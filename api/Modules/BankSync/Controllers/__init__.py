@@ -32,11 +32,16 @@ from api.Modules.BankSync.Repositories import (
 from api.Modules.BankSync.Requests import (
     BankAccountListResponse,
     BankAccountRow,
+    BankConnectCompleteRequest,
+    BankConnectCompleteResponse,
+    BankConnectResponse,
+    BankRefreshResponse,
     BankRuleListResponse,
     BankRuleResponse,
     BankRuleRow,
     BankRuleToggleRequest,
     BankRuleWriteRequest,
+    BankSyncTransactionsResponse,
     BankTransactionListResponse,
     BankTransactionRow,
     CategorizeRequest,
@@ -48,6 +53,17 @@ from api.Modules.BankSync.Services import (
     uncategorize_transaction,
 )
 from typing import Any
+import logging
+
+
+_log = logging.getLogger(__name__)
+
+
+# Hard cap on connected Stripe FC accounts per store.  Bumped only
+# after careful Stripe Customer dashboard cleanup — over-connecting
+# leaves orphan FC accounts charging us $0.01 each per refresh.
+# Mirrored on the SPA in Bank.tsx's `atCap` calculation.
+MAX_BANK_ACCOUNTS_PER_STORE = 6
 
 
 router = APIRouter()
@@ -460,3 +476,313 @@ def delete_rule_route(
     db.commit()
     return None
 
+
+
+# ── Stripe Financial Connections lifecycle ─────────────────
+
+
+def _require_admin_bank_scope(claims: dict[str, Any]) -> int:
+    """Bank-sync mutations are admin-only.  Returns the store_id;
+    raises 403 on missing store scope or non-admin role."""
+    if claims.get("role") not in ("admin", "owner", "superadmin"):
+        raise HTTPException(
+            status_code=403,
+            detail="Only store admins can manage bank connections.",
+        )
+    sid = claims.get("store_id")
+    if sid is None:
+        raise HTTPException(
+            status_code=403,
+            detail="JWT does not carry a store scope.",
+        )
+    return int(sid)
+
+
+def _audit_bank_action(
+    db: Session, *, claims: dict[str, Any], action: str,
+    target_id: str, target_label: str, summary: str = "",
+) -> None:
+    """Per-store operator-audit row for a bank-sync mutation.
+    CLAUDE.md invariant #7 — every mutating endpoint records an
+    audit row."""
+    from api.Modules.Audit.Services import record_operator_action
+    record_operator_action(
+        db,
+        store_id=int(claims["store_id"]),
+        user_id=int(claims["sub"]),
+        user_name=str(claims.get("name") or claims.get("username") or ""),
+        user_role=str(claims.get("role") or ""),
+        target_type="bank_account",
+        target_id=target_id,
+        target_label=target_label,
+        action=action,
+        summary=summary,
+    )
+
+
+@router.post("/connect", response_model=BankConnectResponse)
+def connect_route(
+    db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
+) -> BankConnectResponse:
+    """Mint a Stripe Financial Connections session.
+
+    Returns the client_secret the SPA hands to
+    `stripe.collectFinancialConnectionsAccounts()`.  After Stripe.js
+    resolves, the SPA POSTs `sessionId` to `/connect/complete` so
+    the server can fetch + persist the linked accounts.
+
+    Enforces the per-store account cap before minting — a session
+    that would push the store over `MAX_BANK_ACCOUNTS_PER_STORE`
+    returns 409 with a clear message.
+    """
+    import stripe
+    from api.Modules.Billing.Services.config import (
+        StripeNotConfiguredError, require_stripe_configured,
+        stripe_publishable_key,
+    )
+    from api.Modules.Billing.Services.customer import ensure_stripe_customer
+    from api.Modules.Tenancy.Models import Store
+
+    sid = _require_admin_bank_scope(claims)
+    try:
+        require_stripe_configured()
+    except StripeNotConfiguredError:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Bank sync needs Stripe to be configured. "
+                "An administrator needs to set STRIPE_SECRET_KEY "
+                "in the deployment environment."
+            ),
+        )
+
+    # Per-store cap — count enabled, non-disconnected accounts only.
+    active_count = (
+        db.query(StripeBankAccount)
+          .filter(
+              StripeBankAccount.store_id == sid,
+              StripeBankAccount.enabled.is_(True),
+              StripeBankAccount.disconnected_at.is_(None),
+          )
+          .count()
+    )
+    if active_count >= MAX_BANK_ACCOUNTS_PER_STORE:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"You can connect at most "
+                f"{MAX_BANK_ACCOUNTS_PER_STORE} bank accounts per "
+                f"store.  Disconnect an existing account first."
+            ),
+        )
+
+    store = db.get(Store, sid)
+    if store is None:
+        raise HTTPException(status_code=404, detail="Store not found")
+
+    customer_id = ensure_stripe_customer(db, store)
+    try:
+        session = stripe.financial_connections.Session.create(
+            account_holder={"type": "customer", "customer": customer_id},
+            permissions=["balances", "transactions", "ownership"],
+            filters={"countries": ["US"]},
+        )
+    except stripe.error.StripeError as exc:  # type: ignore[attr-defined]
+        _log.warning(
+            "bank.connect_failed store_id=%s error=%s", sid, exc,
+        )
+        raise HTTPException(
+            status_code=502,
+            detail="Couldn't open the bank-connection flow. "
+                   "Try again in a moment.",
+        )
+
+    return BankConnectResponse(
+        clientSecret=str(session.client_secret),
+        sessionId=str(session.id),
+        publishableKey=stripe_publishable_key(),
+    )
+
+
+@router.post(
+    "/connect/complete", response_model=BankConnectCompleteResponse,
+)
+def connect_complete_route(
+    body: BankConnectCompleteRequest,
+    db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
+) -> BankConnectCompleteResponse:
+    """Persist the FC accounts the user just authorised.
+
+    Called from the SPA after `stripe.collectFinancialConnectionsAccounts()`
+    resolves.  Fetches the FC session by id, iterates its accounts,
+    upserts each via `upsert_fc_account()`.  Idempotent — re-running
+    with the same session id is safe (the upsert dedupes on
+    `stripe_account_id`).
+    """
+    import stripe
+    from api.Modules.BankSync.Services.fc_accounts import upsert_fc_account
+
+    sid = _require_admin_bank_scope(claims)
+    try:
+        session = stripe.financial_connections.Session.retrieve(
+            body.sessionId,
+            expand=["accounts"],
+        )
+    except stripe.error.StripeError as exc:  # type: ignore[attr-defined]
+        _log.warning(
+            "bank.connect_complete_failed store_id=%s session=%s error=%s",
+            sid, body.sessionId, exc,
+        )
+        raise HTTPException(
+            status_code=502,
+            detail="Couldn't read the bank-connection result. Try again.",
+        )
+
+    accounts = getattr(session, "accounts", None)
+    data = getattr(accounts, "data", None) or []
+    added = 0
+    for api_obj in data:
+        row = upsert_fc_account(db, sid, api_obj)
+        if row is not None:
+            added += 1
+    db.commit()
+
+    # Audit a single row for the connect event (not one per
+    # account) so the audit log stays readable.
+    _audit_bank_action(
+        db, claims=claims, action="connect_bank",
+        target_id=body.sessionId,
+        target_label=f"FC session {body.sessionId[:12]}",
+        summary=f"{added} account(s) linked",
+    )
+    db.commit()
+
+    total = (
+        db.query(StripeBankAccount)
+          .filter(
+              StripeBankAccount.store_id == sid,
+              StripeBankAccount.disconnected_at.is_(None),
+          )
+          .count()
+    )
+    return BankConnectCompleteResponse(
+        accounts_added=added,
+        accounts_total=total,
+    )
+
+
+@router.post("/disconnect/{account_id}", status_code=204)
+def disconnect_account_route(
+    account_id: int = Path(..., ge=1),
+    db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
+) -> None:
+    """Soft-disconnect a connected bank account.  Sets
+    `disconnected_at` + flips `enabled` off; historical
+    transactions are preserved + still appear in /bank-transactions
+    with the account label."""
+    from datetime import datetime
+    sid = _require_admin_bank_scope(claims)
+    row = (
+        db.query(StripeBankAccount)
+          .filter(
+              StripeBankAccount.id == account_id,
+              StripeBankAccount.store_id == sid,
+          )
+          .one_or_none()
+    )
+    if row is None:
+        # Same opaque 404 for cross-store probes + genuine missing
+        # ids — tenancy boundary.
+        raise HTTPException(status_code=404, detail="Bank account not found")
+    if row.disconnected_at is not None:
+        # Already disconnected; no-op + still 204.
+        return None
+    row.enabled = False
+    row.disconnected_at = datetime.utcnow()
+    _audit_bank_action(
+        db, claims=claims, action="disconnect_bank",
+        target_id=str(row.id),
+        target_label=(row.nickname or row.display_name
+                      or row.institution_name or "")[:160],
+        summary=f"last4={row.last4 or ''}",
+    )
+    db.commit()
+    return None
+
+
+@router.post("/refresh", response_model=BankRefreshResponse)
+def refresh_balances_route(
+    db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
+) -> BankRefreshResponse:
+    """Trigger a manual balance refresh across every connected FC
+    account on the principal's store.
+
+    Returns the count of accounts the refresh touched + any
+    transient error message from Stripe.  Doesn't 502 on Stripe
+    hiccups — those are surfaced in `error` so the SPA can show
+    a soft warning without blocking the user."""
+    from api.Modules.BankSync.Services.fc_accounts import refresh_bank_balances
+    from api.Modules.Tenancy.Models import Store
+
+    sid = _require_admin_bank_scope(claims)
+    store = db.get(Store, sid)
+    if store is None:
+        raise HTTPException(status_code=404, detail="Store not found")
+
+    updated, error = refresh_bank_balances(db, store)
+    db.commit()
+    _audit_bank_action(
+        db, claims=claims, action="refresh_bank",
+        target_id=str(sid),
+        target_label=(store.name or "")[:160],
+        summary=f"refreshed={updated} error={error[:80] if error else ''}",
+    )
+    db.commit()
+    return BankRefreshResponse(
+        accounts_refreshed=updated, error=error or "",
+    )
+
+
+@router.post(
+    "/sync-transactions", response_model=BankSyncTransactionsResponse,
+)
+def sync_transactions_route(
+    db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
+) -> BankSyncTransactionsResponse:
+    """Trigger a manual transaction sync across every connected FC
+    account on the principal's store.
+
+    Defaults to the rolling 7-day lookback baked into
+    `sync_bank_transactions()` (Stripe FC reports transactions
+    retroactively; strict `max(posted_at)` filtering would skip
+    late-arriving rows)."""
+    from api.Modules.BankSync.Services.sync import sync_bank_transactions
+    from api.Modules.Tenancy.Models import Store
+
+    sid = _require_admin_bank_scope(claims)
+    store = db.get(Store, sid)
+    if store is None:
+        raise HTTPException(status_code=404, detail="Store not found")
+
+    new_rows, total_seen, last_error = sync_bank_transactions(db, store)
+    db.commit()
+    _audit_bank_action(
+        db, claims=claims, action="sync_bank_transactions",
+        target_id=str(sid),
+        target_label=(store.name or "")[:160],
+        summary=(
+            f"new={new_rows} seen={total_seen} "
+            f"error={(last_error or '')[:80]}"
+        ),
+    )
+    db.commit()
+    return BankSyncTransactionsResponse(
+        new_rows=new_rows,
+        total_seen=total_seen,
+        error=last_error or "",
+    )

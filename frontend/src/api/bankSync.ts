@@ -216,25 +216,78 @@ export async function deleteRule(ruleId: number): Promise<void> {
 }
 
 
-// ── Stripe FC connect ──────────────────────────────────────
+// ── Stripe FC connect lifecycle ────────────────────────────
+//
+// 5 endpoints under /api/v2/bank/* drive the Stripe Financial
+// Connections flow.  All admin-role gated; all audited.
+//
+//   POST /api/v2/bank/connect            — mint a new FC session
+//   POST /api/v2/bank/connect/complete   — persist the linked
+//                                          accounts (after Stripe.js)
+//   POST /api/v2/bank/disconnect/{id}    — soft-disconnect an account
+//   POST /api/v2/bank/refresh            — manual balance refresh
+//   POST /api/v2/bank/sync-transactions  — pull recent txns
+//
+// Replaces the legacy /bank/stripe/* Flask form-POST endpoints
+// that went away in PR #550.
 
-export interface StripeConnectResponse {
+export interface BankConnectResponse {
   clientSecret: string;
   sessionId: string;
   publishableKey: string;
-  returnUrl: string;
 }
 
-export async function startStripeConnect(): Promise<StripeConnectResponse> {
-  // Legacy Flask endpoint that mints a Stripe Financial Connections
-  // session — JSON return shape, no template. Stays on Flask because
-  // it composes Stripe-SDK + per-store cap + audit + cookie session
-  // identity.
-  const r = await fetch("/bank/stripe/connect", {
+export interface BankConnectCompleteResponse {
+  accounts_added: number;
+  accounts_total: number;
+}
+
+export interface BankRefreshResponse {
+  accounts_refreshed: number;
+  error: string;
+}
+
+export interface BankSyncTransactionsResponse {
+  new_rows: number;
+  total_seen: number;
+  error: string;
+}
+
+export async function startStripeConnect(): Promise<BankConnectResponse> {
+  return api<BankConnectResponse>("/api/v2/bank/connect", {
     method: "POST",
-    credentials: "same-origin",
+    json: {},
   });
-  const j = await r.json();
-  if (!r.ok) throw new Error(j.error || "Could not start bank connection.");
-  return j as StripeConnectResponse;
+}
+
+export async function completeStripeConnect(
+  sessionId: string,
+): Promise<BankConnectCompleteResponse> {
+  return api<BankConnectCompleteResponse>(
+    "/api/v2/bank/connect/complete",
+    { method: "POST", json: { sessionId } },
+  );
+}
+
+export async function disconnectBankAccount(
+  accountId: number,
+): Promise<void> {
+  await api<void>(
+    `/api/v2/bank/disconnect/${accountId}`,
+    { method: "POST", json: {} },
+  );
+}
+
+export async function refreshBankBalances(): Promise<BankRefreshResponse> {
+  return api<BankRefreshResponse>(
+    "/api/v2/bank/refresh",
+    { method: "POST", json: {} },
+  );
+}
+
+export async function syncBankTransactions(): Promise<BankSyncTransactionsResponse> {
+  return api<BankSyncTransactionsResponse>(
+    "/api/v2/bank/sync-transactions",
+    { method: "POST", json: {} },
+  );
 }

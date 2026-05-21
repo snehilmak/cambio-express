@@ -38,6 +38,7 @@ export function useCountUp(
 
   useEffect(() => {
     if (!trigger) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- reset to `start` when trigger flips false so re-arming the counter restarts from zero
       setValue(start);
       return;
     }

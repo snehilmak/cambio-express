@@ -2,6 +2,11 @@
 from api.Modules.BankSync.Requests.accounts import (
     BankAccountListResponse,
     BankAccountRow,
+    BankConnectCompleteRequest,
+    BankConnectCompleteResponse,
+    BankConnectResponse,
+    BankRefreshResponse,
+    BankSyncTransactionsResponse,
 )
 from api.Modules.BankSync.Requests.rules import (
     BankRuleListResponse,

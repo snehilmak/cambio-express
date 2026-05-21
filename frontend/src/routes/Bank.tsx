@@ -1,13 +1,19 @@
 import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 
 import {
+  completeStripeConnect,
+  disconnectBankAccount,
+  refreshBankBalances,
   startStripeConnect,
+  syncBankTransactions,
   useBankAccounts,
   useBankTransactions,
   type BankAccountRow,
 } from "../api/bankSync";
+import { ApiError } from "../lib/api";
 import {
-  Button, ButtonLink, Card, EmptyState, ErrorState, Loading, PageHeader,
+  Alert, Button, ButtonLink, Card, EmptyState, ErrorState, Loading, PageHeader,
   PageShell, Table, TableSkeleton, tdStyle, thStyle,
 } from "../components/ui";
 import styles from "./Bank.module.css";
@@ -25,22 +31,37 @@ declare global {
 // /app/bank — connected bank accounts grid + recent transactions
 // + the Stripe Financial Connections Connect modal flow.
 //
-// The Connect button dynamically loads Stripe.js (https://js.stripe.com/v3/),
-// posts to the existing legacy /bank/stripe/connect endpoint to mint
-// a Financial Connections client_secret, opens Stripe's hosted modal,
-// then navigates to /bank/stripe/return so the server can persist the
-// linked accounts. Account-level mutations (refresh, disconnect, set
-// nickname, sync transactions) submit to the existing Flask form-POST
-// endpoints that 302 back here.
+// Connect flow (post-cutover, PR #654):
+//   1. SPA POSTs /api/v2/bank/connect → server mints an FC
+//      session, returns clientSecret + sessionId + publishableKey.
+//   2. SPA loads Stripe.js if not already loaded, then calls
+//      stripe.collectFinancialConnectionsAccounts({ clientSecret }).
+//   3. Once Stripe.js resolves, SPA POSTs sessionId to
+//      /api/v2/bank/connect/complete → server fetches the FC
+//      session, upserts the linked accounts.
+//   4. SPA invalidates the accounts/transactions React-Query
+//      caches so the grid refreshes client-side.
+//
+// All account-level mutations (refresh, disconnect, sync
+// transactions) now POST to /api/v2/bank/* and invalidate the
+// React-Query cache for a refresh-free UI update.
 export default function Bank() {
+  const queryClient = useQueryClient();
   const accounts = useBankAccounts();
   const recent = useBankTransactions({ per_page: 10, page: 1 });
   const [connectError, setConnectError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [actionMsg, setActionMsg] = useState<string | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+
+  function invalidate() {
+    void queryClient.invalidateQueries({ queryKey: ["bank", "accounts"] });
+    void queryClient.invalidateQueries({ queryKey: ["bank", "transactions"] });
+  }
 
   async function handleConnect() {
     setConnectError(null);
-    setBusy(true);
+    setActionMsg(null);
+    setBusy("connect");
     try {
       await ensureStripeJs();
       const session = await startStripeConnect();
@@ -52,10 +73,87 @@ export default function Bank() {
       if (result.error) {
         throw new Error(result.error.message || "Bank connection canceled.");
       }
-      window.location.href = session.returnUrl;
+      // Persist server-side, then refresh the accounts grid in
+      // place (no full page reload).
+      const persisted = await completeStripeConnect(session.sessionId);
+      invalidate();
+      setActionMsg(
+        persisted.accounts_added > 0
+          ? `Linked ${persisted.accounts_added} account(s).`
+          : "Account already linked — nothing new to add.",
+      );
     } catch (e) {
-      setConnectError(e instanceof Error ? e.message : "Connect failed.");
-      setBusy(false);
+      const msg = e instanceof ApiError ? e.message
+        : e instanceof Error ? e.message
+        : "Connect failed.";
+      setConnectError(msg);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function handleRefresh() {
+    setConnectError(null);
+    setActionMsg(null);
+    setBusy("refresh");
+    try {
+      const r = await refreshBankBalances();
+      invalidate();
+      setActionMsg(
+        r.error ? `Refreshed (${r.accounts_refreshed}). Warning: ${r.error}`
+          : `Refreshed ${r.accounts_refreshed} account(s).`,
+      );
+    } catch (e) {
+      setConnectError(
+        e instanceof ApiError ? e.message
+          : e instanceof Error ? e.message
+          : "Refresh failed.",
+      );
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function handleSyncTxns() {
+    setConnectError(null);
+    setActionMsg(null);
+    setBusy("sync");
+    try {
+      const r = await syncBankTransactions();
+      invalidate();
+      setActionMsg(
+        r.error
+          ? `Synced (new ${r.new_rows}). Warning: ${r.error}`
+          : `Synced ${r.new_rows} new transaction(s) (${r.total_seen} seen).`,
+      );
+    } catch (e) {
+      setConnectError(
+        e instanceof ApiError ? e.message
+          : e instanceof Error ? e.message
+          : "Sync failed.",
+      );
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function handleDisconnect(acctId: number, label: string) {
+    if (!confirm(`Disconnect ${label}?`)) return;
+    setConnectError(null);
+    setActionMsg(null);
+    setBusy(`disconnect:${acctId}`);
+    try {
+      await disconnectBankAccount(acctId);
+      invalidate();
+      setActionMsg(`Disconnected ${label}.`);
+    } catch (e) {
+      setConnectError(
+        e instanceof ApiError ? e.message
+          : e instanceof Error ? e.message
+          : "Disconnect failed.",
+      );
+    } finally {
+      setBusy(null);
     }
   }
 
@@ -68,6 +166,7 @@ export default function Bank() {
       <PageHeader title="Bank Accounts" />
 
       {connectError && <ErrorState message={connectError} />}
+      {actionMsg && <Alert tone="success">{actionMsg}</Alert>}
 
       <Card>
         <header className={styles.sectionHeader}>
@@ -79,17 +178,22 @@ export default function Bank() {
           </span>
           {accountList.length > 0 && (
             <div className={styles.headerActions}>
-              <form method="POST" action="/bank/stripe/refresh">
-                <Button type="submit" tone="secondary" size="sm">Refresh</Button>
-              </form>
+              <Button
+                tone="secondary" size="sm"
+                busy={busy === "refresh"}
+                disabled={busy !== null}
+                onClick={() => { void handleRefresh(); }}
+              >
+                {busy === "refresh" ? "Refreshing…" : "Refresh"}
+              </Button>
               {!atCap && (
                 <Button
                   size="sm"
-                  busy={busy}
-                  disabled={busy}
-                  onClick={handleConnect}
+                  busy={busy === "connect"}
+                  disabled={busy !== null}
+                  onClick={() => { void handleConnect(); }}
                 >
-                  {busy ? "Opening Stripe…" : "＋ Connect another"}
+                  {busy === "connect" ? "Opening Stripe…" : "＋ Connect another"}
                 </Button>
               )}
             </div>
@@ -112,12 +216,12 @@ export default function Bank() {
               We only see balances — never your bank login.
             </p>
             <Button
-              busy={busy}
-              disabled={busy}
-              onClick={handleConnect}
+              busy={busy === "connect"}
+              disabled={busy !== null}
+              onClick={() => { void handleConnect(); }}
               style={{ marginTop: "1rem" }}
             >
-              {busy ? "Opening Stripe…" : "Connect Bank via Stripe →"}
+              {busy === "connect" ? "Opening Stripe…" : "Connect Bank via Stripe →"}
             </Button>
           </div>
         )}
@@ -125,7 +229,13 @@ export default function Bank() {
         {accountList.length > 0 && (
           <div className={styles.accountGrid}>
             {accountList.map((a) => (
-              <AccountCard key={a.id} acct={a} />
+              <AccountCard
+                key={a.id}
+                acct={a}
+                onDisconnect={() => { void handleDisconnect(a.id, a.label); }}
+                disconnectBusy={busy === `disconnect:${a.id}`}
+                anyBusy={busy !== null}
+              />
             ))}
           </div>
         )}
@@ -136,10 +246,15 @@ export default function Bank() {
           <header className={styles.sectionHeader}>
             <span className={styles.cardTitle}>Recent Transactions</span>
             <div className={styles.headerActions}>
-              <form method="POST" action="/bank/stripe/sync-transactions">
-                <Button type="submit" size="sm">Sync transactions</Button>
-              </form>
-              <ButtonLink href="/bank-transactions" tone="secondary" size="sm">
+              <Button
+                size="sm"
+                busy={busy === "sync"}
+                disabled={busy !== null}
+                onClick={() => { void handleSyncTxns(); }}
+              >
+                {busy === "sync" ? "Syncing…" : "Sync transactions"}
+              </Button>
+              <ButtonLink to="/bank-transactions" tone="secondary" size="sm">
                 View all →
               </ButtonLink>
             </div>
@@ -192,8 +307,14 @@ export default function Bank() {
   );
 }
 
-function AccountCard({ acct }: { acct: BankAccountRow }) {
-  const [nickname, setNickname] = useState(acct.nickname || "");
+function AccountCard({
+  acct, onDisconnect, disconnectBusy, anyBusy,
+}: {
+  acct: BankAccountRow;
+  onDisconnect: () => void;
+  disconnectBusy: boolean;
+  anyBusy: boolean;
+}) {
   return (
     <div className={styles.accountCard}>
       <div className={styles.mutedSmall}>
@@ -211,32 +332,20 @@ function AccountCard({ acct }: { acct: BankAccountRow }) {
           ? `As of ${new Date(acct.last_balance_as_of).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}`
           : "Balance not yet refreshed."}
       </div>
-      <form
-        method="POST"
-        action={`/bank/stripe/nickname/${acct.id}`}
-        className={styles.nicknameForm}
-      >
-        <input
-          type="text"
-          name="nickname"
-          value={nickname}
-          onChange={(e) => setNickname(e.target.value)}
-          placeholder="Set nickname (e.g. MSB Checking)"
-          maxLength={60}
-          className={styles.nicknameInput}
-        />
-        <Button type="submit" tone="secondary" size="sm">Save</Button>
-      </form>
-      <form
-        method="POST"
-        action={`/bank/stripe/disconnect/${acct.id}`}
-        onSubmit={(e) => {
-          if (!confirm(`Disconnect ${acct.label}?`)) e.preventDefault();
-        }}
-        className={styles.disconnectForm}
-      >
-        <Button type="submit" tone="danger" size="sm">Disconnect</Button>
-      </form>
+      {/* Nickname editor was a Flask form posting to a route that
+          went away in PR #550 — re-add when the API endpoint
+          ships (separate PR).  For now the row's label falls back
+          to display_name → institution_name + last4. */}
+      <div className={styles.disconnectForm}>
+        <Button
+          tone="danger" size="sm"
+          busy={disconnectBusy}
+          disabled={anyBusy}
+          onClick={onDisconnect}
+        >
+          {disconnectBusy ? "Disconnecting…" : "Disconnect"}
+        </Button>
+      </div>
     </div>
   );
 }
