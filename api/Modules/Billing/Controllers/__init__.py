@@ -37,6 +37,19 @@ router = APIRouter()
 _log = logging.getLogger(__name__)
 
 
+# Surfaced when the Service-layer guard detects an empty
+# `stripe.api_key`.  Distinct from "Payment service error"
+# because the fix is operator-side (set the env var) not user-
+# side (retry), and the wording reflects that.  HTTP 503 because
+# the service genuinely isn't ready, not because the user did
+# anything wrong.
+_NOT_CONFIGURED_MESSAGE = (
+    "Billing isn't configured on this server yet. "
+    "An administrator needs to set STRIPE_SECRET_KEY in the "
+    "deployment environment before this button works."
+)
+
+
 _BILLING_ROLES = ("admin", "owner", "superadmin")
 
 
@@ -103,6 +116,7 @@ def checkout_route(
     from api.Modules.Billing.Services import (
         InvalidPlanError, StripeServiceError, create_checkout_session,
     )
+    from api.Modules.Billing.Services.config import StripeNotConfiguredError
     sid = _require_billing_scope(claims)
     store = _current_store(db, sid)
     try:
@@ -110,6 +124,15 @@ def checkout_route(
             store, plan=body.plan,
             success_url=_absolute_url("/app/subscribe/success"),
             cancel_url=_absolute_url("/app/settings"),
+        )
+    except StripeNotConfiguredError as exc:
+        _log.critical(
+            "billing.checkout_not_configured store_id=%s: %s",
+            sid, exc,
+        )
+        raise HTTPException(
+            status_code=503,
+            detail=_NOT_CONFIGURED_MESSAGE,
         )
     except InvalidPlanError:
         raise HTTPException(status_code=422, detail="Invalid plan selected.")
@@ -136,6 +159,7 @@ def portal_route(
     from api.Modules.Billing.Services import (
         StripeServiceError, create_billing_portal_session,
     )
+    from api.Modules.Billing.Services.config import StripeNotConfiguredError
     sid = _require_billing_scope(claims)
     store = _current_store(db, sid)
     if not store.stripe_customer_id:
@@ -149,6 +173,15 @@ def portal_route(
     try:
         url = create_billing_portal_session(
             store, return_url=_absolute_url("/app/settings"),
+        )
+    except StripeNotConfiguredError as exc:
+        _log.critical(
+            "billing.portal_not_configured store_id=%s: %s",
+            sid, exc,
+        )
+        raise HTTPException(
+            status_code=503,
+            detail=_NOT_CONFIGURED_MESSAGE,
         )
     except StripeServiceError as exc:
         _log_stripe_error("portal", exc, store_id=sid)
