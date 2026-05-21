@@ -498,14 +498,16 @@ const TWO_FACTOR_CSS = `
 }
 
 .error-msg {
-  background: rgba(255,77,109,0.08); color: var(--db-negative);
-  border: 1px solid rgba(255,77,109,0.3);
+  background: var(--db-tone-error-bg, rgba(255,77,109,0.08));
+  color: var(--db-tone-error-fg, var(--db-negative));
+  border: 1px solid var(--db-tone-error-border, rgba(255,77,109,0.3));
   border-radius: 10px; padding: 11px 14px;
   font-size: 13px; margin-bottom: 16px;
 }
 .info-box {
-  background: rgba(94,169,255,0.08); color: var(--db-info);
-  border: 1px solid rgba(94,169,255,0.3);
+  background: var(--db-tone-info-bg, rgba(94,169,255,0.08));
+  color: var(--db-tone-info-fg, var(--db-info));
+  border: 1px solid var(--db-tone-info-border, rgba(94,169,255,0.3));
   border-radius: 10px; padding: 11px 14px;
   font-size: 13px; margin-bottom: 16px; line-height: 1.5;
 }
@@ -548,9 +550,9 @@ const TWO_FACTOR_CSS = `
   display: grid; grid-template-columns: 1fr 1fr; gap: 10px 18px;
   font-family: var(--db-font-mono);
   font-size: 15px; letter-spacing: 1px;
-  background: rgba(255,176,32,0.08);
-  border: 1px solid rgba(255,176,32,0.3);
-  color: var(--db-warning);
+  background: var(--db-tone-warning-bg, rgba(255,176,32,0.08));
+  border: 1px solid var(--db-tone-warning-border, rgba(255,176,32,0.3));
+  color: var(--db-tone-warning-fg, var(--db-warning));
   border-radius: 10px; padding: 16px; margin: 6px 0 16px;
 }
 .checkbox-row {

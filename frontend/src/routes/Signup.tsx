@@ -261,7 +261,7 @@ nav.site{position:sticky;top:0;z-index:100;background:rgba(11,13,18,0.85);backdr
 .card input::placeholder{color:var(--db-gray-5)}
 .field.has-error input{border-color:var(--db-negative)}
 .error-msg{font-size:12px;color:var(--db-negative);margin-top:5px}
-.error-msg.page-error{background:rgba(255,77,109,.08);border:1px solid rgba(255,77,109,.3);border-radius:10px;padding:10px 14px;font-size:13px;margin-bottom:18px;margin-top:0}
+.error-msg.page-error{background:var(--db-tone-error-bg,rgba(255,77,109,.08));border:1px solid var(--db-tone-error-border,rgba(255,77,109,.3));border-radius:10px;padding:10px 14px;font-size:13px;margin-bottom:18px;margin-top:0}
 
 .submit-btn{width:100%;background:var(--db-neon);color:var(--db-neon-ink);border:none;padding:14px;border-radius:10px;font-size:14.5px;font-weight:600;cursor:pointer;font-family:var(--db-font-body);letter-spacing:-.01em;margin-top:10px;box-shadow:0 0 0 1px var(--db-neon),0 0 28px var(--db-neon-glow-40);transition:background .12s}
 .submit-btn:hover:not(:disabled){background:var(--db-neon-bright)}
