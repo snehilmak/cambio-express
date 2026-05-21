@@ -1,0 +1,84 @@
+/* Page-specific styles for AdminCashiers.tsx.
+ *
+ * Lifted from Settings.module.css when the Team tab moved out
+ * of /settings into the HR section as its own page. */
+
+.helpText {
+  margin: 0 0 1rem;
+  font-size: 0.85rem;
+  color: var(--db-text-muted, #a3a3a3);
+}
+
+.muted {
+  margin: 0;
+  color: var(--db-text-muted, #a3a3a3);
+}
+
+.listSpaced {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 1rem;
+}
+
+.rowTeam {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  /* Wrap on narrow viewports so the Deactivate + ✕ buttons drop
+     below the name row instead of pushing past the card edge.
+     Pilot reported this when the page lived at /settings/team —
+     buttons were bleeding off the right of the card on phones. */
+  flex-wrap: wrap;
+  padding: 0.4rem 0;
+  border-bottom: 1px solid var(--db-border-subtle, #1f1f1f);
+}
+
+.memberActive {
+  /* `flex: 1 1 8rem` lets the name take all remaining row width
+     but allows the row to wrap when there's not enough room left
+     for the action buttons. */
+  flex: 1 1 8rem;
+  min-width: 0;
+  color: var(--db-text, #f5f5f5);
+}
+
+.memberInactive {
+  flex: 1 1 8rem;
+  min-width: 0;
+  color: var(--db-text-muted, #a3a3a3);
+  text-decoration: line-through;
+}
+
+.emptyRow {
+  padding: 0.5rem 0;
+  color: var(--db-text-muted, #a3a3a3);
+}
+
+.actionsInlineRow {
+  display: flex;
+  gap: 0.5rem;
+  /* Wrap the New-cashier form (name input + rate input + Add button)
+     on narrow viewports so the placeholder text doesn't get clipped
+     to "New ca..." inside a too-skinny input. */
+  flex-wrap: wrap;
+}
+
+.actionsInlineRow > :first-child {
+  /* Let the name input expand to fill remaining width on wide
+     screens while shrinking to a sensible minimum so the row
+     stays on one line until it genuinely can't. */
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+
+.rateGroup {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0 0.4rem;
+}
+
+.rateLabel {
+  font-size: 0.78rem;
+  color: var(--db-text-muted, #a3a3a3);
+}
