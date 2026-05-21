@@ -421,7 +421,7 @@ function FeaturesSection() {
                   <div className="mono" style={{ fontSize: 11, color: "var(--db-gray-7)", marginTop: 4 }}>Intermex</div>
                 </div>
               </div>
-              <div style={{ background: "rgba(255,77,109,.08)", border: "1px solid rgba(255,77,109,.3)", borderRadius: 10, padding: "12px 14px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <div style={{ background: "var(--db-tone-error-bg, rgba(255,77,109,.08))", border: "1px solid var(--db-tone-error-border, rgba(255,77,109,.3))", borderRadius: 10, padding: "12px 14px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                 <div>
                   <div style={{ fontSize: 12, color: "var(--db-negative)", fontWeight: 600 }}>Variance detected</div>
                   <div style={{ fontSize: 11, color: "var(--db-gray-7)", marginTop: 2 }}>$22.00 short · 1 transfer missing</div>

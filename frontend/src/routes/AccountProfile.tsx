@@ -9,7 +9,7 @@ import { ApiError } from "../lib/api";
 import { formatTimestamp } from "../lib/datetime";
 import {
   Alert, Button, ButtonLink, Card, ErrorState, Field, Input, Loading,
-  PageHeader, PageShell, Section, Select,
+  PageHeader, PageShell, Section, Select, space,
 } from "../components/ui";
 import styles from "./AccountProfile.module.css";
 
@@ -144,7 +144,7 @@ export default function AccountProfile() {
           <form
             onSubmit={onSubmit}
             autoComplete="off"
-            style={{ display: "flex", flexDirection: "column", gap: "1rem", marginTop: "1rem" }}
+            style={{ display: "flex", flexDirection: "column", gap: space.lg, marginTop: space.lg }}
           >
             <Field label="Display name *" error={fieldErrors.full_name}>
               <Input
@@ -229,7 +229,7 @@ export default function AccountProfile() {
               <ReadOnly label="Last sign-in" value={lastLogin} />
             </div>
 
-            <div style={{ marginTop: "0.5rem", display: "flex", gap: "0.6rem" }}>
+            <div style={{ marginTop: space.sm, display: "flex", gap: "0.6rem" }}>
               <Button type="submit" busy={busy} disabled={busy}>
                 {busy ? "Saving…" : "Save profile"}
               </Button>

@@ -4,7 +4,7 @@ import { useTransfer } from "../api/transfers";
 import { getCurrentIdentity } from "../lib/auth";
 import {
   ButtonLink, Card, Empty, ErrorState, Loading, PageHeader, PageShell,
-  Section, tokens,
+  Section, space, tokens,
 } from "../components/ui";
 
 // Single-transfer detail page. Backed by /api/v2/transfers/{id}
@@ -155,7 +155,7 @@ function BackLink() {
       to="/transfers"
       style={{
         display: "inline-block",
-        marginBottom: "1rem",
+        marginBottom: space.lg,
         color: tokens.textMuted,
         textDecoration: "none",
         fontFamily: tokens.fontMono,

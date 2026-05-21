@@ -13,7 +13,7 @@ import { ApiError } from "../lib/api";
 import { formatTimestamp } from "../lib/datetime";
 import {
   Alert, Button, Card, EmptyState, ErrorState, Field, Input,
-  Loading, PageHeader, PageShell, Pill, RowActions, Select, Table,
+  Loading, PageHeader, PageShell, Pill, RowActions, Select, space, Table,
   TableSkeleton, Textarea, tdStyle, thStyle,
 } from "../components/ui";
 import { getCurrentIdentity } from "../lib/auth";
@@ -591,7 +591,7 @@ function EntryModal({
             </Field>
           </div>
           {err && <Alert tone="error">{err}</Alert>}
-          <div className={styles.modalActions} style={{ marginTop: "0.75rem" }}>
+          <div className={styles.modalActions} style={{ marginTop: space.md }}>
             <Button
               type="button" tone="secondary"
               onClick={onClose} disabled={busy}

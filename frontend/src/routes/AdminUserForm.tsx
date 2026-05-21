@@ -10,7 +10,7 @@ import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
 import {
   Alert, Button, ButtonLink, Card, ErrorState, Field, Input, Loading,
-  PageHeader, PageShell, Select,
+  PageHeader, PageShell, Select, space,
 } from "../components/ui";
 import styles from "./AdminUserForm.module.css";
 
@@ -179,7 +179,7 @@ export default function AdminUserForm() {
         <form
           onSubmit={onSubmit}
           autoComplete="off"
-          style={{ display: "flex", flexDirection: "column", gap: "1rem", marginTop: "1rem" }}
+          style={{ display: "flex", flexDirection: "column", gap: space.lg, marginTop: space.lg }}
         >
           {!isEdit ? (
             <Field label="Username *" error={fieldErrors.username}>
@@ -264,7 +264,7 @@ export default function AdminUserForm() {
             </Field>
           )}
 
-          <div style={{ marginTop: "0.5rem", display: "flex", gap: "0.6rem" }}>
+          <div style={{ marginTop: space.sm, display: "flex", gap: "0.6rem" }}>
             <Button type="submit" busy={busy} disabled={busy}>
               {busy ? "Saving…" : (isEdit ? "Save Changes" : "Create User")}
             </Button>

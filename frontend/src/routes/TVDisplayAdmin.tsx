@@ -13,7 +13,9 @@ import {
 import { useProfile, useStoreInfo } from "../api/account";
 import { ApiError } from "../lib/api";
 import { formatTimestamp } from "../lib/datetime";
-import { Button, ButtonLink, ErrorState, Loading, TabsBar, TabsLink } from "../components/ui";
+import {
+  Button, ButtonLink, ErrorState, IconButton, Loading, TabsBar, TabsLink,
+} from "../components/ui";
 import styles from "./TVDisplayAdmin.module.css";
 
 // /app/tv-display — TV Display add-on operator console.
@@ -696,15 +698,18 @@ function CountrySections({
               </div>
               <div className={styles.countryArrow} aria-hidden="true">→</div>
             </Link>
-            <button
-              type="button"
+            {/* Absolute positioning lives in style here (vs the
+                old `.countryDeleteButton` class) so the kit
+                IconButton can own the visual treatment. */}
+            <IconButton
+              tone="neutral" size="sm"
               onClick={(e) => { e.preventDefault(); removeCountry(c.id, c.country_name); }}
               disabled={deletePending}
-              className={styles.countryDeleteButton}
               title={`Remove ${c.country_name}`}
+              style={{ position: "absolute", top: 6, right: 6 }}
             >
               ×
-            </button>
+            </IconButton>
           </div>
         ))}
         <details

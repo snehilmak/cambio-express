@@ -24,7 +24,7 @@ import {
 import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
 import {
-  Button, Card, EmptyState, Field, Input, Loading,
+  Button, Card, EmptyState, Field, fontSize, Input, Loading,
   PageHeader, PageShell, Pill, Textarea,
 } from "../components/ui";
 import styles from "./EditDailyBook.module.css";
@@ -489,7 +489,7 @@ function TabBar({
               <span
                 style={{
                   fontFamily: "var(--db-font-mono, 'JetBrains Mono', monospace)",
-                  fontSize: "0.72rem",
+                  fontSize: fontSize.xs,
                   color: isActive
                     ? "var(--db-accent, #3fff00)"
                     : "var(--db-text-muted, #a3a3a3)",

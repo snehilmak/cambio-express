@@ -4,7 +4,7 @@ import { useReturnChecks, type ReturnCheckRow } from "../api/returnChecks";
 import { getCurrentIdentity } from "../lib/auth";
 import {
   Button, ButtonLink, Card, Empty, EmptyState, ErrorState, PageHeader,
-  PageShell, Pill, TableSkeleton, tokens, type PillTone,
+  PageShell, Pill, space, TableSkeleton, tokens, type PillTone,
 } from "../components/ui";
 
 // Bounced-check workflow list at /app/return-checks. Filter by
@@ -59,7 +59,7 @@ export default function ReturnChecks() {
         )}
       />
 
-      <div style={{ display: "flex", gap: "0.5rem", marginBottom: "1rem" }}>
+      <div style={{ display: "flex", gap: space.sm, marginBottom: space.lg }}>
         {STATUSES.map((s) => {
           const active = status === s.slug;
           return (

@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 
+import { Button } from "../components/ui";
 import { api, ApiError } from "../lib/api";
 import { setAccessToken } from "../lib/auth";
 
@@ -343,26 +344,24 @@ function SecondFactor({
 
       <div className="totp-actions">
         {mode === "totp" && state.has_recovery_codes && (
-          <button
-            type="button"
-            className="link-btn"
+          <Button
+            tone="ghost"
             onClick={() => { setMode("recovery"); setCode(""); setError(null); }}
           >
             Use a recovery code
-          </button>
+          </Button>
         )}
         {mode === "recovery" && (
-          <button
-            type="button"
-            className="link-btn"
+          <Button
+            tone="ghost"
             onClick={() => { setMode("totp"); setCode(""); setError(null); }}
           >
             Back to authenticator code
-          </button>
+          </Button>
         )}
-        <button type="button" className="link-btn" onClick={onCancel}>
+        <Button tone="ghost" onClick={onCancel}>
           Cancel
-        </button>
+        </Button>
       </div>
 
       <div className="login-footer">
@@ -528,8 +527,9 @@ const LOGIN_CSS = `
 .copyright a{color:var(--db-gray-6);text-decoration:none}
 
 .totp-actions{margin-top:20px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px}
-.link-btn{background:transparent;color:var(--db-gray-7);border:none;padding:0;font-size:13px;text-decoration:underline;cursor:pointer;font-family:var(--db-font-body)}
-.link-btn:hover{color:var(--db-neon)}
+/* .link-btn retired — TOTP recovery / cancel / back actions
+   now use the kit <Button tone="ghost"> primitive, which has the
+   same transparent + underlined + hover-to-neon treatment. */
 
 @media (max-width: 900px){
   .login-shell{flex-direction:column}

@@ -98,6 +98,8 @@ export function SlimSidebar({
                 openGroup === group.title ? null : group.title,
               )}
               aria-expanded={openGroup === group.title}
+              aria-haspopup="menu"
+              aria-controls={`group-flyout-${group.title.toLowerCase()}`}
               aria-label={`${group.title} menu`}
             >
               <span className={styles.groupIcon}>{group.icon}</span>
@@ -119,7 +121,11 @@ export function SlimSidebar({
             onClick={() => setOpenGroup(null)}
             aria-hidden="true"
           />
-          <div className={styles.flyoutPanel} role="menu">
+          <div
+            id={`group-flyout-${activeGroup.title.toLowerCase()}`}
+            className={styles.flyoutPanel}
+            role="menu"
+          >
             <div className={styles.flyoutHeader}>
               <span className={styles.flyoutHeaderIcon}>
                 {activeGroup.icon}

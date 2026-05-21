@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { useCustomerSearch, type CustomerRow } from "../api/customers";
+import { fontSize } from "./ui";
 
 // Type-and-pick autocomplete for the sender name on the transfer
 // form. Wraps `useCustomerSearch` and a small popover.
@@ -149,7 +150,7 @@ function SectionHeader({ children }: { children: React.ReactNode }) {
       style={{
         margin: 0,
         padding: "0.4rem 0.85rem",
-        fontSize: "0.7rem",
+        fontSize: fontSize.xs,
         textTransform: "uppercase",
         letterSpacing: "0.08em",
         color: "var(--db-text-muted, #a3a3a3)",
@@ -215,7 +216,7 @@ const inputStyle: React.CSSProperties = {
   padding: "0.55rem 0.75rem",
   color: "var(--db-text, #f5f5f5)",
   fontFamily: "var(--db-font-body, 'Inter', system-ui, sans-serif)",
-  fontSize: "0.95rem",
+  fontSize: fontSize.base,
   outline: "none",
   width: "100%",
   boxSizing: "border-box",

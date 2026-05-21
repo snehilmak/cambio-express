@@ -19,7 +19,7 @@ import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
 import {
   Alert, Button, ButtonLink, Card, EmptyState, Field, FormActions, Input,
-  Loading, PageHeader, PageShell, SectionTitle, Select, Table, Textarea,
+  Loading, PageHeader, PageShell, SectionTitle, Select, space, Table, Textarea,
   tdStyle, thStyle,
 } from "../components/ui";
 import styles from "./ReturnCheckForm.module.css";
@@ -216,7 +216,7 @@ export default function ReturnCheckForm() {
       </form>
 
       {isEdit && (
-        <Card style={{ marginTop: "1rem" }}>
+        <Card style={{ marginTop: space.lg }}>
           <SectionTitle>Status</SectionTitle>
           <p className={styles.statusLine}>
             Current: <strong className={styles.statusName}>{status}</strong>
@@ -256,7 +256,7 @@ export default function ReturnCheckForm() {
       )}
 
       {isEdit && (
-        <Card style={{ marginTop: "1rem" }}>
+        <Card style={{ marginTop: space.lg }}>
           <SectionTitle>Recovery payments</SectionTitle>
           {status === "pending" && (
             <RecordPaymentForm

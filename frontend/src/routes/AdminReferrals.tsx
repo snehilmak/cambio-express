@@ -8,7 +8,7 @@ import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
 import {
   ButtonLink, Card, Empty, ErrorState, KpiCard, KpiGrid, Loading,
-  PageHeader, PageShell, Pill, Table, tdStyle, thStyle,
+  PageHeader, PageShell, Pill, space, Table, tdStyle, thStyle,
 } from "../components/ui";
 import styles from "./AdminReferrals.module.css";
 
@@ -41,7 +41,7 @@ export default function AdminReferrals() {
             Refer another store, both of you get credit. Activate Basic
             or Pro and your referral code mints automatically.
           </p>
-          <ButtonLink to="/subscribe" tone="primary" style={{ marginTop: "1rem" }}>
+          <ButtonLink to="/subscribe" tone="primary" style={{ marginTop: space.lg }}>
             See plans →
           </ButtonLink>
         </Card>
