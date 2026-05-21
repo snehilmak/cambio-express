@@ -17,6 +17,7 @@ hosted-flow redirect.
 Auth: requires JWT principal with role ∈ {`admin`, `owner`,
 `superadmin`} — same gate as legacy `/admin/subscription/*`.
 """
+import logging
 import os
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -33,6 +34,7 @@ from typing import Any
 
 
 router = APIRouter()
+_log = logging.getLogger(__name__)
 
 
 _BILLING_ROLES = ("admin", "owner", "superadmin")
@@ -111,10 +113,11 @@ def checkout_route(
         )
     except InvalidPlanError:
         raise HTTPException(status_code=422, detail="Invalid plan selected.")
-    except StripeServiceError:
+    except StripeServiceError as exc:
+        _log_stripe_error("checkout", exc, store_id=sid)
         raise HTTPException(
             status_code=502,
-            detail="Payment service error. Please try again.",
+            detail=_stripe_user_message(exc),
         )
     return CheckoutSessionResponse(url=url)
 
@@ -147,9 +150,79 @@ def portal_route(
         url = create_billing_portal_session(
             store, return_url=_absolute_url("/app/settings"),
         )
-    except StripeServiceError:
+    except StripeServiceError as exc:
+        _log_stripe_error("portal", exc, store_id=sid)
         raise HTTPException(
             status_code=502,
-            detail="Payment service error. Please try again.",
+            detail=_stripe_user_message(exc),
         )
     return BillingPortalResponse(url=url)
+
+
+def _log_stripe_error(flow: str, exc: Exception, *, store_id: int) -> None:
+    """Surface the underlying Stripe failure on every billing 502.
+
+    The Service wraps `stripe.error.StripeError` as `StripeServiceError`
+    with `__cause__` set to the original exception — so the user-
+    facing 502 was generic but Sentry / structured logs had no
+    record of WHICH Stripe error fired.  This helper writes a
+    WARN-level log line with the underlying message + code so
+    next time a pilot reports "Payment service error" we can read
+    the actual cause in the logs without re-instrumenting.
+    """
+    cause = exc.__cause__
+    # `stripe.error.StripeError` exposes `code`, `user_message`,
+    # and `http_status` — read defensively in case the wrapping
+    # ever changes.
+    code = getattr(cause, "code", None) or getattr(cause, "error", None) or ""
+    msg = (
+        getattr(cause, "user_message", None)
+        or str(cause)
+        or "no detail from Stripe SDK"
+    )
+    _log.warning(
+        "billing.%s_failed store_id=%s stripe_code=%r message=%r",
+        flow, store_id, code, msg,
+    )
+
+
+# Stripe error codes that map to a clearer user-facing message.
+# Anything not in this dict falls through to the generic
+# "try again" string — those land in logs via _log_stripe_error
+# so we can promote them to specific messages as patterns emerge.
+_STRIPE_FRIENDLY: dict[str, str] = {
+    # Customer Portal hasn't been configured in the Stripe Dashboard
+    # for the current API mode (live / test).  Surfaces verbatim
+    # from Stripe as either of these two codes depending on SDK
+    # version, but the operator action is identical: configure +
+    # save the Customer Portal at
+    # https://dashboard.stripe.com/settings/billing/portal.
+    "billing_portal_configuration_invalid": (
+        "Stripe's billing portal isn't configured yet. "
+        "An admin needs to enable + save the Customer Portal "
+        "in the Stripe Dashboard before this button works."
+    ),
+}
+
+
+def _stripe_user_message(exc: Exception) -> str:
+    """Translate a known Stripe error code into a user-facing
+    message; fall back to the generic "try again" string.
+
+    Reads `exc.__cause__.code` (the Stripe SDK's machine-readable
+    error code) and looks it up in the friendly-message table.
+    Unrecognised codes still surface as "Payment service error.
+    Please try again." but `_log_stripe_error` has already written
+    the real code + message to the log line so an operator can
+    map it + extend `_STRIPE_FRIENDLY`."""
+    cause = exc.__cause__
+    code = getattr(cause, "code", None) or ""
+    if code and code in _STRIPE_FRIENDLY:
+        return _STRIPE_FRIENDLY[code]
+    # The portal-config error message also appears as a string match
+    # in older Stripe SDK versions where `code` isn't populated.
+    # Match the substring as a safety net.
+    cause_text = str(cause or "")
+    if "customer portal" in cause_text.lower() and "configur" in cause_text.lower():
+        return _STRIPE_FRIENDLY["billing_portal_configuration_invalid"]
+    return "Payment service error. Please try again."
