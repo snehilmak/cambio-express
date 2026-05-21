@@ -62,6 +62,11 @@
   display: flex;
   gap: 0.75rem;
   align-items: center;
+  /* Wrap on narrow viewports so the Deactivate + ✕ buttons drop
+     below the name row instead of pushing past the card edge.
+     Pilot reported this on /settings/team — buttons were
+     bleeding off the right of the card on phone widths. */
+  flex-wrap: wrap;
   padding: 0.4rem 0;
   border-bottom: 1px solid var(--db-border-subtle, #1f1f1f);
 }
@@ -81,12 +86,19 @@
 }
 
 .memberActive {
-  flex: 1;
+  /* `flex: 1 1 8rem` lets the name take all remaining row width
+     but allows the row to wrap when there's not enough room left
+     for the action buttons.  Pre-fix this was `flex: 1` (no
+     min-width), which forced the buttons off the right edge on
+     phone viewports. */
+  flex: 1 1 8rem;
+  min-width: 0;
   color: var(--db-text, #f5f5f5);
 }
 
 .memberInactive {
-  flex: 1;
+  flex: 1 1 8rem;
+  min-width: 0;
   color: var(--db-text-muted, #a3a3a3);
   text-decoration: line-through;
 }
@@ -110,6 +122,18 @@
 .actionsInlineRow {
   display: flex;
   gap: 0.5rem;
+  /* Wrap the New-cashier form (name input + rate input + Add button)
+     on narrow viewports so the placeholder text doesn't get clipped
+     to "New ca..." inside a too-skinny input. */
+  flex-wrap: wrap;
+}
+
+.actionsInlineRow > :first-child {
+  /* Let the name input expand to fill remaining width on wide
+     screens while shrinking to a sensible minimum so the row
+     stays on one line until it genuinely can't. */
+  flex: 1 1 12rem;
+  min-width: 0;
 }
 
 .subscriptionInfo {
