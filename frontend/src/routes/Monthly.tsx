@@ -4,7 +4,7 @@ import { useSearchParams } from "react-router-dom";
 import { useLoggedMonths, useMonthly, type MonthlyRow } from "../api/monthly";
 import { getCurrentIdentity } from "../lib/auth";
 import {
-  ButtonLink, Card, Empty, EmptyState, ErrorState, Loading, PageHeader,
+  ButtonLink, Card, Empty, EmptyState, ErrorState, fontSize, Loading, PageHeader,
   PageShell, Section, Select, tokens,
 } from "../components/ui";
 
@@ -269,7 +269,7 @@ function Stat({
       <p
         style={{
           margin: 0,
-          fontSize: "0.72rem",
+          fontSize: fontSize.xs,
           color: tokens.textMuted,
           textTransform: "uppercase",
           letterSpacing: "0.05em",
@@ -281,7 +281,7 @@ function Stat({
         style={{
           margin: "0.2rem 0 0",
           fontFamily: tokens.fontMono,
-          fontSize: "1.05rem",
+          fontSize: fontSize.lg,
           fontWeight: 500,
           color,
         }}

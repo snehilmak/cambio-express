@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useLocation, useSearchParams } from "react-router-dom";
 
 import { ReportDrilldown, fmtMoney } from "../../components/ReportDrilldown";
+import { fontSize } from "../../components/ui";
 
 export default function HighValueTransfers() {
   const isOwner = useLocation().pathname.startsWith("/owner/");
@@ -28,7 +29,7 @@ export default function HighValueTransfers() {
       }}>
         <label style={{
           display: "flex", flexDirection: "column", gap: "0.15rem",
-          fontSize: "0.7rem",
+          fontSize: fontSize.xs,
           color: "var(--db-text-muted, #a3a3a3)",
           textTransform: "uppercase", letterSpacing: "0.05em",
         }}>
