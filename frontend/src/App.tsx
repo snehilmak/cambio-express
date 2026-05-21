@@ -106,6 +106,21 @@ const TransferDetail = lazy(() => import("./routes/TransferDetail"));
 // const TransferReceipt = lazy(() => import("./routes/TransferReceipt"));
 const Transfers = lazy(() => import("./routes/Transfers"));
 const TVDisplayAdmin = lazy(() => import("./routes/TVDisplayAdmin"));
+const TVDisplayOverview = lazy(
+  () => import("./routes/TVDisplayAdmin").then(
+    (m) => ({ default: m.TVDisplayOverview }),
+  ),
+);
+const TVDisplayContent = lazy(
+  () => import("./routes/TVDisplayAdmin").then(
+    (m) => ({ default: m.TVDisplayContent }),
+  ),
+);
+const TVDisplayDevice = lazy(
+  () => import("./routes/TVDisplayAdmin").then(
+    (m) => ({ default: m.TVDisplayDevice }),
+  ),
+);
 const TVDisplayCountry = lazy(() => import("./routes/TVDisplayCountry"));
 
 // TwoFactor.tsx exports three named components from one file. They share
@@ -280,7 +295,12 @@ export default function App() {
           <Route path="account/notifications" element={<AccountNotifications />} />
           <Route path="account/activity"      element={<AccountActivity />} />
           <Route path="account/sessions"      element={<AccountSessions />} />
-          <Route path="tv-display"            element={<TVDisplayAdmin />} />
+          <Route path="tv-display" element={<TVDisplayAdmin />}>
+            <Route index element={<Navigate to="overview" replace />} />
+            <Route path="overview" element={<TVDisplayOverview />} />
+            <Route path="content" element={<TVDisplayContent />} />
+            <Route path="device" element={<TVDisplayDevice />} />
+          </Route>
           <Route path="tv-display/countries/:countryId" element={<TVDisplayCountry />} />
           <Route path="settings" element={<Settings />}>
             {/* index → redirect to /settings/general so legacy

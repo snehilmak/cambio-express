@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { Link } from "react-router-dom";
+import { Link, Outlet } from "react-router-dom";
 
 import {
   useClaimTVPairCode,
@@ -13,7 +13,7 @@ import {
 import { useProfile, useStoreInfo } from "../api/account";
 import { ApiError } from "../lib/api";
 import { formatTimestamp } from "../lib/datetime";
-import { ErrorState, Loading } from "../components/ui";
+import { ErrorState, Loading, TabsBar, TabsLink } from "../components/ui";
 import styles from "./TVDisplayAdmin.module.css";
 
 // /app/tv-display — TV Display add-on operator console.
@@ -75,19 +75,16 @@ function formatPairTimestamp(
   return formatTimestamp(iso, { userTimezone, storeTimezone });
 }
 
+// /app/admin/tv-display — tabbed admin hub.  Layout route: this
+// component renders the page chrome (title + tab bar) + the
+// shared loading/error state, then `<Outlet />` for the active
+// child tab.  Each tab is a child route mounted in App.tsx
+// (`TVDisplayOverview`, `TVDisplayContent`, `TVDisplayDevice`).
+// Tab URLs are deep-linkable.
+//
+// /app/admin/tv-display (bare) redirects to /overview.
 export default function TVDisplayAdmin() {
   const { data, isLoading, isError, error, refetch } = useTVDisplayOverview();
-  const { data: profile } = useProfile();
-  const { data: storeInfo } = useStoreInfo();
-  const userTz  = profile?.timezone ?? "";
-  const storeTz = storeInfo?.store?.timezone ?? "";
-
-  const saveSettings    = useSaveTVDisplaySettings();
-  const regenerateToken = useRegenerateTVDisplayToken();
-  const claimPair       = useClaimTVPairCode();
-  const revokePair      = useRevokeTVPairing();
-  const createCountry   = useCreateTVDisplayCountry();
-  const deleteCountry   = useDeleteTVDisplayCountry();
 
   if (isLoading) {
     return (
@@ -128,12 +125,72 @@ export default function TVDisplayAdmin() {
 
   return (
     <main className={styles.page}>
+      <TabsBar>
+        <TabsLink to="/admin/tv-display/overview">Overview</TabsLink>
+        <TabsLink to="/admin/tv-display/content">Content</TabsLink>
+        <TabsLink to="/admin/tv-display/device">Device & Settings</TabsLink>
+      </TabsBar>
+      <Outlet />
+    </main>
+  );
+}
+
+
+/** Per-tab components.  Each fetches the same overview data via
+ *  the existing React-Query hook (cached at the layout route's
+ *  level so the second render is instant), then renders the
+ *  subset of widgets that belong to its tab.  Keeps the diff
+ *  minimal: existing sub-components are unchanged. */
+export function TVDisplayOverview() {
+  const { data } = useTVDisplayOverview();
+  const { data: profile } = useProfile();
+  const { data: storeInfo } = useStoreInfo();
+  const regenerateToken = useRegenerateTVDisplayToken();
+  if (!data) return null;
+  const userTz = profile?.timezone ?? "";
+  const storeTz = storeInfo?.store?.timezone ?? "";
+  return (
+    <>
       <Hero data={data} userTimezone={userTz} storeTimezone={storeTz} />
       <PublicUrlBar
         publicUrl={data.public_url}
         onRegenerate={() => regenerateToken.mutate()}
         regenerating={regenerateToken.isPending}
       />
+    </>
+  );
+}
+
+
+export function TVDisplayContent() {
+  const { data } = useTVDisplayOverview();
+  const createCountry = useCreateTVDisplayCountry();
+  const deleteCountry = useDeleteTVDisplayCountry();
+  if (!data) return null;
+  return (
+    <CountrySections
+      countries={data.countries}
+      onCreate={(payload) => createCountry.mutateAsync(payload)}
+      onDelete={(id) => deleteCountry.mutateAsync(id)}
+      createPending={createCountry.isPending}
+      deletePending={deleteCountry.isPending}
+    />
+  );
+}
+
+
+export function TVDisplayDevice() {
+  const { data } = useTVDisplayOverview();
+  const { data: profile } = useProfile();
+  const { data: storeInfo } = useStoreInfo();
+  const saveSettings = useSaveTVDisplaySettings();
+  const claimPair = useClaimTVPairCode();
+  const revokePair = useRevokeTVPairing();
+  if (!data) return null;
+  const userTz = profile?.timezone ?? "";
+  const storeTz = storeInfo?.store?.timezone ?? "";
+  return (
+    <>
       <PairFireTV
         activePairing={data.active_pairing}
         onClaim={(code) => claimPair.mutateAsync(code)}
@@ -149,14 +206,7 @@ export default function TVDisplayAdmin() {
         onSave={(payload) => saveSettings.mutateAsync(payload)}
         savePending={saveSettings.isPending}
       />
-      <CountrySections
-        countries={data.countries}
-        onCreate={(payload) => createCountry.mutateAsync(payload)}
-        onDelete={(id) => deleteCountry.mutateAsync(id)}
-        createPending={createCountry.isPending}
-        deletePending={deleteCountry.isPending}
-      />
-    </main>
+    </>
   );
 }
 
