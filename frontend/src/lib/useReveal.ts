@@ -27,6 +27,14 @@ import { useEffect, useRef, useState, type RefObject } from "react";
  *  One-shot: the observer disconnects after first reveal so we
  *  don't pay the cost of watching every element forever.
  */
+export type RevealVariant =
+  | "fade-up"      // opacity + translateY (default)
+  | "from-left"    // opacity + translateX(-)
+  | "from-right"   // opacity + translateX(+)
+  | "scale-up"     // opacity + scale
+  | "blur";        // opacity + filter blur
+
+
 export function useReveal<T extends HTMLElement = HTMLDivElement>(
   options?: { threshold?: number; rootMargin?: string },
 ): { ref: RefObject<T | null>; revealed: boolean } {

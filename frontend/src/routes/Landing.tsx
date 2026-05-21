@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { useCountUp } from "../lib/useCountUp";
-import { useReveal } from "../lib/useReveal";
+import { useReveal, type RevealVariant } from "../lib/useReveal";
 
 // Marketing landing page. Translated 1:1 from templates/landing.html
 // (the legacy Jinja version still served at `/`). Always renders —
@@ -13,6 +13,7 @@ import { useReveal } from "../lib/useReveal";
 // kicked them straight to /login.
 export default function Landing() {
   const [navOpen, setNavOpen] = useState(false);
+  const heroRef = useHeroParallax();
 
   useEffect(() => {
     if ("serviceWorker" in navigator) {
@@ -54,9 +55,9 @@ export default function Landing() {
         </div>
       </nav>
 
-      <section className="hero">
-        <div className="hero-grid" aria-hidden="true" />
-        <div className="hero-glow" aria-hidden="true" />
+      <section className="hero" ref={heroRef}>
+        <div className="hero-grid hero-parallax-bg" aria-hidden="true" />
+        <div className="hero-glow hero-parallax-glow" aria-hidden="true" />
         <div className="hero-inner">
           <div>
             <div className="eyebrow-pill"><span className="dot" />MSB TERMINAL · BUILT FOR SHOPS</div>
@@ -81,27 +82,38 @@ export default function Landing() {
         </div>
       </section>
 
-      <RevealSection><FeaturesSection /></RevealSection>
+      <RevealSection variant="fade-up"><FeaturesSection /></RevealSection>
 
       <AnimatedStatStrip />
 
-      <RevealSection>
-        <section className="how" id="how">
-          <div className="how-inner">
+      {/* "How it works": sticky-pinned headline on the left,
+          steps scroll past on the right (OnePlus signature).
+          On narrow viewports the CSS collapses back to a single
+          column with the steps in normal stacking order. */}
+      <section className="how" id="how">
+        <div className="how-sticky-wrap">
+          <div className="how-sticky-heading">
             <div className="section-eye">// HOW IT WORKS</div>
-            <h2 className="section-heading" style={{ marginBottom: 64 }}>From paper to profitable<br /><span className="accent">in three steps.</span></h2>
-            <div className="how-grid">
-              <div className="how-step"><div className="n">01</div><div className="t">Sign up</div><div className="b">Create your store in 60 seconds. No credit card, no sales call.</div><div className="arrow">→</div></div>
-              <div className="how-step"><div className="n">02</div><div className="t">Log your day</div><div className="b">Cash in/out, money orders, check cashing, transfers. One screen, auto-saves.</div><div className="arrow">→</div></div>
-              <div className="how-step"><div className="n">03</div><div className="t">Close the month</div><div className="b">P&L auto-populates. Export for your accountant. Spot variances before they bite.</div></div>
-            </div>
+            <h2 className="section-heading">From paper to profitable<br /><span className="accent">in three steps.</span></h2>
+            <p className="how-sticky-hint">Scroll to see each step ↓</p>
           </div>
-        </section>
-      </RevealSection>
+          <div className="how-sticky-steps">
+            <RevealSection variant="from-right">
+              <div className="how-step"><div className="n">01</div><div className="t">Sign up</div><div className="b">Create your store in 60 seconds. No credit card, no sales call.</div><div className="arrow">→</div></div>
+            </RevealSection>
+            <RevealSection variant="from-right">
+              <div className="how-step"><div className="n">02</div><div className="t">Log your day</div><div className="b">Cash in/out, money orders, check cashing, transfers. One screen, auto-saves.</div><div className="arrow">→</div></div>
+            </RevealSection>
+            <RevealSection variant="from-right">
+              <div className="how-step"><div className="n">03</div><div className="t">Close the month</div><div className="b">P&L auto-populates. Export for your accountant. Spot variances before they bite.</div></div>
+            </RevealSection>
+          </div>
+        </div>
+      </section>
 
-      <RevealSection><PricingSection /></RevealSection>
+      <RevealSection variant="scale-up"><PricingSection /></RevealSection>
 
-      <RevealSection>
+      <RevealSection variant="from-left">
         <section className="faq">
           <div className="faq-inner">
             <div className="section-eye">// QUESTIONS</div>
@@ -116,7 +128,7 @@ export default function Landing() {
         </section>
       </RevealSection>
 
-      <RevealSection>
+      <RevealSection variant="scale-up">
         <section className="cta-band">
           <div className="cta-glow" aria-hidden="true" />
           <div className="cta-inner">
@@ -149,20 +161,74 @@ export default function Landing() {
 }
 
 
-/** Wrapper that fades + slides its children in once they enter the
- *  viewport.  Uses `useReveal` to flip a `.is-revealed` class; the
- *  actual transition lives in LANDING_CSS so reduced-motion users
- *  see the static content immediately. */
-function RevealSection({ children }: { children: React.ReactNode }) {
+/** Wrapper that fades / slides / scales its children in once they
+ *  enter the viewport.  `variant` picks the entrance animation;
+ *  the actual transition lives in LANDING_CSS so reduced-motion
+ *  users see the static content immediately.
+ *
+ *  Variants (all transition over 700ms with a smooth cubic-bezier):
+ *    - `fade-up`    (default) — opacity + translateY(40px)
+ *    - `from-left`  — opacity + translateX(-48px)
+ *    - `from-right` — opacity + translateX(+48px)
+ *    - `scale-up`   — opacity + scale(0.94)
+ *    - `blur`       — opacity + filter:blur(8px)
+ */
+function RevealSection({
+  children, variant = "fade-up",
+}: {
+  children: React.ReactNode;
+  variant?: RevealVariant;
+}) {
   const { ref, revealed } = useReveal<HTMLDivElement>();
   return (
     <div
       ref={ref}
-      className={`reveal${revealed ? " is-revealed" : ""}`}
+      className={`reveal reveal--${variant}${revealed ? " is-revealed" : ""}`}
     >
       {children}
     </div>
   );
+}
+
+
+/** Hero parallax: the hero-grid + hero-glow drift at a slower
+ *  rate than the rest of the page as the user scrolls.  Creates
+ *  a depth effect (OnePlus / Apple landing pattern) without
+ *  needing a heavy library.
+ *
+ *  Implementation: single rAF-throttled scroll listener writes
+ *  the current scroll-Y to a CSS variable on the hero section;
+ *  the children read it via `translate3d(0, calc(var(--y) * Nx))`.
+ *  Honors reduced-motion (no listener attached). */
+function useHeroParallax(): React.RefObject<HTMLElement | null> {
+  const ref = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    if (
+      typeof window === "undefined"
+      || (window.matchMedia
+          && window.matchMedia("(prefers-reduced-motion: reduce)").matches)
+    ) {
+      return;
+    }
+    let raf: number | null = null;
+    const onScroll = () => {
+      if (raf !== null) return;
+      raf = requestAnimationFrame(() => {
+        const el = ref.current;
+        if (el) {
+          el.style.setProperty("--scroll-y", `${window.scrollY}`);
+        }
+        raf = null;
+      });
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    onScroll();
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      if (raf !== null) cancelAnimationFrame(raf);
+    };
+  }, []);
+  return ref;
 }
 
 
@@ -586,15 +652,129 @@ a{color:inherit}
    in src/lib/useReveal.ts; this CSS only owns the transition
    between states.  Reduced-motion users get .is-revealed
    set immediately by the hook so they see the static content
-   with no transition. ─────────────────────────────────────── */
+   with no transition.
+
+   Variants: fade-up (default), from-left, from-right,
+   scale-up, blur.  Pick per-section via the variant prop on
+   the RevealSection wrapper; mixing variants keeps a long
+   scroll from feeling monotonous (every section moving
+   identically reads as a slideshow, not a product page).
+   ───────────────────────────────────────────────────────── */
 .reveal{
   opacity:0;
-  transform:translateY(40px);
   transition:opacity 700ms cubic-bezier(0.22, 1, 0.36, 1),
-             transform 700ms cubic-bezier(0.22, 1, 0.36, 1);
+             transform 700ms cubic-bezier(0.22, 1, 0.36, 1),
+             filter 700ms cubic-bezier(0.22, 1, 0.36, 1);
   will-change:opacity,transform;
 }
-.reveal.is-revealed{opacity:1;transform:translateY(0)}
+.reveal--fade-up{transform:translateY(40px)}
+.reveal--from-left{transform:translateX(-48px)}
+.reveal--from-right{transform:translateX(48px)}
+.reveal--scale-up{transform:scale(0.94)}
+.reveal--blur{filter:blur(8px)}
+
+.reveal.is-revealed{
+  opacity:1;
+  transform:translate(0) scale(1);
+  filter:none;
+}
+
+/* ── Hero parallax ────────────────────────────────────────
+   The hero section sets a --scroll-y CSS variable from a
+   rAF-throttled scroll listener (useHeroParallax in
+   Landing.tsx).  The grid
+   pattern + the glow halo translate at fractional rates of
+   the scroll so they drift behind the foreground content,
+   creating a depth effect.  Multipliers are tiny (0.15 +
+   0.25) — enough to feel alive, not enough to obscure the
+   text.
+
+   Reduced-motion users get no listener attached (the hook
+   bails on mount); --scroll-y stays unset so the transforms
+   collapse to 0px. */
+.hero{--scroll-y:0}
+.hero-parallax-bg{
+  transform:translate3d(0, calc(var(--scroll-y) * 0.15px), 0);
+  will-change:transform;
+}
+.hero-parallax-glow{
+  transform:translate3d(0, calc(var(--scroll-y) * 0.25px), 0);
+  will-change:transform;
+}
+
+/* ── Sticky-pinned "How it works" (OnePlus signature) ──────
+   Two-column layout: the headline column sticks to a position
+   below the nav while the steps column scrolls past.  Each
+   step uses the from-right reveal variant so it slides in as
+   it enters the viewport.
+
+   On narrow viewports (<=900px) the grid collapses to single
+   column + the heading goes back to normal flow — sticky is
+   awkward on phones where the viewport is already short. */
+.how{padding-top:60px;padding-bottom:60px}
+.how-sticky-wrap{
+  max-width:1200px;
+  margin:0 auto;
+  padding:0 48px;
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:80px;
+  align-items:start;
+}
+.how-sticky-heading{
+  position:sticky;
+  /* Below the 64px sticky nav with a 32px breathing margin. */
+  top:96px;
+  align-self:start;
+}
+.how-sticky-heading .section-eye{margin-bottom:18px}
+.how-sticky-heading .section-heading{margin-bottom:24px}
+.how-sticky-hint{
+  font-family:var(--db-font-mono);
+  font-size:12px;
+  color:var(--db-gray-6);
+  letter-spacing:.06em;
+  text-transform:uppercase;
+  margin-top:24px;
+}
+.how-sticky-steps{
+  display:flex;
+  flex-direction:column;
+  gap:32px;
+}
+.how-sticky-steps .how-step{margin-bottom:0}
+
+@media (max-width:900px){
+  .how-sticky-wrap{
+    grid-template-columns:1fr;
+    gap:32px;
+    padding:0 24px;
+  }
+  .how-sticky-heading{
+    position:static;
+    top:auto;
+  }
+  .how-sticky-hint{display:none}
+}
+
+/* ── Scroll-snap (proximity, not mandatory) ────────────────
+   proximity is the gentler flavor: the browser nudges scroll
+   to the nearest snap point IF the user is near one, but
+   doesn't fight them mid-scroll the way mandatory would.
+   Result: sections gently align without the page feeling
+   locked.
+
+   Skip on touch devices (the hover: hover + pointer: fine
+   media query) since iOS Safari snap interferes with momentum
+   scrolling.  And of course strip entirely under reduced
+   motion. */
+@media (hover: hover) and (pointer: fine){
+  html{scroll-snap-type:y proximity;scroll-padding-top:80px}
+  .hero, .stat-strip, .how, .pricing, .faq, .cta-band{
+    scroll-snap-align:start;
+    scroll-snap-stop:normal;
+  }
+}
 
 /* Stat strip's stat cells get a tiny stagger so the four
    numbers don't all fly in at the exact same instant.
@@ -644,17 +824,25 @@ a{color:inherit}
 }
 
 /* Honor prefers-reduced-motion globally for this page so
-   scroll-driven motion + the hero pulse + hover lifts all
-   collapse to instant transitions. */
+   scroll-driven motion + the hero pulse + hover lifts + the
+   parallax + the scroll-snap all collapse to instant /
+   static behavior. */
 @media (prefers-reduced-motion: reduce){
   .reveal,.reveal.is-revealed,.reveal .how-step,
-  .reveal.is-revealed .how-step{
-    opacity:1!important;transform:none!important;
-    transition:none!important;animation:none!important;
+  .reveal.is-revealed .how-step,
+  .reveal--fade-up,.reveal--from-left,.reveal--from-right,
+  .reveal--scale-up,.reveal--blur{
+    opacity:1!important;
+    transform:none!important;
+    filter:none!important;
+    transition:none!important;
+    animation:none!important;
   }
   .hero-glow{animation:none!important}
+  .hero-parallax-bg,.hero-parallax-glow{transform:none!important}
   .how-step{transition:none!important}
   .how-step:hover{transform:none!important}
+  html{scroll-snap-type:none!important}
 }
 
 nav.site{position:sticky;top:0;z-index:100;background:rgba(11,13,18,0.82);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);padding:0 48px;height:64px;display:flex;align-items:center;gap:20px;border-bottom:1px solid var(--db-gray-2)}
