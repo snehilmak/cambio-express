@@ -76,6 +76,43 @@ def _require_admin_scope(claims: dict[str, Any]) -> int:
     return int(sid)
 
 
+def _audit_return_check_action(
+    db: Session, *, claims: dict[str, Any], action: str,
+    target_id: str, target_label: str, summary: str,
+) -> None:
+    """Operator-audit emitter for return-check mutations.
+
+    CLAUDE.md invariant #7 — every mutating endpoint records an
+    audit row.  Return checks are a financial-recovery surface
+    (money the store is trying to claw back after a bounced check)
+    so every state change deserves a paper trail.  Before this
+    helper landed, the seven mutation routes silently mutated
+    state without writing audit; the CLAUDE.md "employee action
+    audit" claim of coverage was wrong for this module.
+
+    target_type is "return_check" for the parent + its lifecycle
+    transitions, "return_check_payment" for the installment
+    record/delete pair — keeps the audit feed filterable per
+    legacy contract."""
+    from api.Modules.Audit.Services import record_operator_action
+    record_operator_action(
+        db,
+        store_id=int(claims["store_id"]),
+        user_id=int(claims["sub"]),
+        user_name=claims.get("name") or claims.get("username") or "",
+        user_role=claims.get("role") or "",
+        target_type=(
+            "return_check_payment"
+            if action in ("record_payment", "delete_payment")
+            else "return_check"
+        ),
+        target_id=target_id,
+        target_label=target_label,
+        action=action,
+        summary=summary,
+    )
+
+
 def _row(rc) -> ReturnCheckRow:
     return ReturnCheckRow(
         id=rc.id,
@@ -164,6 +201,15 @@ def create_route(
     row = create_return_check(
         db, store_id=sid, created_by=user_id, payload=payload,
     )
+    _audit_return_check_action(
+        db, claims=claims, action="create_return_check",
+        target_id=str(row.id),
+        target_label=(row.customer_name or "")[:160],
+        summary=(
+            f"check #{row.check_number or '?'} amount=${float(row.amount or 0):,.2f} "
+            f"bounced_on={row.bounced_on.isoformat() if row.bounced_on else ''}"
+        ),
+    )
     db.commit()
     return ReturnCheckResponse(return_check=_row(row))
 
@@ -183,19 +229,39 @@ def update_route(
         )
     except ReturnCheckNotFoundError:
         raise HTTPException(status_code=404, detail="Return check not found")
+    _audit_return_check_action(
+        db, claims=claims, action="update_return_check",
+        target_id=str(row.id),
+        target_label=(row.customer_name or "")[:160],
+        summary=(
+            f"check #{row.check_number or '?'} amount=${float(row.amount or 0):,.2f}"
+        ),
+    )
     db.commit()
     return ReturnCheckResponse(return_check=_row(row))
 
 
 def _transition(
     db: Session, store_id: int, rc_id: int, transition_fn,
+    *, claims: dict[str, Any], action: str,
 ) -> ReturnCheckResponse:
+    """Apply a `pending → loss / fraud / recovered → pending` Service
+    transition and emit a matching audit row.  ``action`` is the
+    audit-log verb (`mark_loss` / `mark_fraud` / `reopen`); it's
+    distinct from the transition_fn so the audit feed can show
+    the operator's intent rather than the new state."""
     try:
         row = transition_fn(db, store_id, rc_id)
     except ReturnCheckNotFoundError:
         raise HTTPException(status_code=404, detail="Return check not found")
     except ReturnCheckStateError as exc:
         raise HTTPException(status_code=409, detail=str(exc))
+    _audit_return_check_action(
+        db, claims=claims, action=action,
+        target_id=str(row.id),
+        target_label=(row.customer_name or "")[:160],
+        summary=f"status=>{row.status or ''}",
+    )
     db.commit()
     return ReturnCheckResponse(return_check=_row(row))
 
@@ -210,7 +276,9 @@ def mark_loss_route(
     claims: dict[str, Any] = Depends(get_principal),
 ) -> ReturnCheckResponse:
     sid = _require_admin_scope(claims)
-    return _transition(db, sid, rc_id, mark_loss)
+    return _transition(
+        db, sid, rc_id, mark_loss, claims=claims, action="mark_loss",
+    )
 
 
 @router.post(
@@ -223,7 +291,9 @@ def mark_fraud_route(
     claims: dict[str, Any] = Depends(get_principal),
 ) -> ReturnCheckResponse:
     sid = _require_admin_scope(claims)
-    return _transition(db, sid, rc_id, mark_fraud)
+    return _transition(
+        db, sid, rc_id, mark_fraud, claims=claims, action="mark_fraud",
+    )
 
 
 @router.post(
@@ -236,7 +306,9 @@ def reopen_route(
     claims: dict[str, Any] = Depends(get_principal),
 ) -> ReturnCheckResponse:
     sid = _require_admin_scope(claims)
-    return _transition(db, sid, rc_id, reopen)
+    return _transition(
+        db, sid, rc_id, reopen, claims=claims, action="reopen_return_check",
+    )
 
 
 def _payment_row(p) -> ReturnCheckPaymentRow:
@@ -316,9 +388,23 @@ def record_payment_route(
         raise HTTPException(status_code=404, detail="Return check not found")
     except ReturnCheckStateError as exc:
         raise HTTPException(status_code=409, detail=str(exc))
+    # Payments are the single most-audited event on this surface —
+    # each payment shifts money + can auto-flip the parent to
+    # 'recovered'.  Summary carries the amount + paid_on date so a
+    # reconciliation question ("did we credit this customer twice?")
+    # is one feed lookup away.
+    rc = find_return_check(db, sid, rc_id)
+    _audit_return_check_action(
+        db, claims=claims, action="record_payment",
+        target_id=str(payment.id),
+        target_label=(getattr(rc, "customer_name", "") or "")[:160],
+        summary=(
+            f"rc={rc_id} amount=${float(payment.amount or 0):,.2f} "
+            f"paid_on={payment.paid_on.isoformat() if payment.paid_on else ''}"
+        ),
+    )
     db.commit()
     db.refresh(payment)
-    rc = find_return_check(db, sid, rc_id)
     return ReturnCheckPaymentResponse(
         payment=_payment_row(payment),
         return_check=_row(rc),
@@ -336,6 +422,13 @@ def delete_payment_route(
     claims: dict[str, Any] = Depends(get_principal),
 ) -> ReturnCheckPaymentResponse:
     sid = _require_admin_scope(claims)
+    # Snapshot the payment before the Service deletes it so the audit
+    # row carries the amount that walked out the door — answers
+    # "we deleted payment #PID — how much was that?".
+    from api.Modules.ReturnChecks.Repositories import find_payment
+    pre_delete = find_payment(db, sid, rc_id, payment_id)
+    pre_amount = float(getattr(pre_delete, "amount", 0) or 0)
+    pre_paid_on = getattr(pre_delete, "paid_on", None) if pre_delete else None
     try:
         delete_payment(
             db, store_id=sid, rc_id=rc_id, payment_id=payment_id,
@@ -344,8 +437,17 @@ def delete_payment_route(
         raise HTTPException(status_code=404, detail="Return check not found")
     except ReturnCheckPaymentNotFoundError:
         raise HTTPException(status_code=404, detail="Payment not found")
-    db.commit()
     rc = find_return_check(db, sid, rc_id)
+    _audit_return_check_action(
+        db, claims=claims, action="delete_payment",
+        target_id=str(payment_id),
+        target_label=(getattr(rc, "customer_name", "") or "")[:160],
+        summary=(
+            f"rc={rc_id} amount=${pre_amount:,.2f} "
+            f"paid_on={pre_paid_on.isoformat() if pre_paid_on else ''}"
+        ),
+    )
+    db.commit()
     return ReturnCheckPaymentResponse(
         payment=None,
         return_check=_row(rc),
