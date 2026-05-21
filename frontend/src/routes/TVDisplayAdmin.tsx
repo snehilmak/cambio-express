@@ -75,14 +75,14 @@ function formatPairTimestamp(
   return formatTimestamp(iso, { userTimezone, storeTimezone });
 }
 
-// /app/admin/tv-display — tabbed admin hub.  Layout route: this
+// /app/tv-display — tabbed admin hub.  Layout route: this
 // component renders the page chrome (title + tab bar) + the
 // shared loading/error state, then `<Outlet />` for the active
 // child tab.  Each tab is a child route mounted in App.tsx
 // (`TVDisplayOverview`, `TVDisplayContent`, `TVDisplayDevice`).
 // Tab URLs are deep-linkable.
 //
-// /app/admin/tv-display (bare) redirects to /overview.
+// /app/tv-display (bare) redirects to /overview.
 export default function TVDisplayAdmin() {
   const { data, isLoading, isError, error, refetch } = useTVDisplayOverview();
 
@@ -126,9 +126,9 @@ export default function TVDisplayAdmin() {
   return (
     <main className={styles.page}>
       <TabsBar>
-        <TabsLink to="/admin/tv-display/overview">Overview</TabsLink>
-        <TabsLink to="/admin/tv-display/content">Content</TabsLink>
-        <TabsLink to="/admin/tv-display/device">Device & Settings</TabsLink>
+        <TabsLink to="/tv-display/overview">Overview</TabsLink>
+        <TabsLink to="/tv-display/content">Content</TabsLink>
+        <TabsLink to="/tv-display/device">Device & Settings</TabsLink>
       </TabsBar>
       <Outlet />
     </main>
