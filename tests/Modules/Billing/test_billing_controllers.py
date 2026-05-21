@@ -258,6 +258,43 @@ def test_checkout_passes_absolute_urls_to_service(
     assert "/app/settings" in captured["cancel_url"]
 
 
+def test_portal_502_surfaces_configure_portal_message(
+    client, test_store_id,
+):
+    """When Stripe responds with `billing_portal_configuration_invalid`
+    (operator hasn't activated the Customer Portal in the live-mode
+    dashboard), the Controller should surface a clear "an admin
+    needs to enable the portal" message instead of the generic
+    "Payment service error" — that text was actively confusing the
+    pilot user, who had no way to know the fix was a Dashboard
+    toggle rather than an app bug.
+
+    Plumbed via `exc.__cause__.code` on the StripeServiceError;
+    `_stripe_user_message` translates the code into the friendly
+    message."""
+    from api.Modules.Billing.Services import StripeServiceError
+
+    class _FakeStripeError(Exception):
+        code = "billing_portal_configuration_invalid"
+
+    _set_store_customer_id(test_store_id, "cus_test_abc")
+    token = _login_admin(client, test_store_id)
+    svc_err = StripeServiceError("Stripe billing portal failed")
+    svc_err.__cause__ = _FakeStripeError("portal not configured")
+    with patch(
+        "api.Modules.Billing.Services.create_billing_portal_session",
+        side_effect=svc_err,
+    ):
+        resp = client.post(
+            "/api/v2/billing/portal",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+    assert resp.status_code == 502
+    body = resp.get_json()
+    assert "Customer Portal" in body["detail"] or "billing portal" in body["detail"]
+    assert "configur" in body["detail"]
+
+
 def test_portal_passes_absolute_return_url_to_service(
     client, test_store_id, monkeypatch,
 ):
