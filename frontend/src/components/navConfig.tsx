@@ -63,6 +63,16 @@ export const NAV: NavGroup[] = [
         roles: ["admin", "employee"],
         icon: iconReturnChecks(),
       },
+      {
+        // Storefront rate-board addon — admins configure the
+        // countries / rates / Fire-TV pairing, customers see the
+        // board running on the in-store TV.  Lives in Daily
+        // because it's part of the storefront operation, not the
+        // ledger/finance stack.
+        to: "/tv-display", label: "TV display",
+        roles: ["admin"],
+        icon: iconDevice(),
+      },
     ],
   },
   {
@@ -108,18 +118,29 @@ export const NAV: NavGroup[] = [
     ],
   },
   {
-    title: "Finance",
+    // Reports — everything that's a read-only retrospective view
+    // of store activity (audit trails, P&L, exported snapshots).
+    // Separate from Finance so the sidebar tells the user "go here
+    // to LOOK at what happened" vs "go here to MOVE money."
+    title: "Reports",
     roles: ["admin"],
     icon: iconReports(),
     items: [
       { to: "/reports",            label: "Reports",     icon: iconReports() },
       { to: "/monthly",            label: "Monthly P&L", icon: iconMonthly() },
+      { to: "/admin/audit-log",    label: "Audit log",   icon: iconAudit() },
+      { to: "/admin/tax-export",   label: "Tax export",  icon: iconReports() },
+      { to: "/admin/data-export",  label: "Data export", icon: iconReports() },
+    ],
+  },
+  {
+    title: "Finance",
+    roles: ["admin"],
+    icon: iconBank(),
+    items: [
       { to: "/batches",            label: "ACH batches", icon: iconBatches() },
       { to: "/bank",               label: "Bank sync",   icon: iconBank() },
       { to: "/bank-transactions",  label: "Bank txns",   icon: iconBank() },
-      { to: "/admin/audit-log",    label: "Audit log",   icon: iconAudit() },
-      { to: "/admin/data-export",  label: "Data export", icon: iconReports() },
-      { to: "/tv-display",         label: "TV display",  icon: iconDevice() },
     ],
   },
   {
