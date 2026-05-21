@@ -13,7 +13,7 @@ import {
 import { useProfile, useStoreInfo } from "../api/account";
 import { ApiError } from "../lib/api";
 import { formatTimestamp } from "../lib/datetime";
-import { ErrorState, Loading, TabsBar, TabsLink } from "../components/ui";
+import { Button, ErrorState, Loading, TabsBar, TabsLink } from "../components/ui";
 import styles from "./TVDisplayAdmin.module.css";
 
 // /app/tv-display — TV Display add-on operator console.
@@ -299,11 +299,14 @@ function PublicUrlBar({
           aria-label="Public TV display URL"
           className={styles.urlBarInput}
         />
-        <button type="button" onClick={copy} className={styles.urlBarButton}>
+        <Button
+          tone="secondary" size="sm"
+          onClick={copy}
+        >
           {copyState === "copied" ? "Copied"
             : copyState === "fail" ? "Select + copy"
             : "Copy"}
-        </button>
+        </Button>
         <a
           href={publicUrl}
           target="_blank"
@@ -573,9 +576,13 @@ function SettingsAndStatsGrid({
             </div>
             <div style={{ marginTop: 16, display: "flex", justifyContent: "flex-end", gap: 12, alignItems: "center" }}>
               {saved && <span className={styles.savedFlash}>Saved</span>}
-              <button type="submit" disabled={savePending} className={styles.primaryButton}>
+              <Button
+                type="submit"
+                busy={savePending}
+                disabled={savePending}
+              >
                 {savePending ? "Saving…" : "Save settings"}
-              </button>
+              </Button>
             </div>
           </form>
         </div>
@@ -732,9 +739,13 @@ function CountrySections({
             </label>
             {createError && <div className={styles.flashErr} style={{ marginTop: 12 }}>{createError}</div>}
             <div style={{ marginTop: 14, display: "flex", justifyContent: "flex-end" }}>
-              <button type="submit" disabled={createPending} className={styles.primaryButton}>
+              <Button
+                type="submit"
+                busy={createPending}
+                disabled={createPending}
+              >
                 {createPending ? "Adding…" : "Add country"}
-              </button>
+              </Button>
             </div>
           </form>
         </details>
