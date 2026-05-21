@@ -64,6 +64,10 @@ def create_checkout_session(
     return the redirect URL.
 
     Raises:
+        StripeNotConfiguredError — `stripe.api_key` is empty
+            (operator hasn't set STRIPE_SECRET_KEY).  Distinct
+            from StripeServiceError so callers can render a
+            clear "Stripe isn't configured" message.
         InvalidPlanError — plan slug unknown, OR the Price ID env
             var is empty (treated as "plan not offered here").
         StripeServiceError — `stripe.error.StripeError` from the
@@ -73,6 +77,8 @@ def create_checkout_session(
     contract — this helper sets it unconditionally per CLAUDE.md
     invariant #8.
     """
+    from api.Modules.Billing.Services.config import require_stripe_configured
+    require_stripe_configured()
     price_map = resolve_price_ids()
     if plan not in price_map or not price_map[plan]:
         raise InvalidPlanError(f"Plan {plan!r} is not offered here.")

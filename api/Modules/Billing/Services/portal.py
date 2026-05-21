@@ -13,6 +13,7 @@ import stripe
 
 from api.Modules.Billing.Models import Store
 from api.Modules.Billing.Services.checkout import StripeServiceError
+from api.Modules.Billing.Services.config import require_stripe_configured
 
 
 class NoBillingCustomerError(Exception):
@@ -28,12 +29,17 @@ def create_billing_portal_session(
     the redirect URL.
 
     Raises:
+        StripeNotConfiguredError — `stripe.api_key` is empty
+            (operator hasn't set STRIPE_SECRET_KEY).  Distinct
+            from the generic StripeServiceError so the Controller
+            can surface a clear "Stripe isn't configured" message.
         NoBillingCustomerError — store has no `stripe_customer_id`.
             The caller's flash message should suggest picking a plan
             (which triggers the customer creation in the webhook).
         StripeServiceError — `stripe.error.StripeError` from the SDK
             (the underlying exception is on `__cause__` for logging).
     """
+    require_stripe_configured()
     if not store or not getattr(store, "stripe_customer_id", None):
         raise NoBillingCustomerError(
             "Store has no Stripe billing customer.",
