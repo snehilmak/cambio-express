@@ -109,11 +109,15 @@ def update_line_item(
             raise LineItemValidationError(
                 "Amount must be greater than zero.",
             )
-        line_item.amount = float(amount)
+        # `setattr` rather than direct assignment — SQLAlchemy 1.x
+        # column descriptors expose `Column[float]` to mypy, which
+        # rejects `float` assignments under --strict.  Same trick
+        # `recompute_line_items_total` uses below.
+        setattr(line_item, "amount", float(amount))
     if at_time is not None:
-        line_item.at_time = at_time
+        setattr(line_item, "at_time", at_time)
     if note is not None:
-        line_item.note = note.strip()[:120]
+        setattr(line_item, "note", note.strip()[:120])
     db.flush()
     return line_item
 
