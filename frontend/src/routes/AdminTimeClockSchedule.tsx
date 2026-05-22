@@ -11,8 +11,8 @@ import {
 import { useEmployees } from "../api/transfers";
 import { ApiError } from "../lib/api";
 import {
-  Alert, Button, Card, EmptyState, ErrorState, Field, Input, Loading,
-  PageHeader, PageShell, Select,
+  Alert, Button, Card, ConfirmDialog, EmptyState, ErrorState, Field, Input,
+  Loading, PageHeader, PageShell, Select,
 } from "../components/ui";
 import styles from "./AdminTimeClockSchedule.module.css";
 
@@ -205,14 +205,14 @@ function ShiftCard({
 }) {
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
-  async function onDelete() {
-    if (!confirm(`Delete the ${trimSeconds(shift.start_time)} `
-      + `shift for ${shift.employee_name}?`)) return;
+  async function doDelete() {
     setBusy(true);
     try {
       await deleteShift(shift.id);
       onSaved(`Deleted ${shift.employee_name}'s shift.`);
+      setConfirmingDelete(false);
     } catch (err) {
       onError(err instanceof ApiError
         ? err.message
@@ -252,12 +252,26 @@ function ShiftCard({
         </button>
         <button
           type="button" className={styles.linkBtn}
-          onClick={() => { void onDelete(); }}
+          onClick={() => setConfirmingDelete(true)}
           disabled={busy}
         >
           {busy ? "…" : "Delete"}
         </button>
       </div>
+      <ConfirmDialog
+        open={confirmingDelete}
+        title="Delete shift"
+        message={
+          `Delete the ${trimSeconds(shift.start_time)} shift for `
+          + `${shift.employee_name}? The roster row stays; only this `
+          + "planned shift is removed."
+        }
+        confirmLabel="Delete"
+        confirmTone="danger"
+        busy={busy}
+        onConfirm={() => { void doDelete(); }}
+        onCancel={() => setConfirmingDelete(false)}
+      />
     </div>
   );
 }

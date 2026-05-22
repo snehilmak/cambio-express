@@ -18,9 +18,9 @@ import {
 import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
 import {
-  Alert, Button, ButtonLink, Card, EmptyState, Field, FormActions, Input,
-  Loading, PageHeader, PageShell, SectionTitle, Select, space, Table, Textarea,
-  tdStyle, thStyle,
+  Alert, Button, ButtonLink, Card, ConfirmDialog, EmptyState, Field,
+  FormActions, Input, Loading, PageHeader, PageShell, SectionTitle, Select,
+  space, Table, Textarea, tdStyle, thStyle,
 } from "../components/ui";
 import styles from "./ReturnCheckForm.module.css";
 
@@ -120,13 +120,20 @@ export default function ReturnCheckForm() {
     }
   }
 
-  async function transition(fn: (id: number) => Promise<unknown>, label: string) {
-    if (!isEdit) return;
-    if (!confirm(`${label} this return check?`)) return;
+  // Status transitions are gated through a ConfirmDialog.  The
+  // pending action carries the API fn + the human label so the
+  // dialog body can render the right wording.
+  const [pendingTransition, setPendingTransition] =
+    useState<{ fn: (id: number) => Promise<unknown>; label: string } | null>(null);
+
+  async function doTransition() {
+    if (!isEdit || !pendingTransition) return;
+    const { fn, label } = pendingTransition;
     setError(null); setBusy(true);
     try {
       await fn(rcId);
       await detail.refetch();
+      setPendingTransition(null);
     } catch (err) {
       setError(
         err instanceof ApiError
@@ -228,14 +235,14 @@ export default function ReturnCheckForm() {
               <>
                 <Button
                   tone="danger"
-                  onClick={() => transition(markLoss, "Mark loss")}
+                  onClick={() => setPendingTransition({ fn: markLoss, label: "Mark loss" })}
                   disabled={busy}
                 >
                   Mark loss
                 </Button>
                 <Button
                   tone="danger"
-                  onClick={() => transition(markFraud, "Mark fraud")}
+                  onClick={() => setPendingTransition({ fn: markFraud, label: "Mark fraud" })}
                   disabled={busy}
                 >
                   Mark fraud
@@ -245,7 +252,7 @@ export default function ReturnCheckForm() {
             {status !== "pending" && (
               <Button
                 tone="secondary"
-                onClick={() => transition(reopenReturnCheck, "Reopen")}
+                onClick={() => setPendingTransition({ fn: reopenReturnCheck, label: "Reopen" })}
                 disabled={busy}
               >
                 Reopen
@@ -284,6 +291,23 @@ export default function ReturnCheckForm() {
           )}
         </Card>
       )}
+
+      <ConfirmDialog
+        open={pendingTransition != null}
+        title={`${pendingTransition?.label ?? ""} this return check?`}
+        message={
+          pendingTransition?.label === "Reopen"
+            ? "Re-opens this check for collection.  Payments stay; you can mark it again later."
+            : "Marks the check as a final outcome.  You can re-open it later if needed."
+        }
+        confirmLabel={pendingTransition?.label ?? "Confirm"}
+        confirmTone={
+          pendingTransition?.label === "Reopen" ? "primary" : "danger"
+        }
+        busy={busy}
+        onConfirm={() => { void doTransition(); }}
+        onCancel={() => setPendingTransition(null)}
+      />
     </PageShell>
   );
 }
@@ -417,11 +441,12 @@ function PaymentsTable({
   const identity = getCurrentIdentity();
   const [busyId, setBusyId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [pendingRemove, setPendingRemove] =
+    useState<ReturnCheckPaymentRow | null>(null);
 
-  async function onDelete(p: ReturnCheckPaymentRow) {
-    if (!confirm(`Remove the $${p.amount.toFixed(2)} payment from ${p.paid_on}?`)) {
-      return;
-    }
+  async function doRemove() {
+    if (!pendingRemove) return;
+    const p = pendingRemove;
     setError(null);
     setBusyId(p.id);
     try {
@@ -432,6 +457,7 @@ function PaymentsTable({
       qc.invalidateQueries({
         queryKey: ["return-checks", "payments", identity?.store_id, rcId],
       });
+      setPendingRemove(null);
     } catch (err) {
       setError(
         err instanceof ApiError
@@ -473,7 +499,7 @@ function PaymentsTable({
                     tone="danger" size="sm"
                     busy={busyId === p.id}
                     disabled={busyId !== null}
-                    onClick={() => onDelete(p)}
+                    onClick={() => setPendingRemove(p)}
                   >
                     {busyId === p.id ? "Removing…" : "Remove"}
                   </Button>
@@ -483,6 +509,22 @@ function PaymentsTable({
           ))}
         </tbody>
       </Table>
+      <ConfirmDialog
+        open={pendingRemove != null}
+        title="Remove payment"
+        message={
+          pendingRemove
+            ? `Remove the $${pendingRemove.amount.toFixed(2)} payment from `
+              + `${pendingRemove.paid_on}?  The audit trail keeps the original `
+              + "entry but the recovered total goes back down."
+            : ""
+        }
+        confirmLabel="Remove"
+        confirmTone="danger"
+        busy={busyId != null}
+        onConfirm={() => { void doRemove(); }}
+        onCancel={() => setPendingRemove(null)}
+      />
     </>
   );
 }

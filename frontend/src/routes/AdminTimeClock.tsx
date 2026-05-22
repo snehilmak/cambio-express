@@ -11,9 +11,9 @@ import { useProfile, useStoreInfo } from "../api/account";
 import { ApiError } from "../lib/api";
 import { formatTimestamp } from "../lib/datetime";
 import {
-  Alert, Button, Card, EmptyState, ErrorState, Field, Input,
+  Alert, Button, Card, ConfirmDialog, EmptyState, ErrorState, Field, Input,
   Loading, Modal, PageHeader, PageShell, Pill, RowActions, Select, space, Table,
-  TableSkeleton, Textarea, tdStyle, thStyle,
+  TableSkeleton, Textarea, tdStyle, thStyle, useToast,
 } from "../components/ui";
 import { getCurrentIdentity } from "../lib/auth";
 import styles from "./AdminTimeClock.module.css";
@@ -59,6 +59,10 @@ export default function AdminTimeClock() {
   const [modal, setModal] = useState<ModalState>({ kind: "closed" });
   const [expandedHistoryId, setExpandedHistoryId] =
     useState<number | null>(null);
+  // Pending entry-id staged for delete via the kit ConfirmDialog.
+  const [pendingDelete, setPendingDelete] = useState<number | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const toast = useToast();
 
   const data = useAdminTimeClock(
     from, to, empFilter === "" ? undefined : Number(empFilter),
@@ -239,19 +243,7 @@ export default function AdminTimeClock() {
                           },
                           {
                             label: "Delete", tone: "danger",
-                            onClick: async () => {
-                              if (!window.confirm(
-                                "Delete this time-clock entry? The audit row will survive.",
-                              )) return;
-                              try {
-                                await adminDeleteEntry(r.id);
-                                refresh();
-                              } catch (e) {
-                                window.alert(
-                                  e instanceof ApiError ? e.message : "Couldn't delete.",
-                                );
-                              }
-                            },
+                            onClick: () => setPendingDelete(r.id),
                           },
                         ]}
                       />
@@ -283,6 +275,35 @@ export default function AdminTimeClock() {
         />
       )}
 
+      <ConfirmDialog
+        open={pendingDelete != null}
+        title="Delete time-clock entry"
+        message={
+          "Delete this time-clock entry?  The audit row survives, but "
+          + "the entry disappears from the payroll roll-up."
+        }
+        confirmLabel="Delete"
+        confirmTone="danger"
+        busy={deleteBusy}
+        onConfirm={async () => {
+          if (pendingDelete == null) return;
+          setDeleteBusy(true);
+          try {
+            await adminDeleteEntry(pendingDelete);
+            setPendingDelete(null);
+            refresh();
+          } catch (e) {
+            toast({
+              message: e instanceof ApiError ? e.message : "Couldn't delete.",
+              tone: "error",
+              duration: 5000,
+            });
+          } finally {
+            setDeleteBusy(false);
+          }
+        }}
+        onCancel={() => setPendingDelete(null)}
+      />
     </PageShell>
   );
 }

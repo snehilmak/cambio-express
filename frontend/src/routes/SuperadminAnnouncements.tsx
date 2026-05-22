@@ -10,9 +10,9 @@ import {
   type CreateAnnouncementBody,
 } from "../api/announcements";
 import {
-  Alert, Button, Card, Empty, EmptyState, ErrorState, Field, Input,
-  PageHeader, PageShell, Pill, SectionTitle, Select, Table, TableSkeleton,
-  Textarea, tdStyle, thStyle, type PillTone,
+  Alert, Button, Card, ConfirmDialog, Empty, EmptyState, ErrorState, Field,
+  Input, PageHeader, PageShell, Pill, SectionTitle, Select, Table,
+  TableSkeleton, Textarea, tdStyle, thStyle, type PillTone,
 } from "../components/ui";
 import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
@@ -226,6 +226,7 @@ function AnnouncementsTable({
 function Row({ row, onChanged }: { row: AnnouncementRow; onChanged: () => void }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   async function onToggle() {
     setErr(null); setBusy(true);
@@ -239,12 +240,12 @@ function Row({ row, onChanged }: { row: AnnouncementRow; onChanged: () => void }
     }
   }
 
-  async function onDelete() {
-    if (!confirm("Delete this announcement permanently?")) return;
+  async function doDelete() {
     setErr(null); setBusy(true);
     try {
       await deleteAnnouncement(row.id);
       onChanged();
+      setConfirmingDelete(false);
     } catch (e) {
       setErr(e instanceof ApiError ? e.message : "Could not delete.");
     } finally {
@@ -295,11 +296,22 @@ function Row({ row, onChanged }: { row: AnnouncementRow; onChanged: () => void }
           <Button tone="secondary" size="sm" busy={busy} onClick={onToggle}>
             {row.is_active ? "Disable" : "Enable"}
           </Button>
-          <Button tone="danger" size="sm" busy={busy} onClick={onDelete}>
+          <Button tone="danger" size="sm" busy={busy}
+            onClick={() => setConfirmingDelete(true)}>
             Delete
           </Button>
         </div>
         {err && <span className={styles.rowError}>{err}</span>}
+        <ConfirmDialog
+          open={confirmingDelete}
+          title="Delete announcement"
+          message="Delete this announcement permanently? Operators who haven't dismissed it yet will lose the message."
+          confirmLabel="Delete"
+          confirmTone="danger"
+          busy={busy}
+          onConfirm={() => { void doDelete(); }}
+          onCancel={() => setConfirmingDelete(false)}
+        />
       </td>
     </tr>
   );

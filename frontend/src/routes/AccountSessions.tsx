@@ -9,8 +9,8 @@ import {
 } from "../api/account";
 import { ApiError } from "../lib/api";
 import {
-  Alert, Button, Card, ErrorState, Loading, PageHeader, PageShell, Section,
-  space, Table, tdStyle, thStyle, tokens,
+  Alert, Button, Card, ConfirmDialog, ErrorState, Loading, PageHeader,
+  PageShell, Section, space, Table, tdStyle, thStyle, tokens,
 } from "../components/ui";
 import styles from "./AccountSessions.module.css";
 
@@ -44,12 +44,15 @@ export default function AccountSessions() {
     }
   }
 
-  async function onRevokeOthers() {
-    if (!confirm(
-      "Sign out of every other device? You'll stay signed in here.",
-    )) return;
+  // Destructive: gate the "sign out everywhere" action via a
+  // confirm dialog so a stray click doesn't yank the user's
+  // other browsers / installed PWAs offline.
+  const [confirmingRevokeOthers, setConfirmingRevokeOthers] = useState(false);
+
+  async function doRevokeOthers() {
     setBusy("others");
     setRevokeError(null);
+    setConfirmingRevokeOthers(false);
     try {
       const result = await revokeOtherSessions();
       setToast(
@@ -109,7 +112,7 @@ export default function AccountSessions() {
             size="sm"
             busy={busy === "others"}
             disabled={busy !== null}
-            onClick={() => { void onRevokeOthers(); }}
+            onClick={() => setConfirmingRevokeOthers(true)}
           >
             Sign out everywhere else
           </Button>
@@ -170,6 +173,17 @@ export default function AccountSessions() {
         session ends every API call from that browser; the next
         action there will redirect to login.
       </p>
+
+      <ConfirmDialog
+        open={confirmingRevokeOthers}
+        title="Sign out of other devices?"
+        message="You'll stay signed in here. Every other browser / installed PWA will be signed out and need to re-authenticate."
+        confirmLabel="Sign out everywhere else"
+        confirmTone="danger"
+        busy={busy === "others"}
+        onConfirm={() => { void doRevokeOthers(); }}
+        onCancel={() => setConfirmingRevokeOthers(false)}
+      />
     </PageShell>
   );
 }

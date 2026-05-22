@@ -13,8 +13,9 @@ import {
 } from "../api/bankSync";
 import { ApiError } from "../lib/api";
 import {
-  Button, ButtonLink, Card, EmptyState, ErrorState, Field, Input, Loading,
-  PageHeader, PageShell, Section, Select, Table, tdStyle, thStyle,
+  Button, ButtonLink, Card, ConfirmDialog, EmptyState, ErrorState, Field,
+  Input, Loading, PageHeader, PageShell, Section, Select, Table, tdStyle,
+  thStyle,
 } from "../components/ui";
 import styles from "./BankRules.module.css";
 
@@ -139,10 +140,22 @@ export default function BankRules() {
     await rules.refetch();
   }
 
-  async function handleDelete(r: BankRuleRow) {
-    if (!confirm(`Delete rule "${r.description || r.desc_match_value}"?`)) return;
-    await deleteRule(r.id);
-    await rules.refetch();
+  // Destructive: gate via ConfirmDialog rather than window.confirm
+  // so the prompt is themed + accessible.  `pendingDelete` is the
+  // row being staged for removal; null means "no dialog showing".
+  const [pendingDelete, setPendingDelete] = useState<BankRuleRow | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+
+  async function doDelete() {
+    if (!pendingDelete) return;
+    setDeleteBusy(true);
+    try {
+      await deleteRule(pendingDelete.id);
+      await rules.refetch();
+      setPendingDelete(null);
+    } finally {
+      setDeleteBusy(false);
+    }
   }
 
   return (
@@ -319,7 +332,7 @@ export default function BankRules() {
                       <Button tone="secondary" size="sm" onClick={() => handleToggle(r)}>
                         {r.enabled ? "Disable" : "Enable"}
                       </Button>
-                      <Button tone="danger" size="sm" onClick={() => handleDelete(r)}>Delete</Button>
+                      <Button tone="danger" size="sm" onClick={() => setPendingDelete(r)}>Delete</Button>
                     </td>
                   </tr>
                 ))}
@@ -328,6 +341,21 @@ export default function BankRules() {
           )}
         </Card>
       </Section>
+
+      <ConfirmDialog
+        open={pendingDelete != null}
+        title="Delete rule"
+        message={
+          `Delete rule "${pendingDelete?.description || pendingDelete?.desc_match_value || ""}"? `
+          + "Existing tagged transactions keep their labels; only "
+          + "future syncs stop applying this rule."
+        }
+        confirmLabel="Delete"
+        confirmTone="danger"
+        busy={deleteBusy}
+        onConfirm={() => { void doDelete(); }}
+        onCancel={() => setPendingDelete(null)}
+      />
     </PageShell>
   );
 }

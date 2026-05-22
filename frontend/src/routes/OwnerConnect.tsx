@@ -11,8 +11,8 @@ import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
 import { formatDate as formatDateTz } from "../lib/datetime";
 import {
-  Button, Card, ErrorState, Loading, PageHeader, PageShell, Section,
-  Table, tdStyle, thStyle,
+  Button, Card, ConfirmDialog, ErrorState, Loading, PageHeader, PageShell,
+  Section, Table, tdStyle, thStyle,
 } from "../components/ui";
 import styles from "./OwnerConnect.module.css";
 
@@ -40,6 +40,12 @@ export default function OwnerConnect() {
   const [busy, setBusy] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  // Two destructive actions live on this page; each gets its own
+  // ConfirmDialog open-state so the right copy lands in the right
+  // prompt.  Lifted above the role-check early-return so hooks
+  // run in the same order on every render.
+  const [confirmingGenerate, setConfirmingGenerate] = useState(false);
+  const [confirmingRevoke, setConfirmingRevoke] = useState(false);
 
   // The legacy page shows the FIRST unused-unrevoked-unexpired
   // code as the "active" one; we narrow to the same shape.
@@ -66,12 +72,8 @@ export default function OwnerConnect() {
     );
   }
 
-  async function handleGenerate() {
-    if (!confirm(
-      active
-        ? "Generate a new code? This will revoke the current one."
-        : "Generate a new invite code? It expires in 7 days.",
-    )) return;
+  async function doGenerate() {
+    setConfirmingGenerate(false);
     setBusy(true); setServerError(null);
     try {
       // Legacy contract: generating revokes any active code first.
@@ -89,12 +91,9 @@ export default function OwnerConnect() {
     } finally { setBusy(false); }
   }
 
-  async function handleRevoke() {
+  async function doRevoke() {
     if (!active) return;
-    if (!confirm(
-      "Revoke this code? The store admin won't be able to redeem it. " +
-      "You can generate a new one right after.",
-    )) return;
+    setConfirmingRevoke(false);
     setBusy(true); setServerError(null);
     try {
       await revokeOwnerConnectCode(active.id);
@@ -142,7 +141,7 @@ export default function OwnerConnect() {
                 page to link their store to your umbrella. Codes are
                 valid for 7 days.
               </p>
-              <Button onClick={handleGenerate} busy={busy} disabled={busy}>
+              <Button onClick={() => setConfirmingGenerate(true)} busy={busy} disabled={busy}>
                 {busy ? "Generating…" : "Generate Invite Code"}
               </Button>
             </>
@@ -166,10 +165,10 @@ export default function OwnerConnect() {
                 </Button>
               </div>
               <div className={styles.actionsRow}>
-                <Button tone="secondary" onClick={handleRevoke} disabled={busy}>
+                <Button tone="secondary" onClick={() => setConfirmingRevoke(true)} disabled={busy}>
                   Revoke
                 </Button>
-                <Button tone="secondary" onClick={handleGenerate} disabled={busy}>
+                <Button tone="secondary" onClick={() => setConfirmingGenerate(true)} disabled={busy}>
                   {busy ? "Generating…" : "Generate New Code"}
                 </Button>
               </div>
@@ -220,6 +219,31 @@ export default function OwnerConnect() {
         <Link to="/owner/locations" className={styles.inlineLink}>Locations</Link>{" "}
         page — only the owner can break the link, store admins can't.
       </p>
+
+      <ConfirmDialog
+        open={confirmingGenerate}
+        title={active ? "Replace the current code?" : "Generate a new code?"}
+        message={
+          active
+            ? "Generating a new code revokes the current one — the store admin who's holding it won't be able to redeem anymore."
+            : "A fresh 8-character invite code valid for 7 days.  Share it with the store admin you want to connect."
+        }
+        confirmLabel={active ? "Replace" : "Generate"}
+        confirmTone={active ? "danger" : "primary"}
+        busy={busy}
+        onConfirm={() => { void doGenerate(); }}
+        onCancel={() => setConfirmingGenerate(false)}
+      />
+      <ConfirmDialog
+        open={confirmingRevoke}
+        title="Revoke this code?"
+        message="The store admin won't be able to redeem it.  You can generate a new one right after."
+        confirmLabel="Revoke"
+        confirmTone="danger"
+        busy={busy}
+        onConfirm={() => { void doRevoke(); }}
+        onCancel={() => setConfirmingRevoke(false)}
+      />
     </PageShell>
   );
 }
