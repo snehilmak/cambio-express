@@ -40,41 +40,11 @@
   color: var(--db-text-muted, #a3a3a3);
 }
 
-.tabBar {
-  display: flex;
-  gap: 0.4rem;
-  flex-wrap: wrap;
-  background: var(--db-surface-2, #141414);
-  border: 1px solid var(--db-border, #262626);
-  border-radius: 0.875rem;
-  padding: 0.35rem;
-}
-
-.tabBtn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.55rem;
-  background: transparent;
-  color: var(--db-text-muted, #a3a3a3);
-  border: 1px solid transparent;
-  border-radius: 0.65rem;
-  padding: 0.55rem 0.95rem;
-  font-family: var(--db-font-body, "Inter", system-ui, sans-serif);
-  font-size: 0.88rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition:
-    background 120ms ease,
-    color 120ms ease,
-    border-color 120ms ease;
-}
-
-.tabBtnActive {
-  background: var(--db-surface, #0a0a0a);
-  color: var(--db-text, #f5f5f5);
-  border-color: rgba(63, 255, 0, 0.25);
-  box-shadow: 0 1px 0 rgba(63, 255, 0, 0.18) inset;
-}
+/* `.tabBar` / `.tabBtn` / `.tabBtnActive` retired — the daily
+ * book is single-page now (every section renders inline).  The
+ * always-visible <TotalsStrip> at the top of the page surfaces
+ * the receipts + disbursements totals the tab labels used to
+ * show.  See EditDailyBook.tsx `TabBar` retirement note. */
 
 .form {
   display: flex;
@@ -85,8 +55,19 @@
 
 .panelGrid {
   display: grid;
+  /* Single-column at phone widths (the cards stack so each one
+   * gets the full viewport width).  At the typical tablet
+   * breakpoint, jump to 2-column so the manual-input card sits
+   * beside the line-items card — matches the single-page
+   * layout intent (see EditDailyBook.tsx single-page note). */
   grid-template-columns: minmax(0, 1fr);
   gap: 1rem;
+}
+
+@media (min-width: 60rem) {
+  .panelGrid {
+    grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  }
 }
 
 .panelTitle {

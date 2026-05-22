@@ -24,7 +24,7 @@ import {
 import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
 import {
-  Button, Card, EmptyState, Field, fontSize, Input, Loading,
+  Button, Card, EmptyState, Field, Input, Loading, MoneyInput,
   PageHeader, PageShell, Pill, Textarea,
 } from "../components/ui";
 import styles from "./EditDailyBook.module.css";
@@ -166,13 +166,14 @@ const DISBURSEMENT_LINE_ITEMS: LineItemFieldDef[] = [
   { key: "other_cash_out",     label: "Other cash out",       kind: "other_cash_out" },
 ];
 
-type Tab = "receipts" | "disbursements" | "transfers" | "notes";
-const TAB_DEFS: Array<{ id: Tab; label: string }> = [
-  { id: "receipts",      label: "Receipts" },
-  { id: "disbursements", label: "Disbursements" },
-  { id: "transfers",     label: "Money Transfers" },
-  { id: "notes",         label: "Over / Short & Notes" },
-];
+// The page used to be tab-based (Receipts / Disbursements /
+// Money Transfers / Over-Short & Notes).  Pilot called out the
+// click-to-switch as too many clicks for a workflow that needs
+// the operator to see + reconcile multiple sections at once.
+// Switched to a single-page layout where every panel renders
+// inline, top-to-bottom.  The legacy `?tab=` query param is
+// ignored — links from the calendar drop the operator at the
+// top of the page and they can scroll to the relevant section.
 
 // ── Component ────────────────────────────────────────────────
 
@@ -180,17 +181,12 @@ export default function EditDailyBook() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const identity = getCurrentIdentity();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const date = searchParams.get("date") ?? "";
-  const initialTab = (searchParams.get("tab") as Tab) ?? "receipts";
-
   const detail = useDailyReport(date || undefined);
   const lineItemsQuery = useLineItems(date || undefined);
 
   const [form, setForm] = useState<FormState | null>(null);
-  const [activeTab, setActiveTab] = useState<Tab>(
-    TAB_DEFS.some((t) => t.id === initialTab) ? initialTab : "receipts",
-  );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [savedAt, setSavedAt] = useState<Date | null>(null);
@@ -220,12 +216,6 @@ export default function EditDailyBook() {
     setForm((f) => (f ? { ...f, [key]: value } : f));
   }, []);
 
-  const switchTab = useCallback((next: Tab) => {
-    setActiveTab(next);
-    const p = new URLSearchParams(searchParams);
-    p.set("tab", next);
-    setSearchParams(p, { replace: true });
-  }, [searchParams, setSearchParams]);
 
   // Invalidate after a line-item mutation so the report's derived
   // total + the entries list both re-fetch.
@@ -352,45 +342,47 @@ export default function EditDailyBook() {
         overShort={form.over_short}
       />
 
-      <TabBar active={activeTab} onChange={switchTab} totals={totals} />
-
       <form onSubmit={onSubmit} className={styles.form}>
-        {activeTab === "receipts" && (
-          <ReceiptsPanel
-            form={form}
-            set={set}
-            report={report}
-            date={date}
-            storeId={storeId}
-            locked={locked}
-            lineItems={lineItems}
-            onLineItemChange={refreshAfterLineItem}
-          />
-        )}
-        {activeTab === "disbursements" && (
-          <DisbursementsPanel
-            form={form}
-            set={set}
-            report={report}
-            date={date}
-            storeId={storeId}
-            locked={locked}
-            lineItems={lineItems}
-            onLineItemChange={refreshAfterLineItem}
-          />
-        )}
-        {activeTab === "transfers" && (
-          <TransfersPanel
-            set={set}
-            locked={locked}
-            date={date}
-            storeId={storeId}
-            onJumpReceipts={() => switchTab("receipts")}
-          />
-        )}
-        {activeTab === "notes" && (
-          <NotesPanel form={form} set={set} locked={locked} />
-        )}
+        {/* Single-page layout — every section renders inline so
+            the operator never has to click-then-scroll to
+            reconcile two sections.  Replaces the legacy tab
+            structure (Receipts / Disbursements / Money
+            Transfers / Over-Short & Notes).  Each panel keeps
+            its own internal 2-column input/line-items grid. */}
+        <ReceiptsPanel
+          form={form}
+          set={set}
+          report={report}
+          date={date}
+          storeId={storeId}
+          locked={locked}
+          lineItems={lineItems}
+          onLineItemChange={refreshAfterLineItem}
+        />
+        <DisbursementsPanel
+          form={form}
+          set={set}
+          report={report}
+          date={date}
+          storeId={storeId}
+          locked={locked}
+          lineItems={lineItems}
+          onLineItemChange={refreshAfterLineItem}
+        />
+        <TransfersPanel
+          set={set}
+          locked={locked}
+          date={date}
+          storeId={storeId}
+          /* `onJumpReceipts` was the old "scroll to top" CTA
+             when transfers were a separate tab.  In the
+             stacked layout the operator can just scroll up,
+             so this is a no-op now. */
+          onJumpReceipts={() => {
+            window.scrollTo({ top: 0, behavior: "smooth" });
+          }}
+        />
+        <NotesPanel form={form} set={set} locked={locked} />
 
         {error && <ErrorRow message={error} />}
 
@@ -480,60 +472,12 @@ function TotalsCard({
   );
 }
 
-// ── Tab bar ──────────────────────────────────────────────────
-
-function TabBar({
-  active, onChange, totals,
-}: {
-  active: Tab;
-  onChange: (t: Tab) => void;
-  totals: { receipts: number; disbursements: number };
-}) {
-  return (
-    <div role="tablist" aria-label="Daily book sections" className={styles.tabBar}>
-      {TAB_DEFS.map((t) => {
-        const isActive = t.id === active;
-        const hint = (() => {
-          if (t.id === "receipts") return fmtMoney(totals.receipts);
-          if (t.id === "disbursements") return fmtMoney(totals.disbursements);
-          return null;
-        })();
-        return (
-          <button
-            key={t.id}
-            type="button"
-            role="tab"
-            aria-selected={isActive}
-            onClick={() => onChange(t.id)}
-            className={
-              isActive
-                ? `${styles.tabBtn} ${styles.tabBtnActive}`
-                : styles.tabBtn
-            }
-          >
-            <span>{t.label}</span>
-            {hint && (
-              <span
-                style={{
-                  fontFamily: "var(--db-font-mono, 'JetBrains Mono', monospace)",
-                  fontSize: fontSize.xs,
-                  color: isActive
-                    ? "var(--db-accent, #3fff00)"
-                    : "var(--db-text-muted, #a3a3a3)",
-                  fontWeight: 600,
-                }}
-              >
-                {hint}
-              </span>
-            )}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
 // ── Panels ───────────────────────────────────────────────────
+//
+// `TabBar` component retired — the daily book renders all
+// panels stacked inline now (see the render() above).  The
+// per-tab totals (Receipts / Disbursements totals) still
+// surface via the always-visible `<TotalsStrip>` at the top.
 
 interface PanelProps {
   form: FormState;
@@ -1285,6 +1229,13 @@ function InputGrid({ children }: { children: React.ReactNode }) {
   return <div className={styles.inputGrid}>{children}</div>;
 }
 
+/** Tiny shim around the kit `<MoneyInput>` so the panel components
+ *  below don't have to spread MoneyInput's full prop surface
+ *  everywhere.  All dollar fields on the daily book go through
+ *  this primitive — `inputMode="decimal"`, no spinner arrows,
+ *  empty input means 0, optional `$` prefix.  See
+ *  `frontend/src/components/ui/MoneyInput.tsx` for the contract
+ *  and the linked test cases. */
 function NumberInput({
   label, value, onChange, disabled,
 }: {
@@ -1294,16 +1245,12 @@ function NumberInput({
   disabled?: boolean;
 }) {
   return (
-    <Field label={label}>
-      <Input
-        type="number"
-        step="0.01"
-        value={Number.isFinite(value) ? value : 0}
-        onChange={(e) => onChange(Number(e.target.value) || 0)}
-        disabled={disabled}
-        style={{ fontFamily: "var(--db-font-mono, 'JetBrains Mono', monospace)" }}
-      />
-    </Field>
+    <MoneyInput
+      label={label}
+      value={Number.isFinite(value) ? value : 0}
+      onChange={onChange}
+      disabled={disabled}
+    />
   );
 }
 
@@ -1367,13 +1314,9 @@ function computeTotals(form: FormState | null, report: DailyReportRow | null | u
   return { receipts, disbursements, net };
 }
 
-function fmtMoney(n: number): string {
-  if (!Number.isFinite(n)) return "$0";
-  return n.toLocaleString(undefined, {
-    style: "currency", currency: "USD",
-    minimumFractionDigits: 0, maximumFractionDigits: 0,
-  });
-}
+// `fmtMoney` retired alongside the TabBar — was only used for the
+// per-tab totals hints in the bar.  `fmtMoney2` (2-decimal form)
+// stays since it backs the TotalsStrip + StickySaveBar.
 
 function fmtMoney2(n: number): string {
   if (!Number.isFinite(n)) return "$0.00";
