@@ -181,6 +181,29 @@ that was active at registration time.
 
 ## Critical invariants — don't break these
 
+### Per-module `INVARIANTS.md` — read these first
+
+Money-flow modules carry a co-located `INVARIANTS.md` file that
+captures the rules NOT obvious from the code (field categories,
+locked-day semantics, math formulas, cross-module dependencies,
+the 422-trap field list).
+
+**Before editing a file in one of these modules, read the local
+`INVARIANTS.md`:**
+
+- `api/Modules/DailyBook/INVARIANTS.md` — daily ledger. Field
+  categories (operator-editable / line-item-derived /
+  cross-table-derived), lock rules, the 422 trap, the math
+  formulas. `frontend/src/routes/EditDailyBook.tsx` +
+  `frontend/src/api/dailybook.ts` count as "DailyBook files" too.
+
+When more INVARIANTS docs land (Transfers, Batches, Monthly), add
+them to this list. The point: a `frontend/src/routes/Bank.tsx`
+edit needs the Bank invariants in scope; a daily-book edit needs
+the daily-book ones.
+
+### Code-level invariants
+
 1. **Design system is the source of truth.** See
    [`docs/design-system/`](docs/design-system/) and the "Design
    system" section above. Dark-only, neon `#3fff00` as sole accent,
