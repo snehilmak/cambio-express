@@ -192,7 +192,7 @@ Actions audited today:
 - `update_daily_report` (summary: comma-separated list of fields
   the operator touched)
 - `lock_daily_report` / `unlock_daily_report`
-- Line-item create / delete
+- Line-item create / **update** / delete
 
 If you add a new mutation route to this module, add the matching
 `_audit_daily_action` call.

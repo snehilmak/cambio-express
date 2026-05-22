@@ -12,6 +12,7 @@ import {
   replaceMTBreakdown,
   unlockDailyReport,
   updateDailyReport,
+  updateLineItem,
   useDailyReport,
   useLineItems,
   useMTBreakdown,
@@ -25,7 +26,7 @@ import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
 import {
   Button, Card, EmptyState, Field, Input, Loading, MoneyInput,
-  PageHeader, PageShell, Pill, Textarea,
+  PageHeader, PageShell, Pill, RowActions, Textarea,
 } from "../components/ui";
 import styles from "./EditDailyBook.module.css";
 
@@ -998,6 +999,51 @@ function LineItemWidget({
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
+  // Inline-edit state.  `editingId` is null when no row is being
+  // edited.  When set, the row shows three inputs (time / amount /
+  // note) + Save / Cancel actions instead of the static cell text.
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editTime, setEditTime] = useState("");
+  const [editAmount, setEditAmount] = useState(0);
+  const [editNote, setEditNote] = useState("");
+
+  function startEdit(item: LineItemRow) {
+    setEditingId(item.id);
+    setEditTime(item.at_time || "");
+    setEditAmount(item.amount);
+    setEditNote(item.note || "");
+    setErr(null);
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+    setErr(null);
+  }
+
+  async function saveEdit() {
+    if (editingId == null || busy) return;
+    if (!editTime) { setErr("Pick a time."); return; }
+    if (!editAmount || editAmount <= 0) {
+      setErr("Amount must be greater than zero.");
+      return;
+    }
+    setBusy(true);
+    setErr(null);
+    try {
+      await updateLineItem(storeId, editingId, {
+        at_time: editTime,
+        amount: editAmount,
+        note: editNote,
+      });
+      setEditingId(null);
+      onChange();
+    } catch (e) {
+      setErr(humanizeError(e, "Could not save entry."));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function add() {
     if (busy) return;
     setErr(null);
@@ -1134,32 +1180,93 @@ function LineItemWidget({
                   </tr>
                 </thead>
                 <tbody>
-                  {items.map((item) => (
-                    <tr key={item.id}>
-                      <td className={styles.widgetTdMono}>{item.at_time || "—"}</td>
-                      <td className={styles.widgetTdMono}>{fmtMoney2(item.amount)}</td>
-                      <td className={styles.widgetTd}>{item.note || "—"}</td>
-                      {!readOnly && (
-                        <td className={styles.widgetTd}>
-                          {item.return_check_id == null ? (
-                            <Button
-                              type="button"
-                              tone="danger"
-                              size="sm"
-                              busy={busy}
-                              onClick={() => remove(item.id)}
-                            >
-                              Remove
-                            </Button>
-                          ) : (
-                            <span className={styles.widgetTdSmall}>
-                              from return check
-                            </span>
-                          )}
-                        </td>
-                      )}
-                    </tr>
-                  ))}
+                  {items.map((item) => {
+                    const isEditing = editingId === item.id;
+                    const fromReturnCheck = item.return_check_id != null;
+                    if (isEditing) {
+                      // Inline edit row — three inputs replace the
+                      // static cells, with Save / Cancel buttons in
+                      // the actions column.  Validation errors flash
+                      // above the table via the shared `err` state.
+                      return (
+                        <tr key={item.id}>
+                          <td className={styles.widgetTd}>
+                            <Input
+                              type="time"
+                              value={editTime}
+                              onChange={(e) => setEditTime(e.target.value)}
+                              disabled={busy}
+                            />
+                          </td>
+                          <td className={styles.widgetTd}>
+                            <MoneyInput
+                              value={editAmount}
+                              onChange={setEditAmount}
+                              disabled={busy}
+                            />
+                          </td>
+                          <td className={styles.widgetTd}>
+                            <Input
+                              type="text"
+                              maxLength={120}
+                              value={editNote}
+                              onChange={(e) => setEditNote(e.target.value)}
+                              disabled={busy}
+                              placeholder="optional"
+                            />
+                          </td>
+                          <td className={styles.widgetTd}>
+                            <div className={styles.editRowActions}>
+                              <Button
+                                type="button" tone="primary" size="sm"
+                                busy={busy} disabled={busy}
+                                onClick={() => { void saveEdit(); }}
+                              >
+                                Save
+                              </Button>
+                              <Button
+                                type="button" tone="secondary" size="sm"
+                                disabled={busy} onClick={cancelEdit}
+                              >
+                                Cancel
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    }
+                    return (
+                      <tr key={item.id}>
+                        <td className={styles.widgetTdMono}>{item.at_time || "—"}</td>
+                        <td className={styles.widgetTdMono}>{fmtMoney2(item.amount)}</td>
+                        <td className={styles.widgetTd}>{item.note || "—"}</td>
+                        {!readOnly && (
+                          <td className={styles.widgetTd}>
+                            {fromReturnCheck ? (
+                              <span className={styles.widgetTdSmall}>
+                                from return check
+                              </span>
+                            ) : (
+                              <RowActions
+                                label="Actions"
+                                actions={[
+                                  {
+                                    label: "Edit",
+                                    onClick: () => startEdit(item),
+                                  },
+                                  {
+                                    label: "Remove",
+                                    tone: "danger",
+                                    onClick: () => { void remove(item.id); },
+                                  },
+                                ]}
+                              />
+                            )}
+                          </td>
+                        )}
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

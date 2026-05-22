@@ -174,6 +174,34 @@ export async function createLineItem(
   );
 }
 
+export interface LineItemUpdateBody {
+  at_time?: string;  // HH:MM
+  amount?: number;
+  note?: string;
+}
+
+/** PATCH one line item.  All fields optional — only the ones the
+ *  caller includes get written.  Returns the canonical row from
+ *  the server so the React-Query cache can refresh in place.
+ *  The DailyReport's roll-up total recomputes server-side on a
+ *  successful patch — invalidate the report query to pick it up.
+ *
+ *  Backend contract:
+ *  - `extra="forbid"` on the request schema (so `kind` / store_id
+ *    / report_date can't be patched — they're identity, not data).
+ *  - 403 when the parent daily report is locked.
+ *  - 409 when the row is linked to a ReturnCheck.
+ *  - 422 on `amount <= 0` or unknown extra field.
+ */
+export async function updateLineItem(
+  storeId: number, itemId: number, body: LineItemUpdateBody,
+): Promise<LineItemRow> {
+  return api<LineItemRow>(
+    `/api/v2/daily/${storeId}/line-items/${itemId}`,
+    { method: "PATCH", json: body },
+  );
+}
+
 export async function deleteLineItem(
   storeId: number, itemId: number,
 ): Promise<void> {

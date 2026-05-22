@@ -16,6 +16,7 @@ from api.Modules.DailyBook.Services.line_items import (
     parse_amount,
     parse_at_time,
     recompute_line_items_total,
+    update_line_item,
 )
 from api.Modules.DailyBook.Services.locks import (
     is_locked as is_daily_report_locked,
@@ -76,4 +77,5 @@ __all__ = [
     "summarize_transfers_for_day",
     "unlock_report",
     "update_daily_report",
+    "update_line_item",
 ]

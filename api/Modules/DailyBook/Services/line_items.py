@@ -76,6 +76,48 @@ def add_line_item(
     return row
 
 
+def update_line_item(
+    db: Session, line_item: DailyLineItem,
+    *,
+    at_time: time | None = None,
+    amount: float | None = None,
+    note: str | None = None,
+    allow_return_check_linked: bool = False,
+) -> DailyLineItem:
+    """Patch one DailyLineItem in place.  Caller fetches +
+    scope-checks the row.  Only the fields whose argument was
+    passed (not None) get written — partial PATCH semantics.
+
+    Rejects updates on rows linked to a `ReturnCheck` (mirror of
+    ReturnChecks-side state — daily-book edits can't drift those
+    numbers).  Same guard as ``delete_line_item``.
+
+    Caller commits the surrounding transaction and re-derives the
+    DailyReport total via ``recompute_line_items_total`` after the
+    update.
+    """
+    if (
+        not allow_return_check_linked
+        and line_item.return_check_id is not None
+    ):
+        raise LineItemValidationError(
+            "This payback is linked to a return check. Edit it "
+            "from Books → Return Checks (update the payment).",
+        )
+    if amount is not None:
+        if amount <= 0:
+            raise LineItemValidationError(
+                "Amount must be greater than zero.",
+            )
+        line_item.amount = float(amount)
+    if at_time is not None:
+        line_item.at_time = at_time
+    if note is not None:
+        line_item.note = note.strip()[:120]
+    db.flush()
+    return line_item
+
+
 def delete_line_item(
     db: Session, line_item: DailyLineItem,
     *, allow_return_check_linked: bool = False,

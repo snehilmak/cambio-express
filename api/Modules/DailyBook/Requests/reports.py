@@ -123,6 +123,20 @@ class LineItemCreateRequest(BaseModel):
     note: str = ""
 
 
+class LineItemUpdateRequest(BaseModel):
+    """PATCH body for /daily/{store}/line-items/{item_id}.  All
+    fields optional — only the ones the SPA included get
+    written.  `kind` is NOT mutable post-creation (would change
+    which DailyReport field the row rolls up into, breaking the
+    derivation in surprising ways)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    at_time: str | None = None  # HH:MM
+    amount: float | None = None  # > 0; the Service rejects ≤0
+    note: str | None = None
+
+
 class TransferCompanyTotalsResponse(BaseModel):
     """One company's roll-up inside the day's transfer-summary
     response. Mirrors the editable columns the legacy Jinja MT
