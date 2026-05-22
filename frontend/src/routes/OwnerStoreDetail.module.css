@@ -8,31 +8,8 @@
   margin-bottom: 0.5rem;
 }
 
-.tabBar {
-  display: flex;
-  border: 1px solid var(--db-border, #262626);
-  border-radius: 0.5rem;
-  overflow: hidden;
-}
-
-.tab {
-  padding: 0.4rem 0.85rem;
-  background: transparent;
-  color: inherit;
-  border: none;
-  cursor: pointer;
-  font-size: 0.85rem;
-}
-
-.tabActive {
-  padding: 0.4rem 0.85rem;
-  background: var(--db-accent, #3fff00);
-  color: #000;
-  font-weight: 600;
-  border: none;
-  cursor: pointer;
-  font-size: 0.85rem;
-}
+/* `.tabBar` / `.tab` / `.tabActive` retired — the period
+ * switcher now uses kit `<TabsBar>` + `<TabsButton>`. */
 
 .chartHost {
   height: 280px;

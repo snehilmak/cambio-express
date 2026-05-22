@@ -9,7 +9,7 @@ import { Line } from "react-chartjs-2";
 import { useOwnerDashboard } from "../api/owner";
 import {
   Card, ErrorState, KpiCard, KpiGrid, Loading, PageHeader, PageShell,
-  Section, Table, tdStyle, thStyle,
+  Section, TabsBar, TabsButton, Table, tdStyle, thStyle,
 } from "../components/ui";
 import { moneyChartOptions } from "../lib/chartOptions";
 import styles from "./OwnerDashboard.module.css";
@@ -38,18 +38,17 @@ export default function OwnerDashboard() {
       <PageHeader
         title="Owner Dashboard"
         actions={(
-          <div className={styles.tabBar}>
+          <TabsBar>
             {PERIODS.map((p) => (
-              <button
+              <TabsButton
                 key={p.value}
-                type="button"
+                active={p.value === period}
                 onClick={() => setPeriod(p.value)}
-                className={p.value === period ? styles.tabActive : styles.tab}
               >
                 {p.label}
-              </button>
+              </TabsButton>
             ))}
-          </div>
+          </TabsBar>
         )}
       />
 
