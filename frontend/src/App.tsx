@@ -4,7 +4,7 @@ import { Navigate, Outlet, Route, Routes } from "react-router-dom";
 import AppShell from "./components/AppShell";
 import RequireAuth from "./components/RequireAuth";
 import { RouteErrorBoundary } from "./components/RouteErrorBoundary";
-import { Loading } from "./components/ui";
+import { Loading, ToastProvider } from "./components/ui";
 import Home from "./routes/Home";
 import NotFound from "./routes/NotFound";
 
@@ -345,14 +345,19 @@ export default function App() {
 function AuthedShell() {
   return (
     <RequireAuth>
-      <AppShell>
-        {/* Inner boundary keeps the shell intact when a single
-            route crashes — sidebar + topbar stay, only the
-            content column shows the fallback. */}
-        <RouteErrorBoundary routeName="authed-route">
-          <Outlet />
-        </RouteErrorBoundary>
-      </AppShell>
+      {/* ToastProvider mounts inside RequireAuth so the toast
+          region only renders for signed-in users (the marketing
+          landing + auth pages don't need it). */}
+      <ToastProvider>
+        <AppShell>
+          {/* Inner boundary keeps the shell intact when a single
+              route crashes — sidebar + topbar stay, only the
+              content column shows the fallback. */}
+          <RouteErrorBoundary routeName="authed-route">
+            <Outlet />
+          </RouteErrorBoundary>
+        </AppShell>
+      </ToastProvider>
     </RequireAuth>
   );
 }
