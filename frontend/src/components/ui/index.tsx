@@ -78,3 +78,18 @@ export {
 } from "./RowActions";
 export { FormActions } from "./FormActions";
 export { TabsBar, TabsLink, TabsButton } from "./Tabs";
+export { Checkbox } from "./Checkbox";
+export { Switch } from "./Switch";
+export { Tooltip } from "./Tooltip";
+/* eslint-disable react-refresh/only-export-components -- public DS surface: re-export `useToast` from this barrel so consumers don't learn two import paths.  Same trade-off as the tokens block above. */
+export {
+  ToastProvider,
+  useToast,
+  type ToastInput,
+  type ToastTone,
+} from "./Toast";
+/* eslint-enable react-refresh/only-export-components */
+export { Badge, type BadgeTone } from "./Badge";
+export { Progress } from "./Progress";
+export { Separator } from "./Separator";
+export { Avatar } from "./Avatar";
