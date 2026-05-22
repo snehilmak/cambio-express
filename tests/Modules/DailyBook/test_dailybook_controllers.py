@@ -250,6 +250,39 @@ def test_put_rejects_extra_fields(client, test_store_id):
     assert resp.status_code == 422
 
 
+# Characterization: every field listed under "the 422 trap" in
+# INVARIANTS.md MUST be rejected by the daily-report PUT.  Pins
+# the full read-only surface (line-item-derived + cross-table-
+# derived) so a future refactor can't silently let one slip into
+# the writable schema.
+@pytest.mark.parametrize("derived_field", [
+    "money_transfer",
+    "return_check_paid_back",
+    "cash_purchases",
+    "cash_expense",
+    "check_purchases",
+    "check_expense",
+    "other_cash_in",
+    "other_cash_out",
+    "outside_cash_drops",
+    "checks_deposit",
+])
+def test_put_rejects_every_derived_field(client, test_store_id, derived_field):
+    today_iso = date.today().isoformat()
+    token = _login_admin_token(client, test_store_id)
+    resp = client.put(
+        f"/api/v2/daily/{test_store_id}/{today_iso}",
+        json={derived_field: 1.0},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 422, (
+        f"Expected 422 when sending {derived_field!r} (derived field per "
+        f"INVARIANTS.md), got {resp.status_code}.  If this field is now "
+        f"legitimately operator-editable, update INVARIANTS.md + add it to "
+        f"EDITABLE_REPORT_FIELDS + DailyReportUpdateRequest in the same PR."
+    )
+
+
 def test_put_requires_jwt(test_store_id, api_client):
     today_iso = date.today().isoformat()
     resp = api_client.put(

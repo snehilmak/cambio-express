@@ -50,18 +50,39 @@ import styles from "./EditDailyBook.module.css";
 
 // ── Field definitions ────────────────────────────────────────
 
-// Editable totals on the report. Keys must match the API's
-// DailyReportUpdateBody schema 1:1.
+// Editable keys for the daily-report PUT body.  MUST be a subset
+// of the backend's `EDITABLE_REPORT_FIELDS` constant in
+// `api/Modules/DailyBook/Services/reports.py`.  The backend
+// schema uses `extra="forbid"` so sending ANY field outside the
+// allowed set returns HTTP 422 (`test_put_rejects_extra_fields`
+// pins this).
+//
+// Specifically EXCLUDED here despite being on the form:
+//   - `money_transfer` — derived from `mt_summary` rows; written
+//      via the separate PUT /mt-breakdown endpoint.
+//   - line-item-derived fields (cash_purchases, drops, etc.) —
+//      mutated by adding / removing daily_line_item rows.
+//
+// See `api/Modules/DailyBook/INVARIANTS.md` before adding a key
+// here.
 const EDITABLE_KEYS = [
   "taxable_sales", "non_taxable", "sales_tax",
   "bill_payment_charge", "phone_recargas", "boost_mobile",
-  "money_transfer", "money_order",
+  "money_order",
   "check_cashing_fees", "return_check_hold_fees",
   "forward_balance", "from_bank", "rebates_commissions",
   "cash_deposit", "safe_balance", "payroll_expense",
   "over_short",
 ] as const;
-type EditKey = (typeof EDITABLE_KEYS)[number];
+// Form fields whose VALUE is a number — wider than the
+// EDITABLE_KEYS list because some displayed-but-not-editable
+// fields (notably `money_transfer`, which mirrors the
+// mt_summary roll-up) need the same `<NumberInput>` treatment.
+// The PUT builder still loops over EDITABLE_KEYS, so these
+// wider keys never get sent.
+type NumericFormKey = {
+  [K in keyof FormState]: FormState[K] extends number ? K : never;
+}[keyof FormState];
 
 interface FormState {
   taxable_sales: number;
@@ -85,7 +106,13 @@ interface FormState {
 }
 
 interface InputFieldDef {
-  key: EditKey;
+  // `NumericFormKey` rather than `EditKey` because the form
+  // displays a few derived values (notably `money_transfer`,
+  // which mirrors the mt_summary roll-up) that are NOT in the
+  // editable PUT body but still surface on the report.  The PUT
+  // builder loops over `EDITABLE_KEYS` so it never sends these
+  // derived keys.  See INVARIANTS.md.
+  key: NumericFormKey;
   label: string;
 }
 
