@@ -19,8 +19,8 @@ import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
 import {
   Alert, Button, ButtonLink, Card, ConfirmDialog, EmptyState, Field,
-  FormActions, Input, Loading, PageHeader, PageShell, SectionTitle, Select,
-  space, Table, Textarea, tdStyle, thStyle,
+  FormActions, Input, Loading, MoneyInput, PageHeader, PageShell, SectionTitle,
+  Select, space, Table, Textarea, tdStyle, thStyle,
 } from "../components/ui";
 import styles from "./ReturnCheckForm.module.css";
 
@@ -194,11 +194,12 @@ export default function ReturnCheckForm() {
                 value={form.payer_bank ?? ""}
                 onChange={(e) => set("payer_bank", e.target.value)} />
             </Field>
-            <Field label="Amount (USD)" highlight={field === "amount"}>
-              <Input type="number" step="0.01" min="0.01" required
-                value={form.amount}
-                onChange={(e) => set("amount", Number(e.target.value))} />
-            </Field>
+            <MoneyInput
+              label="Amount"
+              value={form.amount}
+              onChange={(v) => set("amount", v)}
+              error={field === "amount" ? "Invalid amount" : undefined}
+            />
           </div>
           <Field label="Notes (optional)">
             <Textarea
@@ -323,7 +324,7 @@ function RecordPaymentForm({
   const qc = useQueryClient();
   const identity = getCurrentIdentity();
   const [paidOn,  setPaidOn]  = useState(() => todayIso());
-  const [amount,  setAmount]  = useState("");
+  const [amount,  setAmount]  = useState(0);
   const [method,  setMethod]  = useState<string>(PAYMENT_METHODS[0].value);
   const [note,    setNote]    = useState("");
   const [busy,    setBusy]    = useState(false);
@@ -336,11 +337,11 @@ function RecordPaymentForm({
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
-    const amt = Number(amount);
-    if (!Number.isFinite(amt) || amt <= 0) {
+    if (!Number.isFinite(amount) || amount <= 0) {
       setError("Amount must be greater than zero.");
       return;
     }
+    const amt = amount;
     if (cap <= 0) {
       setError("Return check is already fully recovered.");
       return;
@@ -360,7 +361,7 @@ function RecordPaymentForm({
       qc.invalidateQueries({
         queryKey: ["return-checks", "payments", identity?.store_id, rcId],
       });
-      setAmount(""); setNote("");
+      setAmount(0); setNote("");
     } catch (err) {
       setError(
         err instanceof ApiError
@@ -383,18 +384,13 @@ function RecordPaymentForm({
             disabled={busy || disabled}
           />
         </Field>
-        <Field
-          label="Amount (USD)"
+        <MoneyInput
+          label="Amount"
           hint={cap > 0 ? `Up to $${cap.toFixed(2)} remaining.` : undefined}
-        >
-          <Input
-            type="number" step="0.01" min="0.01" max={cap || undefined}
-            required
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            disabled={busy || disabled || cap <= 0}
-          />
-        </Field>
+          value={amount}
+          onChange={setAmount}
+          disabled={busy || disabled || cap <= 0}
+        />
         <Field label="Method">
           <Select
             value={method}

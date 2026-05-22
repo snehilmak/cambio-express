@@ -11,7 +11,7 @@ import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
 import {
   Alert, Button, ButtonLink, Card, Field, FormActions, Input, Loading,
-  PageHeader, PageShell, Select, Textarea,
+  MoneyInput, PageHeader, PageShell, Select, Textarea,
 } from "../components/ui";
 import styles from "./BatchForm.module.css";
 
@@ -156,11 +156,11 @@ export default function BatchForm() {
                 onChange={(e) => set("batch_ref", e.target.value)}
                 placeholder="From bank statement" />
             </Field>
-            <Field label="ACH amount (USD)">
-              <Input type="number" step="0.01" min="0" required
-                value={form.ach_amount}
-                onChange={(e) => set("ach_amount", Number(e.target.value))} />
-            </Field>
+            <MoneyInput
+              label="ACH amount"
+              value={form.ach_amount}
+              onChange={(v) => set("ach_amount", v)}
+            />
             <Field label="Status">
               <Select value={form.status}
                 onChange={(e) => set("status", e.target.value)}>

@@ -9,7 +9,7 @@ import {
 import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
 import {
-  Alert, Button, Card, Field, FormActions, Input, Loading, PageHeader,
+  Alert, Button, Card, FormActions, Loading, MoneyInput, PageHeader,
   PageShell, Textarea,
 } from "../components/ui";
 import styles from "./EditMonthly.module.css";
@@ -177,20 +177,16 @@ export default function EditMonthly() {
             <h2 className={styles.sectionTitle}>{sec}</h2>
             <div className={styles.fieldGrid}>
               {FIELDS.filter((f) => f.section === sec).map((f) => (
-                <Field key={f.key} label={f.label}>
-                  <Input
-                    type="number" step="0.01"
-                    className={styles.monoInput}
-                    value={
-                      typeof form[f.key] === "number"
-                        ? (form[f.key] as number)
-                        : 0
-                    }
-                    onChange={(e) =>
-                      set(f.key, Number(e.target.value) as never)
-                    }
-                  />
-                </Field>
+                <MoneyInput
+                  key={f.key}
+                  label={f.label}
+                  value={
+                    typeof form[f.key] === "number"
+                      ? (form[f.key] as number)
+                      : 0
+                  }
+                  onChange={(v) => set(f.key, v as never)}
+                />
               ))}
             </div>
           </Card>

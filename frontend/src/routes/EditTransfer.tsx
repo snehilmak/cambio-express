@@ -5,7 +5,7 @@ import SenderAutocomplete from "../components/SenderAutocomplete";
 import RecipientSuggestions from "../components/RecipientSuggestions";
 import {
   Alert, Button, Card, ErrorState, Field, FormActions, Input,
-  Loading, PageHeader, PageShell, Select,
+  Loading, MoneyInput, PageHeader, PageShell, Select,
 } from "../components/ui";
 import {
   previewFederalTax,
@@ -275,17 +275,16 @@ export default function EditTransfer() {
         <Card>
           <h2 className={styles.sectionTitle}>Amounts</h2>
           <div className={styles.grid}>
-            <Field label="Send amount (USD)">
-              <Input type="number" step="0.01" min="0"
-                value={form.send_amount}
-                onChange={(e) => set("send_amount", Number(e.target.value))}
-                required />
-            </Field>
-            <Field label="Fee (USD)">
-              <Input type="number" step="0.01" min="0"
-                value={form.fee}
-                onChange={(e) => set("fee", Number(e.target.value))} />
-            </Field>
+            <MoneyInput
+              label="Send amount"
+              value={form.send_amount}
+              onChange={(v) => set("send_amount", v)}
+            />
+            <MoneyInput
+              label="Fee"
+              value={form.fee ?? 0}
+              onChange={(v) => set("fee", v)}
+            />
             <Field
               label={
                 (storeInfo.data?.store.federal_tax_rate ?? 0) > 0
