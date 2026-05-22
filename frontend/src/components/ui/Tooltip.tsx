@@ -128,7 +128,12 @@ function tipStyle(placement: "top" | "bottom"): CSSProperties {
     // The keyframe defines the FROM state; the static `transform`
     // here is the TO state (final resting position).
     transform: "translateX(-50%) translateY(0)",
-    ["--db-tooltip-slide-from" as string]: slideFrom,
+    // Internal animation variable — deliberately NOT prefixed with
+    // `--db-` since it's a component-internal slide-from offset, not
+    // a design-system token (the theme-token CI test treats every
+    // `--db-*` reference as a DS token that must be declared in
+    // static/design-tokens.css).
+    ["--tooltip-slide-from" as string]: slideFrom,
   };
 }
 
@@ -144,7 +149,7 @@ if (typeof document !== "undefined") {
 @keyframes db-tooltip-in {
   from {
     opacity: 0;
-    transform: translateX(-50%) translateY(var(--db-tooltip-slide-from, 4px));
+    transform: translateX(-50%) translateY(var(--tooltip-slide-from, 4px));
   }
   to {
     opacity: 1;
