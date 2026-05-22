@@ -13,7 +13,7 @@ import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
 import {
   Alert, Button, ButtonLink, Card, ErrorState, Field, Input, Loading,
-  PageHeader, PageShell, SectionTitle, Select, space,
+  PageHeader, PageShell, SectionTitle, Select, space, useToast,
 } from "../components/ui";
 import styles from "./SuperadminStoreForm.module.css";
 
@@ -70,7 +70,7 @@ export default function SuperadminStoreForm() {
   const [busy,        setBusy]        = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
-  const [saved,       setSaved]       = useState(false);
+  const toast = useToast();
 
   // Hydrate the form once the GET resolves on edit.
   useEffect(() => {
@@ -162,7 +162,6 @@ export default function SuperadminStoreForm() {
     setBusy(true);
     setServerError(null);
     setFieldErrors({});
-    setSaved(false);
     try {
       if (isEdit && storeId !== null) {
         const body: SuperadminStoreUpdateBody = {
@@ -182,7 +181,7 @@ export default function SuperadminStoreForm() {
         // the canonical normalized values (lowercased slug, etc.).
         queryClient.invalidateQueries({ queryKey: ["superadmin", "store", storeId] });
         queryClient.invalidateQueries({ queryKey: ["superadmin", "stores"] });
-        setSaved(true);
+        toast({ message: "Store updated.", tone: "success" });
       } else {
         const body: SuperadminStoreCreateBody = {
           name:           name.trim(),
@@ -227,7 +226,6 @@ export default function SuperadminStoreForm() {
 
         <div style={{ marginTop: space.lg, display: "flex", flexDirection: "column", gap: space.md }}>
           {serverError && <Alert tone="error">{serverError}</Alert>}
-          {saved && <Alert tone="success">Store updated.</Alert>}
         </div>
 
         <form onSubmit={onSubmit} autoComplete="off">
