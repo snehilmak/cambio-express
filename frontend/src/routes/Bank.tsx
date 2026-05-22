@@ -14,8 +14,9 @@ import {
 } from "../api/bankSync";
 import { ApiError } from "../lib/api";
 import {
-  Alert, Button, ButtonLink, Card, EmptyState, ErrorState, Loading, PageHeader,
-  PageShell, space, Table, TableSkeleton, tdStyle, thStyle,
+  Alert, Button, ButtonLink, Card, ConfirmDialog, EmptyState, ErrorState,
+  Loading, PageHeader, PageShell, space, Table, TableSkeleton, tdStyle,
+  thStyle,
 } from "../components/ui";
 import styles from "./Bank.module.css";
 
@@ -161,8 +162,16 @@ export default function Bank() {
     }
   }
 
-  async function handleDisconnect(acctId: number, label: string) {
-    if (!confirm(`Disconnect ${label}?`)) return;
+  // Confirm-dialog state for the destructive disconnect.  The
+  // pending object holds both id + label so the dialog can show
+  // the right copy + the action handler can use the right id.
+  const [pendingDisconnect, setPendingDisconnect] = useState<
+    { id: number; label: string } | null
+  >(null);
+
+  async function doDisconnect() {
+    if (!pendingDisconnect) return;
+    const { id: acctId, label } = pendingDisconnect;
     setConnectError(null);
     setActionMsg(null);
     setBusy(`disconnect:${acctId}`);
@@ -178,6 +187,7 @@ export default function Bank() {
       );
     } finally {
       setBusy(null);
+      setPendingDisconnect(null);
     }
   }
 
@@ -256,7 +266,7 @@ export default function Bank() {
               <AccountCard
                 key={a.id}
                 acct={a}
-                onDisconnect={() => { void handleDisconnect(a.id, a.label); }}
+                onDisconnect={() => setPendingDisconnect({ id: a.id, label: a.label })}
                 onSaveNickname={(nickname) => handleSaveNickname(a.id, nickname)}
                 disconnectBusy={busy === `disconnect:${a.id}`}
                 nicknameBusy={busy === `nickname:${a.id}`}
@@ -329,6 +339,21 @@ export default function Bank() {
           )}
         </Card>
       )}
+
+      <ConfirmDialog
+        open={pendingDisconnect != null}
+        title="Disconnect bank"
+        message={
+          `Disconnect ${pendingDisconnect?.label ?? "this bank"}? `
+          + "Future transactions won't sync to DineroBook until "
+          + "you reconnect."
+        }
+        confirmLabel="Disconnect"
+        confirmTone="danger"
+        busy={busy === `disconnect:${pendingDisconnect?.id}`}
+        onConfirm={() => { void doDisconnect(); }}
+        onCancel={() => setPendingDisconnect(null)}
+      />
     </PageShell>
   );
 }

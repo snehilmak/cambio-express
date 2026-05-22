@@ -24,9 +24,9 @@ import {
   getCurrentCoordinates,
 } from "../lib/geolocation";
 import {
-  Alert, Button, ButtonLink, Card, ErrorState, Field, Input, Loading,
-  PageHeader, PageShell, SectionTitle, Select, space,
-  TabsBar, TabsLink,
+  Alert, Button, ButtonLink, Card, Checkbox, ConfirmDialog, ErrorState, Field,
+  Input, Loading, PageHeader, PageShell, SectionTitle, Select, space, Switch,
+  TabsBar, TabsLink, useToast,
 } from "../components/ui";
 import styles from "./Settings.module.css";
 
@@ -99,11 +99,11 @@ function ProfileCard() {
   const { data: storeInfo } = useStoreInfo();
   const storeTz = storeInfo?.store?.timezone ?? "";
 
+  const toast = useToast();
   const [draft, setDraft] = useState<ProfileUpdateBody>({});
   const [busy, setBusy]   = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
-  const [saved, setSaved] = useState(false);
 
   useEffect(() => {
     if (!data) return;
@@ -121,7 +121,6 @@ function ProfileCard() {
     key: K, value: ProfileUpdateBody[K],
   ) {
     setDraft((d) => ({ ...d, [key]: value }));
-    if (saved) setSaved(false);
     if (fieldErrors[key as string]) {
       setFieldErrors((e) => {
         const next = { ...e }; delete next[key as string]; return next;
@@ -137,7 +136,7 @@ function ProfileCard() {
     setFieldErrors({});
     try {
       await updateProfile(draft);
-      setSaved(true);
+      toast({ message: "Profile updated.", tone: "success" });
       queryClient.invalidateQueries({ queryKey: ["account", "profile"] });
     } catch (err) {
       if (err instanceof ApiError && err.status === 422) {
@@ -195,7 +194,6 @@ function ProfileCard() {
       </p>
 
       {serverError && <Alert tone="error">{serverError}</Alert>}
-      {saved && <Alert tone="success">Profile updated.</Alert>}
 
       <form
         onSubmit={onSubmit}
@@ -315,6 +313,11 @@ function PasskeysCard() {
   const [adding, setAdding] = useState(false);
   const [addBusy, setAddBusy] = useState(false);
   const [newName, setNewName] = useState("");
+  // Pending passkey staged for removal — null when no confirm
+  // is showing.  Holds id + label so the dialog can reference
+  // both without re-resolving from the list.
+  const [pendingRemove, setPendingRemove] =
+    useState<{ id: number; label: string } | null>(null);
   const supported = passkeysSupported();
 
   if (identity == null) return null;
@@ -323,12 +326,14 @@ function PasskeysCard() {
     queryClient.invalidateQueries({ queryKey: ["account", "passkeys"] });
   }
 
-  async function remove(id: number, label: string) {
-    if (!confirm(`Remove "${label || "this device"}"?`)) return;
+  async function doRemove() {
+    if (!pendingRemove) return;
+    const { id } = pendingRemove;
     setErr(null); setBusyId(id);
     try {
       await deletePasskey(id);
       refresh();
+      setPendingRemove(null);
     } catch (e) {
       setErr(e instanceof ApiError ? e.message : "Could not remove device.");
     } finally {
@@ -434,7 +439,7 @@ function PasskeysCard() {
               </span>
               <Button
                 tone="secondary" size="sm"
-                onClick={() => remove(p.id, p.name)}
+                onClick={() => setPendingRemove({ id: p.id, label: p.name })}
                 busy={busyId === p.id}
                 disabled={busyId === p.id}
               >
@@ -445,6 +450,20 @@ function PasskeysCard() {
         </ul>
       )}
       {err && <Alert tone="error">{err}</Alert>}
+      <ConfirmDialog
+        open={pendingRemove != null}
+        title="Remove passkey"
+        message={
+          `Remove "${pendingRemove?.label || "this device"}"? `
+          + "You can re-enroll it later if you change your mind, but "
+          + "anyone with this device will lose passkey access."
+        }
+        confirmLabel="Remove"
+        confirmTone="danger"
+        busy={busyId != null}
+        onConfirm={() => { void doRemove(); }}
+        onCancel={() => setPendingRemove(null)}
+      />
     </Card>
   );
 }
@@ -531,7 +550,7 @@ function StoreInfoCard() {
   const [lateThreshold, setLateThreshold] = useState("5");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const [okMsg, setOkMsg] = useState<string | null>(null);
+  const toast = useToast();
 
   // Hydrate the form from the read-side row when it arrives.
   // Federal tax is stored as a decimal (0.01 = 1%) but operators
@@ -578,7 +597,6 @@ function StoreInfoCard() {
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     setErr(null);
-    setOkMsg(null);
     setBusy(true);
     try {
       // Geofence inputs are strings — turn them into numbers (or
@@ -623,7 +641,7 @@ function StoreInfoCard() {
       await queryClient.invalidateQueries({
         queryKey: ["admin", "store-info"],
       });
-      setOkMsg("Store info saved.");
+      toast({ message: "Store info saved.", tone: "success" });
     } catch (e) {
       setErr(e instanceof ApiError ? e.message : "Could not save.");
     } finally {
@@ -776,20 +794,20 @@ function StoreInfoCard() {
           onChange={setHours}
           disabled={!canEdit}
         />
-        <label className={styles.enforceRow}>
-          <input
-            type="checkbox"
+        <div className={styles.enforceRow}>
+          <Switch
             checked={enforceHours}
             disabled={!canEdit}
-            onChange={(e) => setEnforceHours(e.target.checked)}
-          />{" "}
-          Block transfers outside these hours
-          <span className={styles.enforceHint}>
-            {" "}— refuses transfer saves with an error when
-            outside the open window. The soft warning on the New
-            Transfer form fires regardless of this toggle.
-          </span>
-        </label>
+            onChange={setEnforceHours}
+          >
+            Block transfers outside these hours
+            <span className={styles.enforceHint}>
+              {" "}— refuses transfer saves with an error when
+              outside the open window. The soft warning on the New
+              Transfer form fires regardless of this toggle.
+            </span>
+          </Switch>
+        </div>
       </Card>
 
       <Card>
@@ -798,22 +816,22 @@ function StoreInfoCard() {
           Anti-buddy-punching gates for clock-in / clock-out and
           the lateness threshold used by the payroll view.
         </p>
-        <label className={styles.enforceRow}>
-          <input
-            type="checkbox"
+        <div className={styles.enforceRow}>
+          <Switch
             checked={requirePasskey}
             disabled={!canEdit}
-            onChange={(e) => setRequirePasskey(e.target.checked)}
-          />{" "}
-          Block time-clock punches without a passkey
-          <span className={styles.enforceHint}>
-            {" "}— every clock-in / clock-out demands a fresh
-            Windows Hello / Touch ID / Face ID prompt. Enroll
-            each cashier's device from
-            {" "}<code>/app/admin/timeclock/credentials</code>
-            {" "}before flipping this on.
-          </span>
-        </label>
+            onChange={setRequirePasskey}
+          >
+            Block time-clock punches without a passkey
+            <span className={styles.enforceHint}>
+              {" "}— every clock-in / clock-out demands a fresh
+              Windows Hello / Touch ID / Face ID prompt. Enroll
+              each cashier's device from
+              {" "}<code>/app/admin/timeclock/credentials</code>
+              {" "}before flipping this on.
+            </span>
+          </Switch>
+        </div>
         <GeofenceSettingsSection
           canEdit={canEdit}
           requireGeofence={requireGeofence}
@@ -839,7 +857,6 @@ function StoreInfoCard() {
       </Card>
 
       {err && <Alert tone="error">{err}</Alert>}
-      {okMsg && <Alert tone="success">{okMsg}</Alert>}
 
       {canEdit && (
         <div style={{ display: "flex", justifyContent: "flex-end" }}>
@@ -902,21 +919,21 @@ function GeofenceSettingsSection({
 
   return (
     <>
-      <label className={styles.enforceRow}>
-        <input
-          type="checkbox"
+      <div className={styles.enforceRow}>
+        <Switch
           checked={requireGeofence}
           disabled={!canEdit}
-          onChange={(e) => onChangeRequireGeofence(e.target.checked)}
-        />{" "}
-        Block time-clock punches outside the store's location
-        <span className={styles.enforceHint}>
-          {" "}— anti-buddy-punching: pin a lat/lng + radius below,
-          then every clock-in / clock-out checks the cashier's
-          browser GPS against the pin. Refused when outside the
-          radius or when GPS permission is denied.
-        </span>
-      </label>
+          onChange={onChangeRequireGeofence}
+        >
+          Block time-clock punches outside the store's location
+          <span className={styles.enforceHint}>
+            {" "}— anti-buddy-punching: pin a lat/lng + radius below,
+            then every clock-in / clock-out checks the cashier's
+            browser GPS against the pin. Refused when outside the
+            radius or when GPS permission is denied.
+          </span>
+        </Switch>
+      </div>
       <div className={styles.geofenceGrid}>
         <Field label="Latitude" hint="-90 to 90">
           <Input
@@ -971,12 +988,11 @@ function ChangePasswordCard() {
   const [confirm, setConfirm] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [okMsg, setOkMsg] = useState<string | null>(null);
+  const toast = useToast();
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
-    setOkMsg(null);
     setBusy(true);
     try {
       await changePassword({
@@ -984,7 +1000,7 @@ function ChangePasswordCard() {
         new_password:     next,
         confirm_password: confirm,
       });
-      setOkMsg("Password updated.");
+      toast({ message: "Password updated.", tone: "success" });
       setCurrent(""); setNext(""); setConfirm("");
     } catch (err) {
       setError(
@@ -1031,7 +1047,6 @@ function ChangePasswordCard() {
           />
         </Field>
         {error && <Alert tone="error">{error}</Alert>}
-        {okMsg && <Alert tone="success">{okMsg}</Alert>}
         <Button
           type="submit"
           busy={busy}
@@ -1084,15 +1099,13 @@ function StoreHoursEditor({
           >
             {DAY_LABELS[row.day]}
           </span>
-          <label>
-            <input
-              type="checkbox"
-              checked={row.closed}
-              disabled={disabled}
-              onChange={(e) => setRow(i, { closed: e.target.checked })}
-            />{" "}
+          <Checkbox
+            checked={row.closed}
+            disabled={disabled}
+            onChange={(next) => setRow(i, { closed: next })}
+          >
             Closed
-          </label>
+          </Checkbox>
           <Input
             type="time"
             value={row.open}

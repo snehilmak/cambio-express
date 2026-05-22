@@ -12,8 +12,8 @@ import { useStoreInfo } from "../api/account";
 import { ApiError } from "../lib/api";
 import { passkeysSupported, performPasskeyRegister } from "../lib/webauthn";
 import {
-  Alert, Button, Card, EmptyState, ErrorState, Loading, PageHeader,
-  PageShell, Pill, Table, tdStyle, thStyle,
+  Alert, Button, Card, ConfirmDialog, EmptyState, ErrorState, Loading,
+  PageHeader, PageShell, Pill, Table, tdStyle, thStyle,
 } from "../components/ui";
 import { getCurrentIdentity } from "../lib/auth";
 import styles from "./AdminTimeClockCredentials.module.css";
@@ -67,15 +67,19 @@ export default function AdminTimeClockCredentials() {
     }
   }
 
-  async function remove(row: TimeClockCredentialRow) {
-    if (!window.confirm(
-      `Remove ${row.employee_name}'s registered passkey? They'll need to `
-      + "re-enroll before they can clock in / out (if the store gate is on).",
-    )) return;
-    setErr(null); setBusyEmpId(row.store_employee_id);
+  // Pending credential staged for removal; null = no confirm
+  // showing.  Held as the whole row so the dialog can show the
+  // employee name + the action handler has the employee id.
+  const [pendingRemove, setPendingRemove] =
+    useState<TimeClockCredentialRow | null>(null);
+
+  async function doRemove() {
+    if (!pendingRemove) return;
+    setErr(null); setBusyEmpId(pendingRemove.store_employee_id);
     try {
-      await adminDeleteCredential(row.store_employee_id);
+      await adminDeleteCredential(pendingRemove.store_employee_id);
       refresh();
+      setPendingRemove(null);
     } catch (e) {
       setErr(
         e instanceof ApiError ? e.message : "Couldn't remove the passkey.",
@@ -203,7 +207,7 @@ export default function AdminTimeClockCredentials() {
                           size="sm" tone="secondary"
                           busy={busyEmpId === r.store_employee_id}
                           disabled={busyEmpId !== null}
-                          onClick={() => remove(r)}
+                          onClick={() => setPendingRemove(r)}
                         >
                           Remove
                         </Button>
@@ -218,6 +222,21 @@ export default function AdminTimeClockCredentials() {
       )}
 
       {err && <Alert tone="error">{err}</Alert>}
+
+      <ConfirmDialog
+        open={pendingRemove != null}
+        title="Remove passkey"
+        message={
+          `Remove ${pendingRemove?.employee_name ?? "this cashier"}'s `
+          + "registered passkey?  They'll need to re-enroll before "
+          + "they can clock in / out (if the store gate is on)."
+        }
+        confirmLabel="Remove"
+        confirmTone="danger"
+        busy={busyEmpId === pendingRemove?.store_employee_id}
+        onConfirm={() => { void doRemove(); }}
+        onCancel={() => setPendingRemove(null)}
+      />
     </PageShell>
   );
 }
