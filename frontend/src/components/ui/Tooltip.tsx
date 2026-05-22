@@ -102,10 +102,13 @@ function ChildWithDescribedBy({
 }
 
 function tipStyle(placement: "top" | "bottom"): CSSProperties {
+  // Small offset for the slide-from-direction effect — the tip
+  // starts shifted toward the trigger then settles into place,
+  // matching the shadcn / sonner motion vocabulary.
+  const slideFrom = placement === "top" ? "4px" : "-4px";
   return {
     position: "absolute",
     left: "50%",
-    transform: "translateX(-50%)",
     [placement === "top" ? "bottom" : "top"]: "calc(100% + 6px)",
     background: tokens.surface3,
     color: tokens.text,
@@ -118,5 +121,41 @@ function tipStyle(placement: "top" | "bottom"): CSSProperties {
     boxShadow: "0 8px 20px rgba(0, 0, 0, 0.35)",
     pointerEvents: "none",
     zIndex: 200,
+    // Smooth fade + tiny slide-in.  Sub-150ms keeps it responsive.
+    // CSS animations are stripped by the global prefers-reduced-
+    // motion rule for opt-in users.
+    animation: "db-tooltip-in 140ms ease-out",
+    // The keyframe defines the FROM state; the static `transform`
+    // here is the TO state (final resting position).
+    transform: "translateX(-50%) translateY(0)",
+    // Internal animation variable — deliberately NOT prefixed with
+    // `--db-` since it's a component-internal slide-from offset, not
+    // a design-system token (the theme-token CI test treats every
+    // `--db-*` reference as a DS token that must be declared in
+    // static/design-tokens.css).
+    ["--tooltip-slide-from" as string]: slideFrom,
   };
+}
+
+// Inject the keyframe once on first mount.  Living in a module
+// scoped <style> tag inside the Tooltip would re-mount per-tooltip;
+// global injection is simpler and dedups via the id check.
+if (typeof document !== "undefined") {
+  const id = "db-tooltip-keyframes";
+  if (!document.getElementById(id)) {
+    const style = document.createElement("style");
+    style.id = id;
+    style.textContent = `
+@keyframes db-tooltip-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(var(--tooltip-slide-from, 4px));
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}`;
+    document.head.appendChild(style);
+  }
 }
