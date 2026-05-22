@@ -20,6 +20,7 @@ from api.Modules.DailyBook.Requests import (
     LineItemCreateRequest,
     LineItemListResponse,
     LineItemRow,
+    LineItemUpdateRequest,
     MTBreakdownResponse,
     MTBreakdownRowResponse,
     MTBreakdownWriteRequest,
@@ -48,6 +49,7 @@ from api.Modules.DailyBook.Services import (
     summarize_transfers_for_day,
     unlock_report,
     update_daily_report,
+    update_line_item,
 )
 from typing import Any
 
@@ -544,6 +546,105 @@ def line_items_create_route(
     )
     db.commit()
     return _line_item_row(row)
+
+
+@router.patch(
+    "/{store_id}/line-items/{item_id}",
+    response_model=LineItemRow,
+)
+def line_items_update_route(
+    store_id: int = Path(..., ge=1),
+    item_id: int = Path(..., ge=1),
+    body: LineItemUpdateRequest = ...,
+    db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
+) -> LineItemRow:
+    """Patch one line item in place.  Same scope + lock + return-
+    check-link rules as create / delete:
+      - Cross-store edits return 403.
+      - Locked daily reports return 403 with "unlock first".
+      - Rows linked to a ReturnCheck return 409 ("edit it from
+        Books → Return Checks").
+
+    The DailyReport's roll-up total is recomputed after a
+    successful patch so the parent field stays accurate.  Every
+    patch writes an operator-audit row.
+    """
+    _require_store_match(claims, store_id)
+    item = (
+        db.query(DailyLineItem)
+          .filter_by(id=item_id, store_id=int(store_id))
+          .first()
+    )
+    if item is None:
+        # Same opaque 404 for missing IDs and cross-tenant probes.
+        raise HTTPException(status_code=404, detail="Line item not found")
+
+    # Lock check — the parent daily report's lock blanket-rejects
+    # every mutation, including line-item edits.  Match the
+    # update_daily_report path's 403 + "unlock first" UX.
+    from api.Modules.DailyBook.Services.locks import is_locked
+    if is_locked(db, int(store_id), item.report_date):
+        raise HTTPException(
+            status_code=403,
+            detail="Daily report is locked — unlock it before editing.",
+        )
+
+    fields = body.model_dump(exclude_unset=True)
+    parsed_time = None
+    if "at_time" in fields and fields["at_time"] is not None:
+        try:
+            parsed_time = parse_at_time(fields["at_time"])
+        except LineItemValidationError as exc:
+            raise HTTPException(status_code=422, detail=str(exc))
+    amount = fields.get("amount")
+    if amount is not None and amount <= 0:
+        raise HTTPException(
+            status_code=422,
+            detail="Amount must be greater than zero.",
+        )
+
+    original_amount = float(item.amount or 0)
+    try:
+        update_line_item(
+            db, item,
+            at_time=parsed_time,
+            amount=amount,
+            note=fields.get("note"),
+        )
+    except LineItemValidationError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+
+    # Recompute parent roll-up so the DailyReport stays in sync.
+    target_field = field_for_kind(item.kind)
+    if target_field:
+        recompute_line_items_total(
+            db, int(store_id), item.report_date,
+            kind=item.kind, daily_report_field=target_field,
+        )
+
+    # Audit row — same shape as delete (kind + amount delta).
+    new_amount = float(item.amount or 0)
+    _audit_daily_action(
+        db, claims, "update_line_item",
+        target_type="daily_line_item",
+        target_id=str(item_id),
+        target_label=f"{item.kind} on {item.report_date.isoformat()}",
+        summary=(
+            f"kind={item.kind} amount=${original_amount:,.2f}"
+            f"→${new_amount:,.2f}"
+        ),
+    )
+    db.commit()
+
+    return LineItemRow(
+        id=item.id,
+        kind=item.kind,
+        at_time=item.at_time.strftime("%H:%M") if item.at_time else "",
+        amount=float(item.amount or 0),
+        note=item.note or "",
+        return_check_id=item.return_check_id,
+    )
 
 
 @router.delete(

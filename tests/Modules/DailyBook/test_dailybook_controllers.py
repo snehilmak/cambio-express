@@ -496,6 +496,96 @@ def test_line_items_delete_404_when_missing(client, test_store_id):
     assert resp.status_code == 404
 
 
+# ── PATCH /line-items/{id} ──────────────────────────────────
+
+
+def test_line_items_patch_round_trip(client, test_store_id):
+    """PATCH lets the operator fix a typo'd amount / time / note on
+    an existing line item — and the DailyReport roll-up rederives."""
+    today_iso = date.today().isoformat()
+    token = _login_admin_token(client, test_store_id)
+    create = client.post(
+        f"/api/v2/daily/{test_store_id}/{today_iso}/line-items",
+        json={
+            "kind": "drop", "at_time": "09:00",
+            "amount": 100.0, "note": "morning",
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    item_id = create.get_json()["id"]
+
+    patched = client.patch(
+        f"/api/v2/daily/{test_store_id}/line-items/{item_id}",
+        json={"amount": 250.0, "note": "morning + extra"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert patched.status_code == 200, patched.get_data(as_text=True)
+    body = patched.get_json()
+    assert body["amount"] == 250.0
+    assert body["note"] == "morning + extra"
+    # at_time wasn't in the body, stays at the original 09:00
+    assert body["at_time"] == "09:00"
+
+    # DailyReport's outside_cash_drops field should now reflect 250.
+    report = client.get(
+        f"/api/v2/daily/{test_store_id}/{today_iso}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert report.get_json()["report"]["outside_cash_drops"] == 250.0
+
+
+def test_line_items_patch_404_when_missing(client, test_store_id):
+    token = _login_admin_token(client, test_store_id)
+    resp = client.patch(
+        f"/api/v2/daily/{test_store_id}/line-items/9999999",
+        json={"amount": 5.0},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 404
+
+
+def test_line_items_patch_rejects_bad_amount(client, test_store_id):
+    """`amount: 0` (or negative) is a 422 — same contract as create."""
+    today_iso = date.today().isoformat()
+    token = _login_admin_token(client, test_store_id)
+    create = client.post(
+        f"/api/v2/daily/{test_store_id}/{today_iso}/line-items",
+        json={
+            "kind": "drop", "at_time": "09:00",
+            "amount": 100.0, "note": "ok",
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    item_id = create.get_json()["id"]
+    resp = client.patch(
+        f"/api/v2/daily/{test_store_id}/line-items/{item_id}",
+        json={"amount": -5.0},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 422
+
+
+def test_line_items_patch_rejects_extra_fields(client, test_store_id):
+    """`kind` is NOT mutable post-creation — extra=forbid rejects."""
+    today_iso = date.today().isoformat()
+    token = _login_admin_token(client, test_store_id)
+    create = client.post(
+        f"/api/v2/daily/{test_store_id}/{today_iso}/line-items",
+        json={
+            "kind": "drop", "at_time": "09:00",
+            "amount": 100.0, "note": "ok",
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    item_id = create.get_json()["id"]
+    resp = client.patch(
+        f"/api/v2/daily/{test_store_id}/line-items/{item_id}",
+        json={"kind": "cash_expense"},  # not in the schema
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 422
+
+
 def test_line_items_reject_cross_store_jwt(client, test_store_id):
     today_iso = date.today().isoformat()
     from tests.conftest import login_superadmin
