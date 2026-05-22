@@ -9,7 +9,7 @@ import { Bar, Line } from "react-chartjs-2";
 import { useOwnerStoreDetail } from "../api/owner";
 import {
   Card, ErrorState, KpiCard, KpiGrid, Loading, PageHeader, PageShell,
-  Section, Table, tdStyle, thStyle,
+  Section, TabsBar, TabsButton, Table, tdStyle, thStyle,
 } from "../components/ui";
 import { chartTokens, moneyChartOptions } from "../lib/chartOptions";
 import styles from "./OwnerStoreDetail.module.css";
@@ -43,18 +43,17 @@ export default function OwnerStoreDetail() {
         <PageHeader
           title={data?.store.name || "Store"}
           actions={(
-            <div className={styles.tabBar}>
+            <TabsBar>
               {PERIODS.map((p) => (
-                <button
+                <TabsButton
                   key={p.value}
-                  type="button"
+                  active={p.value === period}
                   onClick={() => setPeriod(p.value)}
-                  className={p.value === period ? styles.tabActive : styles.tab}
                 >
                   {p.label}
-                </button>
+                </TabsButton>
               ))}
-            </div>
+            </TabsBar>
           )}
         />
       </div>

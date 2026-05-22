@@ -14,7 +14,8 @@ import { useProfile, useStoreInfo } from "../api/account";
 import { ApiError } from "../lib/api";
 import { formatTimestamp } from "../lib/datetime";
 import {
-  Button, ButtonLink, ErrorState, IconButton, Loading, TabsBar, TabsLink,
+  Button, ButtonLink, ConfirmDialog, ErrorState, IconButton, Loading,
+  TabsBar, TabsLink,
 } from "../components/ui";
 import styles from "./TVDisplayAdmin.module.css";
 
@@ -269,6 +270,7 @@ function PublicUrlBar({
 }) {
   const [copyState, setCopyState] = useState<"idle" | "copied" | "fail">("idle");
   const [showRegenForm, setShowRegenForm] = useState(false);
+  const [confirmingRegen, setConfirmingRegen] = useState(false);
 
   async function copy() {
     try {
@@ -281,11 +283,8 @@ function PublicUrlBar({
     }
   }
 
-  function regenerate() {
-    if (!window.confirm(
-      "This invalidates the current display URL. Any TV pointing at the " +
-      "old link will stop working until you reconfigure it. Continue?",
-    )) return;
+  function doRegenerate() {
+    setConfirmingRegen(false);
     onRegenerate();
   }
 
@@ -332,7 +331,7 @@ function PublicUrlBar({
           </p>
           <Button
             tone="danger" size="sm"
-            onClick={regenerate}
+            onClick={() => setConfirmingRegen(true)}
             busy={regenerating}
             disabled={regenerating}
           >
@@ -340,6 +339,17 @@ function PublicUrlBar({
           </Button>
         </div>
       </details>
+
+      <ConfirmDialog
+        open={confirmingRegen}
+        title="Rotate display URL?"
+        message="This invalidates the current display URL.  Any TV pointing at the old link will stop showing the board until you reconfigure it with the new URL."
+        confirmLabel="Rotate URL"
+        confirmTone="danger"
+        busy={regenerating}
+        onConfirm={doRegenerate}
+        onCancel={() => setConfirmingRegen(false)}
+      />
     </section>
   );
 }
@@ -363,6 +373,8 @@ function PairFireTV({
 }) {
   const [code, setCode] = useState("");
   const [flash, setFlash] = useState<{ kind: "ok" | "err"; msg: string } | null>(null);
+  const [pendingUnpair, setPendingUnpair] = useState<number | null>(null);
+  const [unpairBusy, setUnpairBusy] = useState(false);
 
   function normaliseInput(raw: string): string {
     return raw.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6);
@@ -386,17 +398,20 @@ function PairFireTV({
     }
   }
 
-  async function revoke(id: number) {
-    if (!window.confirm(
-      "Unpair this Fire TV? It will stop showing the board on its next refresh, " +
-      "and you can pair a new device with a fresh code.",
-    )) return;
+  async function doUnpair() {
+    if (pendingUnpair == null) return;
     setFlash(null);
-    await onRevoke(id);
-    setFlash({
-      kind: "ok",
-      msg: "Fire TV unpaired. The device will stop showing the board on its next refresh.",
-    });
+    setUnpairBusy(true);
+    try {
+      await onRevoke(pendingUnpair);
+      setPendingUnpair(null);
+      setFlash({
+        kind: "ok",
+        msg: "Fire TV unpaired. The device will stop showing the board on its next refresh.",
+      });
+    } finally {
+      setUnpairBusy(false);
+    }
   }
 
   // Claim button is enabled only when the input has 6 valid chars.
@@ -461,7 +476,7 @@ function PairFireTV({
           </div>
           <Button
             tone="danger" size="sm"
-            onClick={() => revoke(activePairing.id)}
+            onClick={() => setPendingUnpair(activePairing.id)}
             busy={revokePending}
             disabled={revokePending}
           >
@@ -469,6 +484,17 @@ function PairFireTV({
           </Button>
         </div>
       )}
+
+      <ConfirmDialog
+        open={pendingUnpair != null}
+        title="Unpair Fire TV?"
+        message="The device will stop showing the rate board on its next refresh.  You can pair a new device with a fresh code afterwards."
+        confirmLabel="Unpair"
+        confirmTone="danger"
+        busy={unpairBusy}
+        onConfirm={() => { void doUnpair(); }}
+        onCancel={() => setPendingUnpair(null)}
+      />
     </section>
   );
 }
@@ -629,6 +655,8 @@ function CountrySections({
   const [showAdd, setShowAdd] = useState(false);
   const [picker, setPicker] = useState("");
   const [createError, setCreateError] = useState<string | null>(null);
+  const [pendingRemove, setPendingRemove] =
+    useState<{ id: number; name: string } | null>(null);
 
   async function addCountry(e: FormEvent) {
     e.preventDefault();
@@ -652,9 +680,10 @@ function CountrySections({
     }
   }
 
-  async function removeCountry(id: number, name: string) {
-    if (!window.confirm(`Remove ${name}? This deletes its banks and rates.`)) return;
-    await onDelete(id);
+  async function doRemove() {
+    if (!pendingRemove) return;
+    await onDelete(pendingRemove.id);
+    setPendingRemove(null);
   }
 
   return (
@@ -703,7 +732,7 @@ function CountrySections({
                 IconButton can own the visual treatment. */}
             <IconButton
               tone="neutral" size="sm"
-              onClick={(e) => { e.preventDefault(); removeCountry(c.id, c.country_name); }}
+              onClick={(e) => { e.preventDefault(); setPendingRemove({ id: c.id, name: c.country_name }); }}
               disabled={deletePending}
               title={`Remove ${c.country_name}`}
               style={{ position: "absolute", top: 6, right: 6 }}
@@ -754,6 +783,20 @@ function CountrySections({
           </form>
         </details>
       </div>
+
+      <ConfirmDialog
+        open={pendingRemove != null}
+        title="Remove country?"
+        message={
+          `Remove ${pendingRemove?.name ?? "this country"}? `
+          + "This deletes its banks and rates from the board."
+        }
+        confirmLabel="Remove"
+        confirmTone="danger"
+        busy={deletePending}
+        onConfirm={() => { void doRemove(); }}
+        onCancel={() => setPendingRemove(null)}
+      />
     </>
   );
 }
