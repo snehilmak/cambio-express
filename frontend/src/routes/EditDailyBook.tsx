@@ -26,7 +26,7 @@ import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
 import {
   Button, Card, EmptyState, Field, Input, Loading, MoneyInput,
-  PageHeader, PageShell, Pill, RowActions, Textarea,
+  PageHeader, PageShell, Pill, RowActions, TabsBar, TabsButton, Textarea,
 } from "../components/ui";
 import styles from "./EditDailyBook.module.css";
 
@@ -167,14 +167,26 @@ const DISBURSEMENT_LINE_ITEMS: LineItemFieldDef[] = [
   { key: "other_cash_out",     label: "Other cash out",       kind: "other_cash_out" },
 ];
 
-// The page used to be tab-based (Receipts / Disbursements /
-// Money Transfers / Over-Short & Notes).  Pilot called out the
-// click-to-switch as too many clicks for a workflow that needs
-// the operator to see + reconcile multiple sections at once.
-// Switched to a single-page layout where every panel renders
-// inline, top-to-bottom.  The legacy `?tab=` query param is
-// ignored — links from the calendar drop the operator at the
-// top of the page and they can scroll to the relevant section.
+// Layout strategy:
+//   - Desktop (≥60rem): all four panels render in a CSS-grid
+//     layout — Receipts + Disbursements side-by-side at the top,
+//     Transfers full-width below them, Notes full-width at the
+//     bottom.  Operator sees everything at once and never has to
+//     click to switch sections.
+//   - Mobile (<60rem): the same JSX renders, but a sticky tab
+//     strip at the top picks which panel is visible.  CSS hides
+//     the other three (via `display:none`) so the page only
+//     paints one section at a time and never scrolls past 100vh.
+// The legacy `?tab=` query param is ignored — links from the
+// calendar drop the operator on the Receipts tab by default.
+
+type DailyTab = "receipts" | "disbursements" | "transfers" | "notes";
+const DAILY_TAB_DEFS: Array<{ id: DailyTab; label: string }> = [
+  { id: "receipts",      label: "Receipts" },
+  { id: "disbursements", label: "Disbursements" },
+  { id: "transfers",     label: "Transfers" },
+  { id: "notes",         label: "Notes" },
+];
 
 // ── Component ────────────────────────────────────────────────
 
@@ -189,6 +201,11 @@ export default function EditDailyBook() {
 
   const [form, setForm] = useState<FormState | null>(null);
   const [busy, setBusy] = useState(false);
+  // Mobile-only tab.  Desktop CSS ignores the data-attr and
+  // shows every panel in the grid; mobile CSS hides every
+  // panel except the one matching `mobileTab`.  See
+  // EditDailyBook.module.css `.dailyLayout` rules.
+  const [mobileTab, setMobileTab] = useState<DailyTab>("receipts");
   const [error, setError] = useState<string | null>(null);
   const [savedAt, setSavedAt] = useState<Date | null>(null);
 
@@ -343,47 +360,73 @@ export default function EditDailyBook() {
         overShort={form.over_short}
       />
 
+      {/* Mobile-only tab strip.  CSS hides it at ≥60rem viewports
+          (see `.mobileTabs` in EditDailyBook.module.css) so the
+          desktop grid renders all four panels at once. */}
+      <div className={styles.mobileTabs}>
+        <TabsBar>
+          {DAILY_TAB_DEFS.map((t) => (
+            <TabsButton
+              key={t.id}
+              active={mobileTab === t.id}
+              onClick={() => setMobileTab(t.id)}
+            >
+              {t.label}
+            </TabsButton>
+          ))}
+        </TabsBar>
+      </div>
+
       <form onSubmit={onSubmit} className={styles.form}>
-        {/* Single-page layout — every section renders inline so
-            the operator never has to click-then-scroll to
-            reconcile two sections.  Replaces the legacy tab
-            structure (Receipts / Disbursements / Money
-            Transfers / Over-Short & Notes).  Each panel keeps
-            its own internal 2-column input/line-items grid. */}
-        <ReceiptsPanel
-          form={form}
-          set={set}
-          report={report}
-          date={date}
-          storeId={storeId}
-          locked={locked}
-          lineItems={lineItems}
-          onLineItemChange={refreshAfterLineItem}
-        />
-        <DisbursementsPanel
-          form={form}
-          set={set}
-          report={report}
-          date={date}
-          storeId={storeId}
-          locked={locked}
-          lineItems={lineItems}
-          onLineItemChange={refreshAfterLineItem}
-        />
-        <TransfersPanel
-          set={set}
-          locked={locked}
-          date={date}
-          storeId={storeId}
-          /* `onJumpReceipts` was the old "scroll to top" CTA
-             when transfers were a separate tab.  In the
-             stacked layout the operator can just scroll up,
-             so this is a no-op now. */
-          onJumpReceipts={() => {
-            window.scrollTo({ top: 0, behavior: "smooth" });
-          }}
-        />
-        <NotesPanel form={form} set={set} locked={locked} />
+        {/* CSS-grid layout: desktop renders all four panels in a
+            grid (Receipts | Disbursements top, Transfers full-
+            width, Notes full-width).  Mobile renders only the
+            panel matching `mobileTab` via the `[data-tab]`
+            attribute selector — see `.dailyLayout` rules. */}
+        <div
+          className={styles.dailyLayout}
+          data-active-tab={mobileTab}
+        >
+          <div data-tab="receipts">
+            <ReceiptsPanel
+              form={form}
+              set={set}
+              report={report}
+              date={date}
+              storeId={storeId}
+              locked={locked}
+              lineItems={lineItems}
+              onLineItemChange={refreshAfterLineItem}
+            />
+          </div>
+          <div data-tab="disbursements">
+            <DisbursementsPanel
+              form={form}
+              set={set}
+              report={report}
+              date={date}
+              storeId={storeId}
+              locked={locked}
+              lineItems={lineItems}
+              onLineItemChange={refreshAfterLineItem}
+            />
+          </div>
+          <div data-tab="transfers">
+            <TransfersPanel
+              set={set}
+              locked={locked}
+              date={date}
+              storeId={storeId}
+              onJumpReceipts={() => {
+                setMobileTab("receipts");
+                window.scrollTo({ top: 0, behavior: "smooth" });
+              }}
+            />
+          </div>
+          <div data-tab="notes">
+            <NotesPanel form={form} set={set} locked={locked} />
+          </div>
+        </div>
 
         {error && <ErrorRow message={error} />}
 
