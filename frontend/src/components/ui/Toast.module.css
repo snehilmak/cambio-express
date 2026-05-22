@@ -1,0 +1,163 @@
+/* Toast — shadcn/sonner-style notification card.
+ *
+ * Visual language:
+ *   • Solid surface (--db-surface-2) + 1px border for contrast
+ *     against whatever's behind the toast region (topbar, page
+ *     chrome, modal backdrops).  No translucent tints — those
+ *     read as glassy/washed-out over the dark page and were the
+ *     pilot's "weird popup" complaint.
+ *   • Tone shown via (a) a 3px left-border accent in the tone
+ *     color and (b) a tone-colored icon to the left of the
+ *     message.  Surface + body text stay neutral.
+ *   • Stack from bottom of the viewport so toasts never overlap
+ *     the topbar / nav chrome.  Sonner convention.
+ *   • Slide-in from the right + fade-in on mount.  Slide-out to
+ *     the right + fade-out on dismiss (the .exit class runs the
+ *     reverse keyframe).
+ *
+ * The global `@media (prefers-reduced-motion: reduce)` rule in
+ * src/styles.css zeros these durations for opt-in users.
+ */
+
+.region {
+  position: fixed;
+  bottom: 1rem;
+  right: 1rem;
+  display: flex;
+  flex-direction: column-reverse;
+  /* Reverse column so the newest toast sits at the bottom (just
+   * above the viewport edge) and older ones stack above it.  Same
+   * spatial model as sonner. */
+  gap: 0.5rem;
+  z-index: 300;
+  pointer-events: none;
+  max-width: min(22rem, calc(100vw - 2rem));
+}
+
+.item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  padding: 0.75rem 0.9rem;
+  padding-right: 2.25rem;            /* room for the dismiss × */
+  border-radius: 0.6rem;
+  /* Solid card surface — same vocabulary as <Card>.  Border in
+   * --db-border keeps the edge crisp against the page chrome. */
+  background: var(--db-surface-2, #141414);
+  border: 1px solid var(--db-border, #262626);
+  /* Tone accent — narrow left stripe in the saturated tone color
+   * supplied via --toast-accent (set inline by ToastItem). */
+  border-left: 3px solid var(--toast-accent, var(--db-accent, #3fff00));
+  color: var(--db-text, #f5f5f5);
+  font-size: 0.9rem;
+  line-height: 1.4;
+  font-family: var(--db-font-body, "Inter", system-ui, sans-serif);
+  /* Slightly heavier shadow than Card so the toast reads as
+   * floating above whatever's behind it (topbar, modals, page). */
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
+  /* Re-enable pointer events — .region is pointer-events:none so
+   * toasts don't block clicks behind them, but each toast itself
+   * needs to receive its own dismiss click. */
+  pointer-events: auto;
+  position: relative;
+  min-width: 16rem;
+}
+
+.toneIcon {
+  color: var(--toast-accent, var(--db-accent, #3fff00));
+  flex-shrink: 0;
+  /* Nudge down to align with the first line of message text. */
+  margin-top: 0.05rem;
+}
+
+.message {
+  flex: 1;
+  min-width: 0;
+}
+
+.dismissBtn {
+  position: absolute;
+  top: 0.45rem;
+  right: 0.45rem;
+  width: 1.5rem;
+  height: 1.5rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  appearance: none;
+  background: transparent;
+  border: none;
+  border-radius: 0.4rem;
+  color: var(--db-text-muted, #a3a3a3);
+  cursor: pointer;
+  font-size: 1.1rem;
+  line-height: 1;
+  padding: 0;
+  transition: background 120ms ease-out, color 120ms ease-out;
+}
+
+.dismissBtn:hover {
+  background: var(--db-surface-3, #1f1f1f);
+  color: var(--db-text, #f5f5f5);
+}
+
+.dismissBtn:focus-visible {
+  outline: 2px solid var(--db-accent, #3fff00);
+  outline-offset: 1px;
+}
+
+/* ── Motion ─────────────────────────────────────────────────── */
+
+.enter {
+  animation: db-toast-in 220ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.exit {
+  animation: db-toast-out 180ms cubic-bezier(0.4, 0, 1, 1) forwards;
+  pointer-events: none;
+}
+
+@keyframes db-toast-in {
+  from {
+    opacity: 0;
+    transform: translateX(120%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes db-toast-out {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+    max-height: 6rem;
+    margin-bottom: 0;
+  }
+  to {
+    opacity: 0;
+    transform: translateX(120%);
+    /* Collapse the row so toasts below slide up smoothly during
+     * the exit instead of waiting for the unmount to happen. */
+    max-height: 0;
+    margin-bottom: -0.5rem;        /* eat the .region gap */
+    padding-top: 0;
+    padding-bottom: 0;
+  }
+}
+
+/* On narrow viewports the toast region pins to the bottom edge
+ * and goes full-width-minus-margin so long messages don't get
+ * clipped by the 22rem cap. */
+@media (max-width: 30rem) {
+  .region {
+    left: 0.75rem;
+    right: 0.75rem;
+    bottom: 0.75rem;
+    max-width: none;
+  }
+  .item {
+    min-width: 0;
+  }
+}
