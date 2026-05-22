@@ -54,6 +54,7 @@ export { Card } from "./Card";
 export { Section, SectionTitle } from "./Section";
 export { Field } from "./Field";
 export { Input } from "./Input";
+export { MoneyInput } from "./MoneyInput";
 export { Select } from "./Select";
 export { Textarea } from "./Textarea";
 export { KpiCard, KpiGrid, type KpiTone } from "./KpiCard";
