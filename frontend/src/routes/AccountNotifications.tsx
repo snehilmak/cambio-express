@@ -19,7 +19,7 @@ import {
 } from "../lib/push";
 import {
   Alert, Button, Card, ErrorState, Loading, PageHeader, PageShell, Section,
-  Table, tdStyle, thStyle, tokens,
+  Table, tdStyle, thStyle, tokens, useToast,
 } from "../components/ui";
 import styles from "./AccountNotifications.module.css";
 
@@ -39,7 +39,7 @@ export default function AccountNotifications() {
   const [draft, setDraft] = useState<NotificationsUpdateBody>({});
   const [busy, setBusy]   = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
-  const [saved, setSaved] = useState(false);
+  const toast = useToast();
 
   useEffect(() => {
     if (!data) return;
@@ -60,7 +60,6 @@ export default function AccountNotifications() {
     key: K, value: NotificationsUpdateBody[K],
   ) {
     setDraft((d) => ({ ...d, [key]: value }));
-    if (saved) setSaved(false);
   }
 
   async function onSubmit(e: FormEvent) {
@@ -70,7 +69,7 @@ export default function AccountNotifications() {
     setServerError(null);
     try {
       await updateNotifications(draft);
-      setSaved(true);
+      toast({ message: "Notification preferences saved.", tone: "success" });
       queryClient.invalidateQueries({ queryKey: ["account", "notifications"] });
     } catch (err) {
       setServerError(
@@ -116,7 +115,6 @@ export default function AccountNotifications() {
         <Section title="Your preferences">
           <Card>
             {serverError && <Alert tone="error">{serverError}</Alert>}
-            {saved && <Alert tone="success">Notification preferences saved.</Alert>}
 
             <form onSubmit={onSubmit} autoComplete="off">
               <div className={styles.kindHeader}>
@@ -375,7 +373,7 @@ function BrowserPushCard() {
   const [permission, setPermission] = useState(getPushPermission());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
+  const toast = useToast();
   const supported = pushSupported();
 
   // Sync local "is this browser subscribed?" once on mount + after
@@ -417,7 +415,7 @@ function BrowserPushCard() {
 
   async function onEnable() {
     if (!status?.public_key) return;
-    setBusy(true); setError(null); setSuccess(null);
+    setBusy(true); setError(null);
     try {
       const env = await subscribeBrowser(status.public_key);
       await subscribePush({
@@ -428,7 +426,10 @@ function BrowserPushCard() {
       });
       setLocalSubscribed(true);
       setPermission(getPushPermission());
-      setSuccess("Browser notifications enabled on this device.");
+      toast({
+        message: "Browser notifications enabled on this device.",
+        tone: "success",
+      });
       queryClient.invalidateQueries({ queryKey: ["account", "push-status"] });
     } catch (err) {
       setError(
@@ -442,14 +443,17 @@ function BrowserPushCard() {
   }
 
   async function onDisable() {
-    setBusy(true); setError(null); setSuccess(null);
+    setBusy(true); setError(null);
     try {
       const endpoint = await unsubscribeBrowser();
       if (endpoint) {
         await unsubscribePush({ endpoint });
       }
       setLocalSubscribed(false);
-      setSuccess("Browser notifications disabled on this device.");
+      toast({
+        message: "Browser notifications disabled on this device.",
+        tone: "success",
+      });
       queryClient.invalidateQueries({ queryKey: ["account", "push-status"] });
     } catch (err) {
       setError(
@@ -481,7 +485,6 @@ function BrowserPushCard() {
         </div>
 
         {error && <Alert tone="error">{error}</Alert>}
-        {success && <Alert tone="success">{success}</Alert>}
         {permission === "denied" && (
           <Alert tone="info">
             Notifications are blocked for this site.  Allow them in

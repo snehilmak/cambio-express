@@ -1,3 +1,4 @@
+import { Tooltip } from "./ui";
 import { useInstallPrompt } from "../lib/installPrompt";
 import styles from "./InstallAppButton.module.css";
 
@@ -10,11 +11,11 @@ export function InstallAppButton() {
   const { canInstall, promptInstall } = useInstallPrompt();
   if (!canInstall) return null;
   return (
+    <Tooltip label="Install DineroBook as a standalone app on this device">
     <button
       type="button"
       className={styles.button}
       onClick={() => { void promptInstall(); }}
-      title="Install DineroBook as a standalone app on this device"
       aria-label="Install DineroBook as an app"
     >
       <svg
@@ -29,5 +30,6 @@ export function InstallAppButton() {
       </svg>
       <span className={styles.label}>Install app</span>
     </button>
+    </Tooltip>
   );
 }

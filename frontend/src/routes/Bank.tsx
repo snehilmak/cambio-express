@@ -14,9 +14,9 @@ import {
 } from "../api/bankSync";
 import { ApiError } from "../lib/api";
 import {
-  Alert, Button, ButtonLink, Card, ConfirmDialog, EmptyState, ErrorState,
+  Button, ButtonLink, Card, ConfirmDialog, EmptyState, ErrorState,
   Loading, PageHeader, PageShell, space, Table, TableSkeleton, tdStyle,
-  thStyle,
+  thStyle, useToast,
 } from "../components/ui";
 import styles from "./Bank.module.css";
 
@@ -52,8 +52,8 @@ export default function Bank() {
   const accounts = useBankAccounts();
   const recent = useBankTransactions({ per_page: 10, page: 1 });
   const [connectError, setConnectError] = useState<string | null>(null);
-  const [actionMsg, setActionMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const toast = useToast();
 
   function invalidate() {
     void queryClient.invalidateQueries({ queryKey: ["bank", "accounts"] });
@@ -62,7 +62,6 @@ export default function Bank() {
 
   async function handleConnect() {
     setConnectError(null);
-    setActionMsg(null);
     setBusy("connect");
     try {
       await ensureStripeJs();
@@ -79,11 +78,12 @@ export default function Bank() {
       // place (no full page reload).
       const persisted = await completeStripeConnect(session.sessionId);
       invalidate();
-      setActionMsg(
-        persisted.accounts_added > 0
+      toast({
+        message: persisted.accounts_added > 0
           ? `Linked ${persisted.accounts_added} account(s).`
           : "Account already linked — nothing new to add.",
-      );
+        tone: "success",
+      });
     } catch (e) {
       const msg = e instanceof ApiError ? e.message
         : e instanceof Error ? e.message
@@ -96,15 +96,16 @@ export default function Bank() {
 
   async function handleRefresh() {
     setConnectError(null);
-    setActionMsg(null);
     setBusy("refresh");
     try {
       const r = await refreshBankBalances();
       invalidate();
-      setActionMsg(
-        r.error ? `Refreshed (${r.accounts_refreshed}). Warning: ${r.error}`
+      toast({
+        message: r.error
+          ? `Refreshed (${r.accounts_refreshed}). Warning: ${r.error}`
           : `Refreshed ${r.accounts_refreshed} account(s).`,
-      );
+        tone: r.error ? "warning" : "success",
+      });
     } catch (e) {
       setConnectError(
         e instanceof ApiError ? e.message
@@ -118,16 +119,16 @@ export default function Bank() {
 
   async function handleSyncTxns() {
     setConnectError(null);
-    setActionMsg(null);
     setBusy("sync");
     try {
       const r = await syncBankTransactions();
       invalidate();
-      setActionMsg(
-        r.error
+      toast({
+        message: r.error
           ? `Synced (new ${r.new_rows}). Warning: ${r.error}`
           : `Synced ${r.new_rows} new transaction(s) (${r.total_seen} seen).`,
-      );
+        tone: r.error ? "warning" : "success",
+      });
     } catch (e) {
       setConnectError(
         e instanceof ApiError ? e.message
@@ -141,16 +142,16 @@ export default function Bank() {
 
   async function handleSaveNickname(acctId: number, nickname: string) {
     setConnectError(null);
-    setActionMsg(null);
     setBusy(`nickname:${acctId}`);
     try {
       await setBankAccountNickname(acctId, nickname);
       invalidate();
-      setActionMsg(
-        nickname.trim()
+      toast({
+        message: nickname.trim()
           ? `Renamed to "${nickname.trim()}".`
           : "Nickname cleared.",
-      );
+        tone: "success",
+      });
     } catch (e) {
       setConnectError(
         e instanceof ApiError ? e.message
@@ -173,12 +174,11 @@ export default function Bank() {
     if (!pendingDisconnect) return;
     const { id: acctId, label } = pendingDisconnect;
     setConnectError(null);
-    setActionMsg(null);
     setBusy(`disconnect:${acctId}`);
     try {
       await disconnectBankAccount(acctId);
       invalidate();
-      setActionMsg(`Disconnected ${label}.`);
+      toast({ message: `Disconnected ${label}.`, tone: "success" });
     } catch (e) {
       setConnectError(
         e instanceof ApiError ? e.message
@@ -200,7 +200,6 @@ export default function Bank() {
       <PageHeader title="Bank Accounts" />
 
       {connectError && <ErrorState message={connectError} />}
-      {actionMsg && <Alert tone="success">{actionMsg}</Alert>}
 
       <Card>
         <header className={styles.sectionHeader}>

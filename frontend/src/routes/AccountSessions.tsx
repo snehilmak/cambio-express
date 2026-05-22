@@ -10,7 +10,7 @@ import {
 import { ApiError } from "../lib/api";
 import {
   Alert, Button, Card, ConfirmDialog, ErrorState, Loading, PageHeader,
-  PageShell, Section, space, Table, tdStyle, thStyle, tokens,
+  PageShell, Section, space, Table, tdStyle, thStyle, tokens, useToast,
 } from "../components/ui";
 import styles from "./AccountSessions.module.css";
 
@@ -26,14 +26,14 @@ export default function AccountSessions() {
   const { data, isLoading, isError, error, refetch } = useActiveSessions();
   const [busy, setBusy] = useState<string | null>(null);
   const [revokeError, setRevokeError] = useState<string | null>(null);
-  const [toast, setToast] = useState<string | null>(null);
+  const toast = useToast();
 
   async function onRevoke(sessionId: string) {
     setBusy(sessionId);
     setRevokeError(null);
     try {
       await revokeSession(sessionId);
-      setToast("Session signed out.");
+      toast({ message: "Session signed out.", tone: "success" });
       queryClient.invalidateQueries({ queryKey: ["account", "sessions"] });
     } catch (e) {
       setRevokeError(
@@ -55,13 +55,14 @@ export default function AccountSessions() {
     setConfirmingRevokeOthers(false);
     try {
       const result = await revokeOtherSessions();
-      setToast(
-        result.revoked === 0
+      toast({
+        message: result.revoked === 0
           ? "No other sessions to sign out."
           : `Signed out ${result.revoked} other session${
               result.revoked === 1 ? "" : "s"
             }.`,
-      );
+        tone: "success",
+      });
       queryClient.invalidateQueries({ queryKey: ["account", "sessions"] });
     } catch (e) {
       setRevokeError(
@@ -118,23 +119,6 @@ export default function AccountSessions() {
           </Button>
         ) : undefined}
       />
-
-      {toast && (
-        <div style={{ marginBottom: space.lg }}>
-          <Alert tone="success">
-            <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
-              <span>{toast}</span>
-              <Button
-                tone="secondary"
-                size="sm"
-                onClick={() => setToast(null)}
-              >
-                Dismiss
-              </Button>
-            </div>
-          </Alert>
-        </div>
-      )}
 
       {revokeError && (
         <div style={{ marginBottom: space.lg }}>

@@ -1,15 +1,16 @@
 import { Link } from "react-router-dom";
 
+import { Tooltip } from "./ui";
 import styles from "./HomeButton.module.css";
 
 /** Topbar shortcut to /app/home — always one tap away from
  *  the tile-hub, regardless of where the user is in the SPA. */
 export function HomeButton() {
   return (
+    <Tooltip label="Open the home hub — every action, one tap away">
     <Link
       to="/home"
       className={styles.button}
-      title="Open the home hub — every action, one tap away"
       aria-label="Home"
     >
       <svg
@@ -23,5 +24,6 @@ export function HomeButton() {
       </svg>
       <span className={styles.label}>Home</span>
     </Link>
+    </Tooltip>
   );
 }
