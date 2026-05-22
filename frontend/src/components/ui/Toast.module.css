@@ -9,11 +9,13 @@
  *   • Tone shown via (a) a 3px left-border accent in the tone
  *     color and (b) a tone-colored icon to the left of the
  *     message.  Surface + body text stay neutral.
- *   • Stack from bottom of the viewport so toasts never overlap
- *     the topbar / nav chrome.  Sonner convention.
- *   • Slide-in from the right + fade-in on mount.  Slide-out to
- *     the right + fade-out on dismiss (the .exit class runs the
- *     reverse keyframe).
+ *   • **Top-center placement** — pilot wanted notifications to
+ *     "come from the top."  Region sits just below the topbar so
+ *     the card never overlaps nav chrome; newest pins to the
+ *     top and older toasts stack below.
+ *   • Slide-down + fade-in on mount.  Slide-up + fade-out on
+ *     dismiss (the .exit class runs the reverse keyframe and
+ *     collapses max-height so neighbours slide up smoothly).
  *
  * The global `@media (prefers-reduced-motion: reduce)` rule in
  * src/styles.css zeros these durations for opt-in users.
@@ -21,17 +23,23 @@
 
 .region {
   position: fixed;
-  bottom: 1rem;
-  right: 1rem;
+  /* Top-center placement.  Pilot called this out as the best
+   * spot to see notifications arrive ("coming from the top").
+   * Region sits just below the topbar (which is ~3.5-4rem tall
+   * in the AppShell layout) so the card never overlaps the nav
+   * chrome.  z-index 300 sits above modals (z 100) so a toast
+   * fired during a modal save still surfaces.  Newest toast
+   * lands at the top; older toasts stack below it. */
+  top: 4.5rem;
+  left: 50%;
+  transform: translateX(-50%);
   display: flex;
-  flex-direction: column-reverse;
-  /* Reverse column so the newest toast sits at the bottom (just
-   * above the viewport edge) and older ones stack above it.  Same
-   * spatial model as sonner. */
+  flex-direction: column;
   gap: 0.5rem;
   z-index: 300;
   pointer-events: none;
-  max-width: min(22rem, calc(100vw - 2rem));
+  width: min(22rem, calc(100vw - 2rem));
+  align-items: stretch;
 }
 
 .item {
@@ -109,7 +117,7 @@
 /* ── Motion ─────────────────────────────────────────────────── */
 
 .enter {
-  animation: db-toast-in 220ms cubic-bezier(0.16, 1, 0.3, 1);
+  animation: db-toast-in 240ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .exit {
@@ -117,27 +125,31 @@
   pointer-events: none;
 }
 
+/* Slide DOWN from above the viewport on mount — matches the
+ * top-center placement so the toast reads as "dropping in from
+ * the top." */
 @keyframes db-toast-in {
   from {
     opacity: 0;
-    transform: translateX(120%);
+    transform: translateY(-140%);
   }
   to {
     opacity: 1;
-    transform: translateX(0);
+    transform: translateY(0);
   }
 }
 
 @keyframes db-toast-out {
   from {
     opacity: 1;
-    transform: translateX(0);
+    transform: translateY(0);
     max-height: 6rem;
     margin-bottom: 0;
   }
   to {
     opacity: 0;
-    transform: translateX(120%);
+    /* Slide UP off the top edge to mirror the entry direction. */
+    transform: translateY(-140%);
     /* Collapse the row so toasts below slide up smoothly during
      * the exit instead of waiting for the unmount to happen. */
     max-height: 0;
@@ -147,15 +159,16 @@
   }
 }
 
-/* On narrow viewports the toast region pins to the bottom edge
- * and goes full-width-minus-margin so long messages don't get
- * clipped by the 22rem cap. */
+/* On narrow viewports anchor near the top edge (below the mobile
+ * hamburger) and go full-width-minus-margin so long messages
+ * don't get clipped by the 22rem cap. */
 @media (max-width: 30rem) {
   .region {
+    top: max(3.75rem, calc(env(safe-area-inset-top) + 3rem));
     left: 0.75rem;
     right: 0.75rem;
-    bottom: 0.75rem;
-    max-width: none;
+    transform: none;
+    width: auto;
   }
   .item {
     min-width: 0;
