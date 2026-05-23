@@ -205,11 +205,21 @@ the 422-trap field list).
   Services/customers.py` upsert + `frontend/src/routes/
   NewTransfer.tsx` + `EditTransfer.tsx` count as "Transfers
   files" too.
+- `api/Modules/Monthly/INVARIANTS.md` — monthly P&L. Field
+  categories (operator-editable / daily-derived /
+  cross-table-derived), the 422 trap for every read-only field,
+  the income / expense / net-profit formulas, the auto-derive
+  contract ("trust the ledger, never the stored value"), and the
+  `bank_charges_total` conditional-lock rule that Basic-plan
+  stores depend on for manual entry.
+  `frontend/src/routes/EditMonthly.tsx` +
+  `frontend/src/api/monthly.ts` count as "Monthly files" too.
 
-When more INVARIANTS docs land (Batches, Monthly), add them to
+When more INVARIANTS docs land (Batches, Auth), add them to
 this list. The point: a `frontend/src/routes/Bank.tsx` edit
 needs the Bank invariants in scope; a daily-book edit needs
-the daily-book ones; a transfer edit needs the transfer ones.
+the daily-book ones; a transfer edit needs the transfer ones;
+a monthly P&L edit needs the monthly ones.
 
 ### Code-level invariants
 
