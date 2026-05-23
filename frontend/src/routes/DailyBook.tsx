@@ -245,6 +245,7 @@ function CalendarCell({
     ? (report.total_receipts ?? 0) - (report.total_disbursements ?? 0)
     : 0;
   const over = (report?.over_short ?? 0);
+  const hasVariance = Math.abs(over) >= 0.005;
 
   const cls = [
     styles.cell,
@@ -264,7 +265,7 @@ function CalendarCell({
         <span className={styles.cellDay}>{day}</span>
         {locked && (
           <svg
-            width="14" height="14" viewBox="0 0 24 24"
+            width="12" height="12" viewBox="0 0 24 24"
             stroke="currentColor" fill="none" strokeWidth="2"
             strokeLinecap="round" strokeLinejoin="round"
             className={styles.lockIcon}
@@ -275,10 +276,23 @@ function CalendarCell({
           </svg>
         )}
       </div>
-      {hasReport ? (
-        <>
+
+      {hasReport && (
+        <div className={styles.dots} aria-hidden="true">
+          <span className={`${styles.dot} ${styles.dotEntry}`} />
+          {hasVariance && (
+            <span
+              className={`${styles.dot} ${over > 0 ? styles.dotOverPos : styles.dotOverNeg}`}
+            />
+          )}
+          {locked && <span className={`${styles.dot} ${styles.dotLocked}`} />}
+        </div>
+      )}
+
+      {hasReport && (
+        <div className={styles.cellMoneyWrap}>
           <div className={styles.cellMoney}>{fmtMoney(total)}</div>
-          {Math.abs(over) >= 0.005 && (
+          {hasVariance && (
             <span
               className={`${styles.overPill} ${over > 0 ? styles.overPos : styles.overNeg}`}
               title={`Over/short: ${fmtMoney2(over)}`}
@@ -286,9 +300,7 @@ function CalendarCell({
               {over > 0 ? "+" : ""}{fmtMoney2(over)}
             </span>
           )}
-        </>
-      ) : (
-        <div className={styles.cellEmptyHint}>—</div>
+        </div>
       )}
     </Link>
   );
