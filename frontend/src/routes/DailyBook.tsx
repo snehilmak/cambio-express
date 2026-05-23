@@ -156,7 +156,7 @@ export default function DailyBook() {
       )}
 
       {data && (
-        <Card padding="1.25rem">
+        <Card padding="clamp(0.5rem, 2.5vw, 1.25rem)">
           <Calendar
             year={year}
             month={month}
