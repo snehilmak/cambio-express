@@ -12,6 +12,7 @@ import {
   Field,
   FormActions,
   Input,
+  MoneyInput,
   PageHeader,
   PageShell,
   Section,
@@ -337,26 +338,30 @@ export default function NewTransfer() {
         <Card>
           <Section title="Amounts">
             <Grid>
-              <Field label="Send amount (USD)"
-                     highlight={!!errors.send_amount}>
-                <Input
-                  type="number" step="0.01" min="0"
-                  {...register("send_amount", { valueAsNumber: true })}
-                  required
-                />
-                {errors.send_amount && (
-                  <FieldError>{errors.send_amount.message}</FieldError>
+              <Controller
+                control={control}
+                name="send_amount"
+                render={({ field }) => (
+                  <MoneyInput
+                    label="Send amount (USD)"
+                    value={field.value ?? 0}
+                    onChange={field.onChange}
+                    error={errors.send_amount?.message}
+                  />
                 )}
-              </Field>
-              <Field label="Fee (USD)" highlight={!!errors.fee}>
-                <Input
-                  type="number" step="0.01" min="0"
-                  {...register("fee", { valueAsNumber: true })}
-                />
-                {errors.fee && (
-                  <FieldError>{errors.fee.message}</FieldError>
+              />
+              <Controller
+                control={control}
+                name="fee"
+                render={({ field }) => (
+                  <MoneyInput
+                    label="Fee (USD)"
+                    value={field.value ?? 0}
+                    onChange={field.onChange}
+                    error={errors.fee?.message}
+                  />
                 )}
-              </Field>
+              />
               <FederalTaxPreview
                 sendAmount={sendAmount}
                 serviceType={serviceType}
