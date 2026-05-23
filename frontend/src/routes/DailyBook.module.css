@@ -9,73 +9,189 @@
 .grid {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  gap: 0.5rem;
+  gap: 0.3rem;
+}
+
+@media (min-width: 36rem) {
+  .grid {
+    gap: 0.5rem;
+  }
 }
 
 .weekHeaderRow {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  gap: 0.5rem;
-  margin-bottom: 0.5rem;
+  gap: 0.3rem;
+  margin-bottom: 0.4rem;
+}
+
+@media (min-width: 36rem) {
+  .weekHeaderRow {
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+  }
 }
 
 .weekHeaderCell {
-  font-size: 0.7rem;
-  letter-spacing: 0.08em;
+  font-size: 0.65rem;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--db-text-muted, #a3a3a3);
   text-align: center;
-  padding: 0.4rem 0;
+  padding: 0.3rem 0;
   font-weight: 600;
 }
+
+@media (min-width: 36rem) {
+  .weekHeaderCell {
+    font-size: 0.7rem;
+    letter-spacing: 0.08em;
+    padding: 0.4rem 0;
+  }
+}
+
+/* ── Cell base ────────────────────────────────────────────── */
 
 .cell {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
-  padding: 0.7rem 0.65rem;
-  border-radius: 0.65rem;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.4rem 0.25rem 0.35rem;
+  border-radius: 0.5rem;
   border: 1px solid var(--db-border, #262626);
   background: var(--db-surface-2, #141414);
   text-decoration: none;
   color: var(--db-text, #f5f5f5);
-  min-height: 5.25rem;
+  min-height: 3rem;
+  aspect-ratio: 1 / 1;
+  position: relative;
+  transition: background-color 120ms ease, border-color 120ms ease, transform 120ms ease;
+}
+
+@media (min-width: 36rem) {
+  .cell {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.25rem;
+    padding: 0.7rem 0.65rem;
+    border-radius: 0.65rem;
+    min-height: 5.25rem;
+    aspect-ratio: auto;
+  }
 }
 
 .cellHasReport {
-  background: var(--db-surface, #0a0a0a);
-  border-color: rgba(63, 255, 0, 0.25);
+  background: color-mix(in srgb, var(--db-accent, #3fff00) 6%, var(--db-surface-2, #141414));
+  border-color: color-mix(in srgb, var(--db-accent, #3fff00) 30%, transparent);
 }
 
 .cellToday {
   border-color: var(--db-accent, #3fff00);
-  box-shadow: 0 0 0 1px rgba(63, 255, 0, 0.35) inset;
+  box-shadow: 0 0 0 1px var(--db-accent, #3fff00) inset;
 }
 
 .cellLocked {
   border-style: dashed;
-  opacity: 0.94;
 }
 
 .emptyCell {
   background: transparent;
-  min-height: 5.25rem;
+  border: 1px solid transparent;
+  aspect-ratio: 1 / 1;
+  min-height: 3rem;
 }
+
+@media (min-width: 36rem) {
+  .emptyCell {
+    aspect-ratio: auto;
+    min-height: 5.25rem;
+  }
+}
+
+/* ── Cell header (day number + lock icon) ─────────────────── */
 
 .cellHeader {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  width: 100%;
   font-family: var(--db-font-display, "Space Grotesk", sans-serif);
+  line-height: 1;
 }
 
 .cellDay {
-  font-size: 1rem;
+  font-size: 0.9rem;
   font-weight: 700;
+  line-height: 1;
+}
+
+@media (min-width: 36rem) {
+  .cellDay {
+    font-size: 1rem;
+  }
 }
 
 .lockIcon {
   color: var(--db-warning, #ffb800);
+  flex-shrink: 0;
+}
+
+/* ── Mobile-only status dot row ───────────────────────────── */
+
+.dots {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.22rem;
+  margin-top: auto;
+  min-height: 0.55rem;
+}
+
+.dot {
+  display: inline-block;
+  width: 0.35rem;
+  height: 0.35rem;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+
+.dotEntry {
+  background: var(--db-accent, #3fff00);
+}
+
+.dotOverPos {
+  background: var(--db-accent, #3fff00);
+  box-shadow: 0 0 0 1px var(--db-surface, #0a0a0a);
+}
+
+.dotOverNeg {
+  background: var(--db-negative, #ff3b30);
+}
+
+.dotLocked {
+  background: var(--db-warning, #ffb800);
+}
+
+@media (min-width: 36rem) {
+  .dots {
+    display: none;
+  }
+}
+
+/* ── Desktop money + over/short pill ──────────────────────── */
+
+.cellMoneyWrap {
+  display: none;
+}
+
+@media (min-width: 36rem) {
+  .cellMoneyWrap {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    width: 100%;
+  }
 }
 
 .cellMoney {
@@ -83,11 +199,6 @@
   font-size: 0.85rem;
   font-weight: 600;
   color: var(--db-text, #f5f5f5);
-}
-
-.cellEmptyHint {
-  font-size: 0.85rem;
-  color: var(--db-text-muted, #a3a3a3);
 }
 
 .overPill {
@@ -111,15 +222,23 @@
   border-color: var(--db-negative, #ff3b30);
 }
 
+/* ── Legend ───────────────────────────────────────────────── */
+
 .legend {
   display: flex;
   flex-wrap: wrap;
-  gap: 1rem;
+  gap: 0.75rem 1rem;
   margin-top: 1rem;
   padding-top: 0.75rem;
   border-top: 1px solid var(--db-border, #262626);
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   color: var(--db-text-muted, #a3a3a3);
+}
+
+@media (min-width: 36rem) {
+  .legend {
+    font-size: 0.75rem;
+  }
 }
 
 .legendItem {
@@ -130,9 +249,12 @@
 
 .swatch {
   display: inline-block;
-  width: 1.25rem;
-  height: 0.9rem;
+  width: 1.1rem;
+  height: 0.8rem;
   border-radius: 0.25rem;
   border: 1px solid var(--db-border, #262626);
   background: var(--db-surface-2, #141414);
 }
+
+/* Legend swatch variants reuse the cell modifier classes via
+   composition in the JSX, so the visuals stay in sync. */
