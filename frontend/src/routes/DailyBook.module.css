@@ -8,8 +8,12 @@
 
 .grid {
   display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  gap: 0.3rem;
+  /* minmax(0, 1fr) lets columns shrink below their intrinsic min-content
+     width — without it, .cell's aspect-ratio + min-height forces a min
+     width that pushes the rightmost cells past the Card edge on phones. */
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 0.25rem;
+  width: 100%;
 }
 
 @media (min-width: 36rem) {
@@ -20,9 +24,10 @@
 
 .weekHeaderRow {
   display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  gap: 0.3rem;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 0.25rem;
   margin-bottom: 0.4rem;
+  width: 100%;
 }
 
 @media (min-width: 36rem) {
