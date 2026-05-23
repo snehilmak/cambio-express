@@ -1259,3 +1259,18 @@ gaps. Ordered by "what I'd do next" at the top.
       revenue upside.
 - [ ] **Business legal info** — legal name, EIN, address. Avoid
       duplicating on each store.
+
+## Housekeeping (lowest priority)
+
+- [ ] **Prune stale `claude/*` branches on GitHub.** ~514
+      orphan branches accumulated during the multi-month Flask
+      removal + SPA cutover + per-module migration arcs. All have
+      been merged into `main` (or superseded). Keep only `main`
+      and `pre-prod`. The harness's git proxy returns 403 on
+      branch deletion (push --delete) and the GitHub MCP doesn't
+      expose a `delete_branch` tool, so this can't be done from
+      a Claude session — run locally with `gh api -X DELETE` or
+      `git push origin --delete` in a loop. The branch list is
+      reproducible with `git ls-remote --heads origin | grep -v
+      -E 'main|pre-prod'`. No-op for production; tidies the
+      branch picker only.
