@@ -14,6 +14,16 @@
   align-items: end;
 }
 
+/* On narrow viewports the 4-column grid (search + 3 fixed-width filters)
+   overflows horizontally and the rightmost columns get clipped. Stack
+   each filter on its own row instead — more vertical scroll, no
+   horizontal overflow, native date pickers render at full width. */
+@media (max-width: 640px) {
+  .filterBar {
+    grid-template-columns: 1fr;
+  }
+}
+
 .filterBusy {
   grid-column: 1 / -1;
   color: var(--db-text-muted, #a3a3a3);

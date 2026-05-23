@@ -950,15 +950,16 @@ function MTCellInput({
   onChange: (next: number) => void;
   locked: boolean;
 }) {
+  // MoneyInput with prefix="" drops the $ chrome so the cell stays
+  // table-tight; the kit's empty-means-zero + wheel-blur + decimal-
+  // keypad behaviour carries over from the rest of the SPA.
   return (
     <td className={styles.mtCellTd}>
-      <input
-        type="number"
-        step="0.01"
+      <MoneyInput
         value={Number.isFinite(value) ? value : 0}
-        onChange={(e) => onChange(Number(e.target.value) || 0)}
+        onChange={onChange}
         disabled={locked}
-        className={`ds-input ${styles.mtCellInput}`}
+        prefix=""
       />
     </td>
   );
@@ -1037,7 +1038,7 @@ function LineItemWidget({
 }) {
   const [open, setOpen] = useState(false);
   const [time, setTime] = useState("");
-  const [amount, setAmount] = useState("");
+  const [amount, setAmount] = useState(0);
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -1090,16 +1091,17 @@ function LineItemWidget({
   async function add() {
     if (busy) return;
     setErr(null);
-    const amt = Number(amount);
     if (!time) { setErr("Pick a time."); return; }
-    if (!amt || amt <= 0) { setErr("Amount must be greater than zero."); return; }
+    if (!amount || amount <= 0) {
+      setErr("Amount must be greater than zero."); return;
+    }
     setBusy(true);
     try {
       await createLineItem(storeId, date, {
-        kind, at_time: time, amount: amt, note,
+        kind, at_time: time, amount, note,
       });
       setTime("");
-      setAmount("");
+      setAmount(0);
       setNote("");
       onChange();
     } catch (e) {
@@ -1164,17 +1166,12 @@ function LineItemWidget({
                 </Field>
               </div>
               <div className={styles.addRowAmount}>
-                <Field label="Amount">
-                  <Input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    placeholder="0.00"
-                    value={amount}
-                    onChange={(e) => setAmount(e.target.value)}
-                    disabled={busy}
-                  />
-                </Field>
+                <MoneyInput
+                  label="Amount"
+                  value={amount}
+                  onChange={setAmount}
+                  disabled={busy}
+                />
               </div>
               <div className={styles.addRowNote}>
                 <Field label="Note (optional)">
