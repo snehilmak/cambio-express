@@ -361,6 +361,109 @@ def test_create_recomputes_tax_ignoring_client_value(client, test_store_id):
     assert resp.status_code == 422
 
 
+# Characterization: every field listed under "the 422 trap" in
+# INVARIANTS.md MUST be rejected by the transfer POST.  Pins the
+# full server-computed / derived surface so a future refactor
+# can't silently let one slip into the writable schema.
+@pytest.mark.parametrize("derived_field,value", [
+    ("federal_tax", 99.99),     # always server-computed
+    ("total_collected", 999.0), # derived @property
+    ("id", 42),                 # DB identity
+    ("created_by", 99),         # set from the JWT principal
+    ("updated_at", "2026-01-01T00:00:00"),  # auto
+    ("employee_name", "X"),     # snapshotted from the chosen employee
+])
+def test_create_rejects_every_derived_field(
+    client, test_store_id, derived_field, value,
+):
+    with db_session():
+        emp_id = _seed_employee(test_store_id, name="P1")
+    login = client.post(
+        "/api/v2/auth/login",
+        json={
+            "username": "admin@test.com",
+            "password": "testpass123!",
+            "store_id": test_store_id,
+        },
+    )
+    token = login.get_json()["access_token"]
+    body = {
+        "send_date": "2026-01-15",
+        "company": "Intermex",
+        "service_type": "Money Transfer",
+        "sender_name": "S",
+        "send_amount": 100.0,
+        "country": "Mexico",
+        "employee_id": emp_id,
+        derived_field: value,  # the trap
+    }
+    resp = client.post(
+        "/api/v2/transfers", json=body,
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 422, (
+        f"Expected 422 when sending {derived_field!r} (derived per "
+        f"INVARIANTS.md), got {resp.status_code}.  If this field is "
+        f"now legitimately client-supplied, update INVARIANTS.md + "
+        f"CreateTransferRequest in the same PR."
+    )
+
+
+# Characterization: the bedrock formula
+#   total_collected = send_amount + fee + federal_tax
+# rendered in the wire response across a sweep of inputs.  Fuzz-
+# adjacent — catches any future drift where a response adapter
+# starts computing total_collected differently than the model.
+@pytest.mark.parametrize("send_amount,fee", [
+    (0.0, 0.0),
+    (10.0, 0.0),
+    (100.0, 5.0),
+    (250.50, 10.25),
+    (5000.0, 25.0),
+    (999.99, 0.01),
+])
+def test_create_total_collected_matches_send_plus_fee_plus_tax(
+    client, test_store_id, send_amount, fee,
+):
+    with db_session():
+        emp_id = _seed_employee(test_store_id, name="FormulaCheck")
+    login = client.post(
+        "/api/v2/auth/login",
+        json={
+            "username": "admin@test.com",
+            "password": "testpass123!",
+            "store_id": test_store_id,
+        },
+    )
+    token = login.get_json()["access_token"]
+    resp = client.post(
+        "/api/v2/transfers",
+        json={
+            "send_date": "2026-01-15",
+            "company": "Intermex",
+            "service_type": "Money Transfer",
+            "sender_name": "S",
+            "send_amount": send_amount,
+            "fee": fee,
+            "country": "Mexico",
+            "employee_id": emp_id,
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 201, resp.get_data(as_text=True)
+    row = resp.get_json()["transfer"]
+    # The formula is the source of truth.  Tax is recomputed
+    # server-side (we don't assert its exact value here; the
+    # test_tax_service.py sweep covers that).
+    expected_total = row["send_amount"] + row["fee"] + row["federal_tax"]
+    assert row["total_collected"] == pytest.approx(expected_total), (
+        f"total_collected drifted from send_amount + fee + federal_tax: "
+        f"got {row['total_collected']}, expected {expected_total} "
+        f"(send={row['send_amount']}, fee={row['fee']}, "
+        f"tax={row['federal_tax']})"
+    )
+
+
 def test_create_rejects_missing_employee(client, test_store_id):
     """`pick_employee` returning None must produce 422."""
     login = client.post(

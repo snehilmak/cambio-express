@@ -206,10 +206,17 @@ The daily book feeds:
   the monthly roll-up. Several `DailyReport` fields back specific
   monthly lines via `_BANK_CATEGORY_PL_FIELD`. Changing the field
   set here can break monthly without warning.
-- **Transfers** (`api/Modules/Transfers/`): each transfer's
-  `(store, date, company)` updates `mt_summary` via
-  `recompute_mt_summary_for_date`, which in turn re-derives the
-  daily book's `money_transfer` field.
+- **Transfers** (`api/Modules/Transfers/`): the per-(store,
+  date, company) `mt_summary` table is the source of truth for
+  `DailyReport.money_transfer`.  Cashier-entered transfers in
+  `Transfer` do NOT auto-update `mt_summary` — the operator
+  applies them via the MT-breakdown editor (`PUT
+  /api/v2/daily/{store}/{date}/mt-breakdown`), which is the only
+  write path.  The editor's auto-fill defaults come from
+  `summarize_transfers_for_day` reading `Transfer` rows, but
+  applying them is an explicit action — that's why a fresh day
+  pre-fills with the day's totals and an overridden day keeps
+  the cashier's edits.
 - **Bank sync** (`api/Modules/BankSync/`): some bank-charge rows
   feed line-item kinds (see `BUILTIN_BANK_RULES`). Those line items
   show up under the existing line-item-derived fields.

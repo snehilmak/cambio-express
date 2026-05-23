@@ -196,11 +196,20 @@ the 422-trap field list).
   cross-table-derived), lock rules, the 422 trap, the math
   formulas. `frontend/src/routes/EditDailyBook.tsx` +
   `frontend/src/api/dailybook.ts` count as "DailyBook files" too.
+- `api/Modules/Transfers/INVARIANTS.md` — transfer ledger. The
+  money math (`total_collected = send_amount + fee + federal_tax`),
+  the server-computed federal-tax rule, the Customer upsert
+  chain across the owner umbrella, status semantics, audit
+  contract, employee attribution, cross-module dependencies
+  (Batches / Monthly / DailyBook). `api/Modules/Customers/
+  Services/customers.py` upsert + `frontend/src/routes/
+  NewTransfer.tsx` + `EditTransfer.tsx` count as "Transfers
+  files" too.
 
-When more INVARIANTS docs land (Transfers, Batches, Monthly), add
-them to this list. The point: a `frontend/src/routes/Bank.tsx`
-edit needs the Bank invariants in scope; a daily-book edit needs
-the daily-book ones.
+When more INVARIANTS docs land (Batches, Monthly), add them to
+this list. The point: a `frontend/src/routes/Bank.tsx` edit
+needs the Bank invariants in scope; a daily-book edit needs
+the daily-book ones; a transfer edit needs the transfer ones.
 
 ### Code-level invariants
 
