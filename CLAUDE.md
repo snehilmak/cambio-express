@@ -214,8 +214,18 @@ the 422-trap field list).
   stores depend on for manual entry.
   `frontend/src/routes/EditMonthly.tsx` +
   `frontend/src/api/monthly.ts` count as "Monthly files" too.
+- `api/Modules/Auth/INVARIANTS.md` — login, 2FA, recovery codes,
+  passkeys. The `_TOTP_REQUIRED_ROLES` single role gate, the
+  `_ROLE_PERMISSIONS` matrix (privilege escalation surface), the
+  opaque-error-message rule (anti-enumeration), the pending vs
+  access token purpose separation, the passkey-register
+  TOTP-first rule for superadmin, the forward invariant for a
+  passkey-LOGIN flow (when it lands, must follow the documented
+  rules), and the `WEBAUTHN_RP_ID` invalidate-everything rule.
+  Auth changes deserve an explicit review header in the PR
+  description.
 
-When more INVARIANTS docs land (Batches, Auth), add them to
+When more INVARIANTS docs land (Batches), add them to
 this list. The point: a `frontend/src/routes/Bank.tsx` edit
 needs the Bank invariants in scope; a daily-book edit needs
 the daily-book ones; a transfer edit needs the transfer ones;
