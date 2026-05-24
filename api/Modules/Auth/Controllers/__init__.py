@@ -1322,13 +1322,16 @@ def reset_password_route(
 
 # ── Passkey management (list + register + delete) ───────────
 #
-# Login verification still lives on the legacy /login/passkey/*
-# routes (it's tied to the Flask session promotion path the SPA
-# doesn't drive yet). Registration moved here so the SPA's
-# Settings page can run the full enrollment dance — the
-# WebAuthn challenge bridges between begin and finish via a
+# Passkeys are a registered factor on the user account today,
+# not a login factor — the SPA settings page enrolls and lists
+# them, but a passkey-LOGIN flow has not been built. See
+# `api/Modules/Auth/INVARIANTS.md` :: "Passkey carve-out" for
+# the forward invariant if/when that flow lands.
+#
+# The WebAuthn challenge bridges between begin + finish via a
 # short-lived signed JWT (`purpose: passkey-register`) since
-# FastAPI doesn't share Flask's `session` dict.
+# FastAPI doesn't share Flask's `session` dict (Flask removed
+# in PR #550).
 
 @router.post("/passkeys/register/begin")
 def passkey_register_begin_route(
@@ -1476,12 +1479,11 @@ def passkey_register_finish_route(
 
 # ── Passkey management (list + delete) ──────────────────────
 #
-# Login verification (the assertion flow on
-# /login/passkey/*) stays on Flask for now — it's tied to the
-# session promotion path the SPA doesn't yet drive end-to-end.
-# orchestration that's a separate migration. Read + delete are
-# pure server-side and ship here so the SPA's settings page can
-# show the user's registered devices without bouncing to legacy.
+# A passkey-LOGIN flow has not been built — passkeys are a
+# registered factor only. See `api/Modules/Auth/INVARIANTS.md`
+# :: "Passkey carve-out" for the forward invariant if/when
+# that flow lands. The list + delete routes here power the
+# SPA settings page (`/app/settings/security`).
 
 
 @router.get("/passkeys")
