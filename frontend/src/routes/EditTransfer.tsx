@@ -1,44 +1,98 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect } from "react";
+import { Controller, useForm, useWatch } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import { useNavigate, useParams } from "react-router-dom";
 
 import SenderAutocomplete from "../components/SenderAutocomplete";
 import RecipientSuggestions from "../components/RecipientSuggestions";
 import {
   Alert, Button, Card, ErrorState, Field, FormActions, Input,
-  Loading, MoneyInput, PageHeader, PageShell, Select,
+  Loading, MoneyInput, PageHeader, PageShell, Section, Select,
 } from "../components/ui";
 import {
   previewFederalTax,
   updateTransfer,
   useEmployees,
   useTransfer,
-  type CreateTransferBody,
 } from "../api/transfers";
 import { useStoreInfo } from "../api/account";
 import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
 import styles from "./EditTransfer.module.css";
 
-// Edit-transfer page at /app/transfers/:id/edit. Loads the
-// existing transfer via the read-side hook, lets the user mutate
-// any field, posts the full body to PUT /api/v2/transfers/{id}.
-//
-// Server-side recomputes federal_tax from
-// (send_amount, service_type, country, store) — same invariant
-// as create.
-
 const COMPANIES = [
   "Intermex", "Maxi", "Barri", "Sigue", "Vigo", "Western Union",
   "MoneyGram", "Cibao", "RIA", "Other",
-];
+] as const;
 const SERVICES = [
   "Money Transfer", "Bill Payment", "Top Up", "Recharge",
-];
+] as const;
 const COUNTRIES = [
   "United States", "Mexico", "Guatemala", "El Salvador", "Honduras",
   "Dominican Republic", "Colombia", "Ecuador", "Peru", "Other",
-];
-const STATUSES = ["Sent", "Pending", "Cancelled", "Returned"];
+] as const;
+const STATUSES = ["Sent", "Pending", "Cancelled", "Returned"] as const;
+
+
+// ── Validation schema ──────────────────────────────────────────
+//
+// Mirrors NewTransfer's schema + batch_id for edit. Server-side
+// is still the source of truth — Zod here is for instant client
+// feedback + type narrowing.
+
+const editSchema = z.object({
+  send_date: z.string().min(1, "Date is required"),
+  company: z.enum(COMPANIES),
+  service_type: z.enum(SERVICES),
+  status: z.enum(STATUSES),
+
+  sender_name: z.string().min(1, "Sender name is required"),
+  sender_phone_country: z.string(),
+  sender_phone: z.string(),
+  sender_address: z.string(),
+  sender_dob: z.string(),
+  customer_id: z.number().int().positive().nullable(),
+
+  country: z.enum(COUNTRIES),
+  recipient_name: z.string(),
+  recipient_phone: z.string(),
+
+  send_amount: z.coerce.number().positive("Send amount must be > 0"),
+  fee: z.coerce.number().min(0, "Fee must be ≥ 0"),
+  confirm_number: z.string(),
+
+  employee_id: z
+    .number({ message: "Pick an employee" })
+    .int()
+    .positive(),
+
+  batch_id: z.string(),
+});
+
+type EditFormValues = z.infer<typeof editSchema>;
+
+const defaultValues: EditFormValues = {
+  send_date: "",
+  company: "Intermex",
+  service_type: "Money Transfer",
+  status: "Sent",
+  sender_name: "",
+  sender_phone_country: "+1",
+  sender_phone: "",
+  sender_address: "",
+  sender_dob: "",
+  customer_id: null,
+  country: "Mexico",
+  recipient_name: "",
+  recipient_phone: "",
+  send_amount: 0,
+  fee: 0,
+  confirm_number: "",
+  employee_id: undefined as unknown as number,
+  batch_id: "",
+};
+
 
 export default function EditTransfer() {
   const { id } = useParams<{ id: string }>();
@@ -49,63 +103,67 @@ export default function EditTransfer() {
   const roster = useEmployees();
   const storeInfo = useStoreInfo();
 
-  const [form, setForm] = useState<CreateTransferBody | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const {
+    register, handleSubmit, control, setValue, setError, clearErrors,
+    reset, formState: { errors, isSubmitting },
+  } = useForm<EditFormValues>({
+    resolver: zodResolver(editSchema),
+    defaultValues,
+    mode: "onSubmit",
+  });
 
-  // Hydrate the form once the existing transfer arrives. Edits
-  // happen on the form copy — only a successful PUT writes back.
+  // Hydrate form from the server-fetched transfer. `reset()`
+  // replaces every field at once so the form doesn't flicker
+  // through intermediate states.
   useEffect(() => {
     if (!detail.data) return;
     const t = detail.data.transfer;
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- hydrate local editable form from server-fetched transfer on edit
-    setForm({
+    reset({
       send_date: t.send_date,
-      company: t.company || COMPANIES[0],
-      service_type: t.service_type || "Money Transfer",
+      company: (COMPANIES as readonly string[]).includes(t.company)
+        ? (t.company as (typeof COMPANIES)[number])
+        : "Other",
+      service_type: (SERVICES as readonly string[]).includes(t.service_type)
+        ? (t.service_type as (typeof SERVICES)[number])
+        : "Money Transfer",
+      status: (STATUSES as readonly string[]).includes(t.status)
+        ? (t.status as (typeof STATUSES)[number])
+        : "Sent",
       sender_name: "",
-      sender_phone: "",
       sender_phone_country: "+1",
+      sender_phone: "",
       sender_address: "",
-      send_amount: t.send_amount,
-      fee: t.fee,
-      country: t.country || "Mexico",
+      sender_dob: "",
+      customer_id: null,
+      country: (COUNTRIES as readonly string[]).includes(t.country)
+        ? (t.country as (typeof COUNTRIES)[number])
+        : "Mexico",
       recipient_name: t.recipient_name || "",
       recipient_phone: "",
+      send_amount: t.send_amount,
+      fee: t.fee,
       confirm_number: t.confirm_number || "",
-      status: t.status || "Sent",
-      employee_id: null,  // user re-confirms on save
+      employee_id: undefined as unknown as number,
       batch_id: t.batch_id || "",
     });
-  }, [detail.data]);
+  }, [detail.data, reset]);
 
-  function set<K extends keyof CreateTransferBody>(
-    key: K,
-    value: CreateTransferBody[K],
-  ) {
-    setForm((f) => (f ? { ...f, [key]: value } : f));
-  }
+  const sendAmount = useWatch({ control, name: "send_amount" });
+  const serviceType = useWatch({ control, name: "service_type" });
+  const country = useWatch({ control, name: "country" });
+  const customerId = useWatch({ control, name: "customer_id" });
 
-  async function onSubmit(e: FormEvent) {
-    e.preventDefault();
-    if (!form || !Number.isFinite(transferId)) return;
-    setError(null);
-    setBusy(true);
+  async function onSubmit(values: EditFormValues) {
+    clearErrors("root");
     try {
-      const result = await updateTransfer(transferId, {
-        ...form,
-        send_amount: Number(form.send_amount) || 0,
-        fee: Number(form.fee) || 0,
-      });
+      const result = await updateTransfer(transferId, values);
       navigate(`/transfers/${result.transfer.id}`, { replace: true });
     } catch (err) {
-      setError(
-        err instanceof ApiError
+      setError("root", {
+        message: err instanceof ApiError
           ? err.message
           : "Could not save the changes. Please try again.",
-      );
-    } finally {
-      setBusy(false);
+      });
     }
   }
 
@@ -126,7 +184,7 @@ export default function EditTransfer() {
     );
   }
 
-  if (detail.isLoading || form == null) {
+  if (detail.isLoading) {
     return (
       <PageShell maxWidth="62rem">
         <Loading />
@@ -149,11 +207,6 @@ export default function EditTransfer() {
     );
   }
 
-  // Print-receipt action is intentionally hidden — see App.tsx
-  // comment near the (now-disabled) receipt route. The
-  // ButtonLink + ``/app/transfers/{id}/receipt`` href can come back
-  // by reverting this commit if we ever decide a customer-facing
-  // receipt belongs in a ledger product.
   return (
     <PageShell maxWidth="62rem">
       <PageHeader
@@ -162,197 +215,215 @@ export default function EditTransfer() {
       />
 
       <form
-        onSubmit={onSubmit}
+        onSubmit={handleSubmit(onSubmit)}
         style={{ display: "flex", flexDirection: "column", gap: "1rem" }}
       >
         <Card>
-          <h2 className={styles.sectionTitle}>When + how</h2>
-          <div className={styles.grid}>
-            <Field label="Date">
-              <Input type="date" value={form.send_date}
-                onChange={(e) => set("send_date", e.target.value)} required />
-            </Field>
-            <Field label="Company">
-              <Select value={form.company}
-                onChange={(e) => set("company", e.target.value)}>
-                {COMPANIES.map((c) => <option key={c} value={c}>{c}</option>)}
-              </Select>
-            </Field>
-            <Field label="Service">
-              <Select value={form.service_type}
-                onChange={(e) => set("service_type", e.target.value)}>
-                {SERVICES.map((c) => <option key={c} value={c}>{c}</option>)}
-              </Select>
-            </Field>
-            <Field label="Status">
-              <Select value={form.status}
-                onChange={(e) => set("status", e.target.value)}>
-                {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
-              </Select>
-            </Field>
-          </div>
+          <Section title="When + how">
+            <div className={styles.grid}>
+              <Field label="Date" highlight={!!errors.send_date}>
+                <Input type="date" {...register("send_date")} required />
+              </Field>
+              <Field label="Company">
+                <Select {...register("company")}>
+                  {COMPANIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                </Select>
+              </Field>
+              <Field label="Service">
+                <Select {...register("service_type")}>
+                  {SERVICES.map((c) => <option key={c} value={c}>{c}</option>)}
+                </Select>
+              </Field>
+              <Field label="Status">
+                <Select {...register("status")}>
+                  {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+                </Select>
+              </Field>
+            </div>
+          </Section>
         </Card>
 
         <Card>
-          <h2 className={styles.sectionTitle}>Sender</h2>
-          <div className={styles.grid}>
-            <Field label="Full name">
-              <SenderAutocomplete
-                value={form.sender_name}
-                onChange={(v) => set("sender_name", v)}
-                onPick={(row) => {
-                  setForm((f) =>
-                    f
-                      ? {
-                          ...f,
-                          sender_name: row.full_name,
-                          sender_phone_country: row.phone_country || "+1",
-                          sender_phone: row.phone_number,
-                          sender_address: row.address,
-                          sender_dob: row.dob || "",
-                          customer_id: row.id,
-                        }
-                      : f,
+          <Section title="Sender">
+            <div className={styles.grid}>
+              <Field label="Full name" highlight={!!errors.sender_name}>
+                <Controller
+                  control={control}
+                  name="sender_name"
+                  render={({ field }) => (
+                    <SenderAutocomplete
+                      value={field.value}
+                      onChange={field.onChange}
+                      onPick={(row) => {
+                        setValue("sender_name", row.full_name);
+                        setValue("sender_phone_country",
+                          row.phone_country || "+1");
+                        setValue("sender_phone", row.phone_number);
+                        setValue("sender_address", row.address);
+                        setValue("sender_dob", row.dob || "");
+                        setValue("customer_id", row.id);
+                      }}
+                      onClearPickedId={() =>
+                        setValue("customer_id", null)
+                      }
+                      required
+                    />
+                  )}
+                />
+              </Field>
+              <Field label="Phone country">
+                <Input
+                  type="text"
+                  placeholder="+1"
+                  {...register("sender_phone_country")}
+                />
+              </Field>
+              <Field label="Phone">
+                <Input type="tel" {...register("sender_phone")} />
+              </Field>
+              <Field label="Address">
+                <Input type="text" {...register("sender_address")} />
+              </Field>
+            </div>
+            {customerId != null && (
+              <p className={styles.note}>
+                Linked to customer #{customerId} — edits sync
+                back to the customer directory.
+              </p>
+            )}
+          </Section>
+        </Card>
+
+        <Card>
+          <Section title="Recipient">
+            <RecipientSuggestions
+              customerId={customerId ?? null}
+              storeId={identity.store_id}
+              onPick={(row) => {
+                setValue("recipient_name", row.name);
+                if (
+                  row.country
+                  && (COUNTRIES as readonly string[]).includes(row.country)
+                ) {
+                  setValue(
+                    "country",
+                    row.country as (typeof COUNTRIES)[number],
                   );
-                }}
-                onClearPickedId={() => set("customer_id", null)}
-                required
-              />
-            </Field>
-            <Field label="Phone country">
-              <Input type="text" value={form.sender_phone_country}
-                onChange={(e) => set("sender_phone_country", e.target.value)}
-                placeholder="+1" />
-            </Field>
-            <Field label="Phone">
-              <Input type="tel" value={form.sender_phone}
-                onChange={(e) => set("sender_phone", e.target.value)} />
-            </Field>
-            <Field label="Address">
-              <Input type="text" value={form.sender_address}
-                onChange={(e) => set("sender_address", e.target.value)} />
-            </Field>
-          </div>
-          {form.customer_id && (
-            <p className={styles.note}>
-              Linked to customer #{form.customer_id} — edits sync
-              back to the customer directory.
-            </p>
-          )}
-        </Card>
-
-        <Card>
-          <h2 className={styles.sectionTitle}>Recipient</h2>
-          <RecipientSuggestions
-            customerId={form.customer_id ?? null}
-            storeId={identity.store_id}
-            onPick={(row) => {
-              set("recipient_name", row.name);
-              if (row.country && (COUNTRIES as readonly string[]).includes(row.country)) {
-                set("country", row.country);
-              }
-              set("recipient_phone", row.phone);
-            }}
-          />
-          <div className={styles.grid}>
-            <Field label="Country">
-              <Select value={form.country}
-                onChange={(e) => set("country", e.target.value)}>
-                {COUNTRIES.map((c) => <option key={c} value={c}>{c}</option>)}
-              </Select>
-            </Field>
-            <Field label="Recipient name">
-              <Input type="text" value={form.recipient_name}
-                onChange={(e) => set("recipient_name", e.target.value)} />
-            </Field>
-            <Field label="Recipient phone">
-              <Input type="tel" value={form.recipient_phone}
-                onChange={(e) => set("recipient_phone", e.target.value)} />
-            </Field>
-          </div>
-        </Card>
-
-        <Card>
-          <h2 className={styles.sectionTitle}>Amounts</h2>
-          <div className={styles.grid}>
-            <MoneyInput
-              label="Send amount"
-              value={form.send_amount}
-              onChange={(v) => set("send_amount", v)}
+                }
+                setValue("recipient_phone", row.phone);
+              }}
             />
-            <MoneyInput
-              label="Fee"
-              value={form.fee ?? 0}
-              onChange={(v) => set("fee", v)}
-            />
-            <Field
-              label={
-                (storeInfo.data?.store.federal_tax_rate ?? 0) > 0
-                  ? `Federal tax preview (${((storeInfo.data!.store.federal_tax_rate) * 100).toFixed(0)}%, server recomputes)`
-                  : "Federal tax preview"
-              }
-            >
-              <Input
-                type="text"
-                readOnly
-                tabIndex={-1}
-                value={`$${previewFederalTax({
-                  sendAmount: form.send_amount,
-                  serviceType: form.service_type,
-                  country: form.country,
-                  rate: storeInfo.data?.store.federal_tax_rate ?? 0,
-                }).toFixed(2)}`}
-                className={styles.taxPreview}
-              />
-            </Field>
-            <Field label="Confirm #">
-              <Input type="text" value={form.confirm_number}
-                onChange={(e) => set("confirm_number", e.target.value)} />
-            </Field>
-          </div>
+            <div className={styles.grid}>
+              <Field label="Country">
+                <Select {...register("country")}>
+                  {COUNTRIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                </Select>
+              </Field>
+              <Field label="Recipient name">
+                <Input type="text" {...register("recipient_name")} />
+              </Field>
+              <Field label="Recipient phone">
+                <Input type="tel" {...register("recipient_phone")} />
+              </Field>
+            </div>
+          </Section>
         </Card>
 
         <Card>
-          <h2 className={styles.sectionTitle}>Processed by</h2>
-          <div className={styles.grid}>
-            <Field label="Employee">
-              <Select
-                value={form.employee_id ?? ""}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  set("employee_id", v ? Number(v) : null);
-                }}
-                required
-                disabled={roster.isLoading}
+          <Section title="Amounts">
+            <div className={styles.grid}>
+              <Controller
+                control={control}
+                name="send_amount"
+                render={({ field }) => (
+                  <MoneyInput
+                    label="Send amount"
+                    value={field.value ?? 0}
+                    onChange={field.onChange}
+                    error={errors.send_amount?.message}
+                  />
+                )}
+              />
+              <Controller
+                control={control}
+                name="fee"
+                render={({ field }) => (
+                  <MoneyInput
+                    label="Fee"
+                    value={field.value ?? 0}
+                    onChange={field.onChange}
+                    error={errors.fee?.message}
+                  />
+                )}
+              />
+              <Field
+                label={
+                  (storeInfo.data?.store.federal_tax_rate ?? 0) > 0
+                    ? `Federal tax preview (${((storeInfo.data!.store.federal_tax_rate) * 100).toFixed(0)}%, server recomputes)`
+                    : "Federal tax preview"
+                }
               >
-                <option value="">— Select —</option>
-                {roster.data?.employees.map((emp) => (
-                  <option key={emp.id} value={emp.id}>{emp.name}</option>
-                ))}
-              </Select>
-            </Field>
-          </div>
-          <p className={styles.note}>
-            Required: who made this edit.
-          </p>
+                <Input
+                  type="text"
+                  readOnly
+                  tabIndex={-1}
+                  value={`$${previewFederalTax({
+                    sendAmount,
+                    serviceType,
+                    country: country ?? "",
+                    rate: storeInfo.data?.store.federal_tax_rate ?? 0,
+                  }).toFixed(2)}`}
+                  className={styles.taxPreview}
+                />
+              </Field>
+              <Field label="Confirm #">
+                <Input type="text" {...register("confirm_number")} />
+              </Field>
+            </div>
+          </Section>
         </Card>
 
-        {error && <Alert tone="error">{error}</Alert>}
+        <Card>
+          <Section title="Processed by">
+            <div className={styles.grid}>
+              <Field label="Employee" highlight={!!errors.employee_id}>
+                <Select
+                  {...register("employee_id", {
+                    setValueAs: (v) => v === "" ? null : Number(v),
+                  })}
+                  required
+                  disabled={roster.isLoading}
+                >
+                  <option value="">— Select —</option>
+                  {roster.data?.employees.map((emp) => (
+                    <option key={emp.id} value={emp.id}>{emp.name}</option>
+                  ))}
+                </Select>
+                {errors.employee_id && (
+                  <span className={styles.fieldError}>
+                    {errors.employee_id.message}
+                  </span>
+                )}
+              </Field>
+            </div>
+            <p className={styles.note}>
+              Required: who made this edit.
+            </p>
+          </Section>
+        </Card>
+
+        {errors.root && <Alert tone="error">{errors.root.message}</Alert>}
 
         <FormActions>
           <Button
             tone="secondary"
             onClick={() => navigate(`/transfers/${transferId}`)}
-            disabled={busy}
+            disabled={isSubmitting}
           >
             Cancel
           </Button>
-          <Button
-            type="submit"
-            busy={busy}
-            disabled={busy || !form.sender_name || !form.send_amount || !form.employee_id}
-          >
-            {busy ? "Saving…" : "Save changes"}
+          <Button type="submit" busy={isSubmitting}>
+            {isSubmitting ? "Saving…" : "Save changes"}
           </Button>
         </FormActions>
       </form>
