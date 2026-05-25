@@ -7,9 +7,7 @@ import {
   refreshBankBalances,
   setBankAccountNickname,
   startStripeConnect,
-  syncBankTransactions,
   useBankAccounts,
-  useBankTransactions,
   type BankAccountRow,
 } from "../api/bankSync";
 import { ApiError } from "../lib/api";
@@ -51,7 +49,6 @@ declare global {
 export default function Bank() {
   const queryClient = useQueryClient();
   const accounts = useBankAccounts();
-  const recent = useBankTransactions({ per_page: 10, page: 1 });
   const [connectError, setConnectError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const toast = useToast();
@@ -118,28 +115,7 @@ export default function Bank() {
     }
   }
 
-  async function handleSyncTxns() {
-    setConnectError(null);
-    setBusy("sync");
-    try {
-      const r = await syncBankTransactions();
-      invalidate();
-      toast({
-        message: r.error
-          ? `Synced (new ${r.new_rows}). Warning: ${r.error}`
-          : `Synced ${r.new_rows} new transaction(s) (${r.total_seen} seen).`,
-        tone: r.error ? "warning" : "success",
-      });
-    } catch (e) {
-      setConnectError(
-        e instanceof ApiError ? e.message
-          : e instanceof Error ? e.message
-          : "Sync failed.",
-      );
-    } finally {
-      setBusy(null);
-    }
-  }
+
 
   async function handleSaveNickname(acctId: number, nickname: string) {
     setConnectError(null);
@@ -193,7 +169,6 @@ export default function Bank() {
   }
 
   const accountList = accounts.data?.rows ?? [];
-  const txnList = recent.data?.rows ?? [];
   const atCap = accountList.length >= 6; // mirror MAX_BANK_ACCOUNTS_PER_STORE
 
   return (
@@ -279,69 +254,6 @@ export default function Bank() {
           </div>
         )}
       </Card>
-
-      {accountList.length > 0 && (
-        <Card>
-          <header className={styles.sectionHeader}>
-            <span className={styles.cardTitle}>Recent Transactions</span>
-            <div className={styles.headerActions}>
-              <Button
-                size="sm"
-                busy={busy === "sync"}
-                disabled={busy !== null}
-                onClick={() => { void handleSyncTxns(); }}
-              >
-                {busy === "sync" ? "Syncing…" : "Sync transactions"}
-              </Button>
-              <ButtonLink to="/bank-transactions" tone="secondary" size="sm">
-                View all →
-              </ButtonLink>
-            </div>
-          </header>
-
-          {recent.isLoading && <TableSkeleton rows={5} cols={4} />}
-          {!recent.isLoading && txnList.length === 0 && (
-            <EmptyState
-              title="No transactions yet"
-              body={<>Click <strong>Sync transactions</strong> above to fetch.</>}
-            />
-          )}
-          {txnList.length > 0 && (
-            <Table>
-              <thead>
-                <tr>
-                  <th style={thStyle}>Posted</th>
-                  <th style={thStyle}>Description</th>
-                  <th style={thStyle}>Status</th>
-                  <th style={{ ...thStyle, textAlign: "right" }}>Amount</th>
-                </tr>
-              </thead>
-              <tbody>
-                {txnList.map((t) => (
-                  <tr key={t.id}>
-                    <td style={tdStyle}>
-                      {t.posted_at
-                        ? new Date(t.posted_at).toLocaleDateString(undefined, {
-                            month: "2-digit",
-                            day: "2-digit",
-                          })
-                        : "—"}
-                    </td>
-                    <td style={tdStyle}>{t.description || "—"}</td>
-                    <td style={tdStyle}>{t.status}</td>
-                    <td
-                      style={{ ...tdStyle, textAlign: "right" }}
-                      className={t.amount >= 0 ? styles.amountPos : styles.amountNeg}
-                    >
-                      {t.amount >= 0 ? "+" : ""}${Math.abs(t.amount).toFixed(2)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </Table>
-          )}
-        </Card>
-      )}
 
       <ConfirmDialog
         open={pendingDisconnect != null}
