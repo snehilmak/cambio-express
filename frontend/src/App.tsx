@@ -1,5 +1,5 @@
 import { lazy, Suspense } from "react";
-import { Navigate, Outlet, Route, Routes } from "react-router-dom";
+import { Navigate, Outlet, Route, Routes, useLocation } from "react-router-dom";
 
 import AppShell from "./components/AppShell";
 import RequireAuth from "./components/RequireAuth";
@@ -344,18 +344,19 @@ export default function App() {
 // and wraps the authed page in the sidebar + topbar shell.
 // `<Outlet />` renders the matched child route inside.
 function AuthedShell() {
+  const location = useLocation();
   return (
     <RequireAuth>
-      {/* ToastProvider mounts inside RequireAuth so the toast
-          region only renders for signed-in users (the marketing
-          landing + auth pages don't need it). */}
       <ToastProvider>
         <AppShell>
-          {/* Inner boundary keeps the shell intact when a single
-              route crashes — sidebar + topbar stay, only the
-              content column shows the fallback. */}
           <RouteErrorBoundary routeName="authed-route">
-            <Outlet />
+            {/* key={pathname} remounts the page on every route
+                change, re-triggering the ds-page fade-up animation
+                on the PageShell inside each route. The shell
+                (sidebar + topbar) stays mounted. */}
+            <div key={location.pathname}>
+              <Outlet />
+            </div>
           </RouteErrorBoundary>
         </AppShell>
       </ToastProvider>
