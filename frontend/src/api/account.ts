@@ -320,13 +320,18 @@ export function unsubscribePush(
 }
 
 
+export interface StoreInfoResponse {
+  store: StoreInfoRow;
+  referral_code: string | null;
+}
+
 export function useStoreInfo() {
   const identity = getCurrentIdentity();
-  return useQuery<{ store: StoreInfoRow }>({
+  return useQuery<StoreInfoResponse>({
     enabled: identity?.store_id != null,
     queryKey: ["admin", "store-info", identity?.store_id],
     queryFn: () =>
-      api<{ store: StoreInfoRow }>("/api/v2/admin/store-info"),
+      api<StoreInfoResponse>("/api/v2/admin/store-info"),
   });
 }
 
