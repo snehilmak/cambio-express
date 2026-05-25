@@ -1,8 +1,10 @@
 import { useState, type FormEvent } from "react";
+import { Navigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 
 import { createTicket, useMyTickets, type TicketRow } from "../api/support";
 import { ApiError } from "../lib/api";
+import { getCurrentIdentity } from "../lib/auth";
 import {
   Alert, Breadcrumbs, Button, Card, EmptyState, ErrorState, Field,
   Input, Loading, PageHeader, PageShell, Pill, Section, Select,
@@ -33,6 +35,11 @@ function formatDate(iso: string): string {
 }
 
 export default function SupportTickets() {
+  const identity = getCurrentIdentity();
+  if (identity?.role === "superadmin") {
+    return <Navigate to="/superadmin/tickets" replace />;
+  }
+
   const tickets = useMyTickets();
   const qc = useQueryClient();
   const [showForm, setShowForm] = useState(false);
