@@ -146,7 +146,7 @@ export default function SuperadminHealth() {
                     <Row
                       label="Mode"
                       value={
-                        <Pill tone={data.stripe.mode === "live" ? "positive" : "warning"}>
+                        <Pill tone={data.stripe.mode === "live" ? "success" : "warning"}>
                           {data.stripe.mode ?? "unknown"}
                         </Pill>
                       }
