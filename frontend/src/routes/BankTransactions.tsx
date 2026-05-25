@@ -145,7 +145,7 @@ export default function BankTransactions() {
       )}
 
       <Card>
-        <div className={styles.filtersGrid}>
+        <div className="ds-filter-bar">
           <Field label="Search">
             <Input
               type="search"

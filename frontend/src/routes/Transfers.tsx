@@ -195,7 +195,7 @@ function FilterBar({
   q, onQChange, dateFrom, dateTo, status, onSet, busy,
 }: FilterBarProps) {
   return (
-    <Card className={styles.filterBar}>
+    <Card className="ds-filter-bar">
       <Field label="Search">
         <Input
           type="search"

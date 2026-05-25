@@ -178,6 +178,21 @@
   animation: ds-page-in var(--ds-dur-slow) var(--ds-ease) both;
 }
 
+/* ── Filter bar: consistent filter row across list pages ───── */
+
+.ds-filter-bar {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: 0.75rem;
+  padding: 1rem 1.25rem;
+}
+
+@media (max-width: 640px) {
+  .ds-filter-bar {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* ── Content fade-in: smooth reveal when data arrives ──────── */
 
 @keyframes ds-fade-in {
