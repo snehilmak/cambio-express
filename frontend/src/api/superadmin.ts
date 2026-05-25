@@ -273,3 +273,74 @@ export function useSuperadminDashboard() {
       api<SuperadminDashboardData>("/api/v2/superadmin/dashboard"),
   });
 }
+
+
+export interface SuperadminUserRow {
+  id: number;
+  username: string;
+  full_name: string;
+  email: string;
+  role: string;
+  store_id: number | null;
+  store_name: string;
+  is_active: boolean;
+  has_2fa: boolean;
+  last_login_at: string;
+  created_at: string;
+}
+
+interface SuperadminUserListResponse {
+  rows: SuperadminUserRow[];
+  total: number;
+  page: number;
+  total_pages: number;
+}
+
+export function useSuperadminUsers(opts: {
+  q?: string; role?: string; store_id?: number; page?: number;
+}) {
+  const identity = getCurrentIdentity();
+  const params = new URLSearchParams();
+  if (opts.q) params.set("q", opts.q);
+  if (opts.role) params.set("role", opts.role);
+  if (opts.store_id) params.set("store_id", String(opts.store_id));
+  if (opts.page && opts.page > 1) params.set("page", String(opts.page));
+  const qs = params.toString() ? `?${params}` : "";
+  return useQuery<SuperadminUserListResponse>({
+    enabled: identity?.role === "superadmin",
+    queryKey: ["superadmin", "users", opts.q, opts.role, opts.store_id, opts.page],
+    queryFn: () =>
+      api<SuperadminUserListResponse>(`/api/v2/superadmin/users${qs}`),
+  });
+}
+
+export async function toggleUserActive(userId: number) {
+  return api<{ ok: boolean; is_active: boolean }>(
+    `/api/v2/superadmin/users/${userId}/toggle-active`,
+    { method: "POST" },
+  );
+}
+
+export async function resetUser2FA(userId: number) {
+  return api<{ ok: boolean }>(
+    `/api/v2/superadmin/users/${userId}/reset-2fa`,
+    { method: "POST" },
+  );
+}
+
+export async function forcePasswordReset(userId: number) {
+  return api<{ ok: boolean; temp_password: string }>(
+    `/api/v2/superadmin/users/${userId}/force-password-reset`,
+    { method: "POST" },
+  );
+}
+
+export async function impersonateUser(userId: number) {
+  return api<{
+    token: string;
+    user: { id: number; username: string; role: string; store_id: number | null; full_name: string };
+  }>(
+    `/api/v2/superadmin/impersonate/${userId}`,
+    { method: "POST" },
+  );
+}
