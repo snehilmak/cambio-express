@@ -11,6 +11,7 @@ import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
 import { formatDate as formatDateTz } from "../lib/datetime";
 import {
+  Breadcrumbs,
   Button, Card, ConfirmDialog, ErrorState, Loading, PageHeader, PageShell,
   Section, Table, tdStyle, thStyle,
 } from "../components/ui";
@@ -120,6 +121,9 @@ export default function OwnerConnect() {
 
   return (
     <PageShell maxWidth="40rem">
+
+      <Breadcrumbs crumbs={[{ label: "Owner" }, { label: "Connect a store" }]} />
+
       <PageHeader title="Connect a Store" />
 
       {serverError && <ErrorState message={serverError} />}

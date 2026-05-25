@@ -10,6 +10,7 @@ import {
 import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
 import {
+  Breadcrumbs,
   Alert, Button, ButtonLink, Card, Field, FormActions, Input, Loading,
   MoneyInput, PageHeader, PageShell, Select, Textarea,
 } from "../components/ui";
@@ -128,6 +129,9 @@ export default function BatchForm() {
 
   return (
     <PageShell maxWidth="62rem">
+
+      <Breadcrumbs crumbs={[{ label: "Batches", to: "/batches" }, { label: isNew ? "New batch" : "Edit batch" }]} />
+
       <PageHeader
         title={isEdit ? `Edit batch #${batchId}` : "New ACH batch"}
         subtitle="Track an ACH withdrawal from a money-transfer company."

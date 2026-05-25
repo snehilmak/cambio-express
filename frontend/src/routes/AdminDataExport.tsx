@@ -4,6 +4,7 @@ import { useTaxExportYears } from "../api/account";
 import { downloadCsv } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
 import {
+  Breadcrumbs,
   Alert, Button, Card, Empty, Field, Input, PageHeader, PageShell,
   Section, Select,
 } from "../components/ui";
@@ -145,6 +146,9 @@ export default function AdminDataExport() {
 
   return (
     <PageShell maxWidth="56rem">
+
+      <Breadcrumbs crumbs={[{ label: "Finance" }, { label: "Data export" }]} />
+
       <PageHeader
         title="Data export"
         subtitle="Pull a single dataset or every year-end record at once. All downloads stream over your authenticated session."

@@ -8,6 +8,7 @@ import { Bar, Line } from "react-chartjs-2";
 
 import { useOwnerStoreDetail } from "../api/owner";
 import {
+  Breadcrumbs,
   Card, ErrorState, KpiCard, KpiGrid, Loading, PageHeader, PageShell,
   Section, TabsBar, TabsButton, Table, tdStyle, thStyle,
 } from "../components/ui";
@@ -40,6 +41,9 @@ export default function OwnerStoreDetail() {
     <PageShell gap="1.25rem">
       <div>
         <Link to="/owner/locations" className={styles.backLink}>← All locations</Link>
+
+        <Breadcrumbs crumbs={[{ label: "Locations", to: "/owner/locations" }, { label: "Store detail" }]} />
+
         <PageHeader
           title={data?.store.name || "Store"}
           actions={(

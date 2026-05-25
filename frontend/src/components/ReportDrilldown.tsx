@@ -7,8 +7,8 @@ import {
 } from "../api/reportDrilldown";
 import { downloadCsv } from "../lib/api";
 import {
-  Button, EmptyState, ErrorState, KpiCard, KpiGrid, PageHeader,
-  PageShell, TableSkeleton, tdStyle, thStyle,
+  Breadcrumbs, Button, EmptyState, ErrorState, KpiCard, KpiGrid,
+  PageHeader, PageShell, TableSkeleton, tdStyle, thStyle,
 } from "./ui";
 import styles from "./ReportDrilldown.module.css";
 
@@ -91,8 +91,11 @@ export function ReportDrilldown({
 
   return (
     <PageShell gap="1.25rem">
+      <Breadcrumbs crumbs={[
+        { label: "Reports", to: backTo },
+        { label: title },
+      ]} />
       <div>
-        <Link to={backTo} className={styles.backLink}>← Reports</Link>
         <PageHeader
           title={title}
           actions={(

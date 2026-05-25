@@ -10,6 +10,7 @@ import {
 } from "../api/billing";
 import { ApiError } from "../lib/api";
 import {
+  Breadcrumbs,
   Alert, Button, Card, ErrorState, Loading, PageHeader, PageShell, Pill,
 } from "../components/ui";
 import styles from "./AdminSubscription.module.css";
@@ -86,6 +87,9 @@ export default function AdminSubscription() {
 
   return (
     <PageShell maxWidth="70rem">
+
+      <Breadcrumbs crumbs={[{ label: "Account", to: "/settings" }, { label: "Billing" }]} />
+
       <PageHeader title="Billing & Subscription" />
 
       {error && <Alert tone="error">{error}</Alert>}

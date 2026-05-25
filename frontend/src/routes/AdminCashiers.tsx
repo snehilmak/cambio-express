@@ -11,6 +11,7 @@ import {
 import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
 import {
+  Breadcrumbs,
   Alert, Button, Card, ErrorState, Input, Loading,
   PageHeader, PageShell,
 } from "../components/ui";
@@ -129,6 +130,9 @@ export default function AdminCashiers() {
 
   return (
     <PageShell maxWidth="60rem">
+
+      <Breadcrumbs crumbs={[{ label: "HR" }, { label: "Cashiers" }]} />
+
       <PageHeader title="Cashiers" />
       <Card>
         <p className={styles.helpText}>

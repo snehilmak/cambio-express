@@ -18,6 +18,7 @@ import {
 import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
 import {
+  Breadcrumbs,
   Alert, Button, ButtonLink, Card, ConfirmDialog, EmptyState, Field,
   FormActions, Input, Loading, MoneyInput, PageHeader, PageShell, SectionTitle,
   Select, space, Table, Textarea, tdStyle, thStyle,
@@ -163,6 +164,9 @@ export default function ReturnCheckForm() {
 
   return (
     <PageShell maxWidth="62rem">
+
+      <Breadcrumbs crumbs={[{ label: "Return checks", to: "/return-checks" }, { label: isNew ? "New return check" : "Edit return check" }]} />
+
       <PageHeader
         title={isEdit ? `Return check #${rcId}` : "New return check"}
         subtitle="Track a bounced check from a customer and any partial recovery."

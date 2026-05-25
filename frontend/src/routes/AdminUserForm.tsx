@@ -9,6 +9,7 @@ import {
 import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
 import {
+  Breadcrumbs,
   Alert, Button, ButtonLink, Card, ErrorState, Field, Input, Loading,
   PageHeader, PageShell, Select, space,
 } from "../components/ui";
@@ -162,6 +163,9 @@ export default function AdminUserForm() {
 
   return (
     <PageShell maxWidth="36rem">
+
+      <Breadcrumbs crumbs={[{ label: "User Management", to: "/admin/users" }, { label: isNew ? "Add User" : "Edit User" }]} />
+
       <PageHeader title={isEdit ? "Edit User" : "Add User"} />
 
       <Card>

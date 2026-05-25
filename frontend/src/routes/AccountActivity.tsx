@@ -4,6 +4,7 @@ import { useMyActivity, useProfile, useStoreInfo } from "../api/account";
 import type { MyActivityRow } from "../api/account";
 import { formatTimestamp } from "../lib/datetime";
 import {
+  Breadcrumbs,
   Button, Card, EmptyState, ErrorState, Field, PageHeader, PageShell,
   Pager, Pill, Select, space, Table, TableSkeleton, tdStyle, thStyle,
   type PillTone,
@@ -41,6 +42,9 @@ export default function AccountActivity() {
 
   return (
     <PageShell>
+
+      <Breadcrumbs crumbs={[{ label: "Account", to: "/settings" }, { label: "Activity" }]} />
+
       <PageHeader title="My activity" />
 
       <Card style={{ marginBottom: space.lg }}>

@@ -7,6 +7,7 @@ import {
 import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
 import {
+  Breadcrumbs,
   Alert, Button, Card, Empty, ErrorState, Field, Input, Loading,
   PageHeader, PageShell, Pill, Section, Select, Table, tdStyle, thStyle,
 } from "../components/ui";
@@ -130,6 +131,9 @@ export default function OwnerCrossStoreDefaults() {
 
   return (
     <PageShell maxWidth="60rem">
+
+      <Breadcrumbs crumbs={[{ label: "Owner" }, { label: "Cross-store defaults" }]} />
+
       <PageHeader
         title="Cross-store defaults"
         subtitle="Push the same field defaults to every store you select. Pick which fields to apply with the checkboxes — unchecked fields stay untouched on every store."

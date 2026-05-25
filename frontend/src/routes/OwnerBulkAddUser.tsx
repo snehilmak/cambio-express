@@ -7,6 +7,7 @@ import {
 import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
 import {
+  Breadcrumbs,
   Alert, Button, Card, Empty, ErrorState, Field, Input, Loading,
   PageHeader, PageShell, Pill, Section, Select, Table, tdStyle, thStyle,
 } from "../components/ui";
@@ -92,6 +93,9 @@ export default function OwnerBulkAddUser() {
 
   return (
     <PageShell maxWidth="56rem">
+
+      <Breadcrumbs crumbs={[{ label: "Owner" }, { label: "Bulk add user" }]} />
+
       <PageHeader
         title="Bulk add user"
         subtitle={

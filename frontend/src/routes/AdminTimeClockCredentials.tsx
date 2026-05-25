@@ -12,6 +12,7 @@ import { useStoreInfo } from "../api/account";
 import { ApiError } from "../lib/api";
 import { passkeysSupported, performPasskeyRegister } from "../lib/webauthn";
 import {
+  Breadcrumbs,
   Alert, Button, Card, ConfirmDialog, EmptyState, ErrorState, Loading,
   PageHeader, PageShell, Pill, Table, tdStyle, thStyle,
 } from "../components/ui";
@@ -100,6 +101,9 @@ export default function AdminTimeClockCredentials() {
 
   return (
     <PageShell maxWidth="56rem">
+
+      <Breadcrumbs crumbs={[{ label: "HR" }, { label: "Time-clock credentials" }]} />
+
       <PageHeader
         title="Time-clock credentials"
         subtitle="Enroll a passkey for each cashier — Windows Hello, Touch ID, Face ID, or a hardware key. Once everyone is registered, flip on Settings → Store → Block time-clock punches without a passkey."

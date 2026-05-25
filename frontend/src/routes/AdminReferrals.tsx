@@ -7,6 +7,7 @@ import {
 import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
 import {
+  Breadcrumbs,
   ButtonLink, Card, Empty, ErrorState, KpiCard, KpiGrid, Loading,
   PageHeader, PageShell, Pill, space, Table, tdStyle, thStyle,
 } from "../components/ui";
@@ -51,6 +52,9 @@ export default function AdminReferrals() {
 
   return (
     <PageShell maxWidth="60rem">
+
+      <Breadcrumbs crumbs={[{ label: "Account", to: "/settings" }, { label: "Referrals" }]} />
+
       <PageHeader title="Referrals" />
 
       {isLoading && <Loading />}
