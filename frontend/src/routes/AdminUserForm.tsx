@@ -109,7 +109,6 @@ export default function AdminUserForm() {
           message={`Couldn't load this user.${detail.error instanceof Error ? ` ${detail.error.message}` : ""}`}
           onRetry={() => { void detail.refetch(); }}
         />
-        <ButtonLink href="/admin/users" tone="secondary">← Back</ButtonLink>
       </PageShell>
     );
   }
@@ -173,9 +172,6 @@ export default function AdminUserForm() {
           <span className={styles.cardHeaderText}>
             {isEdit ? "Update user account" : "Create a new user account"}
           </span>
-          <Link to="/admin/users" style={{ textDecoration: "none" }}>
-            <Button tone="secondary" size="sm">← Back</Button>
-          </Link>
         </div>
 
         {serverError && <Alert tone="error">{serverError}</Alert>}

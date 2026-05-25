@@ -166,11 +166,7 @@ export default function BankRules() {
 
       <PageHeader
         title="Bank Rules"
-        actions={(
-          <ButtonLink href="/bank-transactions" tone="secondary" size="sm">
-            ← Transactions
-          </ButtonLink>
-        )}
+        subtitle="Auto-categorize incoming bank transactions by description pattern."
       />
 
       {error && <ErrorState message={error} />}

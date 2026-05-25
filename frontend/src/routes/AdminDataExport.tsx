@@ -58,7 +58,7 @@ export default function AdminDataExport() {
       && identity?.role !== "superadmin") {
     return (
       <PageShell maxWidth="56rem">
-        <PageHeader title="Data export" />
+        <PageHeader title="Data export" subtitle="Download your store data as CSV or ZIP." />
         <Empty>
           You need a store-admin sign-in to pull data exports.
         </Empty>

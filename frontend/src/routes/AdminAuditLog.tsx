@@ -60,7 +60,7 @@ export default function AdminAuditLog() {
 
       <Breadcrumbs crumbs={[{ label: "Finance" }, { label: "Activity log" }]} />
 
-      <PageHeader title="Activity Log" />
+      <PageHeader title="Activity Log" subtitle="Every admin action across the store, newest first." />
 
       <Card style={{ marginBottom: space.lg }}>
         <div className={styles.cardHeader}>
