@@ -5,31 +5,6 @@ import { fontSize, tokens } from "./tokens";
 
 export type ButtonTone = "primary" | "secondary" | "danger" | "ghost";
 
-const buttonPalette: Record<ButtonTone, CSSProperties> = {
-  primary: {
-    background: tokens.accent,
-    color: tokens.onAccent,
-    border: "none",
-  },
-  secondary: {
-    background: "transparent",
-    color: tokens.text,
-    border: `1px solid ${tokens.border}`,
-  },
-  danger: {
-    background: "transparent",
-    color: tokens.negative,
-    border: `1px solid ${tokens.negative}`,
-  },
-  ghost: {
-    background: "transparent",
-    color: tokens.textMuted,
-    border: "none",
-    padding: 0,
-    textDecoration: "underline",
-  },
-};
-
 const buttonSizing = {
   sm: { padding: "0.35rem 0.75rem", fontSize: fontSize.sm,   minHeight: "2rem"   },
   md: { padding: "0.55rem 1rem",    fontSize: "0.9rem",      minHeight: "2.4rem" },
@@ -52,7 +27,6 @@ export function Button({
   size?: "sm" | "md" | "lg";
 } & Omit<React.ButtonHTMLAttributes<HTMLButtonElement>,
          "style" | "children" | "type" | "className">) {
-  const palette = buttonPalette[tone];
   const dimmed = busy || rest.disabled;
   const cls = ["ds-btn", `ds-btn--${tone}`];
   if (className) cls.push(className);
@@ -77,7 +51,6 @@ export function Button({
         cursor: dimmed ? (busy ? "wait" : "not-allowed") : "pointer",
         opacity: dimmed ? 0.6 : 1,
         whiteSpace: "nowrap",
-        ...palette,
         ...style,
       }}
     >
@@ -115,7 +88,6 @@ export function ButtonLink({
   size?: "sm" | "md" | "lg";
 } & Omit<React.AnchorHTMLAttributes<HTMLAnchorElement>,
          "style" | "children" | "href" | "className">) {
-  const palette = buttonPalette[tone];
   const sizing = buttonSizing[size];
   const cls = ["ds-btn", `ds-btn--${tone}`];
   if (className) cls.push(className);
@@ -132,7 +104,6 @@ export function ButtonLink({
     fontSize: sizing.fontSize,
     fontWeight: tone === "primary" || tone === "danger" ? 600 : 500,
     whiteSpace: "nowrap",
-    ...palette,
     ...style,
   };
   // Prefer client-side routing when a SPA `to` is provided —

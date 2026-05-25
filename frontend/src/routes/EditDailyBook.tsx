@@ -25,8 +25,9 @@ import {
 import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
 import {
-  Button, Card, EmptyState, Field, Input, Loading, MoneyInput,
-  PageHeader, PageShell, Pill, RowActions, TabsBar, TabsButton, Textarea,
+  Breadcrumbs, Button, Card, EmptyState, Field, Input, Loading,
+  MoneyInput, PageHeader, PageShell, Pill, RowActions, TabsBar,
+  TabsButton, Textarea,
 } from "../components/ui";
 import styles from "./EditDailyBook.module.css";
 
@@ -327,6 +328,10 @@ export default function EditDailyBook() {
 
   return (
     <PageShell maxWidth="92rem" gap="1rem">
+      <Breadcrumbs crumbs={[
+        { label: "Daily", to: "/daily" },
+        { label: formatHumanDate(date) },
+      ]} />
       <PageHeader
         title="Daily book"
         subtitle={(

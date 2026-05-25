@@ -16,7 +16,7 @@
 
 import {
   clearAccessToken, clearRefreshFallback, getRefreshFallback,
-  persistLoginResponse, persistRefreshFallback,
+  persistLoginResponse,
 } from "./auth";
 
 export class ApiError extends Error {

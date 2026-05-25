@@ -50,6 +50,7 @@ export {
 
 export { PageShell } from "./PageShell";
 export { PageHeader } from "./PageHeader";
+export { Breadcrumbs } from "./Breadcrumbs";
 export { Card } from "./Card";
 export { Section, SectionTitle } from "./Section";
 export { Field } from "./Field";

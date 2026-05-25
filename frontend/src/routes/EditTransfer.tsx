@@ -7,8 +7,8 @@ import { useNavigate, useParams } from "react-router-dom";
 import SenderAutocomplete from "../components/SenderAutocomplete";
 import RecipientSuggestions from "../components/RecipientSuggestions";
 import {
-  Alert, Button, Card, ErrorState, Field, FormActions, Input,
-  Loading, MoneyInput, PageHeader, PageShell, Section, Select,
+  Alert, Breadcrumbs, Button, Card, ErrorState, Field, FormActions,
+  Input, Loading, MoneyInput, PageHeader, PageShell, Section, Select,
 } from "../components/ui";
 import {
   previewFederalTax,
@@ -209,6 +209,11 @@ export default function EditTransfer() {
 
   return (
     <PageShell maxWidth="62rem">
+      <Breadcrumbs crumbs={[
+        { label: "Transfers", to: "/transfers" },
+        { label: `#${transferId}`, to: `/transfers/${transferId}` },
+        { label: "Edit" },
+      ]} />
       <PageHeader
         title={`Edit transfer #${transferId}`}
         subtitle="Federal tax is recomputed server-side on save."

@@ -7,6 +7,7 @@ import SenderAutocomplete from "../components/SenderAutocomplete";
 import RecipientSuggestions from "../components/RecipientSuggestions";
 import {
   Alert,
+  Breadcrumbs,
   Button,
   Card,
   Field,
@@ -186,6 +187,10 @@ export default function NewTransfer() {
 
   return (
     <PageShell>
+      <Breadcrumbs crumbs={[
+        { label: "Transfers", to: "/transfers" },
+        { label: "New transfer" },
+      ]} />
       <PageHeader
         title="New transfer"
         subtitle={
