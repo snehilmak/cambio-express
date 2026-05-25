@@ -114,6 +114,62 @@ def _adapt_detail(s) -> SuperadminStoreDetailRow:
     )
 
 
+@router.get("/dashboard")
+def dashboard_route(
+    db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
+) -> dict[str, Any]:
+    """Platform-wide KPIs, signup trends, plan breakdown, transfer
+    volume, and recent activity for the superadmin dashboard."""
+    _require_superadmin(claims)
+    from api.Modules.Superadmin.Services.dashboard import (
+        superadmin_dashboard_context,
+    )
+    ctx = superadmin_dashboard_context(db)
+    activity = []
+    for a in ctx.get("activity", []):
+        activity.append({
+            "when": a["when"].isoformat() if a["when"] else "",
+            "kind": a["kind"],
+            "store_name": a["store_name"],
+            "detail": a["detail"],
+            "plan": a["plan"],
+        })
+    return {
+        "total_stores": ctx["total_stores"],
+        "active_count": ctx["active_count"],
+        "trial_count": ctx["trial_count"],
+        "paid_count": ctx["paid_count"],
+        "inactive_count": ctx["inactive_count"],
+        "estimated_mrr": ctx["estimated_mrr"],
+        "new_stores_30d": ctx["new_stores_30d"],
+        "new_stores_delta": ctx["new_stores_delta"],
+        "churn_30d": ctx["churn_30d"],
+        "churn_delta": ctx["churn_delta"],
+        "basic_count": ctx["basic_count"],
+        "pro_count": ctx["pro_count"],
+        "basic_monthly": ctx["basic_monthly"],
+        "basic_yearly": ctx["basic_yearly"],
+        "pro_monthly": ctx["pro_monthly"],
+        "pro_yearly": ctx["pro_yearly"],
+        "basic_monthly_mrr": ctx["basic_monthly_mrr"],
+        "basic_yearly_mrr": ctx["basic_yearly_mrr"],
+        "pro_monthly_mrr": ctx["pro_monthly_mrr"],
+        "pro_yearly_mrr": ctx["pro_yearly_mrr"],
+        "signup_labels": ctx["signup_labels"],
+        "signup_direct": ctx["signup_direct"],
+        "signup_referral": ctx["signup_referral"],
+        "plan_dist": ctx["plan_dist"],
+        "volume_by_company": ctx["volume_by_company"],
+        "total_volume_30d": ctx["total_volume_30d"],
+        "total_transfers_30d": ctx["total_transfers_30d"],
+        "top_referrers": ctx["top_referrers"],
+        "direct_signups": ctx["direct_signups"],
+        "referral_signups": ctx["referral_signups"],
+        "activity": activity,
+    }
+
+
 @router.get("/stores", response_model=SuperadminStoreListResponse)
 def list_stores_route(
     db: Session = Depends(get_db),

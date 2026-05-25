@@ -92,6 +92,7 @@ const SubscribeSuccess = lazy(() => import("./routes/SubscribeSuccess"));
 const SuperadminAnnouncements = lazy(() => import("./routes/SuperadminAnnouncements"));
 const SuperadminAuditLog = lazy(() => import("./routes/SuperadminAuditLog"));
 const SuperadminControls = lazy(() => import("./routes/SuperadminControls"));
+const SuperadminDashboard = lazy(() => import("./routes/SuperadminDashboard"));
 const SuperadminReports = lazy(() => import("./routes/SuperadminReports"));
 const SuperadminStoreForm = lazy(() => import("./routes/SuperadminStoreForm"));
 const SuperadminStores = lazy(() => import("./routes/SuperadminStores"));
@@ -269,6 +270,7 @@ export default function App() {
           <Route path="owner/bulk-add-user"          element={<OwnerBulkAddUser />} />
           <Route path="owner/cross-store-defaults"   element={<OwnerCrossStoreDefaults />} />
           <Route path="owner/store/:storeId" element={<OwnerStoreDetail />} />
+          <Route path="superadmin/dashboard"     element={<SuperadminDashboard />} />
           <Route path="superadmin/stores"        element={<SuperadminStores />} />
           <Route path="superadmin/stores/new"    element={<SuperadminStoreForm />} />
           <Route path="superadmin/stores/:id/edit" element={<SuperadminStoreForm />} />
