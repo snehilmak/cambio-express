@@ -33,7 +33,7 @@ export default function AdminUsers() {
     || (identity.role !== "admin" && identity.role !== "owner")
   ) {
     return (
-      <PageShell>
+      <PageShell maxWidth="70rem">
         <PageHeader title="User Management" />
         <Empty>You need a store-admin sign-in to manage users.</Empty>
       </PageShell>
@@ -41,7 +41,7 @@ export default function AdminUsers() {
   }
 
   return (
-    <PageShell>
+    <PageShell maxWidth="70rem">
 
       <Breadcrumbs crumbs={[{ label: "User Management" }]} />
 

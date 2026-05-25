@@ -133,7 +133,7 @@ export default function TimeClock() {
 
   if (roster.isError) {
     return (
-      <PageShell>
+      <PageShell maxWidth="56rem">
         <PageHeader title="Time clock" />
         <ErrorState
           message="Couldn't load the store roster."
@@ -145,7 +145,7 @@ export default function TimeClock() {
 
   if (roster.isLoading) {
     return (
-      <PageShell>
+      <PageShell maxWidth="56rem">
         <PageHeader title="Time clock" />
         <Loading />
       </PageShell>

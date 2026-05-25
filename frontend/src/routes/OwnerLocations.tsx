@@ -48,7 +48,7 @@ export default function OwnerLocations() {
     identity?.role === "owner" || identity?.role === "superadmin";
   if (!isOwner) {
     return (
-      <PageShell>
+      <PageShell maxWidth="70rem">
         <PageHeader title="Owner locations" />
         <Empty>Sign in as an owner to view the multi-store umbrella.</Empty>
       </PageShell>
@@ -56,7 +56,7 @@ export default function OwnerLocations() {
   }
 
   return (
-    <PageShell>
+    <PageShell maxWidth="70rem">
 
       <Breadcrumbs crumbs={[{ label: "Locations" }]} />
 

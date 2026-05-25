@@ -26,7 +26,7 @@ export default function SuperadminStores() {
 
   if (identity?.role !== "superadmin") {
     return (
-      <PageShell>
+      <PageShell maxWidth="80rem">
         <PageHeader title="All stores" />
         <Empty>Superadmin scope required.</Empty>
       </PageShell>
@@ -46,7 +46,7 @@ export default function SuperadminStores() {
       : data?.rows;
 
   return (
-    <PageShell>
+    <PageShell maxWidth="80rem">
 
       <Breadcrumbs crumbs={[{ label: "Platform" }, { label: "Stores" }]} />
 
