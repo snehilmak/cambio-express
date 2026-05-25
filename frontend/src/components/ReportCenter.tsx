@@ -91,7 +91,7 @@ function CategoryCard({
   forceOpen: boolean;
 }) {
   return (
-    <Card>
+    <Card padding="0">
       <details open={forceOpen || undefined} className={styles.cat}>
         <summary className={styles.summary}>
           <span className={styles.icon}
