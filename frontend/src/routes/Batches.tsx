@@ -1,4 +1,4 @@
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
 import {
   useBatches,
@@ -107,6 +107,7 @@ function BatchesTable({
   direction: BatchDir;
   onSort: (s: BatchSort) => void;
 }) {
+  const navigate = useNavigate();
   return (
     <Table>
       <thead>
@@ -132,17 +133,18 @@ function BatchesTable({
       </thead>
       <tbody>
         {rows.map((r) => (
-          <tr key={r.id} className={styles.row}>
+          <tr
+            key={r.id}
+            className={styles.row}
+            style={{ cursor: "pointer" }}
+            onClick={() => navigate(`/batches/${r.id}/edit`)}
+          >
             <td style={tdStyle}>
-              <Link to={`/batches/${r.id}/edit`} className={styles.cellLink}>
-                <span className={styles.monoMuted}>{r.ach_date}</span>
-              </Link>
+              <span className={styles.monoMuted}>{r.ach_date}</span>
             </td>
             <td style={tdStyle}>{r.company}</td>
             <td style={tdStyle}>
-              <Link to={`/batches/${r.id}/edit`} className={styles.cellLink}>
-                <span className={styles.mono}>{r.batch_ref}</span>
-              </Link>
+              <span className={styles.mono}>{r.batch_ref}</span>
             </td>
             <td style={{ ...tdStyle, textAlign: "right" }}>
               <span className={styles.mono}>${r.ach_amount.toFixed(2)}</span>
