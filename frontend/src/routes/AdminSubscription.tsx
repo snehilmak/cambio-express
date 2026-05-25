@@ -12,6 +12,7 @@ import { ApiError } from "../lib/api";
 import {
   Breadcrumbs,
   Alert, Button, Card, ErrorState, Loading, PageHeader, PageShell, Pill,
+  SectionTitle,
 } from "../components/ui";
 import styles from "./AdminSubscription.module.css";
 
@@ -181,13 +182,13 @@ export default function AdminSubscription() {
             )}
           </div>
           {has_paid_plan && (
-            <button
-              type="button"
+            <Button
+              tone="ghost"
               className={styles.cancelLink}
               onClick={() => setShowCancel(true)}
             >
               Cancel subscription
-            </button>
+            </Button>
           )}
         </div>
 
@@ -242,8 +243,9 @@ export default function AdminSubscription() {
               <span className={styles.muted}>
                 {a.is_active ? <Pill tone="accent">Active</Pill> : "Not added"}
               </span>
-              <button
-                type="button"
+              <Button
+                tone="secondary"
+                size="sm"
                 className={styles.btnLinkLive}
                 disabled={
                   busy === `addon:${a.key}` ||
@@ -256,7 +258,7 @@ export default function AdminSubscription() {
                   : a.is_active
                     ? "Remove"
                     : "Add"}
-              </button>
+              </Button>
             </div>
           </Card>
         ))}
@@ -268,7 +270,7 @@ export default function AdminSubscription() {
       {showCancel && has_paid_plan && (
         <div className={styles.modalBackdrop} onClick={() => setShowCancel(false)}>
           <div className={styles.modalCard} onClick={(e) => e.stopPropagation()}>
-            <h3 style={{ margin: 0 }}>Before you cancel</h3>
+            <SectionTitle>Before you cancel</SectionTitle>
             <p>
               You're about to cancel your <strong>{plan_label}</strong>{" "}
               subscription. We hold your data so you can come back without

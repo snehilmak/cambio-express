@@ -8,8 +8,9 @@ import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
 import {
   Breadcrumbs,
-  Alert, Button, Card, Empty, ErrorState, Field, Input, Loading,
-  PageHeader, PageShell, Pill, Section, Select, Table, tdStyle, thStyle,
+  Alert, Button, Card, Checkbox, Empty, ErrorState, Field, Input,
+  Loading, PageHeader, PageShell, Pill, Section, Select, Table,
+  tdStyle, thStyle,
 } from "../components/ui";
 import styles from "./OwnerCrossStoreDefaults.module.css";
 
@@ -160,16 +161,12 @@ export default function OwnerCrossStoreDefaults() {
         <form onSubmit={onSubmit}>
           <Card>
             <Section title="Fields to push">
-              <label className={styles.fieldToggle}>
-                <input
-                  type="checkbox" checked={applyTz}
-                  onChange={(e) => setApplyTz(e.target.checked)}
-                />
+              <Checkbox checked={applyTz} onChange={setApplyTz}>
                 Timezone
                 <span className={styles.fieldHint}>
                   — IANA name, e.g. <code>America/Chicago</code>
                 </span>
-              </label>
+              </Checkbox>
               {applyTz && (
                 <Field label="Timezone">
                   <Select
@@ -183,17 +180,13 @@ export default function OwnerCrossStoreDefaults() {
                 </Field>
               )}
 
-              <label className={styles.fieldToggle}>
-                <input
-                  type="checkbox" checked={applyFedTax}
-                  onChange={(e) => setApplyFedTax(e.target.checked)}
-                />
+              <Checkbox checked={applyFedTax} onChange={setApplyFedTax}>
                 Federal tax rate
                 <span className={styles.fieldHint}>
                   — percent, 0-100. Server stores as a decimal
                   (1.00% → 0.01).
                 </span>
-              </label>
+              </Checkbox>
               {applyFedTax && (
                 <Field label="Federal tax rate (%)">
                   <Input
@@ -204,13 +197,9 @@ export default function OwnerCrossStoreDefaults() {
                 </Field>
               )}
 
-              <label className={styles.fieldToggle}>
-                <input
-                  type="checkbox" checked={applyEnforceHours}
-                  onChange={(e) => setApplyEnforceHours(e.target.checked)}
-                />
+              <Checkbox checked={applyEnforceHours} onChange={setApplyEnforceHours}>
                 Block transfers outside business hours
-              </label>
+              </Checkbox>
               {applyEnforceHours && (
                 <Field label="State">
                   <Select
@@ -223,13 +212,9 @@ export default function OwnerCrossStoreDefaults() {
                 </Field>
               )}
 
-              <label className={styles.fieldToggle}>
-                <input
-                  type="checkbox" checked={applyPasskey}
-                  onChange={(e) => setApplyPasskey(e.target.checked)}
-                />
+              <Checkbox checked={applyPasskey} onChange={setApplyPasskey}>
                 Require passkey on time-clock punches
-              </label>
+              </Checkbox>
               {applyPasskey && (
                 <Field label="State">
                   <Select
@@ -244,13 +229,9 @@ export default function OwnerCrossStoreDefaults() {
 
               <div className={styles.fieldGrid}>
                 <div>
-                  <label className={styles.fieldToggle}>
-                    <input
-                      type="checkbox" checked={applyPhone}
-                      onChange={(e) => setApplyPhone(e.target.checked)}
-                    />
+                  <Checkbox checked={applyPhone} onChange={setApplyPhone}>
                     Phone
-                  </label>
+                  </Checkbox>
                   {applyPhone && (
                     <Field label="Phone">
                       <Input
@@ -261,13 +242,9 @@ export default function OwnerCrossStoreDefaults() {
                   )}
                 </div>
                 <div>
-                  <label className={styles.fieldToggle}>
-                    <input
-                      type="checkbox" checked={applyAddress}
-                      onChange={(e) => setApplyAddress(e.target.checked)}
-                    />
+                  <Checkbox checked={applyAddress} onChange={setApplyAddress}>
                     Address
-                  </label>
+                  </Checkbox>
                   {applyAddress && (
                     <Field label="Address">
                       <Input
@@ -295,15 +272,13 @@ export default function OwnerCrossStoreDefaults() {
               <ul className={styles.storeList}>
                 {locations.rows.map((s) => (
                   <li key={s.store_id}>
-                    <label className={styles.storeRow}>
-                      <input
-                        type="checkbox"
-                        checked={storeIds.includes(s.store_id)}
-                        onChange={() => toggleStore(s.store_id)}
-                      />
+                    <Checkbox
+                      checked={storeIds.includes(s.store_id)}
+                      onChange={() => toggleStore(s.store_id)}
+                    >
                       <span className={styles.storeName}>{s.store_name}</span>
                       <span className={styles.storeSlug}>{s.store_slug}</span>
-                    </label>
+                    </Checkbox>
                   </li>
                 ))}
               </ul>
