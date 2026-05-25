@@ -130,7 +130,7 @@ export default function EditMonthly() {
 
   if (identity?.store_id == null) {
     return (
-      <PageShell maxWidth="78rem">
+      <PageShell>
         <PageHeader title="Edit monthly P&L" />
         <p>Sign in as a store admin to edit monthly P&L.</p>
       </PageShell>
@@ -139,7 +139,7 @@ export default function EditMonthly() {
 
   if (!Number.isFinite(year) || !Number.isFinite(month)) {
     return (
-      <PageShell maxWidth="78rem">
+      <PageShell>
         <PageHeader title="Edit monthly P&L" />
         <p>Missing year or month. Open a P&L first, then click Edit.</p>
       </PageShell>
@@ -148,14 +148,14 @@ export default function EditMonthly() {
 
   if (detail.isLoading || form == null) {
     return (
-      <PageShell maxWidth="78rem">
+      <PageShell>
         <Loading />
       </PageShell>
     );
   }
 
   return (
-    <PageShell maxWidth="78rem">
+    <PageShell>
       <header>
 
         <Breadcrumbs crumbs={[{ label: "Monthly P&L", to: "/monthly" }, { label: "Edit" }]} />

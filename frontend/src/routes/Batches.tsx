@@ -53,7 +53,7 @@ export default function Batches() {
 
   if (identity?.store_id == null) {
     return (
-      <PageShell maxWidth="100%">
+      <PageShell>
         <PageHeader title="ACH batches" />
         <Empty>Sign in as a store admin to view ACH batches.</Empty>
       </PageShell>
@@ -61,7 +61,7 @@ export default function Batches() {
   }
 
   return (
-    <PageShell maxWidth="100%">
+    <PageShell>
 
       <Breadcrumbs crumbs={[{ label: "ACH Batches" }]} />
 

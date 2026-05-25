@@ -131,7 +131,7 @@ export default function OwnerCrossStoreDefaults() {
   }
 
   return (
-    <PageShell maxWidth="60rem">
+    <PageShell>
 
       <Breadcrumbs crumbs={[{ label: "Owner" }, { label: "Cross-store defaults" }]} />
 

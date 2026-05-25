@@ -59,14 +59,14 @@ export default function TVDisplayCountry() {
 
   if (isLoading) {
     return (
-      <PageShell maxWidth="75rem">
+      <PageShell>
         <Loading label="Loading country…" />
       </PageShell>
     );
   }
   if (isError || !data) {
     return (
-      <PageShell maxWidth="75rem">
+      <PageShell>
         <ErrorState
           message={`Couldn't load country — ${error instanceof Error ? error.message : "unknown error"}`}
           onRetry={() => { void refetch(); }}
@@ -91,7 +91,7 @@ export default function TVDisplayCountry() {
   }
 
   return (
-    <PageShell maxWidth="75rem">
+    <PageShell>
       <div>
         <Link to="/tv-display" className={styles.backLink}>← Back to TV Display</Link>
 

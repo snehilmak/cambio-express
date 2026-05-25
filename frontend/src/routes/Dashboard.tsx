@@ -70,7 +70,7 @@ export default function Dashboard() {
         : "Admin Dashboard";
 
   return (
-    <PageShell maxWidth="80rem">
+    <PageShell>
 
       <Breadcrumbs crumbs={[{ label: "Dashboard" }]} />
 

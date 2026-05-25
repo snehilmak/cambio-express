@@ -171,7 +171,7 @@ export default function Bank() {
   const atCap = accountList.length >= 6; // mirror MAX_BANK_ACCOUNTS_PER_STORE
 
   return (
-    <PageShell maxWidth="70rem" gap="1.25rem">
+    <PageShell gap="1.25rem">
 
       <Breadcrumbs crumbs={[{ label: "Finance" }, { label: "Bank accounts" }]} />
 

@@ -73,7 +73,7 @@ export default function AdminTimeClockSchedule() {
   const activeRoster = roster.data?.employees ?? [];
 
   return (
-    <PageShell maxWidth="80rem">
+    <PageShell>
 
       <Breadcrumbs crumbs={[{ label: "HR" }, { label: "Schedule" }]} />
 

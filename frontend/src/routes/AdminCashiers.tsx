@@ -117,7 +117,7 @@ export default function AdminCashiers() {
 
   if (identity?.store_id == null) {
     return (
-      <PageShell maxWidth="60rem">
+      <PageShell>
         <PageHeader title="Cashiers" />
         <Card>
           <p className={styles.muted}>
@@ -129,7 +129,7 @@ export default function AdminCashiers() {
   }
 
   return (
-    <PageShell maxWidth="60rem">
+    <PageShell>
 
       <Breadcrumbs crumbs={[{ label: "HR" }, { label: "Cashiers" }]} />
 

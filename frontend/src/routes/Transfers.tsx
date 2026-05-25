@@ -109,7 +109,7 @@ export default function Transfers() {
 
   if (identity?.store_id == null) {
     return (
-      <PageShell maxWidth="100%">
+      <PageShell>
         <PageHeader title="Transfers" />
         <Empty>
           Sign in as a store admin to view this store's transfers.
@@ -123,7 +123,7 @@ export default function Transfers() {
   const { data, dataUpdatedAt, isLoading, isFetching, isError, error, refetch } = apiQuery;
 
   return (
-    <PageShell maxWidth="100%">
+    <PageShell>
 
       <Breadcrumbs crumbs={[{ label: "Transfers" }]} />
 

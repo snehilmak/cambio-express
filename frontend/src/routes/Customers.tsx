@@ -138,7 +138,7 @@ export default function Customers() {
 
   if (identity?.store_id == null) {
     return (
-      <PageShell maxWidth="70rem">
+      <PageShell>
         <PageHeader title="Customers" />
         <Empty>Sign in as a store admin to search this store's customers.</Empty>
       </PageShell>
@@ -182,7 +182,7 @@ export default function Customers() {
   );
 
   return (
-    <PageShell maxWidth="70rem">
+    <PageShell>
 
       <Breadcrumbs crumbs={[{ label: "Customers" }]} />
 

@@ -41,7 +41,7 @@ export default function AccountActivity() {
   const hasFilters = !!(target || action);
 
   return (
-    <PageShell maxWidth="70rem">
+    <PageShell>
 
       <Breadcrumbs crumbs={[{ label: "Account", to: "/settings" }, { label: "Activity" }]} />
 
