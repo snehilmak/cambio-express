@@ -139,6 +139,20 @@ def apply_schema(engine: Engine, logger: logging.Logger | None = None) -> None:
         # tests + StaticPool — without it the upgrade DDL
         # evaporates when the connection returns to the pool.
         with engine.begin() as connection:
+            # Serialize migrations across gunicorn workers. With
+            # --workers 2+, every worker runs init_db() on boot;
+            # without a lock, two workers can race on `upgrade head`
+            # and one crashes with "expected to match one row …
+            # 0 found" because the alembic_version row is being
+            # mutated concurrently. pg_advisory_xact_lock blocks
+            # until the first worker's transaction commits, then the
+            # second worker's upgrade is a no-op ("already at head").
+            if engine.dialect.name == "postgresql":
+                from sqlalchemy import text
+                connection.execute(text(
+                    "SELECT pg_advisory_xact_lock(8675309)"
+                ))
+
             cfg.attributes["connection"] = connection
             inspector = inspect(connection)
             table_names = set(inspector.get_table_names())
