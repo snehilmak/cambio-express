@@ -8,7 +8,7 @@ import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
 import {
   Breadcrumbs,
-  ButtonLink, Card, Empty, ErrorState, KpiCard, KpiGrid, Loading,
+  Button, ButtonLink, Card, Empty, ErrorState, KpiCard, KpiGrid, Loading,
   PageHeader, PageShell, Pill, space, Table, tdStyle, thStyle,
 } from "../components/ui";
 import styles from "./AdminReferrals.module.css";
@@ -166,8 +166,7 @@ function Hero({
           className={styles.shareInput}
           onFocus={(e) => e.currentTarget.select()}
         />
-        <button
-          type="button"
+        <Button
           className={styles.btnGold}
           onClick={() => copy(code, () => {
             setCodeFlash(true);
@@ -175,9 +174,8 @@ function Hero({
           })}
         >
           {codeFlash ? "Copied!" : "Copy code"}
-        </button>
-        <button
-          type="button"
+        </Button>
+        <Button
           className={styles.btnGold}
           onClick={() => copy(shareUrl, () => {
             setLinkFlash(true);
@@ -185,7 +183,7 @@ function Hero({
           })}
         >
           {linkFlash ? "Copied!" : "Copy link"}
-        </button>
+        </Button>
       </div>
     </section>
   );

@@ -6,7 +6,7 @@ import { ApiError } from "../lib/api";
 import {
   Alert, Breadcrumbs, Button, Card, EmptyState, ErrorState, Field,
   Input, Loading, PageHeader, PageShell, Pill, Section, Select,
-  Textarea,
+  Table, tdStyle, Textarea, thStyle,
 } from "../components/ui";
 
 const CATEGORIES = [
@@ -139,7 +139,7 @@ export default function SupportTickets() {
       {tickets.data && tickets.data.tickets.length > 0 && (
         <Card>
           <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <Table>
               <thead>
                 <tr>
                   <th style={thStyle}>Subject</th>
@@ -153,7 +153,7 @@ export default function SupportTickets() {
                   <TicketRowView key={t.id} ticket={t} />
                 ))}
               </tbody>
-            </table>
+            </Table>
           </div>
         </Card>
       )}
@@ -203,18 +203,3 @@ function TicketRowView({ ticket: t }: { ticket: TicketRow }) {
   );
 }
 
-const thStyle: React.CSSProperties = {
-  textAlign: "left",
-  padding: "0.75rem 1.25rem",
-  fontSize: "0.72rem",
-  fontWeight: 700,
-  textTransform: "uppercase",
-  letterSpacing: "0.06em",
-  color: "var(--db-text-muted)",
-  borderBottom: "1px solid var(--db-border, #262626)",
-};
-
-const tdStyle: React.CSSProperties = {
-  padding: "0.75rem 1.25rem",
-  fontSize: "0.88rem",
-};
