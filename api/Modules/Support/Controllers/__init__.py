@@ -88,7 +88,10 @@ def list_my_tickets(
     db: Session = Depends(get_db),
     claims: dict[str, Any] = Depends(get_principal),
 ) -> TicketListResponse:
-    """List tickets submitted by users in the caller's store."""
+    """List tickets submitted by users in the caller's store.
+    Superadmin sees all tickets (same as /all) since they have no store."""
+    if claims.get("role") == "superadmin":
+        return list_all_tickets(status=status, db=db, claims=claims)
     sid = resolve_store_scope(claims)
     q = db.query(SupportTicket).filter(
         SupportTicket.store_id == sid,

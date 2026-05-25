@@ -38,11 +38,12 @@ export interface NavGroup {
  *  (the drawer slide animation lives in the legacy styles.css
  *  rules for backwards compat with the existing transitions). */
 export function SlimSidebar({
-  groups, drawerOpen, brandName = "DineroBook",
+  groups, drawerOpen, brandName = "DineroBook", supportLink,
 }: {
   groups: NavGroup[];
   drawerOpen: boolean;
   brandName?: string;
+  supportLink?: NavItem;
 }) {
   const location = useLocation();
   const [openGroup, setOpenGroup] = useState<string | null>(null);
@@ -107,6 +108,19 @@ export function SlimSidebar({
             </button>
           );
         })}
+        {supportLink && (
+          <NavLink
+            to={supportLink.to}
+            className={({ isActive }) =>
+              `${styles.supportBtn}${isActive ? " " + styles.isActive : ""}`
+            }
+            title={supportLink.label}
+            aria-label={supportLink.label}
+          >
+            <span className={styles.groupIcon}>{supportLink.icon}</span>
+            <span className={styles.groupLabel}>{supportLink.label}</span>
+          </NavLink>
+        )}
       </div>
 
       {/* Fly-out panel — desktop only.  Backdrop is a plain
@@ -180,6 +194,19 @@ export function SlimSidebar({
             </div>
           </div>
         ))}
+        {supportLink && (
+          <div className={styles.drawerGroup}>
+            <NavLink
+              to={supportLink.to}
+              className={({ isActive }) =>
+                `${styles.itemRow}${isActive ? " " + styles.isActive : ""}`
+              }
+            >
+              <span className={styles.itemIcon}>{supportLink.icon}</span>
+              <span>{supportLink.label}</span>
+            </NavLink>
+          </div>
+        )}
       </div>
     </aside>
   );

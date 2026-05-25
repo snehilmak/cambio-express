@@ -50,7 +50,9 @@ export default function Settings() {
   // exists (SubscriptionCard renders empty for store_id == null),
   // but the tab is hidden from the bar so owners don't click into
   // a no-op page.
-  const isOwner = identity?.role === "owner";
+  const role = identity?.role;
+  const showGeneral = role !== "superadmin";
+  const showBilling = role !== "owner" && role !== "superadmin";
 
   return (
     <PageShell maxWidth="60rem" gap="1rem">
@@ -61,8 +63,8 @@ export default function Settings() {
 
       <TabsBar>
         <TabsLink to="/settings/profile">Profile</TabsLink>
-        <TabsLink to="/settings/general">General</TabsLink>
-        {!isOwner && <TabsLink to="/settings/billing">Billing</TabsLink>}
+        {showGeneral && <TabsLink to="/settings/general">General</TabsLink>}
+        {showBilling && <TabsLink to="/settings/billing">Billing</TabsLink>}
         <TabsLink to="/settings/security">Security</TabsLink>
       </TabsBar>
 
