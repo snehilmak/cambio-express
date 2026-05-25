@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
-import { useProfile } from "../api/account";
+import { useProfile, useStoreInfo } from "../api/account";
 import { clearAccessToken, getCurrentIdentity } from "../lib/auth";
 import { clearVisits, recordVisit } from "../lib/recency";
 import { reconcileTheme } from "../lib/theme";
@@ -119,6 +119,8 @@ function Topbar({
   onSignOut: () => void;
   onToggleDrawer: () => void;
 }) {
+  const storeInfo = useStoreInfo();
+  const referralCode = storeInfo.data?.referral_code;
   return (
     <header className="app-topbar">
       <button
@@ -136,11 +138,41 @@ function Topbar({
         </svg>
       </button>
       <span style={topbarSpacer} />
+      {referralCode && <ReferralBadge code={referralCode} />}
       <HomeButton />
       <InstallAppButton />
       <ThemeToggle />
       <UserMenu identity={identity} onSignOut={onSignOut} />
     </header>
+  );
+}
+
+function ReferralBadge({ code }: { code: string }) {
+  const navigate = useNavigate();
+  return (
+    <button
+      type="button"
+      onClick={() => navigate("/account/referrals")}
+      title={`Your referral code: ${code}`}
+      className="ds-btn ds-btn--secondary"
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: "0.35rem",
+        padding: "0.3rem 0.65rem",
+        borderRadius: "0.5rem",
+        fontSize: "0.78rem",
+        fontWeight: 600,
+        cursor: "pointer",
+      }}
+    >
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+        stroke="currentColor" strokeWidth="2" strokeLinecap="round"
+        strokeLinejoin="round" aria-hidden="true">
+        <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z" />
+      </svg>
+      {code}
+    </button>
   );
 }
 

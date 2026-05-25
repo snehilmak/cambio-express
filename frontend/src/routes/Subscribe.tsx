@@ -112,6 +112,7 @@ export default function Subscribe() {
 
   const currentPlan = summary?.store.plan ?? null;
   const hasPaid = Boolean(summary?.has_paid_plan);
+  const cancelling = Boolean(summary?.cancel_at_period_end);
 
   async function pickPlan(slug: string) {
     setError(null);
@@ -150,7 +151,18 @@ export default function Subscribe() {
         )}
       />
 
-      {hasPaid && summary && (
+      {hasPaid && summary && cancelling && (
+        <Alert tone="warning">
+          Your <strong>{summary.plan_label}</strong> subscription is{" "}
+          <strong>cancelled</strong>
+          {summary.cancel_at
+            ? <> — active until <strong>{summary.cancel_at}</strong></>
+            : null
+          }.
+          {" "}To keep your access, resubscribe below before it expires.
+        </Alert>
+      )}
+      {hasPaid && summary && !cancelling && (
         <Alert tone="info">
           You're currently on{" "}
           <strong>{summary.plan_label}</strong>
@@ -165,11 +177,13 @@ export default function Subscribe() {
       <div className={styles.grid}>
         {PLANS.map((p) => {
           const isCurrent = currentPlan === p.slug;
+          const isCancelledCurrent = isCurrent && cancelling;
           return (
             <Card key={p.slug} padding="1.5rem" className={styles.tile}>
               <div className={styles.tileHeaderRow}>
                 <h2 className={styles.tileTitle}>{p.label}</h2>
-                {isCurrent && <Pill tone="accent">Current plan</Pill>}
+                {isCancelledCurrent && <Pill tone="warning">Cancelled</Pill>}
+                {isCurrent && !cancelling && <Pill tone="accent">Current plan</Pill>}
               </div>
               <p className={styles.tilePrice}>
                 <span className={styles.mono}>{p.price}</span>{" "}
@@ -179,10 +193,11 @@ export default function Subscribe() {
               <Button
                 onClick={() => pickPlan(p.slug)}
                 busy={busy === p.slug}
-                disabled={busy !== null || isCurrent}
-                tone={isCurrent ? "secondary" : "primary"}
+                disabled={busy !== null || (isCurrent && !cancelling)}
+                tone={(isCurrent && !cancelling) ? "secondary" : "primary"}
               >
-                {isCurrent ? "Current plan"
+                {isCancelledCurrent ? "Resubscribe"
+                  : isCurrent ? "Current plan"
                   : busy === p.slug ? "Redirecting…"
                   : hasPaid ? `Switch to ${p.label}`
                   : "Subscribe"}

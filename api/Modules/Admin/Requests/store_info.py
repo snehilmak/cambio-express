@@ -64,6 +64,7 @@ class StoreInfoResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     store: StoreInfoRow
+    referral_code: str | None = None
 
 
 class StoreInfoUpdateRequest(BaseModel):

@@ -119,7 +119,15 @@ def get_store_info(
     store = find_store(db, store_id)
     if store is None:
         raise HTTPException(status_code=404, detail="Store not found")
-    return StoreInfoResponse(store=_to_row(store))
+    from api.Modules.Billing.Services import (
+        ensure_referral_code, store_has_paid_plan,
+    )
+    ref_code: str | None = None
+    if store_has_paid_plan(store):
+        rc = ensure_referral_code(db, store)
+        if rc:
+            ref_code = rc.code
+    return StoreInfoResponse(store=_to_row(store), referral_code=ref_code)
 
 
 @router.put("/store-info", response_model=StoreInfoResponse)
@@ -361,6 +369,34 @@ def subscription_summary_route(
         from datetime import datetime
         delta = store.trial_ends_at - datetime.utcnow()
         trial_days_left = max(0, delta.days)
+    # Check with Stripe if the subscription is scheduled for
+    # cancellation (cancel at end of billing period). This is a
+    # lightweight API call — Stripe caches it and responds in <100ms.
+    cancel_at_period_end = False
+    cancel_at: str | None = None
+    if store.stripe_subscription_id and store_has_paid_plan(store):
+        try:
+            import stripe
+            sub = stripe.Subscription.retrieve(store.stripe_subscription_id)
+            cancel_at_period_end = bool(sub.cancel_at_period_end)
+            if cancel_at_period_end and sub.current_period_end:
+                from datetime import datetime
+                cancel_at = datetime.utcfromtimestamp(
+                    sub.current_period_end
+                ).strftime("%B %d, %Y")
+        except Exception:
+            pass
+
+    # Referral code for the topbar crown. Only populated for paid
+    # stores — the crown self-gates on plan, so trial/inactive
+    # stores get None and the topbar hides the icon.
+    referral_code_str: str | None = None
+    if store_has_paid_plan(store):
+        from api.Modules.Billing.Services import ensure_referral_code
+        rc = ensure_referral_code(db, store)
+        if rc:
+            referral_code_str = rc.code
+
     return {
         "store": {
             "id": store.id,
@@ -383,6 +419,9 @@ def subscription_summary_route(
         "retention_total_days": DATA_RETENTION_DAYS,
         "addons": addon_rows,
         "active_addon_count": len(active_keys),
+        "cancel_at_period_end": cancel_at_period_end,
+        "cancel_at": cancel_at,
+        "referral_code": referral_code_str,
     }
 
 

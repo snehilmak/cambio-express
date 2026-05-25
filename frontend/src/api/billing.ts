@@ -59,6 +59,9 @@ export interface SubscriptionSummary {
   retention_total_days: number;
   addons: SubscriptionAddon[];
   active_addon_count: number;
+  cancel_at_period_end: boolean;
+  cancel_at: string | null;
+  referral_code: string | null;
 }
 
 export async function fetchSubscriptionSummary(): Promise<SubscriptionSummary> {
