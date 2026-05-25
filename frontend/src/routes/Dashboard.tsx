@@ -26,6 +26,7 @@ import {
   tokens,
 } from "../components/ui";
 import { getCurrentIdentity } from "../lib/auth";
+import styles from "./Dashboard.module.css";
 import { PeakHoursHeatmap } from "../components/PeakHoursHeatmap";
 import { getOpenStatus } from "../lib/datetime";
 
