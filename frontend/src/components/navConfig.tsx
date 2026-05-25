@@ -39,11 +39,6 @@ export const NAV: NavGroup[] = [
         icon: iconDashboard(),
       },
       {
-        to: "/superadmin/stores", label: "Platform",
-        roles: ["superadmin"],
-        icon: iconDashboard(),
-      },
-      {
         to: "/transfers", label: "Transfers",
         roles: ["admin", "employee"],
         icon: iconTransfers(),
@@ -176,7 +171,6 @@ export const NAV: NavGroup[] = [
       { to: "/superadmin/announcements", label: "Announcements", icon: iconBanner() },
       { to: "/superadmin/reports",       label: "Reports",       icon: iconReports() },
       { to: "/superadmin/controls",      label: "Controls",      icon: iconSettings() },
-      { to: "/superadmin/tickets",       label: "Tickets",       icon: iconBell() },
     ],
   },
   {
