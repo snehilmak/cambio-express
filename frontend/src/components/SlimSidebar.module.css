@@ -121,6 +121,7 @@
 .groupBtn.isActive {
   background: var(--db-neon-glow-15, rgba(63, 255, 0, 0.12));
   color: var(--db-accent, #3fff00);
+  box-shadow: inset 3px 0 0 0 var(--db-accent, #3fff00);
 }
 
 .groupBtn:active {
@@ -243,6 +244,7 @@
 .itemRow.isActive {
   background: var(--db-neon-glow-15, rgba(63, 255, 0, 0.12));
   color: var(--db-accent, #3fff00);
+  box-shadow: inset 3px 0 0 0 var(--db-accent, #3fff00);
 }
 
 .itemIcon {

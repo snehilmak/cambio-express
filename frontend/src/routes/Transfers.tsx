@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 
 import {
   useTransfers,
@@ -195,7 +195,7 @@ function FilterBar({
   q, onQChange, dateFrom, dateTo, status, onSet, busy,
 }: FilterBarProps) {
   return (
-    <Card className={styles.filterBar}>
+    <Card className="ds-filter-bar">
       <Field label="Search">
         <Input
           type="search"
