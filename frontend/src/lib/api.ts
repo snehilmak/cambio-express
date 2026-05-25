@@ -90,6 +90,10 @@ export async function api<T = unknown>(
   }
 
   const resp = await fetch(path, init);
+
+  // 204 No Content has no body — skip parsing entirely.
+  if (resp.status === 204) return undefined as T;
+
   const ct = resp.headers.get("content-type") ?? "";
   const parsed = ct.includes("application/json")
     ? await resp.json()

@@ -180,12 +180,11 @@ const DISBURSEMENT_LINE_ITEMS: LineItemFieldDef[] = [
 // The legacy `?tab=` query param is ignored — links from the
 // calendar drop the operator on the Receipts tab by default.
 
-type DailyTab = "receipts" | "disbursements" | "transfers" | "notes";
+type DailyTab = "receipts" | "disbursements" | "overshort";
 const DAILY_TAB_DEFS: Array<{ id: DailyTab; label: string }> = [
-  { id: "receipts",      label: "Receipts" },
-  { id: "disbursements", label: "Disbursements" },
-  { id: "transfers",     label: "Transfers" },
-  { id: "notes",         label: "Notes" },
+  { id: "receipts",      label: "In" },
+  { id: "disbursements", label: "Out" },
+  { id: "overshort",     label: "Over Short" },
 ];
 
 // ── Component ────────────────────────────────────────────────
@@ -411,7 +410,8 @@ export default function EditDailyBook() {
               onLineItemChange={refreshAfterLineItem}
             />
           </div>
-          <div data-tab="transfers">
+          <div data-tab="overshort" className={styles.overShortCol}>
+            <NotesPanel form={form} set={set} locked={locked} />
             <TransfersPanel
               set={set}
               locked={locked}
@@ -422,9 +422,6 @@ export default function EditDailyBook() {
                 window.scrollTo({ top: 0, behavior: "smooth" });
               }}
             />
-          </div>
-          <div data-tab="notes">
-            <NotesPanel form={form} set={set} locked={locked} />
           </div>
         </div>
 
