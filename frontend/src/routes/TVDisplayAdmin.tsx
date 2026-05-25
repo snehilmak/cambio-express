@@ -14,8 +14,9 @@ import { useProfile, useStoreInfo } from "../api/account";
 import { ApiError } from "../lib/api";
 import { formatTimestamp } from "../lib/datetime";
 import {
-  Button, ButtonLink, ConfirmDialog, ErrorState, IconButton, Loading,
-  PageShell, TabsBar, TabsLink,
+  Button, ButtonLink, Card, ConfirmDialog, ErrorState, Field,
+  IconButton, Input, Loading, PageShell, Section, Select,
+  TabsBar, TabsLink,
 } from "../components/ui";
 import styles from "./TVDisplayAdmin.module.css";
 
@@ -91,7 +92,7 @@ export default function TVDisplayAdmin() {
 
   if (isLoading) {
     return (
-      <PageShell>
+      <PageShell maxWidth="72rem" gap="1.25rem">
         <Loading />
       </PageShell>
     );
@@ -104,7 +105,7 @@ export default function TVDisplayAdmin() {
     const status = error instanceof ApiError ? error.status : 0;
     if (status === 409) {
       return (
-        <PageShell>
+        <PageShell maxWidth="72rem" gap="1.25rem">
           <h1 className={styles.title}>TV Display</h1>
           <p className={styles.muted}>
             The TV Display add-on isn't active for this store.{" "}
@@ -116,7 +117,7 @@ export default function TVDisplayAdmin() {
       );
     }
     return (
-      <PageShell>
+      <PageShell maxWidth="72rem" gap="1.25rem">
         <h1 className={styles.title}>TV Display</h1>
         <ErrorState
           message={`Couldn't load the TV display.${error instanceof Error ? ` ${error.message}` : ""}`}
@@ -127,7 +128,7 @@ export default function TVDisplayAdmin() {
   }
 
   return (
-    <PageShell>
+    <PageShell maxWidth="72rem" gap="1.25rem">
       <TabsBar>
         <TabsLink to="/tv-display/overview">Overview</TabsLink>
         <TabsLink to="/tv-display/content">Content</TabsLink>
@@ -547,59 +548,48 @@ function SettingsAndStatsGrid({
 
   return (
     <div className={styles.gridTwoOne}>
-      <section className={styles.card}>
-        <header className={styles.cardHead}>
-          <span className={styles.cardTitle}>Display settings</span>
-        </header>
-        <div className={styles.cardBody}>
+      <Card>
+        <Section title="Display settings">
           <form onSubmit={submit}>
             <div className={styles.fieldGrid}>
-              <label className={styles.field}>
-                <span className={styles.fieldLabel}>Title (top line)</span>
-                <input
+              <Field label="Title (top line)">
+                <Input
                   type="text"
                   value={draft.title}
                   maxLength={120}
                   placeholder="Cheapest Money Transfer"
                   onChange={(e) => setDraft((d) => ({ ...d, title: e.target.value }))}
-                  className={styles.input}
                 />
-              </label>
-              <label className={styles.field}>
-                <span className={styles.fieldLabel}>Subtitle (second line, optional)</span>
-                <input
+              </Field>
+              <Field label="Subtitle (second line, optional)">
+                <Input
                   type="text"
                   value={draft.subtitle}
                   maxLength={120}
                   placeholder="Mejor Tipo de Cambio"
                   onChange={(e) => setDraft((d) => ({ ...d, subtitle: e.target.value }))}
-                  className={styles.input}
                 />
-              </label>
-              <label className={styles.field}>
-                <span className={styles.fieldLabel}>Orientation</span>
-                <select
+              </Field>
+              <Field label="Orientation">
+                <Select
                   value={draft.orientation}
                   onChange={(e) => setDraft((d) => ({ ...d, orientation: e.target.value }))}
-                  className={styles.input}
                 >
                   {ORIENTATION_OPTIONS.map((o) => (
                     <option key={o.value} value={o.value}>{o.label}</option>
                   ))}
-                </select>
-              </label>
-              <label className={styles.field}>
-                <span className={styles.fieldLabel}>Board theme</span>
-                <select
+                </Select>
+              </Field>
+              <Field label="Board theme">
+                <Select
                   value={draft.theme}
                   onChange={(e) => setDraft((d) => ({ ...d, theme: e.target.value }))}
-                  className={styles.input}
                 >
                   {THEME_OPTIONS.map((o) => (
                     <option key={o.value} value={o.value}>{o.label}</option>
                   ))}
-                </select>
-              </label>
+                </Select>
+              </Field>
             </div>
             <div style={{ marginTop: 16, display: "flex", justifyContent: "flex-end", gap: 12, alignItems: "center" }}>
               {saved && <span className={styles.savedFlash}>Saved</span>}
@@ -612,21 +602,18 @@ function SettingsAndStatsGrid({
               </Button>
             </div>
           </form>
-        </div>
-      </section>
-      <section className={styles.card}>
-        <header className={styles.cardHead}>
-          <span className={styles.cardTitle}>At a glance</span>
-        </header>
-        <div className={styles.cardBody}>
+        </Section>
+      </Card>
+      <Card>
+        <Section title="At a glance">
           <div className={styles.statRows}>
             <StatRow label="Country sections" value={data.countries.length} />
             <StatRow label="Payout banks"     value={stats.totalBanks} />
             <StatRow label="Rate cells filled" value={stats.totalRates} />
             <StatRow label="Subscription"     value="$5/mo" valueStyle={{ color: "var(--db-neon)" }} />
           </div>
-        </div>
-      </section>
+        </Section>
+      </Card>
     </div>
   );
 }
