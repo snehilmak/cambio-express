@@ -174,7 +174,7 @@ export default function ReturnCheckForm() {
 
       <form
         onSubmit={onSubmit}
-        style={{ display: "flex", flexDirection: "column", gap: "1rem" }}
+        className="ds-form"
       >
         <Card>
           <div className={styles.fieldGrid}>

@@ -174,7 +174,7 @@ export default function EditMonthly() {
 
       <form
         onSubmit={onSubmit}
-        style={{ display: "flex", flexDirection: "column", gap: "1rem" }}
+        className="ds-form"
       >
         {SECTIONS.map((sec) => (
           <Card key={sec}>
