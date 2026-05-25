@@ -39,7 +39,10 @@ export default function SupportTickets() {
   if (identity?.role === "superadmin") {
     return <Navigate to="/superadmin/tickets" replace />;
   }
+  return <SupportTicketsInner />;
+}
 
+function SupportTicketsInner() {
   const tickets = useMyTickets();
   const qc = useQueryClient();
   const [showForm, setShowForm] = useState(false);
