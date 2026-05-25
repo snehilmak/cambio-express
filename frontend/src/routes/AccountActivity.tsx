@@ -45,7 +45,7 @@ export default function AccountActivity() {
 
       <Breadcrumbs crumbs={[{ label: "Account", to: "/settings" }, { label: "Activity" }]} />
 
-      <PageHeader title="My activity" />
+      <PageHeader title="My activity" subtitle="Your recent page visits and actions." />
 
       <Card style={{ marginBottom: space.lg }}>
         <div className={styles.cardHeader}>
