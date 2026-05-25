@@ -220,7 +220,7 @@ def update_permissions_route(
     _require_superadmin(claims)
     from api.Modules.Auth.Models import RolePermission
     from api.Modules.Auth.Services.login import RBAC_ACTIONS, RBAC_RESOURCES
-    sa = resolve_superadmin_user(claims, db)
+    sa = resolve_superadmin_user(db, claims)
     changes = body.get("changes", [])
     valid_roles = {"admin", "employee", "owner"}
     added = 0
@@ -331,7 +331,7 @@ def toggle_user_active_route(
         raise HTTPException(404, "User not found")
     if user.role == "superadmin":
         raise HTTPException(403, "Cannot disable superadmin")
-    sa = resolve_superadmin_user(claims, db)
+    sa = resolve_superadmin_user(db, claims)
     user.is_active = not user.is_active
     db.commit()
     _audit_store(
@@ -357,7 +357,7 @@ def reset_2fa_route(
         raise HTTPException(404, "User not found")
     if user.role == "superadmin":
         raise HTTPException(403, "Cannot reset superadmin 2FA via API")
-    sa = resolve_superadmin_user(claims, db)
+    sa = resolve_superadmin_user(db, claims)
     user.totp_secret = None
     user.totp_enrolled_at = None
     db.commit()
@@ -385,7 +385,7 @@ def force_password_reset_route(
         raise HTTPException(404, "User not found")
     if user.role == "superadmin":
         raise HTTPException(403, "Cannot reset superadmin password via API")
-    sa = resolve_superadmin_user(claims, db)
+    sa = resolve_superadmin_user(db, claims)
     temp_pw = secrets.token_urlsafe(12)
     user.set_password(temp_pw)
     db.commit()
@@ -418,7 +418,7 @@ def impersonate_route(
         raise HTTPException(404, "User not found")
     if user.role == "superadmin":
         raise HTTPException(403, "Cannot impersonate superadmin")
-    sa = resolve_superadmin_user(claims, db)
+    sa = resolve_superadmin_user(db, claims)
     issuer = JWTIssuer(
         sub=user.id,
         role=user.role or "employee",
