@@ -193,6 +193,14 @@
   }
 }
 
+/* ── Form layout: consistent vertical stack for form pages ─── */
+
+.ds-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
 /* ── Content fade-in: smooth reveal when data arrives ──────── */
 
 @keyframes ds-fade-in {
