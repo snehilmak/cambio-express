@@ -290,15 +290,12 @@ def test_login_sets_refresh_token_cookie(test_store_id, client):
     assert "Path=/api/v2/auth" in cookie
 
 
-def test_refresh_rotates_access_and_refresh_cookies(
+def test_refresh_reuses_token_and_issues_fresh_access(
     test_store_id, client,
 ):
-    """Successful refresh issues a brand-new access cookie + a
-    brand-new refresh cookie. Refresh-token jti rotates (the
-    legitimate test of "rotation happened" — the access JWT
-    might be byte-identical to the login one if both issuances
-    fall in the same wall-clock second, since HS256 + same
-    payload is deterministic)."""
+    """Successful refresh reuses the same refresh cookie (no
+    rotation) and issues a fresh access cookie. The jti stays
+    the same so multiple tabs sharing the cookie don't race."""
     from tests.conftest import _starlette_client
     login = client.post(
         "/api/v2/auth/login",
@@ -317,10 +314,9 @@ def test_refresh_rotates_access_and_refresh_cookies(
     new_cookies = refresh.headers.get_list("set-cookie")
     assert any(c.startswith("db_access_token=") for c in new_cookies)
     assert any(c.startswith("db_refresh_token=") for c in new_cookies)
-    # Rotation: the cookie jar now holds a NEW jti.
+    # Reuse: the cookie jar holds the SAME jti (max-age renewed).
     new_refresh_jti = _starlette_client.cookies.get("db_refresh_token")
-    assert new_refresh_jti
-    assert new_refresh_jti != old_refresh_jti
+    assert new_refresh_jti == old_refresh_jti
     # Identity claims surface in the body so the SPA can update
     # its local cache without a separate /auth/me roundtrip.
     body = refresh.get_json()
@@ -329,9 +325,10 @@ def test_refresh_rotates_access_and_refresh_cookies(
     assert body["username"] == "admin@test.com"
 
 
-def test_refresh_replay_burns_the_chain(test_store_id, client):
-    """Presenting the same refresh token twice — second call is a
-    replay. Server rejects, clears cookies."""
+def test_refresh_same_token_twice_succeeds(test_store_id, client):
+    """The same refresh token presented multiple times (e.g. from
+    concurrent browser tabs) succeeds every time — no rotation
+    means no replay-detection race condition."""
     client.post(
         "/api/v2/auth/login",
         json={
@@ -340,21 +337,12 @@ def test_refresh_replay_burns_the_chain(test_store_id, client):
             "store_id": test_store_id,
         },
     )
-    from tests.conftest import _starlette_client
-    first_jti = _starlette_client.cookies.get("db_refresh_token")
-    assert first_jti
-
-    rot1 = client.post("/api/v2/auth/refresh")
-    assert rot1.status_code == 200
-
-    # Replay the original jti directly via the session client.
-    # `_starlette_client.cookies.set(...)` (rather than the
-    # per-request `cookies=` kwarg httpx is deprecating) puts the
-    # cookie on the client jar; the conftest cookie-clear between
-    # tests handles cleanup.
-    _starlette_client.cookies.set("db_refresh_token", first_jti)
-    replay = _starlette_client.post("/api/v2/auth/refresh")
-    assert replay.status_code == 401, replay.text
+    r1 = client.post("/api/v2/auth/refresh")
+    assert r1.status_code == 200
+    r2 = client.post("/api/v2/auth/refresh")
+    assert r2.status_code == 200
+    r3 = client.post("/api/v2/auth/refresh")
+    assert r3.status_code == 200
 
 
 def test_refresh_without_cookie_returns_401(client):
