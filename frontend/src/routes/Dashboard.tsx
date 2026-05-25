@@ -8,6 +8,7 @@ import {
 } from "../api/dashboard";
 import { useStoreInfo } from "../api/account";
 import {
+  Breadcrumbs,
   ButtonLink,
   Card,
   ErrorState,
@@ -70,6 +71,9 @@ export default function Dashboard() {
 
   return (
     <PageShell>
+
+      <Breadcrumbs crumbs={[{ label: "Dashboard" }]} />
+
       <PageHeader
         title={title}
         actions={openStatus ? (

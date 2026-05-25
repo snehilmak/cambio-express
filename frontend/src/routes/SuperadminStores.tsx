@@ -6,6 +6,7 @@ import {
 } from "../api/superadmin";
 import { getCurrentIdentity } from "../lib/auth";
 import {
+  Breadcrumbs,
   Card, Empty, EmptyState, ErrorState, Input, PageHeader, PageShell, Pill,
   Table, TableSkeleton, tdStyle, thStyle, type PillTone,
 } from "../components/ui";
@@ -46,6 +47,9 @@ export default function SuperadminStores() {
 
   return (
     <PageShell>
+
+      <Breadcrumbs crumbs={[{ label: "Platform" }, { label: "Stores" }]} />
+
       <PageHeader
         title="All stores"
         subtitle={data

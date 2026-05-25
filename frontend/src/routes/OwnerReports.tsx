@@ -1,6 +1,7 @@
 import { useOwnerReportList } from "../api/reports";
 import ReportCenter from "../components/ReportCenter";
-import { ErrorState, Loading, PageHeader, PageShell } from "../components/ui";
+import {
+  Breadcrumbs, ErrorState, Loading, PageHeader, PageShell } from "../components/ui";
 import { ApiError } from "../lib/api";
 
 // /app/owner/reports — owner-scoped report center index.
@@ -26,6 +27,9 @@ export default function OwnerReports() {
     const status = error instanceof ApiError ? error.status : 0;
     return (
       <PageShell>
+
+        <Breadcrumbs crumbs={[{ label: "Owner" }, { label: "Reports" }]} />
+
         <PageHeader title="Reports" />
         <ErrorState
           message={

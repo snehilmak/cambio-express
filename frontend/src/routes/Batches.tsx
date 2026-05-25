@@ -8,6 +8,7 @@ import {
 } from "../api/batches";
 import { getCurrentIdentity } from "../lib/auth";
 import {
+  Breadcrumbs,
   ButtonLink, Card, Empty, EmptyState, ErrorState, PageHeader, PageShell,
   Table, TableSkeleton, tdStyle, thStyle,
 } from "../components/ui";
@@ -61,6 +62,9 @@ export default function Batches() {
 
   return (
     <PageShell>
+
+      <Breadcrumbs crumbs={[{ label: "ACH Batches" }]} />
+
       <PageHeader
         title="ACH batches"
         subtitle={data ? `${data.rows.length.toLocaleString()} batches` : "—"}

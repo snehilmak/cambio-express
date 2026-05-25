@@ -5,6 +5,7 @@ import {
   type OwnerPLRollupRow,
 } from "../api/owner";
 import {
+  Breadcrumbs,
   Button, Card, Empty, EmptyState, ErrorState, monoStyle, PageHeader,
   PageShell, Select, Table, TableSkeleton, tdStyle, thStyle,
 } from "../components/ui";
@@ -59,6 +60,9 @@ export default function OwnerPLRollup() {
 
   return (
     <PageShell>
+
+      <Breadcrumbs crumbs={[{ label: "Owner" }, { label: "P&L rollup" }]} />
+
       <PageHeader
         title="P&L rollup"
         subtitle={

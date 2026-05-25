@@ -15,6 +15,7 @@ import { formatTimestamp } from "../lib/datetime";
 import { getCurrentCoordinates } from "../lib/geolocation";
 import { passkeysSupported, performPasskeyAssert } from "../lib/webauthn";
 import {
+  Breadcrumbs,
   Alert, Button, Card, EmptyState, Empty, ErrorState, Field, Input,
   Loading, PageHeader, PageShell, Select, Table, tdStyle, thStyle,
 } from "../components/ui";
@@ -156,6 +157,9 @@ export default function TimeClock() {
 
   return (
     <PageShell maxWidth="56rem">
+
+      <Breadcrumbs crumbs={[{ label: "Time clock" }]} />
+
       <PageHeader
         title="Time clock"
         subtitle="Pick your name on the roster, then clock in or out. Shifts are logged in the store's local time."

@@ -8,6 +8,7 @@ import {
 } from "../api/owner";
 import { getCurrentIdentity } from "../lib/auth";
 import {
+  Breadcrumbs,
   Card, Empty, EmptyState, ErrorState, Input, PageHeader, PageShell,
   Table, TableSkeleton, tdStyle, thStyle,
 } from "../components/ui";
@@ -56,6 +57,9 @@ export default function OwnerLocations() {
 
   return (
     <PageShell>
+
+      <Breadcrumbs crumbs={[{ label: "Locations" }]} />
+
       <PageHeader
         title="Locations"
         subtitle={data

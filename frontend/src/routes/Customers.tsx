@@ -10,6 +10,7 @@ import { ApiError, downloadCsv } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
 import { maskPhone } from "../lib/format";
 import {
+  Breadcrumbs,
   Alert, Button, Card, Empty, EmptyState, ErrorState, Field, Input, Modal,
   PageHeader, PageShell, Section, space, Table, tdStyle, thStyle,
 } from "../components/ui";
@@ -182,6 +183,9 @@ export default function Customers() {
 
   return (
     <PageShell maxWidth="70rem">
+
+      <Breadcrumbs crumbs={[{ label: "Customers" }]} />
+
       <PageHeader
         title="Customers"
         subtitle={q.length >= 2

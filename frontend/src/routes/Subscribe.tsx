@@ -8,6 +8,7 @@ import {
 import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
 import {
+  Breadcrumbs,
   Alert, Button, Card, Empty, Loading, PageHeader, PageShell, Pill,
 } from "../components/ui";
 import styles from "./Subscribe.module.css";
@@ -140,6 +141,9 @@ export default function Subscribe() {
 
   return (
     <PageShell maxWidth="62rem">
+
+      <Breadcrumbs crumbs={[{ label: "Subscribe" }]} />
+
       <PageHeader
         title="Choose a plan"
         subtitle={(

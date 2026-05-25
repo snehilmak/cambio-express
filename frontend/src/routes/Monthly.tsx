@@ -4,6 +4,7 @@ import { useSearchParams } from "react-router-dom";
 import { useLoggedMonths, useMonthly, type MonthlyRow } from "../api/monthly";
 import { getCurrentIdentity } from "../lib/auth";
 import {
+  Breadcrumbs,
   ButtonLink, Card, Empty, EmptyState, ErrorState, fontSize, Loading, PageHeader,
   PageShell, Section, Select, tokens,
 } from "../components/ui";
@@ -93,6 +94,9 @@ export default function Monthly() {
 
   return (
     <PageShell gap="1rem">
+
+      <Breadcrumbs crumbs={[{ label: "Monthly P&L" }]} />
+
       <PageHeader
         title="Monthly P&L"
         subtitle={year && month ? (

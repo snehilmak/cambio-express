@@ -7,6 +7,7 @@ import {
 } from "../api/superadmin";
 import { getCurrentIdentity } from "../lib/auth";
 import {
+  Breadcrumbs,
   Card, Empty, EmptyState, ErrorState, Input, PageHeader, PageShell, Pager,
   Pill, Table, TableSkeleton, tdStyle, thStyle,
 } from "../components/ui";
@@ -50,6 +51,9 @@ export default function SuperadminAuditLog() {
 
   return (
     <PageShell>
+
+      <Breadcrumbs crumbs={[{ label: "Platform" }, { label: "Audit log" }]} />
+
       <PageHeader
         title="Audit log"
         subtitle={data

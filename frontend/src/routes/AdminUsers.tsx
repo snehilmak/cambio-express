@@ -8,6 +8,7 @@ import { useProfile, useStoreInfo } from "../api/account";
 import { getCurrentIdentity } from "../lib/auth";
 import { formatDate } from "../lib/datetime";
 import {
+  Breadcrumbs,
   Button, ButtonLink, Card, Empty, EmptyState, ErrorState, PageHeader,
   PageShell, Pill, Table, TableSkeleton, tdStyle, thStyle,
 } from "../components/ui";
@@ -41,6 +42,9 @@ export default function AdminUsers() {
 
   return (
     <PageShell>
+
+      <Breadcrumbs crumbs={[{ label: "User Management" }]} />
+
       <PageHeader
         title="User Management"
         subtitle="Manage who has access and what they can see."
