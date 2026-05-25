@@ -140,17 +140,27 @@ def test_role_permissions_matrix_is_pinned():
     diff obvious in the PR."""
     from api.Modules.Auth.Services.login import permissions_for
 
-    assert sorted(permissions_for("superadmin")) == sorted([
-        "platform.admin", "store.admin",
-        "store.employee", "owner.read",
-    ])
-    assert sorted(permissions_for("owner")) == sorted([
-        "owner.read", "owner.admin",
-    ])
-    assert sorted(permissions_for("admin")) == sorted([
-        "store.admin", "store.employee",
-    ])
-    assert permissions_for("employee") == ["store.employee"]
+    sa_perms = permissions_for("superadmin")
+    assert "platform.admin" in sa_perms
+    assert "store.admin" in sa_perms
+    assert "transfers.create" in sa_perms
+    assert "transfers.read" in sa_perms
+
+    owner_perms = permissions_for("owner")
+    assert "owner.read" in owner_perms
+    assert "owner.admin" in owner_perms
+    assert "transfers.read" in owner_perms
+
+    admin_perms = permissions_for("admin")
+    assert "store.admin" in admin_perms
+    assert "store.employee" in admin_perms
+    assert "transfers.create" in admin_perms
+
+    emp_perms = permissions_for("employee")
+    assert "store.employee" in emp_perms
+    assert "transfers.create" in emp_perms
+    assert "transfers.read" in emp_perms
+
     # Unknown role → no permissions. Defensive against future
     # roles that haven't been wired into the matrix.
     assert permissions_for("viewer") == []

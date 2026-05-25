@@ -162,17 +162,39 @@ export const NAV: NavGroup[] = [
     ],
   },
   {
-    title: "Platform",
+    title: "Dashboard",
+    roles: ["superadmin"],
+    icon: iconDashboard(),
+    items: [
+      { to: "/superadmin/dashboard",     label: "Dashboard",     icon: iconDashboard() },
+    ],
+  },
+  {
+    title: "Manage",
     roles: ["superadmin"],
     icon: iconPlatform(),
     items: [
-      { to: "/superadmin/dashboard",     label: "Dashboard",     icon: iconDashboard() },
       { to: "/superadmin/stores",        label: "Stores",        icon: iconPlatform() },
       { to: "/superadmin/users",         label: "Users",         icon: iconCustomers() },
-      { to: "/superadmin/audit-log",     label: "Audit log",     icon: iconAudit() },
       { to: "/superadmin/announcements", label: "Announcements", icon: iconBanner() },
+    ],
+  },
+  {
+    title: "Reports",
+    roles: ["superadmin"],
+    icon: iconReports(),
+    items: [
       { to: "/superadmin/reports",       label: "Reports",       icon: iconReports() },
+      { to: "/superadmin/audit-log",     label: "Audit log",     icon: iconAudit() },
+    ],
+  },
+  {
+    title: "Config",
+    roles: ["superadmin"],
+    icon: iconSettings(),
+    items: [
       { to: "/superadmin/controls",      label: "Controls",      icon: iconSettings() },
+      { to: "/superadmin/permissions",   label: "Permissions",   icon: iconShield() },
       { to: "/superadmin/health",        label: "Health",        icon: iconHealth() },
     ],
   },
@@ -429,6 +451,15 @@ function iconSettings() {
   );
 }
 
+function iconShield() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false"
+      stroke="currentColor" strokeWidth="2" strokeLinecap="round"
+      strokeLinejoin="round">
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+    </svg>
+  );
+}
 function iconHealth() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false"

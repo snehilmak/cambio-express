@@ -39,7 +39,10 @@ from typing import Any
 
 # Permissions per role. Embedded as JWT claims so subsequent
 # requests can authorize without re-hitting the DB.
-_ROLE_PERMISSIONS: dict[str, list[str]] = {
+# Legacy coarse-grained permissions — still emitted alongside the
+# granular resource.action permissions so existing JWT checks don't
+# break during the incremental migration.
+_LEGACY_ROLE_PERMISSIONS: dict[str, list[str]] = {
     "superadmin": [
         "platform.admin",
         "store.admin",
@@ -59,12 +62,76 @@ _ROLE_PERMISSIONS: dict[str, list[str]] = {
     ],
 }
 
+# Granular RBAC resources and actions. Superadmin edits these via
+# /app/superadmin/permissions. Each (role, resource, action) tuple
+# stored in the role_permission table means "allowed".
+RBAC_RESOURCES = [
+    "transfers", "customers", "daily_book", "monthly",
+    "batches", "bank_sync", "reports", "settings",
+    "users", "time_clock", "return_checks",
+]
+RBAC_ACTIONS = ["create", "read", "update", "delete"]
 
-def permissions_for(role: str) -> list[str]:
-    """The permission claim list for a given role. Unknown roles get
-    no permissions — defensive against a role that's not in the
-    matrix yet (e.g. a future "viewer" tier)."""
-    return list(_ROLE_PERMISSIONS.get(role, []))
+# Default grants seeded on first boot. Superadmin gets everything
+# implicitly (not stored). Owner gets read on most store resources.
+RBAC_DEFAULTS: dict[str, list[str]] = {
+    "admin": [
+        f"{r}.{a}" for r in RBAC_RESOURCES for a in RBAC_ACTIONS
+    ],
+    "employee": [
+        "transfers.create", "transfers.read", "transfers.update",
+        "customers.create", "customers.read", "customers.update",
+        "daily_book.read",
+        "time_clock.create", "time_clock.read",
+        "return_checks.read",
+    ],
+    "owner": [
+        f"{r}.read" for r in RBAC_RESOURCES
+    ] + [
+        "settings.update",
+    ],
+}
+
+
+def seed_rbac_defaults(db: "Session") -> None:
+    """Insert default RBAC rows if the table is empty. Called from
+    init_db() on boot — idempotent."""
+    from api.Modules.Auth.Models import RolePermission
+    if db.query(RolePermission).first() is not None:
+        return
+    for role, perms in RBAC_DEFAULTS.items():
+        for perm in perms:
+            resource, action = perm.split(".", 1)
+            db.add(RolePermission(role=role, resource=resource, action=action))
+    db.commit()
+
+
+def permissions_for(role: str, db: "Session | None" = None) -> list[str]:
+    """The permission claim list for a given role.
+
+    Reads granular permissions from the DB when a session is provided,
+    falling back to RBAC_DEFAULTS if the table is empty or unavailable.
+    Always includes the legacy coarse-grained permissions for backward
+    compatibility. Superadmin gets everything."""
+    legacy = list(_LEGACY_ROLE_PERMISSIONS.get(role, []))
+    if role == "superadmin":
+        all_granular = [f"{r}.{a}" for r in RBAC_RESOURCES for a in RBAC_ACTIONS]
+        return legacy + all_granular
+    granular: list[str] = []
+    if db is not None:
+        try:
+            from api.Modules.Auth.Models import RolePermission
+            rows = (
+                db.query(RolePermission.resource, RolePermission.action)
+                .filter(RolePermission.role == role)
+                .all()
+            )
+            granular = [f"{r}.{a}" for r, a in rows]
+        except Exception:
+            pass
+    if not granular:
+        granular = list(RBAC_DEFAULTS.get(role, []))
+    return legacy + granular
 
 
 @dataclass
@@ -110,8 +177,8 @@ class TotpEnrollmentRequired(Exception):
     user to complete enrollment via the legacy site."""
 
 
-def _issue_full_login(user: User) -> LoginResult:
-    perms = permissions_for(user.role)
+def _issue_full_login(user: User, db: "Session | None" = None) -> LoginResult:
+    perms = permissions_for(user.role, db)
     issuer = JWTIssuer(
         sub=user.id,
         role=user.role,

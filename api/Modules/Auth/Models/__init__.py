@@ -191,7 +191,29 @@ from api.Modules.Tenancy.Models import (  # noqa: E402
 )
 
 
+class RolePermission(Base):
+    """Global RBAC matrix row: (role, resource, action) → allowed.
+
+    Superadmin edits these via /app/superadmin/permissions. The
+    ``permissions_for(role)`` function reads them at login time and
+    embeds the result in the JWT ``perms`` claim. Rows are seeded on
+    first boot from ``RBAC_DEFAULTS`` in the login service.
+
+    Superadmin's own permissions are NOT stored here — they always
+    get everything (``platform.admin`` + every resource.action)."""
+    __tablename__ = "role_permission"
+    id       = Column(Integer, primary_key=True)
+    role     = Column(String(20), nullable=False)
+    resource = Column(String(40), nullable=False)
+    action   = Column(String(20), nullable=False)
+    __table_args__ = (
+        UniqueConstraint("role", "resource", "action",
+                         name="uq_role_resource_action"),
+        Index("ix_role_perm_role", "role"),
+    )
+
+
 __all__ = [
     "LoginEvent", "Passkey", "PasswordResetToken", "RecoveryCode",
-    "RefreshToken", "Store", "StoreOwnerLink", "User",
+    "RefreshToken", "RolePermission", "Store", "StoreOwnerLink", "User",
 ]

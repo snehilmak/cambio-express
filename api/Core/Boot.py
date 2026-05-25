@@ -115,3 +115,6 @@ def init_db(logger: Optional[logging.Logger] = None) -> None:
             session.add(sa)
             session.commit()
             print("✅ Superadmin: superadmin / super2025!")
+
+        from api.Modules.Auth.Services.login import seed_rbac_defaults
+        seed_rbac_defaults(session)

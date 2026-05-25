@@ -1,0 +1,68 @@
+.roleSection {
+  margin-bottom: 1.25rem;
+}
+
+.matrix {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.matrix th {
+  text-align: center;
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--db-text-muted, #888);
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--db-border, #262626);
+}
+
+.matrix th:first-child {
+  text-align: left;
+  min-width: 10rem;
+}
+
+.matrix td {
+  padding: 0.45rem 0.75rem;
+  border-bottom: 1px solid var(--db-border, #262626);
+  text-align: center;
+}
+
+.matrix td:first-child {
+  text-align: left;
+  font-size: 0.88rem;
+  font-weight: 500;
+}
+
+.matrix tr:last-child td {
+  border-bottom: none;
+}
+
+.matrix tr:hover td {
+  background: var(--db-fill-neutral, rgba(255,255,255,0.04));
+}
+
+.checkCell {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.saveBar {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  padding-top: 0.75rem;
+}
+
+.dirty {
+  font-size: 0.82rem;
+  color: var(--db-warning, #f59e0b);
+  margin-right: auto;
+  align-self: center;
+}
+
+.resourceLabel {
+  text-transform: capitalize;
+}
