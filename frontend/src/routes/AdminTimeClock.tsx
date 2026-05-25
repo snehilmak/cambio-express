@@ -11,6 +11,7 @@ import { useProfile, useStoreInfo } from "../api/account";
 import { ApiError } from "../lib/api";
 import { formatTimestamp } from "../lib/datetime";
 import {
+  Breadcrumbs,
   Alert, Button, Card, ConfirmDialog, EmptyState, ErrorState, Field, Input,
   Loading, Modal, PageHeader, PageShell, Pill, RowActions, Select, space, Table,
   TableSkeleton, Textarea, tdStyle, thStyle, useToast,
@@ -104,6 +105,9 @@ export default function AdminTimeClock() {
 
   return (
     <PageShell>
+
+      <Breadcrumbs crumbs={[{ label: "HR" }, { label: "Payroll history" }]} />
+
       <PageHeader
         title="Payroll history"
         subtitle="Approved hours feed payroll; pending shifts are still waiting on admin review."

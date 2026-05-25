@@ -12,6 +12,7 @@ import {
 import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
 import {
+  Breadcrumbs,
   Alert, Button, ButtonLink, Card, ErrorState, Field, Input, Loading,
   PageHeader, PageShell, SectionTitle, Select, space, useToast,
 } from "../components/ui";
@@ -215,6 +216,9 @@ export default function SuperadminStoreForm() {
   return (
     <PageShell maxWidth="44rem">
       <div className={styles.headerRow}>
+
+        <Breadcrumbs crumbs={[{ label: "All stores", to: "/superadmin/stores" }, { label: "Store" }]} />
+
         <PageHeader title={heading} />
         <ButtonLink to="/superadmin/stores" tone="secondary">
           ← Back to stores

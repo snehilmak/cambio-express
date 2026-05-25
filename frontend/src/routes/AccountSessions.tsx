@@ -9,6 +9,7 @@ import {
 } from "../api/account";
 import { ApiError } from "../lib/api";
 import {
+  Breadcrumbs,
   Alert, Button, Card, ConfirmDialog, ErrorState, Loading, PageHeader,
   PageShell, Section, space, Table, tdStyle, thStyle, tokens, useToast,
 } from "../components/ui";
@@ -102,6 +103,9 @@ export default function AccountSessions() {
 
   return (
     <PageShell maxWidth="60rem">
+
+      <Breadcrumbs crumbs={[{ label: "Account", to: "/settings" }, { label: "Sessions" }]} />
+
       <PageHeader
         title="Active sessions"
         subtitle={

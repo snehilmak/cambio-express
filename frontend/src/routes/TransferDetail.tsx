@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { useTransfer } from "../api/transfers";
 import { getCurrentIdentity } from "../lib/auth";
 import {
+  Breadcrumbs,
   ButtonLink, Card, Empty, ErrorState, Loading, PageHeader, PageShell,
   Section, space, tokens,
 } from "../components/ui";
@@ -63,6 +64,10 @@ export default function TransferDetail() {
   return (
     <PageShell maxWidth="52rem" gap="1rem">
       <BackLink />
+
+
+      <Breadcrumbs crumbs={[{ label: "Transfers", to: "/transfers" }, { label: `Transfer #${id}` }]} />
+
 
       <PageHeader
         title={`Transfer #${t.id}`}

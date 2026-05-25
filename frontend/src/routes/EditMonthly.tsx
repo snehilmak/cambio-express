@@ -9,6 +9,7 @@ import {
 import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
 import {
+  Breadcrumbs,
   Alert, Button, Card, FormActions, Loading, MoneyInput, PageHeader,
   PageShell, Textarea,
 } from "../components/ui";
@@ -156,6 +157,9 @@ export default function EditMonthly() {
   return (
     <PageShell maxWidth="78rem">
       <header>
+
+        <Breadcrumbs crumbs={[{ label: "Monthly P&L", to: "/monthly" }, { label: "Edit" }]} />
+
         <PageHeader title="Edit monthly P&L" />
         <p className={styles.headerMono}>
           {MONTH_NAMES[month - 1]} {year}

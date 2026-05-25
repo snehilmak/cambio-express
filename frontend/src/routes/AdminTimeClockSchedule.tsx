@@ -11,6 +11,7 @@ import {
 import { useEmployees } from "../api/transfers";
 import { ApiError } from "../lib/api";
 import {
+  Breadcrumbs,
   Alert, Button, Card, ConfirmDialog, EmptyState, ErrorState, Field, Input,
   Loading, PageHeader, PageShell, Select,
 } from "../components/ui";
@@ -73,6 +74,9 @@ export default function AdminTimeClockSchedule() {
 
   return (
     <PageShell maxWidth="80rem">
+
+      <Breadcrumbs crumbs={[{ label: "HR" }, { label: "Schedule" }]} />
+
       <PageHeader
         title="Schedule"
         subtitle="Plan shifts for your team — one row per scheduled shift. Actual punches stay tracked on the payroll history page."

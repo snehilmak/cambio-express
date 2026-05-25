@@ -18,6 +18,7 @@ import {
   unsubscribeBrowser,
 } from "../lib/push";
 import {
+  Breadcrumbs,
   Alert, Button, Card, ErrorState, Loading, PageHeader, PageShell, Section,
   Table, tdStyle, thStyle, tokens, useToast,
 } from "../components/ui";
@@ -109,6 +110,9 @@ export default function AccountNotifications() {
 
   return (
     <PageShell maxWidth="60rem">
+
+      <Breadcrumbs crumbs={[{ label: "Account", to: "/settings" }, { label: "Notifications" }]} />
+
       <PageHeader title="Notifications" />
 
       <div className={styles.grid}>

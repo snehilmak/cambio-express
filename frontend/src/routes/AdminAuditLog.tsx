@@ -9,6 +9,7 @@ import { useProfile, useStoreInfo } from "../api/account";
 import { formatTimestamp } from "../lib/datetime";
 import { getCurrentIdentity } from "../lib/auth";
 import {
+  Breadcrumbs,
   Button, Card, Empty, EmptyState, ErrorState, Field, PageHeader, PageShell,
   Pager, Pill, Select, space, Table, TableSkeleton, tdStyle, thStyle,
   type PillTone,
@@ -56,6 +57,9 @@ export default function AdminAuditLog() {
 
   return (
     <PageShell>
+
+      <Breadcrumbs crumbs={[{ label: "Finance" }, { label: "Activity log" }]} />
+
       <PageHeader title="Activity Log" />
 
       <Card style={{ marginBottom: space.lg }}>

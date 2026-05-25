@@ -6,6 +6,7 @@ import {
   type TVDisplayBankRow,
 } from "../api/tvDisplay";
 import {
+  Breadcrumbs,
   Button, ButtonLink, Card, ErrorState, Field, Input, Loading, PageHeader,
   PageShell, Table, tdStyle, thStyle,
 } from "../components/ui";
@@ -93,6 +94,9 @@ export default function TVDisplayCountry() {
     <PageShell maxWidth="75rem">
       <div>
         <Link to="/tv-display" className={styles.backLink}>← Back to TV Display</Link>
+
+        <Breadcrumbs crumbs={[{ label: "TV Display", to: "/tv-display/content" }, { label: "Country" }]} />
+
         <PageHeader
           title={data.country_name || "Country"}
           subtitle={
