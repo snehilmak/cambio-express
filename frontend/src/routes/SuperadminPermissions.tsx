@@ -189,7 +189,7 @@ export default function SuperadminPermissions() {
                             <Checkbox
                               checked={draft.matrix[role][resource][action]}
                               onChange={() => toggle(role, resource, action)}
-                            />
+                            >{""}</Checkbox>
                           </div>
                         </td>
                       ))}
@@ -198,7 +198,7 @@ export default function SuperadminPermissions() {
                           <Checkbox
                             checked={allChecked}
                             onChange={() => toggleAllForRole(role, resource, !allChecked)}
-                          />
+                          >{""}</Checkbox>
                         </div>
                       </td>
                     </tr>

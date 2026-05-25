@@ -59,13 +59,19 @@ body {
      SlimSidebar.  The background + right border live here (not
      on the inner SlimSidebar .iconCol) so the dark column fills
      the full grid-row height — `grid-row: 1/-1` spans header +
-     content rows, regardless of how tall the content gets. */
+     content rows, regardless of how tall the content gets.
+     position: sticky keeps the sidebar pinned while the main
+     content scrolls — Support at the bottom is always visible. */
   grid-row: 1 / -1;
   grid-column: 1;
   display: flex;
   flex-direction: column;
   background: var(--db-surface-2, #141414);
   border-right: 1px solid var(--db-border, #262626);
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
 }
 
 .app-topbar {
