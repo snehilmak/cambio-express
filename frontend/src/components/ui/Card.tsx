@@ -18,7 +18,7 @@ export function Card({
   /** Extra className stacked on top of `ds-card`. */
   className?: string;
 }) {
-  const cls = ["ds-card"];
+  const cls = ["ds-card", "ds-fade-in"];
   if (interactive) cls.push("ds-card--interactive");
   if (className) cls.push(className);
   return (

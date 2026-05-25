@@ -83,6 +83,7 @@ export function KpiGrid({
 }) {
   return (
     <div
+      className="ds-fade-in"
       style={{
         display: "grid",
         gridTemplateColumns: `repeat(auto-fit, minmax(${minWidth}, 1fr))`,
