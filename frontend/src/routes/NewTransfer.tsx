@@ -206,7 +206,7 @@ export default function NewTransfer() {
 
       <form
         onSubmit={handleSubmit(onSubmit)}
-        style={{ display: "flex", flexDirection: "column", gap: "1rem" }}
+        className="ds-form"
       >
         <Card>
           <Section title="When + how">

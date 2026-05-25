@@ -11,8 +11,8 @@ import { getCurrentIdentity } from "../lib/auth";
 import { maskPhone } from "../lib/format";
 import {
   Breadcrumbs,
-  Alert, Button, Card, Empty, EmptyState, ErrorState, Field, Input, Modal,
-  PageHeader, PageShell, Section, space, Table, tdStyle, thStyle,
+  Alert, Button, Card, Checkbox, Empty, EmptyState, ErrorState, Field,
+  Input, Modal, PageHeader, PageShell, Section, space, Table, tdStyle, thStyle,
 } from "../components/ui";
 import styles from "./Customers.module.css";
 
@@ -461,13 +461,14 @@ function CustomerTable({
             <tr key={c.id} className={picked ? styles.rowPicked : undefined}>
               {mergeMode && (
                 <td style={tdStyle}>
-                  <input
-                    type="checkbox"
+                  <Checkbox
                     checked={!!picked}
                     disabled={disabled}
                     onChange={() => onTogglePick(c)}
-                    aria-label={`Select ${c.full_name} for merge`}
-                  />
+                    aria-describedby={undefined}
+                  >
+                    <span className="sr-only">Select {c.full_name} for merge</span>
+                  </Checkbox>
                 </td>
               )}
               <td style={tdStyle}>

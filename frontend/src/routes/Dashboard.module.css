@@ -1,0 +1,64 @@
+/* Dashboard page styles — extracted from inline style={{}} objects. */
+
+.sectionTitle {
+  font-family: var(--db-font-display, "Space Grotesk", sans-serif);
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--db-text-muted, #a3a3a3);
+  margin: 0 0 0.75rem;
+}
+
+.transferRow {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.65rem 0;
+  border-bottom: 1px solid var(--db-border-subtle, #1a1a1a);
+}
+
+.transferRow:last-child {
+  border-bottom: none;
+}
+
+.transferMeta {
+  flex: 1;
+  min-width: 0;
+}
+
+.transferName {
+  font-weight: 500;
+  font-size: 0.88rem;
+}
+
+.transferDate {
+  font-family: var(--db-font-mono, "JetBrains Mono", monospace);
+  font-size: 0.78rem;
+  color: var(--db-text-muted, #a3a3a3);
+}
+
+.transferAmount {
+  font-family: var(--db-font-mono, "JetBrains Mono", monospace);
+  font-weight: 600;
+  font-size: 0.92rem;
+  white-space: nowrap;
+}
+
+.accentLink {
+  color: var(--db-accent, #3fff00);
+  text-decoration: none;
+  font-size: 0.82rem;
+  font-weight: 500;
+}
+
+.accentLink:hover {
+  text-decoration: underline;
+}
+
+.emptyHint {
+  color: var(--db-text-muted, #a3a3a3);
+  font-size: 0.85rem;
+  text-align: center;
+  padding: 1.5rem 0;
+}
