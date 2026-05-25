@@ -71,9 +71,32 @@
     opacity var(--ds-dur-base) var(--ds-ease);
 }
 
-/* Hover only changes the background (Linear/shadcn vocabulary);
- * the lift on hover is gone — kept the scale-press on :active
- * because that's a tactile cue, not a visual claim of state. */
+/* Palette: background + color + border per tone.  Declared here
+ * (not as inline JS styles) so the :hover rules below actually
+ * win the cascade — inline styles beat class selectors even on
+ * :hover, which silently killed every hover color change. */
+.ds-btn--primary {
+  background: var(--db-accent, #3fff00);
+  color: var(--db-on-accent, #0a0a0a);
+  border: none;
+}
+.ds-btn--secondary {
+  background: transparent;
+  color: var(--db-text, #f5f5f5);
+  border: 1px solid var(--db-border, #262626);
+}
+.ds-btn--danger {
+  background: transparent;
+  color: var(--db-negative, #ff3b30);
+  border: 1px solid var(--db-negative, #ff3b30);
+}
+.ds-btn--ghost {
+  background: transparent;
+  color: var(--db-text-muted, #a3a3a3);
+  border: none;
+  text-decoration: underline;
+}
+
 .ds-btn:not(:disabled):active { transform: scale(0.97); }
 
 .ds-btn:focus-visible {
@@ -86,12 +109,12 @@
 }
 
 .ds-btn--secondary:not(:disabled):hover {
-  background: var(--db-fill-subtle, rgba(255, 255, 255, 0.04));
+  background: var(--db-fill-subtle, rgba(255, 255, 255, 0.06));
   border-color: var(--db-border-strong, #404040);
 }
 
 .ds-btn--danger:not(:disabled):hover {
-  background: rgba(255, 59, 48, 0.08);
+  background: rgba(255, 59, 48, 0.1);
 }
 
 /* ── Inputs: focus glow ────────────────────────────────────── */
