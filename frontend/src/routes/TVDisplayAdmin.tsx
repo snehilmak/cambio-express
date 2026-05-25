@@ -15,7 +15,7 @@ import { ApiError } from "../lib/api";
 import { formatTimestamp } from "../lib/datetime";
 import {
   Button, ButtonLink, ConfirmDialog, ErrorState, IconButton, Loading,
-  TabsBar, TabsLink,
+  PageShell, TabsBar, TabsLink,
 } from "../components/ui";
 import styles from "./TVDisplayAdmin.module.css";
 
@@ -91,9 +91,9 @@ export default function TVDisplayAdmin() {
 
   if (isLoading) {
     return (
-      <main className={styles.page}>
+      <PageShell>
         <Loading />
-      </main>
+      </PageShell>
     );
   }
   if (isError || !data) {
@@ -104,7 +104,7 @@ export default function TVDisplayAdmin() {
     const status = error instanceof ApiError ? error.status : 0;
     if (status === 409) {
       return (
-        <main className={styles.page}>
+        <PageShell>
           <h1 className={styles.title}>TV Display</h1>
           <p className={styles.muted}>
             The TV Display add-on isn't active for this store.{" "}
@@ -112,29 +112,29 @@ export default function TVDisplayAdmin() {
               Turn it on from your subscription page.
             </a>
           </p>
-        </main>
+        </PageShell>
       );
     }
     return (
-      <main className={styles.page}>
+      <PageShell>
         <h1 className={styles.title}>TV Display</h1>
         <ErrorState
           message={`Couldn't load the TV display.${error instanceof Error ? ` ${error.message}` : ""}`}
           onRetry={() => { void refetch(); }}
         />
-      </main>
+      </PageShell>
     );
   }
 
   return (
-    <main className={styles.page}>
+    <PageShell>
       <TabsBar>
         <TabsLink to="/tv-display/overview">Overview</TabsLink>
         <TabsLink to="/tv-display/content">Content</TabsLink>
         <TabsLink to="/tv-display/device">Device & Settings</TabsLink>
       </TabsBar>
       <Outlet />
-    </main>
+    </PageShell>
   );
 }
 

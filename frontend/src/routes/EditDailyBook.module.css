@@ -71,11 +71,13 @@
  *   form toggles which one is visible.
  *
  * Desktop (≥60rem):
- *   Render every panel in a CSS-grid named-area layout:
+ *   3-column grid aligned under the 3 KPI cards:
  *
- *     ┌─ receipts ──────┬─ disbursements ─┐
- *     ├─ transfers (full width) ──────────┤
- *     └─ notes (full width) ──────────────┘
+ *     ┌── In ──────────┬── Out ─────────┬── Over Short ──┐
+ *     │ Sales &         │ Manual         │ Over/short     │
+ *     │ receipts        │ disbursements  │ + Notes        │
+ *     │ Auto-summed     │ Logged         │ + Transfers    │
+ *     └─────────────────┴────────────────┴────────────────┘
  *
  *   Mobile tab state is ignored — every panel is visible.
  */
@@ -95,8 +97,7 @@
   }
   .dailyLayout[data-active-tab="receipts"] > [data-tab="receipts"],
   .dailyLayout[data-active-tab="disbursements"] > [data-tab="disbursements"],
-  .dailyLayout[data-active-tab="transfers"] > [data-tab="transfers"],
-  .dailyLayout[data-active-tab="notes"] > [data-tab="notes"] {
+  .dailyLayout[data-active-tab="overshort"] > [data-tab="overshort"] {
     display: block;
   }
 }
@@ -104,17 +105,19 @@
 @media (min-width: 60rem) {
   .dailyLayout {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    grid-template-areas:
-      "receipts disbursements"
-      "transfers transfers"
-      "notes notes";
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    align-items: start;
     gap: 1rem;
   }
-  .dailyLayout > [data-tab="receipts"]      { grid-area: receipts; }
-  .dailyLayout > [data-tab="disbursements"] { grid-area: disbursements; }
-  .dailyLayout > [data-tab="transfers"]     { grid-area: transfers; }
-  .dailyLayout > [data-tab="notes"]         { grid-area: notes; }
+  .dailyLayout > [data-tab="receipts"]      { grid-column: 1; }
+  .dailyLayout > [data-tab="disbursements"] { grid-column: 2; }
+  .dailyLayout > [data-tab="overshort"]     { grid-column: 3; }
+}
+
+.overShortCol {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
 }
 
 .panelDivider {

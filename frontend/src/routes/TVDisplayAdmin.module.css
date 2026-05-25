@@ -8,12 +8,8 @@
  * specific), so the module holds them.
  */
 
-.page {
-  max-width: 1100px;
-  margin: 0 auto;
-  padding: 1.5rem 1rem 3rem;
-  font-family: "Inter", system-ui, sans-serif;
-}
+/* .page class retired — TVDisplayAdmin now uses <PageShell>
+ * for consistent max-width + padding with the rest of the SPA. */
 
 .title {
   font-family: "Space Grotesk", "Inter", sans-serif;
