@@ -5,9 +5,10 @@ import { useLoggedMonths, useMonthly, type MonthlyRow } from "../api/monthly";
 import { getCurrentIdentity } from "../lib/auth";
 import {
   Breadcrumbs,
-  ButtonLink, Card, Empty, EmptyState, ErrorState, fontSize, Loading, PageHeader,
+  ButtonLink, Card, Empty, EmptyState, ErrorState, Loading, PageHeader,
   PageShell, Section, Select, tokens,
 } from "../components/ui";
+import styles from "./Monthly.module.css";
 
 // Monthly P&L at /app/monthly?year=Y&month=M.
 //
@@ -219,16 +220,7 @@ function ReportContent({ r }: { r: MonthlyRow }) {
       {r.notes && (
         <Section title="Notes">
           <Card>
-            <p
-              style={{
-                margin: 0,
-                color: tokens.text,
-                whiteSpace: "pre-wrap",
-                lineHeight: 1.6,
-              }}
-            >
-              {r.notes}
-            </p>
+            <p className={styles.notes}>{r.notes}</p>
           </Card>
         </Section>
       )}
@@ -237,17 +229,7 @@ function ReportContent({ r }: { r: MonthlyRow }) {
 }
 
 function Grid({ children }: { children: React.ReactNode }) {
-  return (
-    <div
-      style={{
-        display: "grid",
-        gridTemplateColumns: "repeat(auto-fit, minmax(11rem, 1fr))",
-        gap: "0.6rem",
-      }}
-    >
-      {children}
-    </div>
-  );
+  return <div className={styles.grid}>{children}</div>;
 }
 
 function Stat({
@@ -262,34 +244,9 @@ function Stat({
       ? tokens.negative
       : tokens.text;
   return (
-    <div
-      style={{
-        background: tokens.surface,
-        border: `1px solid ${tokens.borderSubtle}`,
-        borderRadius: "0.5rem",
-        padding: "0.6rem 0.8rem",
-      }}
-    >
-      <p
-        style={{
-          margin: 0,
-          fontSize: fontSize.xs,
-          color: tokens.textMuted,
-          textTransform: "uppercase",
-          letterSpacing: "0.05em",
-        }}
-      >
-        {label}
-      </p>
-      <p
-        style={{
-          margin: "0.2rem 0 0",
-          fontFamily: tokens.fontMono,
-          fontSize: fontSize.lg,
-          fontWeight: 500,
-          color,
-        }}
-      >
+    <div className={styles.stat}>
+      <p className={styles.statLabel}>{label}</p>
+      <p className={styles.statValue} style={{ color }}>
         ${(value || 0).toFixed(2)}
       </p>
     </div>

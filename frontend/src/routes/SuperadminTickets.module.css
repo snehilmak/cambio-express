@@ -1,0 +1,87 @@
+.filterRow {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.cardInner {
+  padding: 1rem 1.25rem;
+}
+
+.headerRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.headerLeft {
+  flex: 1;
+  min-width: 0;
+}
+
+.titleRow {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.35rem;
+}
+
+.subject {
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+
+.meta {
+  font-size: 0.78rem;
+  color: var(--db-text-muted, #888);
+}
+
+.metaCat {
+  text-transform: capitalize;
+}
+
+.body {
+  margin: 0.75rem 0 0;
+  white-space: pre-wrap;
+  font-size: 0.88rem;
+}
+
+.replyBox {
+  margin-top: 0.75rem;
+  padding: 0.75rem 1rem;
+  background: var(--db-surface-2, #141414);
+  border: 1px solid var(--db-border, #262626);
+  border-radius: 0.5rem;
+}
+
+.replyMeta {
+  font-size: 0.72rem;
+  color: var(--db-text-muted, #888);
+  margin-bottom: 0.25rem;
+}
+
+.replyBody {
+  margin: 0;
+  white-space: pre-wrap;
+  font-size: 0.85rem;
+}
+
+.formInner {
+  margin-top: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.formGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.65rem;
+}
+
+.formActions {
+  display: flex;
+  justify-content: flex-end;
+}

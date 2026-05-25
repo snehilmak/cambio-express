@@ -1,0 +1,45 @@
+.filters {
+  display: flex;
+  gap: var(--db-space-sm, 0.5rem);
+  margin-bottom: var(--db-space-lg, 1.25rem);
+}
+
+.filterBtn {
+  border: 1px solid var(--db-border, #262626);
+  border-radius: 999px;
+  padding: 0.4rem 0.9rem;
+  font-size: 0.85rem;
+  font-family: var(--db-font-body, "Inter", sans-serif);
+  cursor: pointer;
+  background: transparent;
+  color: var(--db-text, #e5e5e5);
+  transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+
+.filterBtnActive {
+  composes: filterBtn;
+  background: var(--db-accent, #3fff00);
+  color: var(--db-on-accent, #000);
+  border-color: var(--db-accent, #3fff00);
+}
+
+.mono {
+  font-family: var(--db-font-mono, "JetBrains Mono", monospace);
+}
+
+.monoMuted {
+  composes: mono;
+  font-size: 0.85rem;
+  color: var(--db-text-muted, #888);
+}
+
+.recoveredFull {
+  composes: mono;
+  color: var(--db-accent, #3fff00);
+}
+
+.paymentCount {
+  color: var(--db-text-muted, #888);
+  margin-left: 0.4rem;
+  font-size: 0.85rem;
+}

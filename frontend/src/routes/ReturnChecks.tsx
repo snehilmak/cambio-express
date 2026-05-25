@@ -5,9 +5,10 @@ import { getCurrentIdentity } from "../lib/auth";
 import {
   Breadcrumbs,
   Button, ButtonLink, Card, Empty, EmptyState, ErrorState, PageHeader,
-  PageShell, Pill, space, Table as KitTable, TableSkeleton, tdStyle,
+  PageShell, Pill, Table as KitTable, TableSkeleton, tdStyle,
   thStyle, tokens, type PillTone,
 } from "../components/ui";
+import styles from "./ReturnChecks.module.css";
 
 // Bounced-check workflow list at /app/return-checks. Filter by
 // status pill, click any row (or the explicit Edit button) to
@@ -64,7 +65,7 @@ export default function ReturnChecks() {
         )}
       />
 
-      <div style={{ display: "flex", gap: space.sm, marginBottom: space.lg }}>
+      <div className={styles.filters}>
         {STATUSES.map((s) => {
           const active = status === s.slug;
           return (
@@ -72,12 +73,7 @@ export default function ReturnChecks() {
               key={s.slug}
               type="button"
               onClick={() => setStatus(s.slug)}
-              style={{
-                ...filterBtn,
-                background: active ? tokens.accent : "transparent",
-                color: active ? tokens.onAccent : tokens.text,
-                borderColor: active ? tokens.accent : tokens.border,
-              }}
+              className={active ? styles.filterBtnActive : styles.filterBtn}
             >
               {s.label}
             </button>
@@ -143,33 +139,22 @@ function Table({ rows }: { rows: ReturnCheckRow[] }) {
                 }}
               >
                 <td style={tdStyle}>
-                  <span style={monoMuted}>{r.bounced_on}</span>
+                  <span className={styles.monoMuted}>{r.bounced_on}</span>
                 </td>
                 <td style={tdStyle}>{r.customer_name}</td>
                 <td style={tdStyle}>
-                  <span style={mono}>{r.check_number || "—"}</span>
+                  <span className={styles.mono}>{r.check_number || "—"}</span>
                 </td>
                 <td style={tdStyle}>{r.payer_bank || "—"}</td>
                 <td style={{ ...tdStyle, textAlign: "right" }}>
-                  <span style={mono}>${r.amount.toFixed(2)}</span>
+                  <span className={styles.mono}>${r.amount.toFixed(2)}</span>
                 </td>
                 <td style={{ ...tdStyle, textAlign: "right" }}>
-                  <span
-                    style={{
-                      ...mono,
-                      color: r.recovered_total >= r.amount ? tokens.accent : tokens.text,
-                    }}
-                  >
+                  <span className={r.recovered_total >= r.amount ? styles.recoveredFull : styles.mono}>
                     ${r.recovered_total.toFixed(2)}
                   </span>
                   {r.payment_count > 0 && (
-                    <span
-                      style={{
-                        color: tokens.textMuted,
-                        marginLeft: "0.4rem",
-                        fontSize: "0.85rem",
-                      }}
-                    >
+                    <span className={styles.paymentCount}>
                       ({r.payment_count})
                     </span>
                   )}
@@ -216,21 +201,3 @@ function StatusPill({ status }: { status: string }) {
   return <Pill tone={tone}>{label}</Pill>;
 }
 
-const mono: React.CSSProperties = {
-  fontFamily: tokens.fontMono,
-};
-
-const monoMuted: React.CSSProperties = {
-  ...mono,
-  fontSize: "0.85rem",
-  color: tokens.textMuted,
-};
-
-const filterBtn: React.CSSProperties = {
-  border: "1px solid",
-  borderRadius: "999px",
-  padding: "0.4rem 0.9rem",
-  fontSize: "0.85rem",
-  fontFamily: tokens.fontBody,
-  cursor: "pointer",
-};
