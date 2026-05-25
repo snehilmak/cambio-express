@@ -14,6 +14,7 @@ import {
 } from "../api/bankSync";
 import { ApiError } from "../lib/api";
 import {
+  Breadcrumbs,
   Button, ButtonLink, Card, ConfirmDialog, EmptyState, ErrorState,
   Loading, PageHeader, PageShell, space, Table, TableSkeleton, tdStyle,
   thStyle, useToast,
@@ -197,6 +198,9 @@ export default function Bank() {
 
   return (
     <PageShell maxWidth="70rem" gap="1.25rem">
+
+      <Breadcrumbs crumbs={[{ label: "Finance" }, { label: "Bank accounts" }]} />
+
       <PageHeader title="Bank Accounts" />
 
       {connectError && <ErrorState message={connectError} />}

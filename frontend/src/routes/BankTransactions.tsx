@@ -12,6 +12,7 @@ import {
   type BankTransactionRow,
 } from "../api/bankSync";
 import {
+  Breadcrumbs,
   Card, Empty, EmptyState, ErrorState, Field, Input, monoStyle, PageHeader,
   PageShell, Pager, Select, Table, TableSkeleton, tdStyle, thStyle,
 } from "../components/ui";
@@ -79,6 +80,9 @@ export default function BankTransactions() {
 
   return (
     <PageShell>
+
+      <Breadcrumbs crumbs={[{ label: "Finance" }, { label: "Bank transactions" }]} />
+
       <PageHeader
         title="Bank transactions"
         subtitle={
@@ -87,11 +91,7 @@ export default function BankTransactions() {
               `${txns.data.uncategorized_count.toLocaleString()} uncategorized`
             : "—"
         }
-        actions={
-          <a href="/bank" className={styles.legacyLink}>
-            Connect / sync (legacy) →
-          </a>
-        }
+        actions={undefined}
       />
 
       <Card>

@@ -55,6 +55,7 @@ STORE_OWNED_MODELS: list[str] = [
     "StoreEmployee", "Customer",
     "ReferralCode", "ReferralRedemption",
     "TVDisplay",
+    "SupportTicket",
     "User",
 ]
 
@@ -93,6 +94,7 @@ def _store_owned_models() -> list[tuple[type, str]]:
         StoreEmployeePasskey, TimeClockEntry,
     )
     from api.Modules.Transfers.Models import Transfer
+    from api.Modules.Support.Models import SupportTicket
     from api.Modules.TVDisplay.Models import TVDisplay
 
     return [
@@ -129,6 +131,7 @@ def _store_owned_models() -> list[tuple[type, str]]:
         # chain in the purge function. Listing it here covers the
         # parent row itself.
         (TVDisplay, "store_id"),
+        (SupportTicket, "store_id"),
         (User, "store_id"),
     ]
 
