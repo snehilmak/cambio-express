@@ -91,6 +91,9 @@ def _register_routers(app: FastAPI) -> None:
     from api.Modules.Owners.Controllers import router as owners_router
     app.include_router(owners_router, prefix="/owner", tags=["owner"])
 
+    from api.Modules.Support.Controllers import router as support_router
+    app.include_router(support_router, prefix="/tickets", tags=["support"])
+
     from api.Modules.Superadmin.Controllers import (
         router as superadmin_router,
     )

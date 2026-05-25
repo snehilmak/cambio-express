@@ -22,6 +22,8 @@ const AdminCashiers = lazy(() => import("./routes/AdminCashiers"));
 const AdminReferrals = lazy(() => import("./routes/AdminReferrals"));
 const AdminSubscription = lazy(() => import("./routes/AdminSubscription"));
 const AdminDataExport = lazy(() => import("./routes/AdminDataExport"));
+const SupportTickets = lazy(() => import("./routes/SupportTickets"));
+const SuperadminTickets = lazy(() => import("./routes/SuperadminTickets"));
 const AdminTimeClock = lazy(() => import("./routes/AdminTimeClock"));
 const AdminTimeClockCredentials = lazy(
   () => import("./routes/AdminTimeClockCredentials"),
@@ -272,6 +274,7 @@ export default function App() {
           <Route path="superadmin/stores/:id/edit" element={<SuperadminStoreForm />} />
           <Route path="superadmin/audit-log"     element={<SuperadminAuditLog />} />
           <Route path="superadmin/announcements" element={<SuperadminAnnouncements />} />
+          <Route path="superadmin/tickets"       element={<SuperadminTickets />} />
           <Route path="superadmin/controls"      element={<SuperadminControls />} />
           <Route path="superadmin/reports"       element={<SuperadminReports />} />
           <Route path="subscribe"             element={<Subscribe />} />
@@ -292,6 +295,7 @@ export default function App() {
           <Route path="admin/cashiers"          element={<AdminCashiers />} />
           <Route path="timeclock"             element={<TimeClock />} />
           <Route path="account/referrals"     element={<AdminReferrals />} />
+          <Route path="account/tickets"      element={<SupportTickets />} />
           {/* Legacy /account/profile — profile is now the first
               tab inside /settings (see the consolidation that
               moved the standalone page into Settings).  Keep a

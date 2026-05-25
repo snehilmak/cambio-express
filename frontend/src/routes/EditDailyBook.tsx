@@ -350,9 +350,6 @@ export default function EditDailyBook() {
             {savedAt && !locked && (
               <Pill tone="accent">Saved {formatTime(savedAt)}</Pill>
             )}
-            <Button tone="secondary" size="sm" onClick={() => navigate("/daily")}>
-              ← Calendar
-            </Button>
           </div>
         )}
       />

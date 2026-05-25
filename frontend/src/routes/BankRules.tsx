@@ -13,6 +13,7 @@ import {
 } from "../api/bankSync";
 import { ApiError } from "../lib/api";
 import {
+  Breadcrumbs,
   Button, ButtonLink, Card, ConfirmDialog, EmptyState, ErrorState, Field,
   Input, Loading, PageHeader, PageShell, Section, Select, Table, tdStyle,
   thStyle,
@@ -160,6 +161,9 @@ export default function BankRules() {
 
   return (
     <PageShell maxWidth="70rem" gap="1.25rem">
+
+      <Breadcrumbs crumbs={[{ label: "Finance" }, { label: "Bank rules" }]} />
+
       <PageHeader
         title="Bank Rules"
         actions={(
