@@ -113,7 +113,7 @@ export default function AccountNotifications() {
 
       <Breadcrumbs crumbs={[{ label: "Account", to: "/settings" }, { label: "Notifications" }]} />
 
-      <PageHeader title="Notifications" />
+      <PageHeader title="Notifications" subtitle="Control which email and push alerts you receive." />
 
       <div className={styles.grid}>
         <Section title="Your preferences">
