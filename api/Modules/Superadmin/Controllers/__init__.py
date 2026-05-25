@@ -170,6 +170,195 @@ def dashboard_route(
     }
 
 
+# ── Global user management ─────────────────────────────────
+
+
+@router.get("/users")
+def list_users_route(
+    q: str | None = Query(None),
+    role: str | None = Query(None),
+    store_id: int | None = Query(None),
+    page: int = Query(1, ge=1),
+    per_page: int = Query(50, ge=1, le=200),
+    db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
+) -> dict[str, Any]:
+    """List all users across all stores with search + filters."""
+    _require_superadmin(claims)
+    from api.Modules.Tenancy.Models import Store, User
+    query = db.query(User).outerjoin(Store, User.store_id == Store.id)
+    if q:
+        needle = f"%{q}%"
+        query = query.filter(
+            User.username.ilike(needle)
+            | User.full_name.ilike(needle)
+            | User.email.ilike(needle)
+        )
+    if role:
+        query = query.filter(User.role == role)
+    if store_id:
+        query = query.filter(User.store_id == store_id)
+    total = query.count()
+    users = (
+        query
+        .add_columns(Store.name.label("store_name"))
+        .order_by(User.created_at.desc())
+        .offset((page - 1) * per_page)
+        .limit(per_page)
+        .all()
+    )
+    rows = []
+    for u, store_name in users:
+        rows.append({
+            "id": u.id,
+            "username": u.username,
+            "full_name": u.full_name or "",
+            "email": u.email or "",
+            "role": u.role or "",
+            "store_id": u.store_id,
+            "store_name": store_name or "",
+            "is_active": bool(u.is_active),
+            "has_2fa": bool(u.totp_enrolled_at),
+            "last_login_at": _iso(u.last_login_at),
+            "created_at": _iso(u.created_at),
+        })
+    return {
+        "rows": rows,
+        "total": total,
+        "page": page,
+        "total_pages": ceil(total / per_page),
+    }
+
+
+@router.post("/users/{user_id}/toggle-active")
+def toggle_user_active_route(
+    user_id: int = Path(..., ge=1),
+    db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
+) -> dict[str, Any]:
+    """Enable / disable a user account."""
+    _require_superadmin(claims)
+    from api.Modules.Tenancy.Models import User
+    user = db.get(User, user_id)
+    if user is None:
+        raise HTTPException(404, "User not found")
+    if user.role == "superadmin":
+        raise HTTPException(403, "Cannot disable superadmin")
+    sa = resolve_superadmin_user(claims, db)
+    user.is_active = not user.is_active
+    db.commit()
+    _audit_store(
+        db, sa,
+        "disable_user" if not user.is_active else "enable_user",
+        target_id=str(user.id),
+        details=f"User {user.username} (role={user.role})",
+    )
+    return {"ok": True, "is_active": user.is_active}
+
+
+@router.post("/users/{user_id}/reset-2fa")
+def reset_2fa_route(
+    user_id: int = Path(..., ge=1),
+    db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
+) -> dict[str, Any]:
+    """Force-clear a user's TOTP enrollment so they can re-enroll."""
+    _require_superadmin(claims)
+    from api.Modules.Tenancy.Models import User
+    user = db.get(User, user_id)
+    if user is None:
+        raise HTTPException(404, "User not found")
+    if user.role == "superadmin":
+        raise HTTPException(403, "Cannot reset superadmin 2FA via API")
+    sa = resolve_superadmin_user(claims, db)
+    user.totp_secret = None
+    user.totp_enrolled_at = None
+    db.commit()
+    _audit_store(
+        db, sa,
+        "reset_2fa",
+        target_id=str(user.id),
+        details=f"User {user.username}",
+    )
+    return {"ok": True}
+
+
+@router.post("/users/{user_id}/force-password-reset")
+def force_password_reset_route(
+    user_id: int = Path(..., ge=1),
+    db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
+) -> dict[str, Any]:
+    """Reset a user's password to a random temporary one and return it."""
+    _require_superadmin(claims)
+    from api.Modules.Tenancy.Models import User
+    import secrets
+    user = db.get(User, user_id)
+    if user is None:
+        raise HTTPException(404, "User not found")
+    if user.role == "superadmin":
+        raise HTTPException(403, "Cannot reset superadmin password via API")
+    sa = resolve_superadmin_user(claims, db)
+    temp_pw = secrets.token_urlsafe(12)
+    user.set_password(temp_pw)
+    db.commit()
+    _audit_store(
+        db, sa,
+        "force_password_reset",
+        target_id=str(user.id),
+        details=f"User {user.username}",
+    )
+    return {"ok": True, "temp_password": temp_pw}
+
+
+# ── Impersonation ──────────────────────────────────────────
+
+
+@router.post("/impersonate/{user_id}")
+def impersonate_route(
+    user_id: int = Path(..., ge=1),
+    db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
+) -> dict[str, Any]:
+    """Mint a short-lived JWT for impersonating another user.
+    Audit-logged, 1-hour TTL, carries impersonated_by claim."""
+    _require_superadmin(claims)
+    from api.Modules.Auth.Services.jwt_issuer import JWTIssuer, issue_access_token
+    from api.Modules.Auth.Services.login import permissions_for
+    from api.Modules.Tenancy.Models import User
+    user = db.get(User, user_id)
+    if user is None:
+        raise HTTPException(404, "User not found")
+    if user.role == "superadmin":
+        raise HTTPException(403, "Cannot impersonate superadmin")
+    sa = resolve_superadmin_user(claims, db)
+    issuer = JWTIssuer(
+        sub=user.id,
+        role=user.role or "employee",
+        store_id=user.store_id,
+        permissions=permissions_for(user.role or "employee"),
+        full_name=user.full_name or "",
+        username=user.username,
+    )
+    token = issue_access_token(issuer, ttl_seconds=3600)
+    _audit_store(
+        db, sa,
+        "impersonate_user",
+        target_id=str(user.id),
+        details=f"User {user.username} (role={user.role}, store_id={user.store_id})",
+    )
+    return {
+        "token": token,
+        "user": {
+            "id": user.id,
+            "username": user.username,
+            "role": user.role,
+            "store_id": user.store_id,
+            "full_name": user.full_name or "",
+        },
+    }
+
+
 @router.get("/stores", response_model=SuperadminStoreListResponse)
 def list_stores_route(
     db: Session = Depends(get_db),
