@@ -38,7 +38,7 @@ export default function ReturnChecks() {
 
   if (identity?.store_id == null) {
     return (
-      <PageShell maxWidth="80rem">
+      <PageShell maxWidth="100%">
         <PageHeader title="Return checks" />
         <Empty>Sign in as a store admin to view return checks.</Empty>
       </PageShell>
@@ -46,7 +46,7 @@ export default function ReturnChecks() {
   }
 
   return (
-    <PageShell maxWidth="80rem">
+    <PageShell maxWidth="100%">
 
       <Breadcrumbs crumbs={[{ label: "Return checks" }]} />
 
