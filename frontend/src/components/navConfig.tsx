@@ -129,7 +129,6 @@ export const NAV: NavGroup[] = [
       { to: "/reports",            label: "Reports",     icon: iconReports() },
       { to: "/monthly",            label: "Monthly P&L", icon: iconMonthly() },
       { to: "/admin/audit-log",    label: "Audit log",   icon: iconAudit() },
-      { to: "/admin/tax-export",   label: "Tax export",  icon: iconReports() },
       { to: "/admin/data-export",  label: "Data export", icon: iconReports() },
     ],
   },

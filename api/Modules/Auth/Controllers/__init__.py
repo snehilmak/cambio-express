@@ -326,6 +326,7 @@ def _to_login_response(
     elif response is not None:
         _set_access_token_cookie(response, access_token)
 
+    refresh_jti = issued.jti if (response is not None and db is not None) else None
     return LoginResponse(
         access_token=access_token,
         expires_in=DEFAULT_ACCESS_TOKEN_TTL_SECONDS,
@@ -335,6 +336,7 @@ def _to_login_response(
         role=result.role,
         store_id=result.store_id,
         permissions=result.permissions,
+        refresh_jti=refresh_jti,
     )
 
 
@@ -611,23 +613,36 @@ def refresh_route(
     db_refresh_token: str | None = Cookie(default=None),
     db: Session = Depends(get_db),
 ) -> LoginResponse:
-    """Rotate the refresh token + mint a fresh access JWT.
+    """Validate the refresh token + mint a fresh access JWT.
 
-    The SPA's ``api()`` helper hits this when a regular API call
-    401s — silent recovery from an expired access cookie.
-    Successful refresh sets new ``db_access_token`` + new
-    ``db_refresh_token`` cookies (rotation: the old refresh row
-    is revoked and chained to the new one via ``rotated_to_id``).
+    Accepts the refresh JTI from two sources (first match wins):
+      1. ``db_refresh_token`` httpOnly cookie (normal browser path)
+      2. ``refresh_token`` in a JSON request body (PWA fallback —
+         Chrome standalone windows clear httpOnly cookies between
+         sessions, so the SPA stores the JTI in localStorage as
+         backup and sends it in the body)
 
-    Failures clear both cookies and return 401:
-      * No refresh cookie → not logged in
-      * Unknown jti → forged or row-deleted (rare)
-      * Already revoked → replay (legitimate user rotated past it)
-      * Expired → past the 14-day TTL
+    Failures clear both cookies and return 401.
     """
     import logging
     _refresh_log = logging.getLogger("api.Modules.Auth.refresh")
     ua = _client_user_agent(request)[:60]
+    # PWA fallback: if the httpOnly cookie is gone, accept the
+    # JTI from the request body.
+    if not db_refresh_token:
+        try:
+            import json
+            raw = request._body if hasattr(request, "_body") else None
+            if raw is None:
+                import asyncio
+                raw = asyncio.get_event_loop().run_until_complete(
+                    request.body()
+                )
+            if raw:
+                body_data = json.loads(raw)
+                db_refresh_token = body_data.get("refresh_token")
+        except Exception:
+            pass
     if not db_refresh_token:
         _refresh_log.info(
             "auth.refresh_no_cookie ua=%r ip=%s",
@@ -700,6 +715,7 @@ def refresh_route(
         role=user.role or "",
         store_id=user.store_id,
         permissions=perms,
+        refresh_jti=row.jti,
     )
 
 

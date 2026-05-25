@@ -14,7 +14,10 @@
 // browser-native, smaller bundle, and good enough for the SPA's
 // needs. TanStack Query handles caching/retries on top.
 
-import { clearAccessToken, persistLoginResponse } from "./auth";
+import {
+  clearAccessToken, clearRefreshFallback, getRefreshFallback,
+  persistLoginResponse, persistRefreshFallback,
+} from "./auth";
 
 export class ApiError extends Error {
   status: number;
@@ -40,14 +43,23 @@ async function _silentRefresh(): Promise<boolean> {
   if (_inFlightRefresh) return _inFlightRefresh;
   _inFlightRefresh = (async () => {
     try {
+      // PWA fallback: if the httpOnly cookie was cleared between
+      // sessions (Chrome standalone windows do this), send the
+      // refresh JTI from localStorage in the request body so the
+      // server can find the token even without the cookie.
+      const fallbackJti = getRefreshFallback();
       const resp = await fetch("/api/v2/auth/refresh", {
         method: "POST",
         credentials: "include",
+        headers: fallbackJti
+          ? { "Content-Type": "application/json" }
+          : undefined,
+        body: fallbackJti
+          ? JSON.stringify({ refresh_token: fallbackJti })
+          : undefined,
       });
       if (!resp.ok) return false;
       const body = await resp.json();
-      // The refresh response carries fresh identity claims — keep
-      // the local cache in sync so chrome re-renders correctly.
       if (
         typeof body === "object" && body &&
         typeof body.user_id === "number"
@@ -66,6 +78,7 @@ async function _silentRefresh(): Promise<boolean> {
 
 function _bounceToLogin(): void {
   clearAccessToken();
+  clearRefreshFallback();
   const onLogin = window.location.pathname === "/app/login";
   if (!onLogin) window.location.assign("/app/login");
 }

@@ -14,6 +14,7 @@
 // ``hasIdentity()`` which is a non-secret check.
 
 const IDENTITY_KEY = "db.identity";
+const REFRESH_FALLBACK_KEY = "db.refresh_fallback";
 
 export interface IdentityClaims {
   user_id: number;
@@ -100,6 +101,7 @@ export function persistLoginResponse(body: {
   role: string;
   store_id: number | null;
   permissions: string[];
+  refresh_jti?: string;
 }): void {
   _write({
     user_id: body.user_id,
@@ -109,6 +111,22 @@ export function persistLoginResponse(body: {
     store_id: body.store_id,
     permissions: body.permissions,
   });
+  if (body.refresh_jti) {
+    persistRefreshFallback(body.refresh_jti);
+  }
+}
+
+
+export function persistRefreshFallback(jti: string): void {
+  try { window.localStorage.setItem(REFRESH_FALLBACK_KEY, jti); } catch { /* */ }
+}
+
+export function getRefreshFallback(): string | null {
+  try { return window.localStorage.getItem(REFRESH_FALLBACK_KEY); } catch { return null; }
+}
+
+export function clearRefreshFallback(): void {
+  try { window.localStorage.removeItem(REFRESH_FALLBACK_KEY); } catch { /* */ }
 }
 
 
