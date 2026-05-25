@@ -92,7 +92,7 @@ export default function AdminTimeClockCredentials() {
 
   if (!canView) {
     return (
-      <PageShell>
+      <PageShell maxWidth="56rem">
         <PageHeader title="Time-clock credentials" />
         <EmptyState title="Admin or owner only." />
       </PageShell>

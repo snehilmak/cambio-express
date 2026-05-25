@@ -17,7 +17,7 @@ export default function OwnerReports() {
 
   if (isLoading) {
     return (
-      <PageShell>
+      <PageShell maxWidth="70rem">
         <PageHeader title="Reports" />
         <Loading />
       </PageShell>
@@ -26,7 +26,7 @@ export default function OwnerReports() {
   if (isError || !data) {
     const status = error instanceof ApiError ? error.status : 0;
     return (
-      <PageShell>
+      <PageShell maxWidth="70rem">
 
         <Breadcrumbs crumbs={[{ label: "Owner" }, { label: "Reports" }]} />
 
@@ -44,7 +44,7 @@ export default function OwnerReports() {
   }
 
   return (
-    <PageShell>
+    <PageShell maxWidth="70rem">
       <ReportCenter categories={data.categories} />
     </PageShell>
   );

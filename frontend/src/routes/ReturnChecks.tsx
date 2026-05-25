@@ -5,7 +5,8 @@ import { getCurrentIdentity } from "../lib/auth";
 import {
   Breadcrumbs,
   Button, ButtonLink, Card, Empty, EmptyState, ErrorState, PageHeader,
-  PageShell, Pill, space, TableSkeleton, tokens, type PillTone,
+  PageShell, Pill, space, Table as KitTable, TableSkeleton, tdStyle,
+  thStyle, tokens, type PillTone,
 } from "../components/ui";
 
 // Bounced-check workflow list at /app/return-checks. Filter by
@@ -37,7 +38,7 @@ export default function ReturnChecks() {
 
   if (identity?.store_id == null) {
     return (
-      <PageShell>
+      <PageShell maxWidth="80rem">
         <PageHeader title="Return checks" />
         <Empty>Sign in as a store admin to view return checks.</Empty>
       </PageShell>
@@ -45,7 +46,7 @@ export default function ReturnChecks() {
   }
 
   return (
-    <PageShell>
+    <PageShell maxWidth="80rem">
 
       <Breadcrumbs crumbs={[{ label: "Return checks" }]} />
 
@@ -106,42 +107,17 @@ export default function ReturnChecks() {
 function Table({ rows }: { rows: ReturnCheckRow[] }) {
   const navigate = useNavigate();
   return (
-    <div style={{ overflowX: "auto" }}>
-      <table
-        style={{
-          width: "100%",
-          borderCollapse: "collapse",
-          fontSize: "0.92rem",
-        }}
-      >
+    <KitTable>
         <thead>
           <tr>
-            {[
-              { label: "Bounced",   align: "left"  },
-              { label: "Customer",  align: "left"  },
-              { label: "Check #",   align: "left"  },
-              { label: "Bank",      align: "left"  },
-              { label: "Amount",    align: "right" },
-              { label: "Recovered", align: "right" },
-              { label: "Status",    align: "left"  },
-              { label: "",          align: "right" },  // Actions column
-            ].map((h, i) => (
-              <th
-                key={i}
-                style={{
-                  textAlign: h.align as "left" | "right",
-                  padding: "0.6rem 0.75rem",
-                  color: tokens.textMuted,
-                  fontWeight: 500,
-                  fontSize: "0.78rem",
-                  textTransform: "uppercase",
-                  letterSpacing: "0.05em",
-                  borderBottom: `1px solid ${tokens.border}`,
-                }}
-              >
-                {h.label}
-              </th>
-            ))}
+            <th style={thStyle}>Bounced</th>
+            <th style={thStyle}>Customer</th>
+            <th style={thStyle}>Check #</th>
+            <th style={thStyle}>Bank</th>
+            <th style={{ ...thStyle, textAlign: "right" }}>Amount</th>
+            <th style={{ ...thStyle, textAlign: "right" }}>Recovered</th>
+            <th style={thStyle}>Status</th>
+            <th style={{ ...thStyle, textAlign: "right" }}></th>
           </tr>
         </thead>
         <tbody>
@@ -166,18 +142,18 @@ function Table({ rows }: { rows: ReturnCheckRow[] }) {
                   e.currentTarget.style.background = "transparent";
                 }}
               >
-                <td style={cellStyle}>
+                <td style={tdStyle}>
                   <span style={monoMuted}>{r.bounced_on}</span>
                 </td>
-                <td style={cellStyle}>{r.customer_name}</td>
-                <td style={cellStyle}>
+                <td style={tdStyle}>{r.customer_name}</td>
+                <td style={tdStyle}>
                   <span style={mono}>{r.check_number || "—"}</span>
                 </td>
-                <td style={cellStyle}>{r.payer_bank || "—"}</td>
-                <td style={{ ...cellStyle, textAlign: "right" }}>
+                <td style={tdStyle}>{r.payer_bank || "—"}</td>
+                <td style={{ ...tdStyle, textAlign: "right" }}>
                   <span style={mono}>${r.amount.toFixed(2)}</span>
                 </td>
-                <td style={{ ...cellStyle, textAlign: "right" }}>
+                <td style={{ ...tdStyle, textAlign: "right" }}>
                   <span
                     style={{
                       ...mono,
@@ -198,11 +174,11 @@ function Table({ rows }: { rows: ReturnCheckRow[] }) {
                     </span>
                   )}
                 </td>
-                <td style={cellStyle}>
+                <td style={tdStyle}>
                   <StatusPill status={r.status} />
                 </td>
                 <td
-                  style={{ ...cellStyle, textAlign: "right" }}
+                  style={{ ...tdStyle, textAlign: "right" }}
                   // Stop the row-click from firing when the user
                   // taps the explicit button — otherwise we
                   // navigate twice and React-Router warns.
@@ -221,8 +197,7 @@ function Table({ rows }: { rows: ReturnCheckRow[] }) {
             );
           })}
         </tbody>
-      </table>
-    </div>
+    </KitTable>
   );
 }
 
@@ -240,11 +215,6 @@ function StatusPill({ status }: { status: string }) {
   const label = status.charAt(0).toUpperCase() + status.slice(1);
   return <Pill tone={tone}>{label}</Pill>;
 }
-
-const cellStyle: React.CSSProperties = {
-  padding: "0.7rem 0.75rem",
-  borderBottom: `1px solid ${tokens.borderSubtle}`,
-};
 
 const mono: React.CSSProperties = {
   fontFamily: tokens.fontMono,

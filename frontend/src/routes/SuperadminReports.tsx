@@ -16,7 +16,7 @@ export default function SuperadminReports() {
 
   if (isLoading) {
     return (
-      <PageShell>
+      <PageShell maxWidth="70rem">
         <PageHeader title="Reports" />
         <Loading />
       </PageShell>
@@ -25,7 +25,7 @@ export default function SuperadminReports() {
   if (isError || !data) {
     const status = error instanceof ApiError ? error.status : 0;
     return (
-      <PageShell>
+      <PageShell maxWidth="70rem">
 
         <Breadcrumbs crumbs={[{ label: "Platform" }, { label: "Reports" }]} />
 
@@ -43,7 +43,7 @@ export default function SuperadminReports() {
   }
 
   return (
-    <PageShell>
+    <PageShell maxWidth="70rem">
       <ReportCenter categories={data.categories} />
     </PageShell>
   );
