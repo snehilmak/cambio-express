@@ -201,3 +201,75 @@ export function useSuperadminReports() {
       api<SuperadminReportListResponse>("/api/v2/superadmin/reports"),
   });
 }
+
+
+export interface PlanDistEntry {
+  label: string;
+  count: number;
+}
+
+export interface VolumeByCompany {
+  company: string;
+  count: number;
+  total: number;
+}
+
+export interface TopReferrer {
+  store_name: string;
+  slug: string;
+  code: string;
+  redeemed: number;
+  reward_total_cents: number;
+}
+
+export interface ActivityEntry {
+  when: string;
+  kind: "signup" | "cancel";
+  store_name: string;
+  detail: string;
+  plan: string;
+}
+
+export interface SuperadminDashboardData {
+  total_stores: number;
+  active_count: number;
+  trial_count: number;
+  paid_count: number;
+  inactive_count: number;
+  estimated_mrr: number;
+  new_stores_30d: number;
+  new_stores_delta: number;
+  churn_30d: number;
+  churn_delta: number;
+  basic_count: number;
+  pro_count: number;
+  basic_monthly: number;
+  basic_yearly: number;
+  pro_monthly: number;
+  pro_yearly: number;
+  basic_monthly_mrr: number;
+  basic_yearly_mrr: number;
+  pro_monthly_mrr: number;
+  pro_yearly_mrr: number;
+  signup_labels: string[];
+  signup_direct: number[];
+  signup_referral: number[];
+  plan_dist: PlanDistEntry[];
+  volume_by_company: VolumeByCompany[];
+  total_volume_30d: number;
+  total_transfers_30d: number;
+  top_referrers: TopReferrer[];
+  direct_signups: number;
+  referral_signups: number;
+  activity: ActivityEntry[];
+}
+
+export function useSuperadminDashboard() {
+  const identity = getCurrentIdentity();
+  return useQuery<SuperadminDashboardData>({
+    enabled: identity?.role === "superadmin",
+    queryKey: ["superadmin", "dashboard"],
+    queryFn: () =>
+      api<SuperadminDashboardData>("/api/v2/superadmin/dashboard"),
+  });
+}

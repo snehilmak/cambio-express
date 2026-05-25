@@ -1,0 +1,110 @@
+.chartRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.25rem;
+}
+
+@media (max-width: 768px) {
+  .chartRow {
+    grid-template-columns: 1fr;
+  }
+}
+
+.chartWrap {
+  position: relative;
+  height: 280px;
+}
+
+.mrrGrid {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.mrrRow {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.65rem 0;
+  border-bottom: 1px solid var(--db-border, #262626);
+}
+
+.mrrLabel {
+  flex: 1;
+  color: var(--db-text-muted, #888);
+  font-size: 0.88rem;
+}
+
+.mrrCount {
+  font-family: var(--db-font-mono, "JetBrains Mono", monospace);
+  font-size: 0.85rem;
+  color: var(--db-text-muted, #888);
+  min-width: 5rem;
+  text-align: right;
+}
+
+.mrrValue {
+  font-family: var(--db-font-mono, "JetBrains Mono", monospace);
+  font-weight: 600;
+  font-size: 0.92rem;
+  min-width: 6rem;
+  text-align: right;
+}
+
+.mrrTotal {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.85rem 0 0.25rem;
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.mrrTotalValue {
+  font-family: var(--db-font-mono, "JetBrains Mono", monospace);
+  color: var(--db-accent, #3fff00);
+  font-size: 1.15rem;
+}
+
+.activityList {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.activityRow {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 0;
+  border-bottom: 1px solid var(--db-border, #262626);
+}
+
+.activityRow:last-child {
+  border-bottom: none;
+}
+
+.activityStore {
+  font-weight: 600;
+  font-size: 0.88rem;
+  min-width: 8rem;
+}
+
+.activityDetail {
+  flex: 1;
+  color: var(--db-text-muted, #888);
+  font-size: 0.85rem;
+}
+
+.activityTime {
+  font-family: var(--db-font-mono, "JetBrains Mono", monospace);
+  font-size: 0.78rem;
+  color: var(--db-text-muted, #888);
+  white-space: nowrap;
+}
+
+.emptyText {
+  color: var(--db-text-muted, #888);
+  padding: 1rem 0;
+  text-align: center;
+}
