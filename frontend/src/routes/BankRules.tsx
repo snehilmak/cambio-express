@@ -160,7 +160,7 @@ export default function BankRules() {
   }
 
   return (
-    <PageShell maxWidth="70rem" gap="1.25rem">
+    <PageShell gap="1.25rem">
 
       <Breadcrumbs crumbs={[{ label: "Finance" }, { label: "Bank rules" }]} />
 

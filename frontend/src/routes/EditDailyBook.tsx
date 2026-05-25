@@ -327,7 +327,7 @@ export default function EditDailyBook() {
   const lineItems = lineItemsQuery.data?.items ?? [];
 
   return (
-    <PageShell maxWidth="92rem" gap="1rem">
+    <PageShell gap="1rem">
       <Breadcrumbs crumbs={[
         { label: "Daily", to: "/daily" },
         { label: formatHumanDate(date) },

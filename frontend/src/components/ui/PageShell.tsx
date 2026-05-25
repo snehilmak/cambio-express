@@ -5,7 +5,7 @@ import { space } from "./tokens";
 /** Outer ``<main>`` element with consistent padding + max-width +
  *  flex column. Mounts the ``.ds-page`` fade-up animation class. */
 export function PageShell({
-  children, maxWidth = "100rem", gap = space.xl,
+  children, maxWidth = "100%", gap = space.xl,
 }: {
   children: ReactNode;
   /** Override the default max-width. Most pages take the full

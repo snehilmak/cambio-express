@@ -74,7 +74,7 @@ export default function BankTransactions() {
 
   if (identity?.store_id == null) {
     return (
-      <PageShell maxWidth="100%">
+      <PageShell>
         <PageHeader title="Bank transactions" />
         <Empty>Sign in as a store admin to view bank transactions.</Empty>
       </PageShell>
@@ -85,7 +85,7 @@ export default function BankTransactions() {
   const page       = txns.data?.page        ?? 1;
 
   return (
-    <PageShell maxWidth="100%">
+    <PageShell>
 
       <Breadcrumbs crumbs={[{ label: "Finance" }, { label: "Bank transactions" }]} />
 

@@ -76,7 +76,7 @@ export default function AccountSessions() {
 
   if (isLoading) {
     return (
-      <PageShell maxWidth="60rem">
+      <PageShell>
         <PageHeader title="Active sessions" />
         <Loading />
       </PageShell>
@@ -84,7 +84,7 @@ export default function AccountSessions() {
   }
   if (isError || !data) {
     return (
-      <PageShell maxWidth="60rem">
+      <PageShell>
         <PageHeader title="Active sessions" />
         <ErrorState
           message={
@@ -102,7 +102,7 @@ export default function AccountSessions() {
   const otherCount = sessions.filter((s) => !s.is_current).length;
 
   return (
-    <PageShell maxWidth="60rem">
+    <PageShell>
 
       <Breadcrumbs crumbs={[{ label: "Account", to: "/settings" }, { label: "Sessions" }]} />
 

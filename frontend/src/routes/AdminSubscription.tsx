@@ -67,7 +67,7 @@ export default function AdminSubscription() {
 
   if (error && !data) {
     return (
-      <PageShell maxWidth="70rem">
+      <PageShell>
         <PageHeader title="Billing & Subscription" />
         <ErrorState message={error} onRetry={() => { void load(); }} />
       </PageShell>
@@ -75,7 +75,7 @@ export default function AdminSubscription() {
   }
   if (!data) {
     return (
-      <PageShell maxWidth="70rem">
+      <PageShell>
         <PageHeader title="Billing & Subscription" />
         <Loading />
       </PageShell>
@@ -87,7 +87,7 @@ export default function AdminSubscription() {
   const trial = store.plan === "trial";
 
   return (
-    <PageShell maxWidth="70rem">
+    <PageShell>
 
       <Breadcrumbs crumbs={[{ label: "Account", to: "/settings" }, { label: "Billing" }]} />
 

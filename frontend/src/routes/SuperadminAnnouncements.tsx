@@ -40,7 +40,7 @@ export default function SuperadminAnnouncements() {
 
   if (identity?.role !== "superadmin") {
     return (
-      <PageShell maxWidth="70rem">
+      <PageShell>
         <PageHeader title="Announcements" />
         <Empty>Superadmin scope required.</Empty>
       </PageShell>
@@ -52,7 +52,7 @@ export default function SuperadminAnnouncements() {
   }
 
   return (
-    <PageShell maxWidth="70rem">
+    <PageShell>
 
       <Breadcrumbs crumbs={[{ label: "Platform" }, { label: "Announcements" }]} />
 

@@ -92,7 +92,7 @@ export default function TVDisplayAdmin() {
 
   if (isLoading) {
     return (
-      <PageShell maxWidth="72rem" gap="1.25rem">
+      <PageShell gap="1.25rem">
         <Loading />
       </PageShell>
     );
@@ -105,7 +105,7 @@ export default function TVDisplayAdmin() {
     const status = error instanceof ApiError ? error.status : 0;
     if (status === 409) {
       return (
-        <PageShell maxWidth="72rem" gap="1.25rem">
+        <PageShell gap="1.25rem">
           <h1 className={styles.title}>TV Display</h1>
           <p className={styles.muted}>
             The TV Display add-on isn't active for this store.{" "}
@@ -117,7 +117,7 @@ export default function TVDisplayAdmin() {
       );
     }
     return (
-      <PageShell maxWidth="72rem" gap="1.25rem">
+      <PageShell gap="1.25rem">
         <h1 className={styles.title}>TV Display</h1>
         <ErrorState
           message={`Couldn't load the TV display.${error instanceof Error ? ` ${error.message}` : ""}`}
@@ -128,7 +128,7 @@ export default function TVDisplayAdmin() {
   }
 
   return (
-    <PageShell maxWidth="72rem" gap="1.25rem">
+    <PageShell gap="1.25rem">
       <Breadcrumbs crumbs={[{ label: "TV Display" }]} />
       <TabsBar>
         <TabsLink to="/tv-display/overview">Overview</TabsLink>

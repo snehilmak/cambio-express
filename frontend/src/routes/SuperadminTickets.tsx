@@ -53,7 +53,7 @@ export default function SuperadminTickets() {
   const tickets = useAllTickets(statusFilter || undefined, categoryFilter || undefined);
 
   return (
-    <PageShell maxWidth="80rem">
+    <PageShell>
       <Breadcrumbs crumbs={[
         { label: "Superadmin" },
         { label: "Support tickets" },

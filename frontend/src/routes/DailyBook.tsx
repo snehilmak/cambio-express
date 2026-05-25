@@ -94,7 +94,7 @@ export default function DailyBook() {
   const today = todayIso();
 
   return (
-    <PageShell maxWidth="68rem" gap="1.5rem">
+    <PageShell gap="1.5rem">
 
       <Breadcrumbs crumbs={[{ label: "Daily" }]} />
 

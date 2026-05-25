@@ -24,7 +24,7 @@ export default function AdminReferrals() {
 
   if (identity?.role !== "admin" && identity?.role !== "owner") {
     return (
-      <PageShell maxWidth="60rem">
+      <PageShell>
         <PageHeader title="Referrals" />
         <Empty>You need a store-admin sign-in to manage referrals.</Empty>
       </PageShell>
@@ -34,7 +34,7 @@ export default function AdminReferrals() {
   // Trial-plan stores get a 409 with a clear upsell.
   if (isError && error instanceof ApiError && error.status === 409) {
     return (
-      <PageShell maxWidth="60rem">
+      <PageShell>
         <PageHeader title="Referrals" />
         <Card>
           <h2 className={styles.cardTitle}>Unlock referrals on a paid plan</h2>
@@ -51,7 +51,7 @@ export default function AdminReferrals() {
   }
 
   return (
-    <PageShell maxWidth="60rem">
+    <PageShell>
 
       <Breadcrumbs crumbs={[{ label: "Account", to: "/settings" }, { label: "Referrals" }]} />
 

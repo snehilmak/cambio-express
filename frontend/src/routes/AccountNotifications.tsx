@@ -83,7 +83,7 @@ export default function AccountNotifications() {
 
   if (isLoading) {
     return (
-      <PageShell maxWidth="60rem">
+      <PageShell>
         <PageHeader title="Notifications" />
         <Loading />
       </PageShell>
@@ -91,7 +91,7 @@ export default function AccountNotifications() {
   }
   if (isError || !data) {
     return (
-      <PageShell maxWidth="60rem">
+      <PageShell>
         <PageHeader title="Notifications" />
         <ErrorState
           message={`Couldn't load preferences.${error instanceof Error ? ` ${error.message}` : ""}`}
@@ -109,7 +109,7 @@ export default function AccountNotifications() {
   const summaryApplies = data.daily_summary_applies;
 
   return (
-    <PageShell maxWidth="60rem">
+    <PageShell>
 
       <Breadcrumbs crumbs={[{ label: "Account", to: "/settings" }, { label: "Notifications" }]} />
 

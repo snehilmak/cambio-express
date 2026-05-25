@@ -42,7 +42,7 @@ export default function SuperadminAuditLog() {
 
   if (identity?.role !== "superadmin") {
     return (
-      <PageShell maxWidth="100%">
+      <PageShell>
         <PageHeader title="Audit log" />
         <Empty>Superadmin scope required.</Empty>
       </PageShell>
@@ -50,7 +50,7 @@ export default function SuperadminAuditLog() {
   }
 
   return (
-    <PageShell maxWidth="100%">
+    <PageShell>
 
       <Breadcrumbs crumbs={[{ label: "Platform" }, { label: "Audit log" }]} />
 
