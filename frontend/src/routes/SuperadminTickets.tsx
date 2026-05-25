@@ -82,7 +82,7 @@ export default function SuperadminTickets() {
       )}
 
       {tickets.data && tickets.data.tickets.length === 0 && (
-        <EmptyState>No tickets match the current filters.</EmptyState>
+        <EmptyState title="No tickets match the current filters." />
       )}
 
       {tickets.data && tickets.data.tickets.map((t) => (

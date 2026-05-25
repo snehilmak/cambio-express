@@ -5,16 +5,19 @@ import { useSearchParams } from "react-router-dom";
 import {
   BANK_CATEGORY_OPTIONS,
   categorizeTransaction,
+  syncBankTransactions,
   uncategorizeTransaction,
   useBankAccounts,
   useBankTransactions,
+  type BankAccountRow,
   type BankTransactionFilters,
   type BankTransactionRow,
 } from "../api/bankSync";
 import {
-  Breadcrumbs,
-  Card, Empty, EmptyState, ErrorState, Field, Input, monoStyle, PageHeader,
-  PageShell, Pager, Select, Table, TableSkeleton, tdStyle, thStyle,
+  Breadcrumbs, Button, ButtonLink,
+  Card, Empty, EmptyState, ErrorState, Field, Input, KpiCard, KpiGrid,
+  monoStyle, PageHeader, PageShell, Pager, Select, Table, TableSkeleton,
+  tdStyle, thStyle,
 } from "../components/ui";
 import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
@@ -35,7 +38,10 @@ const PER_PAGE = 50;
 export default function BankTransactions() {
   const identity = getCurrentIdentity();
   const accounts = useBankAccounts();
+  const qc = useQueryClient();
   const [sp, setSP] = useSearchParams();
+  const [syncing, setSyncing] = useState(false);
+  const [syncMsg, setSyncMsg] = useState<string | null>(null);
 
   const filters: BankTransactionFilters = useMemo(() => ({
     posted_from:        sp.get("posted_from") ?? "",
@@ -91,8 +97,52 @@ export default function BankTransactions() {
               `${txns.data.uncategorized_count.toLocaleString()} uncategorized`
             : "—"
         }
-        actions={undefined}
+        actions={
+          <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+            <Button
+              tone="primary"
+              size="sm"
+              busy={syncing}
+              disabled={syncing}
+              onClick={async () => {
+                setSyncing(true);
+                setSyncMsg(null);
+                try {
+                  const r = await syncBankTransactions();
+                  setSyncMsg(`Synced ${r.new_rows} new transaction${r.new_rows === 1 ? "" : "s"}.`);
+                  void qc.invalidateQueries({ queryKey: ["bank"] });
+                } catch (err) {
+                  setSyncMsg(
+                    err instanceof ApiError ? err.message : "Sync failed.",
+                  );
+                } finally {
+                  setSyncing(false);
+                  setTimeout(() => setSyncMsg(null), 5000);
+                }
+              }}
+            >
+              {syncing ? "Syncing…" : "Sync transactions"}
+            </Button>
+            <ButtonLink to="/bank" tone="secondary" size="sm">
+              Manage accounts
+            </ButtonLink>
+          </div>
+        }
       />
+
+      {syncMsg && (
+        <div style={{
+          fontSize: "0.82rem",
+          color: "var(--db-text-muted)",
+          padding: "0.4rem 0",
+        }}>
+          {syncMsg}
+        </div>
+      )}
+
+      {accounts.data && accounts.data.rows.length > 0 && (
+        <BalanceCards accounts={accounts.data.rows} />
+      )}
 
       <Card>
         <div className={styles.filtersGrid}>
@@ -302,4 +352,38 @@ function CategoryCell({
       )}
     </div>
   );
+}
+
+
+function BalanceCards({ accounts }: { accounts: BankAccountRow[] }) {
+  const active = accounts.filter((a) => a.enabled && !a.disconnected_at);
+  if (active.length === 0) return null;
+  return (
+    <KpiGrid minWidth="200px">
+      {active.map((a) => (
+        <KpiCard
+          key={a.id}
+          label={a.nickname || a.display_name || a.institution_name}
+          value={`$${a.last_balance.toLocaleString(undefined, {
+            minimumFractionDigits: 2, maximumFractionDigits: 2,
+          })}`}
+          sub={
+            a.last_balance_as_of
+              ? `As of ${formatBalanceDate(a.last_balance_as_of)}`
+              : "Balance not yet refreshed."
+          }
+        />
+      ))}
+    </KpiGrid>
+  );
+}
+
+
+function formatBalanceDate(iso: string): string {
+  try {
+    return new Date(iso).toLocaleDateString(undefined, {
+      month: "short", day: "numeric",
+      hour: "2-digit", minute: "2-digit",
+    });
+  } catch { return iso; }
 }

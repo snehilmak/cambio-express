@@ -133,9 +133,7 @@ export default function SupportTickets() {
       )}
 
       {tickets.data && tickets.data.tickets.length === 0 && !showForm && (
-        <EmptyState>
-          No tickets yet. Click "+ New ticket" to submit your first one.
-        </EmptyState>
+        <EmptyState title="No tickets yet" body='Click "+ New ticket" to submit your first one.' />
       )}
 
       {tickets.data && tickets.data.tickets.length > 0 && (
