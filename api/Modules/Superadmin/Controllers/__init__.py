@@ -170,6 +170,93 @@ def dashboard_route(
     }
 
 
+# ── Permissions matrix ─────────────────────────────────────
+
+
+@router.get("/permissions")
+def get_permissions_route(
+    db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
+) -> dict[str, Any]:
+    """Return the full RBAC matrix for the editor."""
+    _require_superadmin(claims)
+    from api.Modules.Auth.Models import RolePermission
+    from api.Modules.Auth.Services.login import (
+        RBAC_ACTIONS, RBAC_DEFAULTS, RBAC_RESOURCES,
+    )
+    rows = db.query(RolePermission).all()
+    granted: set[tuple[str, str, str]] = set()
+    for r in rows:
+        granted.add((r.role, r.resource, r.action))
+    if not granted:
+        for role, perms in RBAC_DEFAULTS.items():
+            for perm in perms:
+                res, act = perm.split(".", 1)
+                granted.add((role, res, act))
+    matrix: dict[str, dict[str, dict[str, bool]]] = {}
+    for role in ["admin", "employee", "owner"]:
+        matrix[role] = {}
+        for resource in RBAC_RESOURCES:
+            matrix[role][resource] = {}
+            for action in RBAC_ACTIONS:
+                matrix[role][resource][action] = (
+                    (role, resource, action) in granted
+                )
+    return {
+        "roles": ["admin", "employee", "owner"],
+        "resources": RBAC_RESOURCES,
+        "actions": RBAC_ACTIONS,
+        "matrix": matrix,
+    }
+
+
+@router.put("/permissions")
+def update_permissions_route(
+    body: dict[str, Any],
+    db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
+) -> dict[str, Any]:
+    """Bulk-update the RBAC matrix. Body: {changes: [{role, resource, action, allowed}]}."""
+    _require_superadmin(claims)
+    from api.Modules.Auth.Models import RolePermission
+    from api.Modules.Auth.Services.login import RBAC_ACTIONS, RBAC_RESOURCES
+    sa = resolve_superadmin_user(claims, db)
+    changes = body.get("changes", [])
+    valid_roles = {"admin", "employee", "owner"}
+    added = 0
+    removed = 0
+    for ch in changes:
+        role = ch.get("role", "")
+        resource = ch.get("resource", "")
+        action = ch.get("action", "")
+        allowed = ch.get("allowed", False)
+        if role not in valid_roles:
+            continue
+        if resource not in RBAC_RESOURCES:
+            continue
+        if action not in RBAC_ACTIONS:
+            continue
+        existing = (
+            db.query(RolePermission)
+            .filter_by(role=role, resource=resource, action=action)
+            .first()
+        )
+        if allowed and not existing:
+            db.add(RolePermission(role=role, resource=resource, action=action))
+            added += 1
+        elif not allowed and existing:
+            db.delete(existing)
+            removed += 1
+    db.commit()
+    _audit_store(
+        db, sa,
+        "update_permissions",
+        target_id="role_permission",
+        details=f"Added {added}, removed {removed} permission grants",
+    )
+    return get_permissions_route(db=db, claims=claims)
+
+
 # ── Global user management ─────────────────────────────────
 
 
