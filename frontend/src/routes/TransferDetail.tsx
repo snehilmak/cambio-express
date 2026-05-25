@@ -7,6 +7,7 @@ import {
   ButtonLink, Card, Empty, ErrorState, Loading, PageHeader, PageShell,
   Section, tokens,
 } from "../components/ui";
+import styles from "./TransferDetail.module.css";
 
 // Single-transfer detail page. Backed by /api/v2/transfers/{id}
 // — same shape as a row in the list, so the read-only detail
@@ -123,26 +124,15 @@ function DetailRow({
   mono?: boolean;
   emphasis?: boolean;
 }) {
+  const valueClass = emphasis
+    ? styles.rowValueEmphasis
+    : mono
+      ? styles.rowValueMono
+      : styles.rowValue;
   return (
-    <div
-      style={{
-        display: "flex",
-        justifyContent: "space-between",
-        gap: "1rem",
-        padding: "0.6rem 0",
-        borderBottom: `1px solid ${tokens.borderSubtle}`,
-      }}
-    >
-      <span style={{ color: tokens.textMuted }}>{label}</span>
-      <span
-        style={{
-          fontFamily: mono ? tokens.fontMono : undefined,
-          fontWeight: emphasis ? 600 : 400,
-          color: emphasis ? tokens.accent : tokens.text,
-        }}
-      >
-        {value}
-      </span>
+    <div className={styles.row}>
+      <span className={styles.rowLabel}>{label}</span>
+      <span className={valueClass}>{value}</span>
     </div>
   );
 }

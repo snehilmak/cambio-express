@@ -8,6 +8,7 @@ import {
   Input, Loading, PageHeader, PageShell, Pill, Section, Select,
   Table, tdStyle, Textarea, thStyle,
 } from "../components/ui";
+import styles from "./SupportTickets.module.css";
 
 const CATEGORIES = [
   { value: "bug", label: "Bug report" },
@@ -85,7 +86,7 @@ export default function SupportTickets() {
         <Card>
           <Section title="Submit a ticket">
             <form onSubmit={onSubmit} style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+              <div className={styles.formGrid}>
                 <Field label="Category">
                   <Select value={category} onChange={(e) => setCategory(e.target.value)}>
                     {CATEGORIES.map((c) => (
@@ -114,7 +115,7 @@ export default function SupportTickets() {
                   required
                 />
               </Field>
-              <div style={{ display: "flex", justifyContent: "flex-end" }}>
+              <div className={styles.formActions}>
                 <Button type="submit" busy={busy} disabled={busy || !subject.trim() || !body.trim()}>
                   {busy ? "Submitting…" : "Submit ticket"}
                 </Button>
@@ -167,7 +168,7 @@ function TicketRowView({ ticket: t }: { ticket: TicketRow }) {
     <>
       <tr
         onClick={() => setExpanded((v) => !v)}
-        style={{ cursor: "pointer", borderBottom: "1px solid var(--db-border, #262626)" }}
+        className={styles.clickableRow}
       >
         <td style={tdStyle}>{t.subject}</td>
         <td style={tdStyle}>{CATEGORIES.find((c) => c.value === t.category)?.label ?? t.category}</td>
@@ -180,20 +181,14 @@ function TicketRowView({ ticket: t }: { ticket: TicketRow }) {
       </tr>
       {expanded && (
         <tr>
-          <td colSpan={4} style={{ padding: "1rem 1.25rem", background: "var(--db-surface-2, #141414)" }}>
-            <p style={{ margin: "0 0 0.5rem", whiteSpace: "pre-wrap" }}>{t.body}</p>
+          <td colSpan={4} className={styles.expandedBody}>
+            <p className={styles.ticketBody}>{t.body}</p>
             {t.admin_reply && (
-              <div style={{
-                marginTop: "0.75rem",
-                padding: "0.75rem 1rem",
-                background: "var(--db-surface, #0a0a0a)",
-                border: "1px solid var(--db-border, #262626)",
-                borderRadius: "0.5rem",
-              }}>
-                <div style={{ fontSize: "0.78rem", color: "var(--db-text-muted)", marginBottom: "0.35rem" }}>
+              <div className={styles.replyBox}>
+                <div className={styles.replyMeta}>
                   Reply from {t.replied_by} · {t.replied_at ? formatDate(t.replied_at) : ""}
                 </div>
-                <p style={{ margin: 0, whiteSpace: "pre-wrap" }}>{t.admin_reply}</p>
+                <p className={styles.replyBody}>{t.admin_reply}</p>
               </div>
             )}
           </td>

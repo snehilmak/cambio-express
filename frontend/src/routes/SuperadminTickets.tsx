@@ -8,6 +8,7 @@ import {
   Field, Loading, PageHeader, PageShell, Pill, Select, Textarea,
   useToast,
 } from "../components/ui";
+import styles from "./SuperadminTickets.module.css";
 
 const CATEGORIES = [
   { value: "", label: "All categories" },
@@ -63,7 +64,7 @@ export default function SuperadminTickets() {
         title="Support tickets"
         subtitle={`${tickets.data?.total ?? 0} tickets across all stores`}
         actions={(
-          <div style={{ display: "flex", gap: "0.5rem" }}>
+          <div className={styles.filterRow}>
             <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
               {STATUSES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
             </Select>
@@ -129,11 +130,11 @@ function TicketCard({ ticket: t }: { ticket: TicketRow }) {
 
   return (
     <Card>
-      <div style={{ padding: "1rem 1.25rem" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "1rem", flexWrap: "wrap" }}>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap", marginBottom: "0.35rem" }}>
-              <span style={{ fontWeight: 700, fontSize: "0.95rem" }}>{t.subject}</span>
+      <div className={styles.cardInner}>
+        <div className={styles.headerRow}>
+          <div className={styles.headerLeft}>
+            <div className={styles.titleRow}>
+              <span className={styles.subject}>{t.subject}</span>
               <Pill tone={STATUS_TONES[t.status] ?? "neutral"}>
                 {t.status.replace("_", " ")}
               </Pill>
@@ -143,10 +144,10 @@ function TicketCard({ ticket: t }: { ticket: TicketRow }) {
                 </Pill>
               )}
             </div>
-            <div style={{ fontSize: "0.78rem", color: "var(--db-text-muted)" }}>
+            <div className={styles.meta}>
               {t.submitted_by} · {t.store_name || `Store #${t.store_id}`} · {formatDate(t.created_at)}
               {" · "}
-              <span style={{ textTransform: "capitalize" }}>{t.category}</span>
+              <span className={styles.metaCat}>{t.category}</span>
             </div>
           </div>
           <Button tone="secondary" size="sm" onClick={() => setReplying((v) => !v)}>
@@ -154,28 +155,22 @@ function TicketCard({ ticket: t }: { ticket: TicketRow }) {
           </Button>
         </div>
 
-        <p style={{ margin: "0.75rem 0 0", whiteSpace: "pre-wrap", fontSize: "0.88rem" }}>{t.body}</p>
+        <p className={styles.body}>{t.body}</p>
 
         {t.admin_reply && !replying && (
-          <div style={{
-            marginTop: "0.75rem",
-            padding: "0.75rem 1rem",
-            background: "var(--db-surface-2, #141414)",
-            border: "1px solid var(--db-border, #262626)",
-            borderRadius: "0.5rem",
-          }}>
-            <div style={{ fontSize: "0.72rem", color: "var(--db-text-muted)", marginBottom: "0.25rem" }}>
+          <div className={styles.replyBox}>
+            <div className={styles.replyMeta}>
               Reply by {t.replied_by} · {t.replied_at ? formatDate(t.replied_at) : ""}
             </div>
-            <p style={{ margin: 0, whiteSpace: "pre-wrap", fontSize: "0.85rem" }}>{t.admin_reply}</p>
+            <p className={styles.replyBody}>{t.admin_reply}</p>
           </div>
         )}
 
         {error && <Alert tone="error">{error}</Alert>}
 
         {replying && (
-          <form onSubmit={onSave} style={{ marginTop: "0.75rem", display: "flex", flexDirection: "column", gap: "0.65rem" }}>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.65rem" }}>
+          <form onSubmit={onSave} className={styles.formInner}>
+            <div className={styles.formGrid}>
               <Field label="Status">
                 <Select value={newStatus} onChange={(e) => setNewStatus(e.target.value)}>
                   <option value="open">Open</option>
@@ -202,7 +197,7 @@ function TicketCard({ ticket: t }: { ticket: TicketRow }) {
                 placeholder="Type your response…"
               />
             </Field>
-            <div style={{ display: "flex", justifyContent: "flex-end" }}>
+            <div className={styles.formActions}>
               <Button type="submit" busy={busy} disabled={busy}>
                 {busy ? "Saving…" : "Save"}
               </Button>
