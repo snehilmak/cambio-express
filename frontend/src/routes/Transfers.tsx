@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
 import {
   useTransfers,
@@ -235,6 +235,7 @@ function FilterBar({
 }
 
 function TransfersTable({ rows }: { rows: TransferRow[] }) {
+  const navigate = useNavigate();
   return (
     <Table>
       <thead>
@@ -252,20 +253,21 @@ function TransfersTable({ rows }: { rows: TransferRow[] }) {
       </thead>
       <tbody>
         {rows.map((r) => (
-          <tr key={r.id} className={styles.row}>
+          <tr
+            key={r.id}
+            className={styles.row}
+            style={{ cursor: "pointer" }}
+            onClick={() => navigate(`/transfers/${r.id}`)}
+          >
             <td style={tdStyle}>
-              <Link to={`/transfers/${r.id}`} className={styles.cellLink}>
-                <span className={styles.monoMuted}>{r.send_date}</span>
-              </Link>
+              <span className={styles.monoMuted}>{r.send_date}</span>
             </td>
             <td style={tdStyle}>{r.company}</td>
             <td style={tdStyle}>{r.sender_name}</td>
             <td style={tdStyle}>{r.recipient_name || "—"}</td>
             <td style={tdStyle}>{r.country || "—"}</td>
             <td style={tdStyle}>
-              <Link to={`/transfers/${r.id}`} className={styles.cellLink}>
-                <span className={styles.monoMuted}>{r.confirm_number || "—"}</span>
-              </Link>
+              <span className={styles.monoMuted}>{r.confirm_number || "—"}</span>
             </td>
             <td style={tdStyle}>{r.status}</td>
             <td style={{ ...tdStyle, textAlign: "right" }}>
