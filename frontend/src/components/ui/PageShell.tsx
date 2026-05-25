@@ -28,7 +28,7 @@ export function PageShell({
         // first card doesn't float in the middle of the screen.
         padding: "1.5rem 1.5rem 2.5rem",
         maxWidth,
-        margin: "0 auto",
+        margin: 0,
         width: "100%",
         boxSizing: "border-box",
         gap,
