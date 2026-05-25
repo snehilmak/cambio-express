@@ -1,11 +1,11 @@
-import { Link, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 
 import { useTransfer } from "../api/transfers";
 import { getCurrentIdentity } from "../lib/auth";
 import {
   Breadcrumbs,
   ButtonLink, Card, Empty, ErrorState, Loading, PageHeader, PageShell,
-  Section, space, tokens,
+  Section, tokens,
 } from "../components/ui";
 
 // Single-transfer detail page. Backed by /api/v2/transfers/{id}
@@ -22,7 +22,6 @@ export default function TransferDetail() {
   if (Number.isNaN(id)) {
     return (
       <PageShell maxWidth="52rem" gap="1rem">
-        <BackLink />
         <Empty>Invalid transfer ID.</Empty>
       </PageShell>
     );
@@ -31,7 +30,6 @@ export default function TransferDetail() {
   if (identity?.store_id == null) {
     return (
       <PageShell maxWidth="52rem" gap="1rem">
-        <BackLink />
         <Empty>Sign in as a store admin to view transfer details.</Empty>
       </PageShell>
     );
@@ -40,7 +38,6 @@ export default function TransferDetail() {
   if (isLoading) {
     return (
       <PageShell maxWidth="52rem" gap="1rem">
-        <BackLink />
         <Loading />
       </PageShell>
     );
@@ -49,7 +46,6 @@ export default function TransferDetail() {
   if (isError) {
     return (
       <PageShell maxWidth="52rem" gap="1rem">
-        <BackLink />
         <ErrorState
           message={error instanceof Error ? error.message : "Could not load transfer"}
           onRetry={() => { void refetch(); }}
@@ -63,9 +59,6 @@ export default function TransferDetail() {
 
   return (
     <PageShell maxWidth="52rem" gap="1rem">
-      <BackLink />
-
-
       <Breadcrumbs crumbs={[{ label: "Transfers", to: "/transfers" }, { label: `Transfer #${id}` }]} />
 
 
@@ -154,23 +147,6 @@ function DetailRow({
   );
 }
 
-function BackLink() {
-  return (
-    <Link
-      to="/transfers"
-      style={{
-        display: "inline-block",
-        marginBottom: space.lg,
-        color: tokens.textMuted,
-        textDecoration: "none",
-        fontFamily: tokens.fontMono,
-        fontSize: "0.9rem",
-      }}
-    >
-      ← All transfers
-    </Link>
-  );
-}
 
 function fmtCurrency(n: number): string {
   return `$${n.toFixed(2)}`;
