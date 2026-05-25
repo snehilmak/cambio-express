@@ -454,15 +454,15 @@ function TotalsStrip({
   const netNeg = net < 0;
   return (
     <div className={styles.totalsStrip}>
-      <TotalsCard label="Receipts" value={receipts} tone="accent" />
-      <TotalsCard label="Disbursements" value={disbursements} tone="negative" />
+      <TotalsCard label="In" value={receipts} tone="accent" />
+      <TotalsCard label="Out" value={disbursements} tone="negative" />
       <TotalsCard
-        label="Net position"
+        label="Over short"
         value={net}
         tone={netNeg ? "negative" : "accent"}
         sub={
           Math.abs(overShort) >= 0.005
-            ? `Over/short ${fmtMoney2(overShort)} included`
+            ? `Drawer: ${fmtMoney2(overShort)}`
             : undefined
         }
       />
@@ -536,83 +536,79 @@ interface PanelProps {
 
 function ReceiptsPanel(props: PanelProps) {
   return (
-    <div className={styles.panelGrid}>
-      <Card padding="1.25rem 1.5rem">
-        <PanelTitle>Sales & receipts</PanelTitle>
-        <InputGrid>
-          {RECEIPT_INPUTS.map((f) => (
-            <NumberInput
-              key={f.key}
-              label={f.label}
-              value={props.form[f.key]}
-              onChange={(v) => props.set(f.key, v)}
-              disabled={props.locked}
-            />
-          ))}
-        </InputGrid>
-      </Card>
-
-      <Card padding="1.25rem 1.5rem">
-        <PanelTitle>Auto-summed entries</PanelTitle>
-        <p className={styles.subText}>
-          Total updates as you add or delete entries — no manual entry needed.
-        </p>
-        {RECEIPT_LINE_ITEMS.map((f) => (
-          <LineItemWidget
-            key={f.kind}
-            kind={f.kind}
+    <Card padding="1.25rem 1.5rem">
+      <PanelTitle>Sales & receipts</PanelTitle>
+      <InputGrid>
+        {RECEIPT_INPUTS.map((f) => (
+          <NumberInput
+            key={f.key}
             label={f.label}
-            readOnly={f.readOnly === true || props.locked}
-            total={Number(props.report?.[f.key] ?? 0)}
-            items={props.lineItems.filter((li) => li.kind === f.kind)}
-            storeId={props.storeId}
-            date={props.date}
-            onChange={props.onLineItemChange}
+            value={props.form[f.key]}
+            onChange={(v) => props.set(f.key, v)}
+            disabled={props.locked}
           />
         ))}
-      </Card>
-    </div>
+      </InputGrid>
+
+      <div className={styles.panelDivider} />
+
+      <PanelTitle>Auto-summed entries</PanelTitle>
+      <p className={styles.subText}>
+        Total updates as you add or delete entries — no manual entry needed.
+      </p>
+      {RECEIPT_LINE_ITEMS.map((f) => (
+        <LineItemWidget
+          key={f.kind}
+          kind={f.kind}
+          label={f.label}
+          readOnly={f.readOnly === true || props.locked}
+          total={Number(props.report?.[f.key] ?? 0)}
+          items={props.lineItems.filter((li) => li.kind === f.kind)}
+          storeId={props.storeId}
+          date={props.date}
+          onChange={props.onLineItemChange}
+        />
+      ))}
+    </Card>
   );
 }
 
 function DisbursementsPanel(props: PanelProps) {
   return (
-    <div className={styles.panelGrid}>
-      <Card padding="1.25rem 1.5rem">
-        <PanelTitle>Manual disbursements</PanelTitle>
-        <InputGrid>
-          {DISBURSEMENT_INPUTS.map((f) => (
-            <NumberInput
-              key={f.key}
-              label={f.label}
-              value={props.form[f.key]}
-              onChange={(v) => props.set(f.key, v)}
-              disabled={props.locked}
-            />
-          ))}
-        </InputGrid>
-      </Card>
-
-      <Card padding="1.25rem 1.5rem">
-        <PanelTitle>Logged entries</PanelTitle>
-        <p className={styles.subText}>
-          Tap a row to add a timestamped entry — totals roll up automatically.
-        </p>
-        {DISBURSEMENT_LINE_ITEMS.map((f) => (
-          <LineItemWidget
-            key={f.kind}
-            kind={f.kind}
+    <Card padding="1.25rem 1.5rem">
+      <PanelTitle>Manual disbursements</PanelTitle>
+      <InputGrid>
+        {DISBURSEMENT_INPUTS.map((f) => (
+          <NumberInput
+            key={f.key}
             label={f.label}
-            readOnly={props.locked}
-            total={Number(props.report?.[f.key] ?? 0)}
-            items={props.lineItems.filter((li) => li.kind === f.kind)}
-            storeId={props.storeId}
-            date={props.date}
-            onChange={props.onLineItemChange}
+            value={props.form[f.key]}
+            onChange={(v) => props.set(f.key, v)}
+            disabled={props.locked}
           />
         ))}
-      </Card>
-    </div>
+      </InputGrid>
+
+      <div className={styles.panelDivider} />
+
+      <PanelTitle>Logged entries</PanelTitle>
+      <p className={styles.subText}>
+        Tap a row to add a timestamped entry — totals roll up automatically.
+      </p>
+      {DISBURSEMENT_LINE_ITEMS.map((f) => (
+        <LineItemWidget
+          key={f.kind}
+          kind={f.kind}
+          label={f.label}
+          readOnly={props.locked}
+          total={Number(props.report?.[f.key] ?? 0)}
+          items={props.lineItems.filter((li) => li.kind === f.kind)}
+          storeId={props.storeId}
+          date={props.date}
+          onChange={props.onLineItemChange}
+        />
+      ))}
+    </Card>
   );
 }
 

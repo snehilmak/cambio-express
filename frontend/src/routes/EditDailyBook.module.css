@@ -117,21 +117,10 @@
   .dailyLayout > [data-tab="notes"]         { grid-area: notes; }
 }
 
-.panelGrid {
-  display: grid;
-  /* Single-column at phone widths (the cards stack so each one
-   * gets the full viewport width).  At the typical tablet
-   * breakpoint, jump to 2-column so the manual-input card sits
-   * beside the line-items card — matches the single-page
-   * layout intent (see EditDailyBook.tsx single-page note). */
-  grid-template-columns: minmax(0, 1fr);
-  gap: 1rem;
-}
-
-@media (min-width: 60rem) {
-  .panelGrid {
-    grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
-  }
+.panelDivider {
+  border: none;
+  border-top: 1px solid var(--db-border, #262626);
+  margin: 1.25rem 0;
 }
 
 .panelTitle {
