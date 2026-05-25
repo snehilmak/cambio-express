@@ -6,6 +6,7 @@ import { ApiError } from "../lib/api";
 import {
   Alert, Breadcrumbs, Button, Card, EmptyState, ErrorState,
   Field, Loading, PageHeader, PageShell, Pill, Select, Textarea,
+  useToast,
 } from "../components/ui";
 
 const CATEGORIES = [
@@ -94,6 +95,7 @@ export default function SuperadminTickets() {
 
 function TicketCard({ ticket: t }: { ticket: TicketRow }) {
   const qc = useQueryClient();
+  const toast = useToast();
   const [replying, setReplying] = useState(false);
   const [reply, setReply] = useState(t.admin_reply || "");
   const [newStatus, setNewStatus] = useState(t.status);
@@ -115,6 +117,7 @@ function TicketCard({ ticket: t }: { ticket: TicketRow }) {
       if (Object.keys(body).length > 0) {
         await updateTicket(t.id, body);
         void qc.invalidateQueries({ queryKey: ["tickets"] });
+        toast({ message: "Ticket updated.", tone: "success" });
       }
       setReplying(false);
     } catch (err) {
