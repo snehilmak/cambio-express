@@ -9,8 +9,9 @@
 .catGrid {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 0.5rem;
   margin-top: 1rem;
+  max-width: 52rem;
 }
 
 /* ── Category accordion (inside a <Card>) ────────────────── */
@@ -23,7 +24,7 @@
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  padding: 1rem 1.25rem;
+  padding: 0.75rem 1.1rem;
   cursor: pointer;
   user-select: none;
   list-style: none;
@@ -31,11 +32,16 @@
 
 .summary::-webkit-details-marker { display: none; }
 
+.summary:hover {
+  background: var(--db-fill-subtle, rgba(255, 255, 255, 0.04));
+  border-radius: 0.75rem;
+}
+
 .caret {
   color: var(--db-text-muted, #a3a3a3);
   display: inline-flex;
   margin-left: auto;
-  transition: transform 150ms ease;
+  transition: transform 200ms ease;
 }
 
 details[open] > .summary .caret {
@@ -45,31 +51,45 @@ details[open] > .summary .caret {
 .icon {
   color: var(--db-accent, #3fff00);
   display: inline-flex;
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
   flex-shrink: 0;
 }
 
 .catLabel {
   font-family: var(--db-font-display, "Space Grotesk", sans-serif);
-  font-size: 0.95rem;
-  font-weight: 700;
+  font-size: 0.88rem;
+  font-weight: 600;
   color: var(--db-text, #f5f5f5);
 }
 
-/* ── Report rows inside the expanded category ────────────── */
+/* ── Accordion body animation ───────────────────────────── */
 
 .catBody {
   border-top: 1px solid var(--db-border, #262626);
-  padding: 0.5rem 1.25rem 1rem;
+  padding: 0.35rem 1.1rem 0.75rem;
+  animation: catBodyIn 200ms ease both;
 }
+
+@keyframes catBodyIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ── Report rows inside the expanded category ────────────── */
 
 .row {
   display: flex;
   align-items: center;
   gap: 1rem;
-  padding: 0.85rem 0.5rem;
-  border-radius: 0.5rem;
+  padding: 0.65rem 0.5rem;
+  border-radius: 0.4rem;
   transition: background 120ms ease;
 }
 
@@ -88,15 +108,15 @@ details[open] > .summary .caret {
 
 .rowName {
   font-family: var(--db-font-display, "Space Grotesk", sans-serif);
-  font-size: 0.88rem;
+  font-size: 0.85rem;
   font-weight: 600;
   color: var(--db-text, #f5f5f5);
 }
 
 .rowDesc {
-  font-size: 0.78rem;
+  font-size: 0.75rem;
   color: var(--db-text-muted, #a3a3a3);
-  margin-top: 0.15rem;
+  margin-top: 0.1rem;
 }
 
 /* ── Empty state ─────────────────────────────────────────── */
@@ -110,4 +130,5 @@ details[open] > .summary .caret {
   border: 1px dashed var(--db-border, #262626);
   border-radius: 0.875rem;
   margin-top: 1rem;
+  max-width: 52rem;
 }
