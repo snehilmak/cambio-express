@@ -164,7 +164,7 @@ export default function AdminUserForm() {
   return (
     <PageShell maxWidth="36rem">
 
-      <Breadcrumbs crumbs={[{ label: "User Management", to: "/admin/users" }, { label: isNew ? "Add User" : "Edit User" }]} />
+      <Breadcrumbs crumbs={[{ label: "User Management", to: "/admin/users" }, { label: isEdit ? "Edit User" : "Add User" }]} />
 
       <PageHeader title={isEdit ? "Edit User" : "Add User"} />
 

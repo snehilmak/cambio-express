@@ -286,15 +286,13 @@ export const HELP_REGISTRY: readonly HelpEntry[] = [
       + "instead.</p>",
   },
   {
-    title: "What's the home page (/app/home)?",
-    keywords: "home tile hub landing dashboard most used recents",
+    title: "What's the dashboard?",
+    keywords: "home dashboard landing",
     body:
-      "<p>The /app/home page is the tile-hub landing every user "
-      + "sees after sign-in. Every action you can take is one tap "
-      + "away as a colored tile, grouped by section. A "
-      + "<strong>Most Used</strong> strip auto-builds from your "
-      + "click history after a few sessions.</p>",
-    deepLink: { label: "Open home", to: "/home" },
+      "<p>The dashboard is the first page you see after sign-in. "
+      + "It shows today's store activity at a glance — transfers, "
+      + "daily book status, and recent activity.</p>",
+    deepLink: { label: "Open dashboard", to: "/dashboard" },
   },
 
   // ── Billing / plans ────────────────────────────────────

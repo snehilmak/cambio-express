@@ -2,7 +2,7 @@
   "name": "DineroBook — MSB Manager",
   "short_name": "DineroBook",
   "description": "Log money transfers, track daily books, reconcile ACH batches, and monitor your MSB store from anywhere.",
-  "start_url": "/app/home",
+  "start_url": "/app/dashboard",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",

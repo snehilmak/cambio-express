@@ -7,7 +7,6 @@ import { clearVisits, recordVisit } from "../lib/recency";
 import { reconcileTheme } from "../lib/theme";
 import { AnnouncementBanner } from "./AnnouncementBanner";
 import { HelpCenter } from "./HelpCenter";
-import { HomeButton } from "./HomeButton";
 import { InstallAppButton } from "./InstallAppButton";
 import { filterNavForRole } from "./navConfig";
 import { SlimSidebar } from "./SlimSidebar";
@@ -139,7 +138,6 @@ function Topbar({
       </button>
       <span style={topbarSpacer} />
       {referralCode && <ReferralBadge code={referralCode} />}
-      <HomeButton />
       <InstallAppButton />
       <ThemeToggle />
       <UserMenu identity={identity} onSignOut={onSignOut} />
@@ -153,25 +151,29 @@ function ReferralBadge({ code }: { code: string }) {
     <button
       type="button"
       onClick={() => navigate("/account/referrals")}
-      title={`Your referral code: ${code}`}
-      className="ds-btn ds-btn--secondary"
+      title={`Earn $100 — share your code: ${code}`}
       style={{
         display: "inline-flex",
         alignItems: "center",
-        gap: "0.35rem",
-        padding: "0.3rem 0.65rem",
-        borderRadius: "0.5rem",
-        fontSize: "0.78rem",
-        fontWeight: 600,
+        gap: "0.3rem",
+        padding: "0.3rem 0.7rem",
+        borderRadius: "999px",
+        background: "linear-gradient(135deg, #d4a017 0%, #f5c842 100%)",
+        color: "#1a1a1a",
+        fontSize: "0.72rem",
+        fontWeight: 800,
+        letterSpacing: "0.03em",
         cursor: "pointer",
+        border: "none",
+        whiteSpace: "nowrap",
       }}
     >
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-        stroke="currentColor" strokeWidth="2" strokeLinecap="round"
-        strokeLinejoin="round" aria-hidden="true">
-        <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z" />
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="#1a1a1a"
+        stroke="none" aria-hidden="true">
+        <path d="M2.5 8.5L5 3h14l2.5 5.5L12 21 2.5 8.5z" />
+        <path d="M12 3l-2 5.5h4L12 3z" opacity="0.5" />
       </svg>
-      {code}
+      $100
     </button>
   );
 }
