@@ -22,7 +22,6 @@ const AdminCashiers = lazy(() => import("./routes/AdminCashiers"));
 const AdminReferrals = lazy(() => import("./routes/AdminReferrals"));
 const AdminSubscription = lazy(() => import("./routes/AdminSubscription"));
 const AdminDataExport = lazy(() => import("./routes/AdminDataExport"));
-const AdminTaxExport = lazy(() => import("./routes/AdminTaxExport"));
 const AdminTimeClock = lazy(() => import("./routes/AdminTimeClock"));
 const AdminTimeClockCredentials = lazy(
   () => import("./routes/AdminTimeClockCredentials"),
@@ -280,7 +279,6 @@ export default function App() {
           <Route path="subscribe/success"     element={<SubscribeSuccess />} />
           <Route path="admin/subscription"    element={<AdminSubscription />} />
           <Route path="admin/data-export"     element={<AdminDataExport />} />
-          <Route path="admin/tax-export"      element={<AdminTaxExport />} />
           <Route path="admin/timeclock"               element={<AdminTimeClock />} />
           <Route path="admin/timeclock/credentials"   element={<AdminTimeClockCredentials />} />
           <Route path="admin/timeclock/schedule"      element={<AdminTimeClockSchedule />} />

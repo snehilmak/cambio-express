@@ -140,6 +140,10 @@ class LoginResponse(BaseModel):
     # so the SPA routes to /app/login/2fa/enroll instead of
     # /app/login/2fa. False on every other shape.
     enroll_required: bool = False
+    # PWA fallback: the refresh token JTI so the SPA can persist
+    # it in localStorage and send it back when the httpOnly cookie
+    # was cleared between standalone-window sessions.
+    refresh_jti: str | None = None
 
 
 class TotpLoginRequest(BaseModel):

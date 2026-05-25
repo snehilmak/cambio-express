@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 
 import {
-  getCurrentIdentity, persistLoginResponse,
+  getCurrentIdentity, getRefreshFallback, persistLoginResponse,
 } from "../lib/auth";
 import { Loading } from "./ui";
 
@@ -45,9 +45,16 @@ export default function RequireAuth({ children }: Props) {
     let cancelled = false;
     void (async () => {
       try {
+        const fallbackJti = getRefreshFallback();
         const resp = await fetch("/api/v2/auth/refresh", {
           method: "POST",
           credentials: "include",
+          headers: fallbackJti
+            ? { "Content-Type": "application/json" }
+            : undefined,
+          body: fallbackJti
+            ? JSON.stringify({ refresh_token: fallbackJti })
+            : undefined,
         });
         if (cancelled) return;
         if (resp.ok) {
