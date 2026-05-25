@@ -173,7 +173,7 @@ class DailyLineItem(Base):
     # One of the keys in ``_LINE_ITEM_KINDS``. Not a DB enum so new
     # kinds can be introduced with zero migration.
     kind        = Column(String(40), nullable=False, index=True)
-    at_time     = Column(Time, nullable=False)
+    at_time     = Column(Time, nullable=True)
     amount      = Column(Float, nullable=False)
     note        = Column(String(120), default="")
     # When this line item was auto-created by marking a ReturnCheck as

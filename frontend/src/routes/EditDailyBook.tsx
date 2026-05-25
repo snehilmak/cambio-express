@@ -1062,7 +1062,6 @@ function LineItemWidget({
 
   async function saveEdit() {
     if (editingId == null || busy) return;
-    if (!editTime) { setErr("Pick a time."); return; }
     if (!editAmount || editAmount <= 0) {
       setErr("Amount must be greater than zero.");
       return;
@@ -1087,7 +1086,6 @@ function LineItemWidget({
   async function add() {
     if (busy) return;
     setErr(null);
-    if (!time) { setErr("Pick a time."); return; }
     if (!amount || amount <= 0) {
       setErr("Amount must be greater than zero."); return;
     }
