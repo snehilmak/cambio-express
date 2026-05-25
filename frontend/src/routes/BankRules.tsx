@@ -16,7 +16,7 @@ import {
   Breadcrumbs,
   Button, Card, ConfirmDialog, EmptyState, ErrorState, Field,
   Input, Loading, PageHeader, PageShell, Section, Select, Table, tdStyle,
-  thStyle,
+  thStyle, useToast,
 } from "../components/ui";
 import styles from "./BankRules.module.css";
 
@@ -71,6 +71,7 @@ const SPAN_2 = { gridColumn: "span 2" } as const;
 export default function BankRules() {
   const rules = useBankRules();
   const accounts = useBankAccounts();
+  const toast = useToast();
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
@@ -109,9 +110,11 @@ export default function BankRules() {
       } else {
         await createRule(body);
       }
+      const wasEdit = !!editingId;
       setForm(EMPTY_FORM);
       setEditingId(null);
       await rules.refetch();
+      toast({ message: wasEdit ? "Rule updated." : "Rule created.", tone: "success" });
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Save failed.");
     } finally {
@@ -139,6 +142,7 @@ export default function BankRules() {
   async function handleToggle(r: BankRuleRow) {
     await toggleRule(r.id, !r.enabled);
     await rules.refetch();
+    toast({ message: r.enabled ? "Rule disabled." : "Rule enabled.", tone: "success" });
   }
 
   // Destructive: gate via ConfirmDialog rather than window.confirm
@@ -154,6 +158,7 @@ export default function BankRules() {
       await deleteRule(pendingDelete.id);
       await rules.refetch();
       setPendingDelete(null);
+      toast({ message: "Rule deleted.", tone: "success" });
     } finally {
       setDeleteBusy(false);
     }
