@@ -115,7 +115,7 @@ export default function SuperadminDashboard() {
                   ? `+${data.new_stores_delta} vs prior 30d`
                   : `${data.new_stores_delta} vs prior 30d`
               }
-              tone={data.new_stores_delta >= 0 ? "accent" : "negative"}
+              tone={data.new_stores_delta >= 0 ? "positive" : "negative"}
             />
             <KpiCard
               label="Churn (30d)"
@@ -125,7 +125,7 @@ export default function SuperadminDashboard() {
                   ? `${data.churn_delta} vs prior 30d`
                   : `+${data.churn_delta} vs prior 30d`
               }
-              tone={data.churn_delta <= 0 ? "accent" : "negative"}
+              tone={data.churn_delta <= 0 ? "positive" : "negative"}
             />
             <KpiCard
               label="30d volume"
