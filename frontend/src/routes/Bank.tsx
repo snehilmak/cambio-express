@@ -14,7 +14,7 @@ import { ApiError } from "../lib/api";
 import {
   Breadcrumbs,
   Button, Card, ConfirmDialog, ErrorState,
-  Loading, PageHeader, PageShell, space, useToast,
+  Loading, PageHeader, PageShell, SectionTitle, space, useToast,
 } from "../components/ui";
 import styles from "./Bank.module.css";
 
@@ -221,7 +221,7 @@ export default function Bank() {
 
         {!accounts.isLoading && !accounts.isError && accountList.length === 0 && (
           <div className={styles.emptyConnect}>
-            <h3>Connect your bank</h3>
+            <SectionTitle>Connect your bank</SectionTitle>
             <p className={styles.muted}>
               Link your accounts securely through Stripe Financial Connections.
               We only see balances — never your bank login.
