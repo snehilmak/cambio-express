@@ -39,7 +39,6 @@ const BatchForm = lazy(() => import("./routes/BatchForm"));
 const Customers = lazy(() => import("./routes/Customers"));
 const DailyBook = lazy(() => import("./routes/DailyBook"));
 const Dashboard = lazy(() => import("./routes/Dashboard"));
-const HomeHub = lazy(() => import("./routes/HomeHub"));
 const EditDailyBook = lazy(() => import("./routes/EditDailyBook"));
 const EditMonthly = lazy(() => import("./routes/EditMonthly"));
 const EditTransfer = lazy(() => import("./routes/EditTransfer"));
@@ -193,7 +192,7 @@ export default function App() {
         <Route path="reset-password"   element={<ResetPassword />} />
         <Route path="privacy"          element={<Privacy />} />
         <Route element={<AuthedShell />}>
-          <Route path="home"             element={<HomeHub />} />
+          <Route path="home"             element={<Navigate to="/dashboard" replace />} />
           <Route path="dashboard"        element={<Dashboard />} />
           <Route path="transfers"        element={<Transfers />} />
           <Route path="transfers/new"      element={<NewTransfer />} />

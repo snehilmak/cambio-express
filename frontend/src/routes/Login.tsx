@@ -55,15 +55,11 @@ export default function Login() {
   const [pending, setPending]   = useState<PendingState | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
-  // Default post-login destination is the /home tile-hub for
-  // every role — it surfaces every action the user can take and
-  // auto-grows a Most Used shortcut row over time. An explicit
-  // `?from=` (e.g. RequireAuth bouncing a deep link) overrides.
   const stateDest = (location.state as LocationState | null)?.from;
 
   function finishLogin(token: string) {
     setAccessToken(token);
-    navigate(stateDest || "/home", { replace: true });
+    navigate(stateDest || "/dashboard", { replace: true });
   }
 
   async function onSubmit(e: FormEvent) {

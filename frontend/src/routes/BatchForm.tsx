@@ -130,7 +130,7 @@ export default function BatchForm() {
   return (
     <PageShell maxWidth="62rem">
 
-      <Breadcrumbs crumbs={[{ label: "Batches", to: "/batches" }, { label: isNew ? "New batch" : "Edit batch" }]} />
+      <Breadcrumbs crumbs={[{ label: "Batches", to: "/batches" }, { label: isEdit ? "Edit batch" : "New batch" }]} />
 
       <PageHeader
         title={isEdit ? `Edit batch #${batchId}` : "New ACH batch"}

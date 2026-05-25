@@ -165,7 +165,7 @@ export default function ReturnCheckForm() {
   return (
     <PageShell maxWidth="62rem">
 
-      <Breadcrumbs crumbs={[{ label: "Return checks", to: "/return-checks" }, { label: isNew ? "New return check" : "Edit return check" }]} />
+      <Breadcrumbs crumbs={[{ label: "Return checks", to: "/return-checks" }, { label: isEdit ? "Edit return check" : "New return check" }]} />
 
       <PageHeader
         title={isEdit ? `Return check #${rcId}` : "New return check"}
