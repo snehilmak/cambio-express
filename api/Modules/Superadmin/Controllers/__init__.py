@@ -359,6 +359,96 @@ def impersonate_route(
     }
 
 
+# ── System health ──────────────────────────────────────────
+
+
+@router.get("/system-health")
+def system_health_route(
+    db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
+) -> dict[str, Any]:
+    """Platform health dashboard — DB, Stripe, SMTP, queue status."""
+    _require_superadmin(claims)
+    import os
+    import platform
+    from datetime import datetime
+
+    from api.Modules.Tenancy.Models import Store, User
+    from api.Modules.Transfers.Models import Transfer
+
+    # DB stats
+    total_users = db.query(User).count()
+    total_stores = db.query(Store).count()
+    total_transfers = db.query(Transfer).count()
+    db_ok = True
+    db_error = ""
+
+    # Stripe health (wrapped — may hit the network)
+    stripe_health: dict[str, Any] = {}
+    try:
+        from api.Modules.Billing.Services.health import check_stripe_integration
+        stripe_health = check_stripe_integration()
+    except Exception as e:
+        stripe_health = {"ok": False, "error": str(e)[:200]}
+
+    # SMTP / email health
+    email_health: dict[str, Any] = {}
+    try:
+        from api.Modules.Notifications.Services.smtp import health_check
+        raw = health_check(db)
+        email_health = {
+            "configured": raw.get("configured", False),
+            "status": raw.get("status", "unknown"),
+            "error": raw.get("error", ""),
+            "recent_events": raw.get("recent_events", {}),
+            "suppressed_count": raw.get("suppressed_count", 0),
+            "last_event_at": (
+                raw["last_event_at"].isoformat()
+                if raw.get("last_event_at") else None
+            ),
+        }
+    except Exception as e:
+        email_health = {"configured": False, "error": str(e)[:200]}
+
+    # Job queue
+    queue_enabled = os.environ.get("JOB_QUEUE_ENABLED") == "1"
+    redis_url = bool(os.environ.get("REDIS_URL"))
+
+    # Rate limiting
+    rate_limit_enabled = os.environ.get("RATELIMIT_ENABLED", "1") != "0"
+
+    # Environment
+    env_info = {
+        "python_version": platform.python_version(),
+        "platform": platform.platform(),
+        "server_time": datetime.utcnow().isoformat(),
+        "database_url_set": bool(os.environ.get("DATABASE_URL")),
+        "secret_key_set": bool(os.environ.get("SECRET_KEY") or os.environ.get("AUTH_JWT_SECRET")),
+        "sentry_dsn_set": bool(os.environ.get("SENTRY_DSN")),
+        "webauthn_rp_id": os.environ.get("WEBAUTHN_RP_ID", "(auto)"),
+    }
+
+    return {
+        "db": {
+            "ok": db_ok,
+            "error": db_error,
+            "total_users": total_users,
+            "total_stores": total_stores,
+            "total_transfers": total_transfers,
+        },
+        "stripe": stripe_health,
+        "email": email_health,
+        "queue": {
+            "enabled": queue_enabled,
+            "redis_configured": redis_url,
+        },
+        "rate_limiting": {
+            "enabled": rate_limit_enabled,
+        },
+        "env": env_info,
+    }
+
+
 @router.get("/stores", response_model=SuperadminStoreListResponse)
 def list_stores_route(
     db: Session = Depends(get_db),

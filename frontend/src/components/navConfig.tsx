@@ -173,6 +173,7 @@ export const NAV: NavGroup[] = [
       { to: "/superadmin/announcements", label: "Announcements", icon: iconBanner() },
       { to: "/superadmin/reports",       label: "Reports",       icon: iconReports() },
       { to: "/superadmin/controls",      label: "Controls",      icon: iconSettings() },
+      { to: "/superadmin/health",        label: "Health",        icon: iconHealth() },
     ],
   },
   {
@@ -428,6 +429,15 @@ function iconSettings() {
   );
 }
 
+function iconHealth() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false"
+      stroke="currentColor" strokeWidth="2" strokeLinecap="round"
+      strokeLinejoin="round">
+      <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+    </svg>
+  );
+}
 function iconSupport() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false"

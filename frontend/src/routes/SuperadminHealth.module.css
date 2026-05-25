@@ -1,0 +1,95 @@
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.25rem;
+}
+
+@media (max-width: 768px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.55rem 0;
+  border-bottom: 1px solid var(--db-border, #262626);
+  gap: 1rem;
+}
+
+.row:last-child {
+  border-bottom: none;
+}
+
+.rowLabel {
+  color: var(--db-text-muted, #888);
+  font-size: 0.88rem;
+}
+
+.rowValue {
+  font-family: var(--db-font-mono, "JetBrains Mono", monospace);
+  font-size: 0.88rem;
+  text-align: right;
+}
+
+.envGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+}
+
+@media (max-width: 768px) {
+  .envGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.statusDot {
+  display: inline-block;
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 50%;
+  margin-right: 0.4rem;
+  vertical-align: middle;
+}
+
+.dotOk {
+  composes: statusDot;
+  background: var(--db-accent, #3fff00);
+}
+
+.dotError {
+  composes: statusDot;
+  background: var(--db-negative, #ef4444);
+}
+
+.dotWarn {
+  composes: statusDot;
+  background: var(--db-warning, #f59e0b);
+}
+
+.dotMuted {
+  composes: statusDot;
+  background: var(--db-text-muted, #888);
+}
+
+.errorText {
+  color: var(--db-negative, #ef4444);
+  font-size: 0.82rem;
+  margin-top: 0.25rem;
+  word-break: break-all;
+}
+
+.priceGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+}
+
+@media (max-width: 768px) {
+  .priceGrid {
+    grid-template-columns: 1fr;
+  }
+}

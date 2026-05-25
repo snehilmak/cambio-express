@@ -90,7 +90,7 @@ export default function SuperadminDashboard() {
             <KpiCard
               label="Active stores"
               value={data.active_count.toLocaleString()}
-              tone="accent"
+              tone="positive"
             />
             <KpiCard
               label="Trial stores"
@@ -100,17 +100,17 @@ export default function SuperadminDashboard() {
             <KpiCard
               label="Paid stores"
               value={data.paid_count.toLocaleString()}
-              tone="accent"
+              tone="positive"
             />
             <KpiCard
               label="MRR"
               value={fmtMoney(data.estimated_mrr)}
-              tone="accent"
+              tone="positive"
             />
             <KpiCard
               label="New (30d)"
               value={`${data.new_stores_30d}`}
-              detail={
+              sub={
                 data.new_stores_delta >= 0
                   ? `+${data.new_stores_delta} vs prior 30d`
                   : `${data.new_stores_delta} vs prior 30d`
@@ -120,7 +120,7 @@ export default function SuperadminDashboard() {
             <KpiCard
               label="Churn (30d)"
               value={`${data.churn_30d}`}
-              detail={
+              sub={
                 data.churn_delta <= 0
                   ? `${data.churn_delta} vs prior 30d`
                   : `+${data.churn_delta} vs prior 30d`
@@ -130,7 +130,7 @@ export default function SuperadminDashboard() {
             <KpiCard
               label="30d volume"
               value={fmtMoney(data.total_volume_30d)}
-              detail={`${data.total_transfers_30d.toLocaleString()} transfers`}
+              sub={`${data.total_transfers_30d.toLocaleString()} transfers`}
             />
           </KpiGrid>
 
