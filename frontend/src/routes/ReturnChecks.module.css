@@ -1,7 +1,7 @@
 .filters {
   display: flex;
-  gap: var(--db-space-sm, 0.5rem);
-  margin-bottom: var(--db-space-lg, 1.25rem);
+  gap: 0.5rem;
+  margin-bottom: 1.25rem;
 }
 
 .filterBtn {

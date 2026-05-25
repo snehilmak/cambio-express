@@ -8,7 +8,7 @@ import { reconcileTheme } from "../lib/theme";
 import { AnnouncementBanner } from "./AnnouncementBanner";
 import { HelpCenter } from "./HelpCenter";
 import { InstallAppButton } from "./InstallAppButton";
-import { filterNavForRole } from "./navConfig";
+import { filterNavForRole, SUPPORT_LINK } from "./navConfig";
 import { SlimSidebar } from "./SlimSidebar";
 import ThemeToggle from "./ThemeToggle";
 import { UserMenu } from "./UserMenu";
@@ -89,7 +89,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const groups = filterNavForRole(role);
   return (
     <div className="app-shell">
-      <SlimSidebar groups={groups} drawerOpen={drawerOpen} />
+      <SlimSidebar groups={groups} drawerOpen={drawerOpen} supportLink={SUPPORT_LINK} />
       <Topbar
         identity={identity}
         onSignOut={onSignOut}
