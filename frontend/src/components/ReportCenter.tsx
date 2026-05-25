@@ -97,7 +97,7 @@ function CategoryCard({
           <span className={styles.icon}
                 dangerouslySetInnerHTML={{ __html: cat.icon }} />
           <span className={styles.catLabel}>{cat.label}</span>
-          <Pill tone="muted">{cat.reports.length}</Pill>
+          <Pill tone="neutral">{cat.reports.length}</Pill>
           <span className={styles.caret} aria-hidden="true">
             <svg viewBox="0 0 24 24" stroke="currentColor" fill="none"
                  strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
