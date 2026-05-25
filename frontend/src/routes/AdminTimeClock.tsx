@@ -96,7 +96,7 @@ export default function AdminTimeClock() {
 
   if (!canView) {
     return (
-      <PageShell maxWidth="80rem">
+      <PageShell maxWidth="100%">
         <PageHeader title="Payroll history" />
         <EmptyState title="Admin or owner only." />
       </PageShell>
@@ -104,7 +104,7 @@ export default function AdminTimeClock() {
   }
 
   return (
-    <PageShell maxWidth="80rem">
+    <PageShell maxWidth="100%">
 
       <Breadcrumbs crumbs={[{ label: "HR" }, { label: "Payroll history" }]} />
 

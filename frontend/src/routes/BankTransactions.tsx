@@ -74,7 +74,7 @@ export default function BankTransactions() {
 
   if (identity?.store_id == null) {
     return (
-      <PageShell maxWidth="80rem">
+      <PageShell maxWidth="100%">
         <PageHeader title="Bank transactions" />
         <Empty>Sign in as a store admin to view bank transactions.</Empty>
       </PageShell>
@@ -85,7 +85,7 @@ export default function BankTransactions() {
   const page       = txns.data?.page        ?? 1;
 
   return (
-    <PageShell maxWidth="80rem">
+    <PageShell maxWidth="100%">
 
       <Breadcrumbs crumbs={[{ label: "Finance" }, { label: "Bank transactions" }]} />
 
@@ -101,7 +101,6 @@ export default function BankTransactions() {
           <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
             <Button
               tone="primary"
-              size="sm"
               busy={syncing}
               disabled={syncing}
               onClick={async () => {
@@ -123,7 +122,7 @@ export default function BankTransactions() {
             >
               {syncing ? "Syncing…" : "Sync transactions"}
             </Button>
-            <ButtonLink to="/bank" tone="secondary" size="sm">
+            <ButtonLink to="/bank" tone="secondary">
               Manage accounts
             </ButtonLink>
           </div>
