@@ -744,20 +744,18 @@ function CountrySections({
             </div>
           </summary>
           <form onSubmit={addCountry} style={{ padding: 18 }}>
-            <label className={styles.field} style={{ maxWidth: 460 }}>
-              <span className={styles.fieldLabel}>Country *</span>
-              <select
+            <Field label="Country *" style={{ maxWidth: 460 }}>
+              <Select
                 value={picker}
                 required
                 onChange={(e) => setPicker(e.target.value)}
-                className={styles.input}
               >
                 <option value="">— Pick a country —</option>
                 {COUNTRY_PICKER.map(([iso, name]) => (
                   <option key={iso} value={iso}>{name}</option>
                 ))}
-              </select>
-            </label>
+              </Select>
+            </Field>
             {createError && <div className={styles.flashErr} style={{ marginTop: 12 }}>{createError}</div>}
             <div style={{ marginTop: 14, display: "flex", justifyContent: "flex-end" }}>
               <Button

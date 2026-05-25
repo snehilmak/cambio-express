@@ -133,13 +133,11 @@ export default function AdminCashiers() {
 
       <Breadcrumbs crumbs={[{ label: "HR" }, { label: "Cashiers" }]} />
 
-      <PageHeader title="Cashiers" />
+      <PageHeader
+        title="Cashiers"
+        subtitle='Names for the "Processed by" dropdown on transfers. Deactivated rows preserve historical attribution.'
+      />
       <Card>
-        <p className={styles.helpText}>
-          Cashier names that appear in the "Processed by" dropdown
-          on the transfer form. Deactivated rows stay so historical
-          transfer attribution survives.
-        </p>
 
         {isLoading && <Loading />}
         {isError && (
