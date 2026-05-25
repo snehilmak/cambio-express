@@ -24,6 +24,7 @@ import {
   getCurrentCoordinates,
 } from "../lib/geolocation";
 import {
+  Breadcrumbs,
   Alert, Button, ButtonLink, Card, Checkbox, ConfirmDialog, ErrorState, Field,
   Input, Loading, PageHeader, PageShell, SectionTitle, Select, space, Switch,
   TabsBar, TabsLink, useToast,
@@ -53,6 +54,9 @@ export default function Settings() {
 
   return (
     <PageShell maxWidth="60rem" gap="1rem">
+
+      <Breadcrumbs crumbs={[{ label: "Settings" }]} />
+
       <PageHeader title="Settings" subtitle={identity?.username || "—"} />
 
       <TabsBar>

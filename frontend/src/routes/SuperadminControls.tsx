@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 
 import { useDashboardSummary } from "../api/dashboard";
 import {
+  Breadcrumbs,
   ErrorState, KpiCard, KpiGrid, Loading, PageHeader, PageShell, Section,
 } from "../components/ui";
 import styles from "./SuperadminControls.module.css";
@@ -40,6 +41,9 @@ export default function SuperadminControls() {
 
   return (
     <PageShell gap="1.25rem">
+
+      <Breadcrumbs crumbs={[{ label: "Platform" }, { label: "Controls" }]} />
+
       <PageHeader
         title="Platform Controls"
         subtitle="Stores, billing, anomalies, audit log, announcements, reports."

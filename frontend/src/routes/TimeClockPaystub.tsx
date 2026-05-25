@@ -4,7 +4,7 @@ import { usePaystub } from "../api/timeclock";
 import { useProfile, useStoreInfo } from "../api/account";
 import { formatTimestamp } from "../lib/datetime";
 import {
-  Button, ErrorState, Loading, PageShell,
+  Breadcrumbs, Button, ErrorState, Loading, PageShell,
 } from "../components/ui";
 import { getCurrentIdentity } from "../lib/auth";
 import styles from "./TimeClockPaystub.module.css";
@@ -79,6 +79,10 @@ export default function TimeClockPaystub() {
 
   return (
     <PageShell maxWidth="48rem">
+      <Breadcrumbs crumbs={[
+        { label: "HR", to: "/admin/timeclock" },
+        { label: "Paystub" },
+      ]} />
       <div className={styles.printbar}>
         <Button onClick={() => window.print()} tone="primary">
           Print

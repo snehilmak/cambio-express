@@ -10,6 +10,7 @@ import {
   type CreateAnnouncementBody,
 } from "../api/announcements";
 import {
+  Breadcrumbs,
   Alert, Button, Card, ConfirmDialog, Empty, EmptyState, ErrorState, Field,
   Input, PageHeader, PageShell, Pill, SectionTitle, Select, Table,
   TableSkeleton, Textarea, tdStyle, thStyle, type PillTone,
@@ -52,6 +53,9 @@ export default function SuperadminAnnouncements() {
 
   return (
     <PageShell>
+
+      <Breadcrumbs crumbs={[{ label: "Platform" }, { label: "Announcements" }]} />
+
       <PageHeader
         title="Announcements"
         subtitle={data ? `${data.total.toLocaleString()} on file` : "—"}

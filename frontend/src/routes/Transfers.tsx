@@ -7,6 +7,7 @@ import {
 } from "../api/transfers";
 import { getCurrentIdentity } from "../lib/auth";
 import {
+  Breadcrumbs,
   ButtonLink, Card, Empty, EmptyState, ErrorState, Field, Input,
   PageHeader, PageShell, Pager, Pill, Select, Table, TableSkeleton,
   tdStyle, thStyle,
@@ -123,6 +124,9 @@ export default function Transfers() {
 
   return (
     <PageShell>
+
+      <Breadcrumbs crumbs={[{ label: "Transfers" }]} />
+
       <PageHeader
         title="Transfers"
         subtitle={data

@@ -1,6 +1,7 @@
 import { useSuperadminReports } from "../api/superadmin";
 import ReportCenter from "../components/ReportCenter";
-import { ErrorState, Loading, PageHeader, PageShell } from "../components/ui";
+import {
+  Breadcrumbs, ErrorState, Loading, PageHeader, PageShell } from "../components/ui";
 import { ApiError } from "../lib/api";
 
 // /app/superadmin/reports — platform-wide report center index.
@@ -25,6 +26,9 @@ export default function SuperadminReports() {
     const status = error instanceof ApiError ? error.status : 0;
     return (
       <PageShell>
+
+        <Breadcrumbs crumbs={[{ label: "Platform" }, { label: "Reports" }]} />
+
         <PageHeader title="Reports" />
         <ErrorState
           message={

@@ -8,6 +8,7 @@ import { Line } from "react-chartjs-2";
 
 import { useOwnerDashboard } from "../api/owner";
 import {
+  Breadcrumbs,
   Card, ErrorState, KpiCard, KpiGrid, Loading, PageHeader, PageShell,
   Section, TabsBar, TabsButton, Table, tdStyle, thStyle,
 } from "../components/ui";
@@ -35,6 +36,9 @@ export default function OwnerDashboard() {
 
   return (
     <PageShell gap="1.25rem">
+
+      <Breadcrumbs crumbs={[{ label: "Owner dashboard" }]} />
+
       <PageHeader
         title="Owner Dashboard"
         actions={(
