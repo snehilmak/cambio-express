@@ -55,7 +55,7 @@ export default function AdminUsers() {
         )}
       />
 
-      <Card padding="0.5rem 0.5rem">
+      <Card>
         {isLoading && <TableSkeleton rows={4} cols={4} />}
         {isError && (
           <ErrorState
