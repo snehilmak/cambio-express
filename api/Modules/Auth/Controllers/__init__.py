@@ -641,10 +641,10 @@ def refresh_route(
         )
     from api.Modules.Auth.Services.refresh import (
         DEFAULT_REFRESH_TOKEN_TTL_SECONDS,
-        RefreshTokenInvalid, rotate as _rotate,
+        RefreshTokenInvalid, reuse as _reuse,
     )
     try:
-        old_row, new = _rotate(
+        row = _reuse(
             db, jti=db_refresh_token,
             user_agent=_client_user_agent(request),
             ip_address=_client_ip_address(request),
@@ -660,13 +660,11 @@ def refresh_route(
             status_code=401, detail="Invalid refresh token",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    # Look up the user via the refresh row so we can rebuild the
-    # full JWT claim set (role, store_id, permissions, …).
-    user = db.get(User, old_row.user_id)
+    user = db.get(User, row.user_id)
     if user is None or not user.is_active:
         _refresh_log.warning(
             "auth.refresh_user_unavailable user_id=%s active=%s ua=%r",
-            old_row.user_id,
+            row.user_id,
             bool(getattr(user, "is_active", False)) if user else False,
             ua,
         )
@@ -679,19 +677,19 @@ def refresh_route(
         store_id=user.store_id, permissions=perms,
         full_name=user.full_name or "",
         username=user.username,
-        # Propagate the session_id (inherited by ``rotate()``) so
-        # the SPA can keep flagging "this device" after refresh.
-        session_id=new.session_id,
+        session_id=row.session_id,
     ))
     _set_access_token_cookie(response, new_access)
+    # Re-set the same refresh cookie to extend its max-age so
+    # active users never see a login screen.
     _set_refresh_token_cookie(
-        response, new.jti,
+        response, row.jti,
         max_age_seconds=DEFAULT_REFRESH_TOKEN_TTL_SECONDS,
     )
     db.commit()
     _refresh_log.info(
         "auth.refresh_ok user_id=%s session_id=%s ua=%r",
-        user.id, new.session_id, ua,
+        user.id, row.session_id, ua,
     )
     return LoginResponse(
         access_token=new_access,

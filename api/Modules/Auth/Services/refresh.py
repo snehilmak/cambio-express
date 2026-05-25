@@ -155,6 +155,52 @@ class RefreshTokenUnknown(RefreshTokenInvalid):
     the row was deleted (rare — we keep revoked rows for audit)."""
 
 
+def reuse(
+    session: Session, *, jti: str,
+    user_agent: str | None = None,
+    ip_address: str | None = None,
+) -> RefreshToken:
+    """Validate the refresh token WITHOUT revoking it. Returns the
+    row so the caller can read ``user_id`` + ``session_id`` and
+    mint a fresh access JWT.
+
+    Updates ``user_agent`` / ``ip_address`` on the existing row so
+    the sessions panel reflects the latest device info.
+
+    This is the default refresh path — called by ``/auth/refresh``.
+    Token rotation (``rotate()``) is reserved for explicit security
+    events (password change, sign-out-everywhere) where we want to
+    invalidate the old cookie.
+
+    Why NOT rotate on every refresh: strict rotation races across
+    browser tabs. If two tabs fire ``/auth/refresh`` simultaneously
+    with the same cookie, the first one rotates (revokes the old
+    token + mints a new one), and the second one fails because the
+    old token is now revoked — bouncing the user to /login and
+    creating a fresh session. With httpOnly + Secure + SameSite=Lax,
+    cookie theft is already very difficult; the UX cost of the
+    multi-tab race far outweighs the replay-detection benefit.
+    """
+    now = _now()
+    row = _lookup_active(session, jti)
+    if row is None:
+        raise RefreshTokenUnknown()
+    if row.revoked_at is not None:
+        raise RefreshTokenRevoked()
+    if row.expires_at <= now:
+        row.revoked_at = now
+        session.flush()
+        raise RefreshTokenExpired()
+    ua = (user_agent or "")[:255] or None
+    ip = (ip_address or "")[:45] or None
+    if ua:
+        row.user_agent = ua
+    if ip:
+        row.ip_address = ip
+    session.flush()
+    return row
+
+
 def rotate(
     session: Session, *, jti: str,
     ttl_seconds: int = DEFAULT_REFRESH_TOKEN_TTL_SECONDS,
@@ -232,6 +278,7 @@ __all__ = [
     "RefreshTokenRevoked",
     "RefreshTokenUnknown",
     "issue",
+    "reuse",
     "revoke",
     "rotate",
 ]
