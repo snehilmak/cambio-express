@@ -507,7 +507,7 @@ def line_items_create_route(
             ),
         )
     try:
-        at = parse_at_time(body.at_time)
+        at = parse_at_time(body.at_time) if body.at_time.strip() else None
         amt = parse_amount(str(body.amount))
         row = add_line_item(
             db,

@@ -118,7 +118,7 @@ class LineItemCreateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     kind: str  # validated server-side against LINE_ITEM_KINDS
-    at_time: str  # HH:MM
+    at_time: str = ""  # HH:MM; empty = no time recorded
     amount: float  # > 0; the Service rejects ≤0
     note: str = ""
 

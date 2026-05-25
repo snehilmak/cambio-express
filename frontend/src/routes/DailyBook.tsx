@@ -139,12 +139,12 @@ export default function DailyBook() {
             value={`${data.days_logged} / ${daysInMonth(year, month)}`}
           />
           <KpiCard
-            label="Total receipts"
+            label="Total in"
             value={fmtMoney(data.total_receipts)}
             tone="positive"
           />
           <KpiCard
-            label="Total disbursements"
+            label="Total out"
             value={fmtMoney(data.total_disbursements)}
           />
           <KpiCard

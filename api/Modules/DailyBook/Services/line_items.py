@@ -47,7 +47,7 @@ def parse_amount(raw: str) -> float:
 
 def add_line_item(
     db: Session, *, store_id: int, report_date: date,
-    kind: str, at_time: time, amount: float,
+    kind: str, at_time: time | None, amount: float,
     note: str = "", created_by: int | None = None,
     allowed_kinds: Iterable[str] | None = None,
 ) -> DailyLineItem:
