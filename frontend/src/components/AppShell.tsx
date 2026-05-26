@@ -178,9 +178,37 @@ function ReferralBadge({ code }: { code: string }) {
   );
 }
 
+function MaintenanceBanner() {
+  const [msg, setMsg] = useState<string | null>(null);
+  useEffect(() => {
+    fetch("/api/v2/maintenance-status")
+      .then((r) => r.json())
+      .then((d: { enabled: boolean; message: string }) => {
+        if (d.enabled) setMsg(d.message || "The platform is under maintenance.");
+        else setMsg(null);
+      })
+      .catch(() => {});
+  }, []);
+  if (!msg) return null;
+  return (
+    <div style={{
+      background: "var(--db-tone-warning-bg, rgba(245,158,11,0.12))",
+      border: "1px solid var(--db-tone-warning-border, rgba(245,158,11,0.3))",
+      color: "var(--db-tone-warning-fg, #fbbf24)",
+      padding: "0.6rem 1.25rem",
+      textAlign: "center",
+      fontSize: "0.88rem",
+      fontWeight: 500,
+    }}>
+      {msg}
+    </div>
+  );
+}
+
 function ContentColumn({ children }: { children: React.ReactNode }) {
   return (
     <div className="app-content">
+      <MaintenanceBanner />
       <AnnouncementBanner />
       {children}
     </div>

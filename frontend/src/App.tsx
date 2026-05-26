@@ -96,6 +96,7 @@ const SuperadminDashboard = lazy(() => import("./routes/SuperadminDashboard"));
 const SuperadminBilling = lazy(() => import("./routes/SuperadminBilling"));
 const SuperadminEmailLog = lazy(() => import("./routes/SuperadminEmailLog"));
 const SuperadminHealth = lazy(() => import("./routes/SuperadminHealth"));
+const SuperadminMaintenance = lazy(() => import("./routes/SuperadminMaintenance"));
 const SuperadminStoreDrill = lazy(() => import("./routes/SuperadminStoreDrill"));
 const SuperadminPermissions = lazy(() => import("./routes/SuperadminPermissions"));
 const SuperadminReports = lazy(() => import("./routes/SuperadminReports"));
@@ -280,6 +281,7 @@ export default function App() {
           <Route path="superadmin/billing"       element={<SuperadminBilling />} />
           <Route path="superadmin/email-log"     element={<SuperadminEmailLog />} />
           <Route path="superadmin/health"        element={<SuperadminHealth />} />
+          <Route path="superadmin/maintenance"   element={<SuperadminMaintenance />} />
           <Route path="superadmin/stores/:id/drill" element={<SuperadminStoreDrill />} />
           <Route path="superadmin/permissions"   element={<SuperadminPermissions />} />
           <Route path="superadmin/stores"        element={<SuperadminStores />} />

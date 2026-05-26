@@ -22,7 +22,10 @@ mount or the OpenAPI ``root_path`` carry it.
 import os
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
+from sqlalchemy.orm import Session
+
+from api.Core.Database import get_db
 
 from api.Core.Config import settings
 from api.Core.Observability import (
@@ -227,6 +230,19 @@ def create_app() -> FastAPI:
         """Tiny liveness probe — 200 + JSON envelope so the load
         balancer can confirm the app is reachable."""
         return {"status": "ok", "version": app.version}
+
+    @app.get("/maintenance-status", tags=["meta"])
+    def maintenance_status(db: Session = Depends(get_db)) -> dict:
+        """Public (no auth) — returns maintenance mode state so the
+        SPA can show a banner without a separate superadmin call."""
+        try:
+            from api.Modules.Superadmin.Models import get_setting
+            enabled = get_setting(db, "maintenance_mode", "false") == "true"
+            message = get_setting(db, "maintenance_message", "")
+        except Exception:
+            enabled = False
+            message = ""
+        return {"enabled": enabled, "message": message}
 
     _register_routers(app)
     return app
