@@ -262,6 +262,7 @@ export interface SuperadminDashboardData {
   direct_signups: number;
   referral_signups: number;
   activity: ActivityEntry[];
+  mrr_trend: { labels: string[]; values: number[] };
 }
 
 export function useSuperadminDashboard() {
@@ -349,5 +350,37 @@ export async function impersonateUser(userId: number) {
   }>(
     `/api/v2/superadmin/impersonate/${userId}`,
     { method: "POST" },
+  );
+}
+
+export async function extendTrial(storeId: number, days: number = 14) {
+  return api<{ ok: boolean; trial_ends_at: string }>(
+    `/api/v2/superadmin/stores/${storeId}/extend-trial`,
+    { method: "POST", json: { days } },
+  );
+}
+
+export async function toggleStoreActive(storeId: number) {
+  return api<{ ok: boolean; is_active: boolean }>(
+    `/api/v2/superadmin/stores/${storeId}/toggle-active`,
+    { method: "POST" },
+  );
+}
+
+export async function emailStore(storeId: number, subject: string, message: string) {
+  return api<{ ok: boolean; sent_to: string[]; total: number }>(
+    `/api/v2/superadmin/stores/${storeId}/email`,
+    { method: "POST", json: { subject, message } },
+  );
+}
+
+export async function bulkStoreAction(
+  store_ids: number[],
+  action: "extend_trial" | "enable" | "disable",
+  days?: number,
+) {
+  return api<{ ok: boolean; count: number; results: Array<Record<string, unknown>> }>(
+    `/api/v2/superadmin/bulk-action`,
+    { method: "POST", json: { store_ids, action, days } },
   );
 }

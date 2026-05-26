@@ -161,6 +161,17 @@ export default function SuperadminDashboard() {
             </Section>
           </div>
 
+          <Section title="MRR trend (12 months)">
+            <Card>
+              <div className={styles.chartWrap}>
+                <MrrTrendChart
+                  labels={data.mrr_trend.labels}
+                  values={data.mrr_trend.values}
+                />
+              </div>
+            </Card>
+          </Section>
+
           <div className={styles.chartRow}>
             <Section title="Transfer volume by company (30d)">
               <Card>
@@ -298,6 +309,28 @@ function PlanDoughnut({
           },
         },
       }}
+    />
+  );
+}
+
+
+function MrrTrendChart({ labels, values }: { labels: string[]; values: number[] }) {
+  return (
+    <Line
+      data={{
+        labels,
+        datasets: [{
+          label: "MRR",
+          data: values,
+          borderColor: "#3fff00",
+          backgroundColor: "rgba(63, 255, 0, 0.1)",
+          fill: true,
+          tension: 0.3,
+          pointRadius: 3,
+          pointHoverRadius: 6,
+        }],
+      }}
+      options={moneyChartOptions("MRR")}
     />
   );
 }

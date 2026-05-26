@@ -1,14 +1,17 @@
 import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 
 import {
+  bulkStoreAction,
   useSuperadminStores,
   type SuperadminStoreRow,
 } from "../api/superadmin";
+import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
 import {
-  Breadcrumbs, ButtonLink,
+  Alert, Breadcrumbs, Button, ButtonLink, Checkbox,
   Card, Empty, EmptyState, ErrorState, Input, PageHeader, PageShell, Pill,
-  Table, TableSkeleton, tdStyle, thStyle, type PillTone,
+  Select, Table, TableSkeleton, tdStyle, thStyle, useToast, type PillTone,
 } from "../components/ui";
 import styles from "./SuperadminStores.module.css";
 
@@ -22,7 +25,47 @@ import styles from "./SuperadminStores.module.css";
 export default function SuperadminStores() {
   const identity = getCurrentIdentity();
   const { data, isLoading, isError, error, refetch } = useSuperadminStores();
+  const qc = useQueryClient();
+  const toast = useToast();
   const [q, setQ] = useState("");
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [bulkAction, setBulkAction] = useState("");
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkError, setBulkError] = useState<string | null>(null);
+
+  function toggleSelect(id: number) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleAll(rows: SuperadminStoreRow[]) {
+    if (selected.size === rows.length) {
+      setSelected(new Set());
+    } else {
+      setSelected(new Set(rows.map((r) => r.store_id)));
+    }
+  }
+
+  async function runBulk() {
+    if (selected.size === 0 || !bulkAction) return;
+    setBulkBusy(true);
+    setBulkError(null);
+    try {
+      const action = bulkAction as "extend_trial" | "enable" | "disable";
+      const res = await bulkStoreAction(Array.from(selected), action);
+      toast({ message: `${res.count} store${res.count === 1 ? "" : "s"} updated.`, tone: "success" });
+      setSelected(new Set());
+      setBulkAction("");
+      qc.invalidateQueries({ queryKey: ["superadmin", "stores"] });
+    } catch (err) {
+      setBulkError(err instanceof ApiError ? err.message : "Bulk action failed.");
+    } finally {
+      setBulkBusy(false);
+    }
+  }
 
   if (identity?.role !== "superadmin") {
     return (
@@ -66,6 +109,31 @@ export default function SuperadminStores() {
         )}
       />
 
+      {selected.size > 0 && (
+        <div className={styles.bulkBar}>
+          <span className={styles.bulkCount}>{selected.size} selected</span>
+          <Select value={bulkAction} onChange={(e) => setBulkAction(e.target.value)}>
+            <option value="">— Choose action —</option>
+            <option value="extend_trial">Extend trial (+14d)</option>
+            <option value="enable">Enable</option>
+            <option value="disable">Disable</option>
+          </Select>
+          <Button
+            onClick={() => { void runBulk(); }}
+            busy={bulkBusy}
+            disabled={!bulkAction || bulkBusy}
+            size="sm"
+          >
+            Apply
+          </Button>
+          <Button tone="secondary" size="sm" onClick={() => setSelected(new Set())}>
+            Clear
+          </Button>
+        </div>
+      )}
+
+      {bulkError && <Alert tone="error">{bulkError}</Alert>}
+
       <Card>
         {isLoading && <TableSkeleton rows={5} cols={5} />}
         {isError && (
@@ -77,17 +145,33 @@ export default function SuperadminStores() {
         {filtered && filtered.length === 0 && !isLoading && (
           <EmptyState title="No stores match these filters." />
         )}
-        {filtered && filtered.length > 0 && <StoresTable rows={filtered} />}
+        {filtered && filtered.length > 0 && (
+          <StoresTable
+            rows={filtered}
+            selected={selected}
+            onToggle={toggleSelect}
+            onToggleAll={() => toggleAll(filtered)}
+          />
+        )}
       </Card>
     </PageShell>
   );
 }
 
-function StoresTable({ rows }: { rows: SuperadminStoreRow[] }) {
+function StoresTable({ rows, selected, onToggle, onToggleAll }: {
+  rows: SuperadminStoreRow[];
+  selected: Set<number>;
+  onToggle: (id: number) => void;
+  onToggleAll: () => void;
+}) {
+  const allSelected = rows.length > 0 && selected.size === rows.length;
   return (
     <Table>
       <thead>
         <tr>
+          <th style={thStyle}>
+            <Checkbox checked={allSelected} onChange={onToggleAll}>{""}</Checkbox>
+          </th>
           {[
             "Store",
             "Plan",
@@ -104,6 +188,12 @@ function StoresTable({ rows }: { rows: SuperadminStoreRow[] }) {
       <tbody>
         {rows.map((r) => (
           <tr key={r.store_id}>
+            <td style={tdStyle}>
+              <Checkbox
+                checked={selected.has(r.store_id)}
+                onChange={() => onToggle(r.store_id)}
+              >{""}</Checkbox>
+            </td>
             <td style={tdStyle}>
               <div className={styles.storeName}>{r.name}</div>
               <div className={styles.storeMeta}>

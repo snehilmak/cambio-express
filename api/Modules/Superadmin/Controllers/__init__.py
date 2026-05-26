@@ -168,7 +168,50 @@ def dashboard_route(
         "direct_signups": ctx["direct_signups"],
         "referral_signups": ctx["referral_signups"],
         "activity": activity,
+        "mrr_trend": _compute_mrr_trend(db),
     }
+
+
+def _compute_mrr_trend(db: Session) -> dict[str, Any]:
+    """Approximate MRR for each of the last 12 months.
+
+    Uses current paid-store counts as of today — doesn't track
+    historical plan changes. Good enough for a trend chart until
+    we add a monthly MRR snapshot table."""
+    from datetime import date, timedelta
+    from api.Modules.Superadmin.Services.dashboard import compute_mrr
+    from api.Modules.Tenancy.Models import Store
+
+    today = date.today()
+    labels: list[str] = []
+    values: list[int] = []
+    for i in range(11, -1, -1):
+        d = today.replace(day=1) - timedelta(days=i * 30)
+        month_end = d.replace(day=28)
+        stores = (
+            db.query(Store.plan, Store.billing_cycle)
+            .filter(
+                Store.created_at <= month_end,
+                Store.plan.in_(["basic", "pro"]),
+            )
+            .all()
+        )
+        bm = by = pm = py_ = 0
+        for plan, cycle in stores:
+            if plan == "basic":
+                if cycle == "yearly":
+                    by += 1
+                else:
+                    bm += 1
+            elif plan == "pro":
+                if cycle == "yearly":
+                    py_ += 1
+                else:
+                    pm += 1
+        _, _, _, _, total = compute_mrr(bm, by, pm, py_)
+        labels.append(d.strftime("%b %Y"))
+        values.append(total)
+    return {"labels": labels, "values": values}
 
 
 # ── Maintenance mode ───────────────────────────────────────
@@ -1045,6 +1088,149 @@ def update_store_route(
         )
     db.commit()
     return SuperadminStoreDetailResponse(store=_adapt_detail(s))
+
+
+# ── Store actions (single + bulk) ──────────────────────────
+
+
+@router.post("/stores/{store_id}/extend-trial")
+def extend_trial_route(
+    store_id: int = Path(..., ge=1),
+    body: dict[str, Any] = {},
+    db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
+) -> dict[str, Any]:
+    """Extend a store's trial by N days (default 14)."""
+    _require_superadmin(claims)
+    from datetime import datetime, timedelta
+    from api.Modules.Tenancy.Models import Store
+    sa = resolve_superadmin_user(db, claims)
+    s = db.get(Store, store_id)
+    if s is None:
+        raise HTTPException(404, "Store not found")
+    days = int(body.get("days", 14))
+    if days < 1 or days > 365:
+        raise HTTPException(422, "Days must be 1–365")
+    base = s.trial_ends_at or datetime.utcnow()
+    s.trial_ends_at = base + timedelta(days=days)
+    if s.grace_ends_at:
+        s.grace_ends_at = s.trial_ends_at + timedelta(days=7)
+    if s.plan == "inactive":
+        s.plan = "trial"
+    db.commit()
+    _audit_store(db, sa, "extend_trial", target_id=str(s.id),
+                 details=f"+{days} days → {s.trial_ends_at.isoformat()[:10]}")
+    return {"ok": True, "trial_ends_at": s.trial_ends_at.isoformat()}
+
+
+@router.post("/stores/{store_id}/toggle-active")
+def toggle_store_active_route(
+    store_id: int = Path(..., ge=1),
+    db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
+) -> dict[str, Any]:
+    """Enable / disable a store."""
+    _require_superadmin(claims)
+    from api.Modules.Tenancy.Models import Store
+    sa = resolve_superadmin_user(db, claims)
+    s = db.get(Store, store_id)
+    if s is None:
+        raise HTTPException(404, "Store not found")
+    s.is_active = not s.is_active
+    db.commit()
+    act = "enable_store" if s.is_active else "disable_store"
+    _audit_store(db, sa, act, target_id=str(s.id),
+                 details=f"{s.name} ({s.slug})")
+    return {"ok": True, "is_active": s.is_active}
+
+
+@router.post("/bulk-action")
+def bulk_action_route(
+    body: dict[str, Any],
+    db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
+) -> dict[str, Any]:
+    """Bulk action on multiple stores. Actions: extend_trial,
+    enable, disable."""
+    _require_superadmin(claims)
+    from datetime import datetime, timedelta
+    from api.Modules.Tenancy.Models import Store
+    sa = resolve_superadmin_user(db, claims)
+    store_ids = body.get("store_ids", [])
+    action = body.get("action", "")
+    if not store_ids or not isinstance(store_ids, list):
+        raise HTTPException(422, "store_ids must be a non-empty list")
+    if action not in ("extend_trial", "enable", "disable"):
+        raise HTTPException(422, f"Invalid action: {action}")
+
+    stores = db.query(Store).filter(Store.id.in_(store_ids)).all()
+    if not stores:
+        raise HTTPException(404, "No stores found")
+
+    results = []
+    for s in stores:
+        if action == "extend_trial":
+            days = int(body.get("days", 14))
+            base = s.trial_ends_at or datetime.utcnow()
+            s.trial_ends_at = base + timedelta(days=days)
+            if s.grace_ends_at:
+                s.grace_ends_at = s.trial_ends_at + timedelta(days=7)
+            if s.plan == "inactive":
+                s.plan = "trial"
+            results.append({"store_id": s.id, "name": s.name,
+                           "trial_ends_at": s.trial_ends_at.isoformat()})
+        elif action == "enable":
+            s.is_active = True
+            results.append({"store_id": s.id, "name": s.name, "is_active": True})
+        elif action == "disable":
+            s.is_active = False
+            results.append({"store_id": s.id, "name": s.name, "is_active": False})
+
+    db.commit()
+    _audit_store(db, sa, f"bulk_{action}",
+                 target_id=",".join(str(s.id) for s in stores),
+                 details=f"{len(stores)} stores")
+    return {"ok": True, "count": len(stores), "results": results}
+
+
+# ── Store communication ─────────────────────────────────────
+
+
+@router.post("/stores/{store_id}/email")
+def email_store_route(
+    store_id: int = Path(..., ge=1),
+    body: dict[str, Any] = {},
+    db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
+) -> dict[str, Any]:
+    """Send an email to a store's admin(s)."""
+    _require_superadmin(claims)
+    from api.Modules.Notifications.Services.smtp import send_email
+    from api.Modules.Tenancy.Models import Store, User
+    sa = resolve_superadmin_user(db, claims)
+    store = db.get(Store, store_id)
+    if store is None:
+        raise HTTPException(404, "Store not found")
+    subject = body.get("subject", "").strip()
+    message = body.get("message", "").strip()
+    if not subject or not message:
+        raise HTTPException(422, "Subject and message are required")
+    admins = (
+        db.query(User)
+        .filter(User.store_id == store_id, User.role == "admin", User.is_active == True)
+        .all()
+    )
+    recipients = [u for u in admins if u.email]
+    if not recipients:
+        raise HTTPException(422, "No admin with an email address found for this store")
+    sent_to = []
+    for u in recipients:
+        ok = send_email(db, u.email, subject, message)
+        if ok:
+            sent_to.append(u.email)
+    _audit_store(db, sa, "email_store", target_id=str(store_id),
+                 details=f"Subject: {subject[:60]} → {len(sent_to)} recipient(s)")
+    return {"ok": True, "sent_to": sent_to, "total": len(sent_to)}
 
 
 @router.get("/audit-log", response_model=SuperadminAuditListResponse)
