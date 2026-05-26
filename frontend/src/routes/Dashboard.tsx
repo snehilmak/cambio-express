@@ -430,7 +430,7 @@ function EmployeePanel({ d }: { d: EmployeeDashboard }) {
       <Section
         title="Today's Transfers"
         actions={
-          <ButtonLink href="/transfers/new" tone="primary">
+          <ButtonLink href="/transfers/new" tone="primary" size="sm">
             ＋ Log New Transfer
           </ButtonLink>
         }
