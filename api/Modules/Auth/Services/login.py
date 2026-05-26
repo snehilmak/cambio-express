@@ -106,11 +106,16 @@ def seed_rbac_defaults(db: "Session") -> None:
     db.commit()
 
 
-def permissions_for(role: str, db: "Session | None" = None) -> list[str]:
+def permissions_for(role: str, db: "Session | None" = None, store_id: "int | None" = None) -> list[str]:
     """The permission claim list for a given role.
 
-    Reads granular permissions from the DB when a session is provided,
-    falling back to RBAC_DEFAULTS if the table is empty or unavailable.
+    Resolution order:
+    1. Per-store override (StoreRoleOverride) if store_id is given
+       and the store has ANY overrides for this role → use those
+       exclusively (full replacement, not merge)
+    2. Global defaults (RolePermission table)
+    3. Hardcoded RBAC_DEFAULTS fallback
+
     Always includes the legacy coarse-grained permissions for backward
     compatibility. Superadmin gets everything."""
     legacy = list(_LEGACY_ROLE_PERMISSIONS.get(role, []))
@@ -118,7 +123,20 @@ def permissions_for(role: str, db: "Session | None" = None) -> list[str]:
         all_granular = [f"{r}.{a}" for r in RBAC_RESOURCES for a in RBAC_ACTIONS]
         return legacy + all_granular
     granular: list[str] = []
-    if db is not None:
+    if db is not None and store_id is not None:
+        try:
+            from api.Modules.Auth.Models import StoreRoleOverride
+            store_rows = (
+                db.query(StoreRoleOverride.resource, StoreRoleOverride.action)
+                .filter(StoreRoleOverride.store_id == store_id,
+                        StoreRoleOverride.role == role)
+                .all()
+            )
+            if store_rows:
+                granular = [f"{r}.{a}" for r, a in store_rows]
+        except Exception:
+            pass
+    if not granular and db is not None:
         try:
             from api.Modules.Auth.Models import RolePermission
             rows = (
