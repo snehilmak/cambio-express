@@ -1,0 +1,44 @@
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.25rem;
+}
+
+@media (max-width: 768px) {
+  .grid { grid-template-columns: 1fr; }
+}
+
+.storeRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.55rem 0;
+  border-bottom: 1px solid var(--db-border, #262626);
+  gap: 1rem;
+}
+
+.storeRow:last-child { border-bottom: none; }
+
+.storeName {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.storeMeta {
+  font-size: 0.78rem;
+  color: var(--db-text-muted, #888);
+}
+
+.mono {
+  font-family: var(--db-font-mono, "JetBrains Mono", monospace);
+  font-size: 0.85rem;
+}
+
+.monoMuted {
+  composes: mono;
+  color: var(--db-text-muted, #888);
+}
+
+.badge {
+  text-align: right;
+}

@@ -6,7 +6,7 @@ import {
 } from "../api/superadmin";
 import { getCurrentIdentity } from "../lib/auth";
 import {
-  Breadcrumbs,
+  Breadcrumbs, ButtonLink,
   Card, Empty, EmptyState, ErrorState, Input, PageHeader, PageShell, Pill,
   Table, TableSkeleton, tdStyle, thStyle, type PillTone,
 } from "../components/ui";
@@ -95,6 +95,7 @@ function StoresTable({ rows }: { rows: SuperadminStoreRow[] }) {
             "Trial / retention",
             "Stripe",
             "Created",
+            "",
           ].map((h, i) => (
             <th key={i} style={thStyle}>{h}</th>
           ))}
@@ -132,6 +133,11 @@ function StoresTable({ rows }: { rows: SuperadminStoreRow[] }) {
             </td>
             <td style={tdStyle}>
               <span className={styles.monoMuted}>{r.created_at.slice(0, 10)}</span>
+            </td>
+            <td style={{ ...tdStyle, textAlign: "right" }}>
+              <ButtonLink href={`/superadmin/stores/${r.store_id}/drill`} tone="secondary" size="sm">
+                View
+              </ButtonLink>
             </td>
           </tr>
         ))}

@@ -1,0 +1,67 @@
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.25rem;
+}
+
+@media (max-width: 768px) {
+  .grid { grid-template-columns: 1fr; }
+}
+
+.infoRow {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--db-border, #262626);
+  gap: 1rem;
+}
+
+.infoRow:last-child { border-bottom: none; }
+
+.infoLabel {
+  color: var(--db-text-muted, #888);
+  font-size: 0.88rem;
+}
+
+.infoValue {
+  font-family: var(--db-font-mono, "JetBrains Mono", monospace);
+  font-size: 0.88rem;
+  text-align: right;
+}
+
+.teamRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--db-border, #262626);
+}
+
+.teamRow:last-child { border-bottom: none; }
+
+.teamName {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.teamMeta {
+  font-size: 0.78rem;
+  color: var(--db-text-muted, #888);
+}
+
+.monoMuted {
+  font-family: var(--db-font-mono, "JetBrains Mono", monospace);
+  font-size: 0.82rem;
+  color: var(--db-text-muted, #888);
+}
+
+.mono {
+  font-family: var(--db-font-mono, "JetBrains Mono", monospace);
+  font-size: 0.85rem;
+}
+
+.actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
