@@ -5,7 +5,7 @@ import { downloadCsv } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
 import {
   Breadcrumbs,
-  Alert, Button, Card, Empty, Field, Input, PageHeader, PageShell,
+  Alert, Button, Card, DateInput, Empty, Field, PageHeader, PageShell,
   Section, Select,
 } from "../components/ui";
 import styles from "./AdminDataExport.module.css";
@@ -244,15 +244,13 @@ export default function AdminDataExport() {
             </div>
             <div className={styles.exportControls}>
               <Field label="From" style={{ minWidth: "9rem" }}>
-                <Input
-                  type="date"
+                <DateInput
                   value={transFrom}
                   onChange={(e) => setTransFrom(e.target.value)}
                 />
               </Field>
               <Field label="To" style={{ minWidth: "9rem" }}>
-                <Input
-                  type="date"
+                <DateInput
                   value={transTo}
                   onChange={(e) => setTransTo(e.target.value)}
                 />
@@ -288,15 +286,13 @@ export default function AdminDataExport() {
             </div>
             <div className={styles.exportControls}>
               <Field label="From" style={{ minWidth: "9rem" }}>
-                <Input
-                  type="date"
+                <DateInput
                   value={tcFrom}
                   onChange={(e) => setTcFrom(e.target.value)}
                 />
               </Field>
               <Field label="To" style={{ minWidth: "9rem" }}>
-                <Input
-                  type="date"
+                <DateInput
                   value={tcTo}
                   onChange={(e) => setTcTo(e.target.value)}
                 />

@@ -15,7 +15,7 @@ import {
 } from "../api/bankSync";
 import {
   Breadcrumbs, Button, ButtonLink,
-  Card, Empty, Field, Input, KpiCard, KpiGrid,
+  Card, DateInput, Empty, Field, Input, KpiCard, KpiGrid,
   monoStyle, PageHeader, PageShell, Pager, Select, Table, TableStates,
   tdStyle, thStyle,
 } from "../components/ui";
@@ -182,15 +182,13 @@ export default function BankTransactions() {
             </Select>
           </Field>
           <Field label="From">
-            <Input
-              type="date"
+            <DateInput
               value={filters.posted_from ?? ""}
               onChange={(e) => setParam("posted_from", e.target.value)}
             />
           </Field>
           <Field label="To">
-            <Input
-              type="date"
+            <DateInput
               value={filters.posted_to ?? ""}
               onChange={(e) => setParam("posted_to", e.target.value)}
             />

@@ -19,7 +19,7 @@ import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
 import {
   Breadcrumbs,
-  Alert, Button, ButtonLink, Card, ConfirmDialog, EmptyState, Field,
+  Alert, Button, ButtonLink, Card, ConfirmDialog, DateInput, EmptyState, Field,
   FormActions, Input, Loading, MoneyInput, PageHeader, PageShell, SectionTitle,
   Select, space, Table, Textarea, tdStyle, thStyle,
 } from "../components/ui";
@@ -179,7 +179,7 @@ export default function ReturnCheckForm() {
         <Card>
           <div className={styles.fieldGrid}>
             <Field label="Bounced on" highlight={field === "bounced_on"}>
-              <Input type="date" required
+              <DateInput required
                 value={form.bounced_on}
                 onChange={(e) => set("bounced_on", e.target.value)} />
             </Field>
@@ -381,8 +381,8 @@ function RecordPaymentForm({
     <form onSubmit={onSubmit} className={styles.paymentForm}>
       <div className={styles.paymentFormGrid}>
         <Field label="Date">
-          <Input
-            type="date" required
+          <DateInput
+            required
             value={paidOn}
             onChange={(e) => setPaidOn(e.target.value)}
             disabled={busy || disabled}

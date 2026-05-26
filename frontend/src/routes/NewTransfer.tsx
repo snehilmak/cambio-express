@@ -10,6 +10,7 @@ import {
   Breadcrumbs,
   Button,
   Card,
+  DateInput,
   Field,
   FormActions,
   Input,
@@ -212,7 +213,18 @@ export default function NewTransfer() {
           <Section title="When + how">
             <Grid>
               <Field label="Date" highlight={!!errors.send_date}>
-                <Input type="date" {...register("send_date")} required />
+                <Controller
+                  name="send_date"
+                  control={control}
+                  rules={{ required: true }}
+                  render={({ field }) => (
+                    <DateInput
+                      value={field.value ?? ""}
+                      onChange={(e) => field.onChange(e.target.value)}
+                      required
+                    />
+                  )}
+                />
               </Field>
               <Field label="Company">
                 <Select {...register("company")}>

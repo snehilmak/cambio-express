@@ -8,7 +8,7 @@ import {
 import { getCurrentIdentity } from "../lib/auth";
 import {
   Breadcrumbs,
-  ButtonLink, Card, Empty, Field, Input,
+  ButtonLink, Card, DateInput, Empty, Field, Input,
   PageHeader, PageShell, Pager, Pill, Select, Table, TableStates,
   tdStyle, thStyle,
 } from "../components/ui";
@@ -201,15 +201,13 @@ function FilterBar({
         />
       </Field>
       <Field label="From">
-        <Input
-          type="date"
+        <DateInput
           value={dateFrom}
           onChange={(e) => onSet("date_from", e.target.value)}
         />
       </Field>
       <Field label="To">
-        <Input
-          type="date"
+        <DateInput
           value={dateTo}
           onChange={(e) => onSet("date_to", e.target.value)}
         />

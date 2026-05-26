@@ -68,3 +68,28 @@ def resolve_superadmin_user(db: Session, claims: dict[str, Any]) -> User:
             detail="JWT subject does not resolve to a user.",
         )
     return user
+
+
+def has_permission(claims: dict[str, Any], resource: str, action: str) -> bool:
+    """Check if the JWT principal has a specific granular permission.
+
+    Superadmin always returns True. For other roles, checks the
+    ``perms`` claim list for ``resource.action``."""
+    if claims.get("role") == "superadmin":
+        return True
+    perms = claims.get("perms", [])
+    return f"{resource}.{action}" in perms
+
+
+def require_permission(
+    claims: dict[str, Any], resource: str, action: str,
+) -> None:
+    """Raise 403 if the JWT principal lacks a specific permission.
+
+    Use this in controllers to gate endpoints by permission instead
+    of role. Superadmin always passes."""
+    if not has_permission(claims, resource, action):
+        raise HTTPException(
+            status_code=403,
+            detail=f"Missing permission: {resource}.{action}",
+        )

@@ -53,6 +53,8 @@ from api.Modules.Auth.Services.password_reset import (
     verify_password_reset_token,
 )
 from api.Modules.Auth.Services.principal import (
+    has_permission,
+    require_permission,
     resolve_store_scope,
     resolve_superadmin_user,
 )
@@ -143,7 +145,9 @@ __all__ = [
     "passkey_origin",
     "passkey_rp_id",
     "passkey_rp_name",
+    "has_permission",
     "permissions_for",
+    "require_permission",
     "resolve_store_scope",
     "resolve_superadmin_user",
     "trial_toggle_applies",

@@ -12,7 +12,7 @@ import { ApiError } from "../lib/api";
 import { formatTimestamp } from "../lib/datetime";
 import {
   Breadcrumbs,
-  Alert, Button, Card, ConfirmDialog, EmptyState, ErrorState, Field, Input,
+  Alert, Button, Card, ConfirmDialog, DateInput, EmptyState, ErrorState, Field, Input,
   Loading, Modal, PageHeader, PageShell, Pill, RowActions, Select, space, Table,
   TableSkeleton, Textarea, tdStyle, thStyle, useToast,
 } from "../components/ui";
@@ -123,14 +123,14 @@ export default function AdminTimeClock() {
       <Card>
         <div className={styles.filterRow}>
           <Field label="From" style={{ minWidth: "10rem" }}>
-            <Input
-              type="date" value={from}
+            <DateInput
+              value={from}
               onChange={(e) => setFrom(e.target.value)}
             />
           </Field>
           <Field label="To (exclusive)" style={{ minWidth: "10rem" }}>
-            <Input
-              type="date" value={to}
+            <DateInput
+              value={to}
               onChange={(e) => setTo(e.target.value)}
             />
           </Field>

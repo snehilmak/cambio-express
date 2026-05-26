@@ -7,7 +7,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import SenderAutocomplete from "../components/SenderAutocomplete";
 import RecipientSuggestions from "../components/RecipientSuggestions";
 import {
-  Alert, Breadcrumbs, Button, Card, ErrorState, Field, FormActions,
+  Alert, Breadcrumbs, Button, Card, DateInput, ErrorState, Field, FormActions,
   Input, Loading, MoneyInput, PageHeader, PageShell, Section, Select,
 } from "../components/ui";
 import {
@@ -227,7 +227,18 @@ export default function EditTransfer() {
           <Section title="When + how">
             <div className={styles.grid}>
               <Field label="Date" highlight={!!errors.send_date}>
-                <Input type="date" {...register("send_date")} required />
+                <Controller
+                  name="send_date"
+                  control={control}
+                  rules={{ required: true }}
+                  render={({ field }) => (
+                    <DateInput
+                      value={field.value ?? ""}
+                      onChange={(e) => field.onChange(e.target.value)}
+                      required
+                    />
+                  )}
+                />
               </Field>
               <Field label="Company">
                 <Select {...register("company")}>
