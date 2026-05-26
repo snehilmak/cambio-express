@@ -4,8 +4,8 @@ import { useReturnChecks, type ReturnCheckRow } from "../api/returnChecks";
 import { getCurrentIdentity } from "../lib/auth";
 import {
   Breadcrumbs,
-  Button, ButtonLink, Card, Empty, EmptyState, ErrorState, PageHeader,
-  PageShell, Pill, Table as KitTable, TableSkeleton, tdStyle,
+  Button, ButtonLink, Card, Empty, PageHeader,
+  PageShell, Pill, Table as KitTable, TableStates, tdStyle,
   thStyle, tokens, type PillTone,
 } from "../components/ui";
 import styles from "./ReturnChecks.module.css";
@@ -82,18 +82,12 @@ export default function ReturnChecks() {
       </div>
 
       <Card>
-        {isLoading && <TableSkeleton rows={5} cols={5} />}
-        {isError && (
-          <ErrorState
-            message={error instanceof Error ? error.message : "Could not load"}
-            onRetry={() => { void refetch(); }}
-          />
-        )}
-        {data && data.rows.length === 0 && !isLoading && (
-          <EmptyState
-            title={`No return checks ${status ? `with status ${status}` : "yet"}.`}
-          />
-        )}
+        <TableStates
+          isLoading={isLoading} isError={isError} error={error}
+          isEmpty={!data || data.rows.length === 0}
+          onRetry={() => { void refetch(); }}
+          emptyTitle={`No return checks ${status ? `with status ${status}` : "yet"}.`}
+        />
         {data && data.rows.length > 0 && <Table rows={data.rows} />}
       </Card>
     </PageShell>

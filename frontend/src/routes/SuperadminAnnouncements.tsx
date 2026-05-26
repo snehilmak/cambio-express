@@ -11,9 +11,9 @@ import {
 } from "../api/announcements";
 import {
   Breadcrumbs,
-  Alert, Button, Card, ConfirmDialog, Empty, EmptyState, ErrorState, Field,
+  Alert, Button, Card, ConfirmDialog, Empty, Field,
   Input, PageHeader, PageShell, Pill, SectionTitle, Select, Table,
-  TableSkeleton, Textarea, tdStyle, thStyle, type PillTone,
+  TableStates, Textarea, tdStyle, thStyle, type PillTone,
 } from "../components/ui";
 import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
@@ -71,16 +71,13 @@ export default function SuperadminAnnouncements() {
           Banners shown to every user across the app. Disable to hide
           without deleting; delete to remove permanently.
         </p>
-        {isLoading && <TableSkeleton rows={3} cols={4} />}
-        {isError && (
-          <ErrorState
-            message={error instanceof Error ? error.message : "Could not load"}
-            onRetry={() => { void refetch(); }}
-          />
-        )}
-        {data && data.rows.length === 0 && !isLoading && (
-          <EmptyState title="No announcements yet." />
-        )}
+        <TableStates
+          isLoading={isLoading} isError={isError} error={error}
+          isEmpty={!data || data.rows.length === 0}
+          onRetry={() => { void refetch(); }}
+          emptyTitle="No announcements yet."
+          rows={3} cols={4}
+        />
         {data && data.rows.length > 0 && (
           <AnnouncementsTable rows={data.rows} onChanged={refresh} />
         )}

@@ -9,8 +9,8 @@ import {
 import { getCurrentIdentity } from "../lib/auth";
 import {
   Breadcrumbs,
-  Card, Empty, EmptyState, ErrorState, Input, PageHeader, PageShell,
-  Table, TableSkeleton, tdStyle, thStyle,
+  Card, Empty, Input, PageHeader, PageShell,
+  Table, TableStates, tdStyle, thStyle,
 } from "../components/ui";
 import styles from "./OwnerLocations.module.css";
 
@@ -97,22 +97,21 @@ export default function OwnerLocations() {
       </div>
 
       <Card>
-        {isLoading && <TableSkeleton rows={5} cols={5} />}
-        {isError && (
-          <ErrorState
-            message={error instanceof Error ? error.message : "Could not load"}
-            onRetry={() => { void refetch(); }}
-          />
-        )}
-        {data && data.matched === 0 && !isLoading && data.total === 0 && (
-          <EmptyState
-            title="No stores connected yet"
-            body="Ask each store admin to redeem an owner-connect code."
-          />
-        )}
-        {data && data.matched === 0 && !isLoading && data.total > 0 && (
-          <EmptyState title={`No stores match "${q}".`} />
-        )}
+        <TableStates
+          isLoading={isLoading} isError={isError} error={error}
+          isEmpty={!data || data.matched === 0}
+          onRetry={() => { void refetch(); }}
+          emptyTitle={
+            data && data.total === 0
+              ? "No stores connected yet"
+              : `No stores match "${q}".`
+          }
+          emptyBody={
+            data && data.total === 0
+              ? "Ask each store admin to redeem an owner-connect code."
+              : undefined
+          }
+        />
         {data && data.matched > 0 && <StoreTable rows={data.rows} />}
       </Card>
     </PageShell>

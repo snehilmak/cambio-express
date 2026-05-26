@@ -5,8 +5,8 @@ import type { MyActivityRow } from "../api/account";
 import { formatTimestamp } from "../lib/datetime";
 import {
   Breadcrumbs,
-  Button, Card, EmptyState, ErrorState, Field, PageHeader, PageShell,
-  Pager, Pill, Select, space, Table, TableSkeleton, tdStyle, thStyle,
+  Button, Card, Field, PageHeader, PageShell,
+  Pager, Pill, Select, space, Table, TableStates, tdStyle, thStyle,
   type PillTone,
 } from "../components/ui";
 import styles from "./AccountActivity.module.css";
@@ -102,16 +102,12 @@ export default function AccountActivity() {
           )}
         </div>
 
-        {isLoading && <TableSkeleton rows={5} cols={5} />}
-        {isError && (
-          <ErrorState
-            message={error instanceof Error ? error.message : "Could not load"}
-            onRetry={() => { void refetch(); }}
-          />
-        )}
-        {data && data.rows.length === 0 && !isLoading && (
-          <EmptyState title="Nothing here yet — once you log a transfer, lock a daily book, or save a batch you'll see it." />
-        )}
+        <TableStates
+          isLoading={isLoading} isError={isError} error={error}
+          isEmpty={!data || data.rows.length === 0}
+          onRetry={() => { void refetch(); }}
+          emptyTitle="Nothing here yet — once you log a transfer, lock a daily book, or save a batch you'll see it."
+        />
         {data && data.rows.length > 0 && (
           <>
             <ActivityTable

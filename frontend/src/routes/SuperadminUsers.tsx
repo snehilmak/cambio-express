@@ -18,8 +18,6 @@ import {
   Breadcrumbs,
   Card,
   ConfirmDialog,
-  EmptyState,
-  ErrorState,
   Input,
   Pager,
   PageHeader,
@@ -28,7 +26,7 @@ import {
   RowActions,
   Select,
   Table,
-  TableSkeleton,
+  TableStates,
   tdStyle,
   thStyle,
   useToast,
@@ -173,16 +171,13 @@ export default function SuperadminUsers() {
       )}
 
       <Card>
-        {isLoading && <TableSkeleton rows={8} cols={6} />}
-        {isError && (
-          <ErrorState
-            message={fetchError instanceof Error ? fetchError.message : "Could not load users"}
-            onRetry={() => { void refetch(); }}
-          />
-        )}
-        {data && data.rows.length === 0 && !isLoading && (
-          <EmptyState title="No users match these filters." />
-        )}
+        <TableStates
+          isLoading={isLoading} isError={isError} error={fetchError}
+          isEmpty={!data || data.rows.length === 0}
+          onRetry={() => { void refetch(); }}
+          emptyTitle="No users match these filters."
+          rows={8} cols={6}
+        />
         {data && data.rows.length > 0 && (
           <Table>
             <thead>

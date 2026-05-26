@@ -8,8 +8,8 @@ import {
 import { getCurrentIdentity } from "../lib/auth";
 import {
   Breadcrumbs,
-  Card, Empty, EmptyState, ErrorState, Input, PageHeader, PageShell, Pager,
-  Pill, Table, TableSkeleton, tdStyle, thStyle,
+  Card, Empty, Input, PageHeader, PageShell, Pager,
+  Pill, Table, TableStates, tdStyle, thStyle,
 } from "../components/ui";
 import styles from "./SuperadminAuditLog.module.css";
 
@@ -80,16 +80,12 @@ export default function SuperadminAuditLog() {
       />
 
       <Card>
-        {isLoading && <TableSkeleton rows={5} cols={5} />}
-        {isError && (
-          <ErrorState
-            message={error instanceof Error ? error.message : "Could not load"}
-            onRetry={() => { void refetch(); }}
-          />
-        )}
-        {data && data.rows.length === 0 && !isLoading && (
-          <EmptyState title="No audit entries match." />
-        )}
+        <TableStates
+          isLoading={isLoading} isError={isError} error={error}
+          isEmpty={!data || data.rows.length === 0}
+          onRetry={() => { void refetch(); }}
+          emptyTitle="No audit entries match."
+        />
         {data && data.rows.length > 0 && (
           <>
             <AuditTable rows={data.rows} />
