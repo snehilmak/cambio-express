@@ -28,6 +28,7 @@ import {
 import { getCurrentIdentity } from "../lib/auth";
 import { PeakHoursHeatmap } from "../components/PeakHoursHeatmap";
 import { getOpenStatus } from "../lib/datetime";
+import { fmtNumber, fmtShortDate } from "../lib/formatters";
 
 // Role-shaped dashboard. /api/v2/dashboard/summary returns one
 // payload tagged by role; we render the matching panel.
@@ -136,7 +137,7 @@ function AdminPanel({ d }: { d: AdminDashboard }) {
         <KpiCard
           label="Today's Transfers"
           value={d.kpis.today_transfers.toLocaleString()}
-          sub={fmtDate(d.today)}
+          sub={fmtShortDate(d.today)}
           tone="positive"
         />
         <KpiCard
@@ -422,7 +423,7 @@ function EmployeePanel({ d }: { d: EmployeeDashboard }) {
         <KpiCard
           label="Today's Transfers"
           value={d.totals.count.toLocaleString()}
-          sub={fmtDate(d.today)}
+          sub={fmtShortDate(d.today)}
         />
       </KpiGrid>
 
@@ -571,10 +572,10 @@ function SuperadminPanel({ d }: { d: SuperadminContextLite & { role: string } })
   return (
     <>
       <KpiGrid>
-        <KpiCard label="Total Stores" value={fmt(d.total_stores)} sub="All time" />
-        <KpiCard label="Active" value={fmt(d.active_stores)} tone="positive" />
-        <KpiCard label="Trial" value={fmt(d.trial_stores)} tone="warning" />
-        <KpiCard label="Paid" value={fmt(d.paid_stores)} tone="positive" />
+        <KpiCard label="Total Stores" value={fmtNumber(d.total_stores)} sub="All time" />
+        <KpiCard label="Active" value={fmtNumber(d.active_stores)} tone="positive" />
+        <KpiCard label="Trial" value={fmtNumber(d.trial_stores)} tone="warning" />
+        <KpiCard label="Paid" value={fmtNumber(d.paid_stores)} tone="positive" />
         <KpiCard
           label="MRR"
           value={typeof d.mrr_total === "number" ? `$${d.mrr_total.toLocaleString()}` : "—"}
@@ -585,10 +586,10 @@ function SuperadminPanel({ d }: { d: SuperadminContextLite & { role: string } })
           value={typeof d.arr_total === "number" ? `$${d.arr_total.toLocaleString()}` : "—"}
           tone="positive"
         />
-        <KpiCard label="New (30d)" value={fmt(d.new_stores_30d)} tone="positive" />
+        <KpiCard label="New (30d)" value={fmtNumber(d.new_stores_30d)} tone="positive" />
         <KpiCard
           label="Cancellations (30d)"
-          value={fmt(d.cancellations_30d)}
+          value={fmtNumber(d.cancellations_30d)}
           tone={
             typeof d.cancellations_30d === "number" && d.cancellations_30d > 0
               ? "negative"
@@ -638,14 +639,6 @@ function StatusPill({ value }: { value: string }) {
   return <Pill tone={tone as "accent" | "warning" | "negative" | "neutral"}>{value}</Pill>;
 }
 
-function fmt(n: number | undefined) {
-  return typeof n === "number" ? n.toLocaleString() : "—";
-}
-
-function fmtDate(iso: string) {
-  const d = new Date(iso + "T00:00:00");
-  return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
-}
 
 function shortDate(iso: string) {
   const d = new Date(iso + "T00:00:00");

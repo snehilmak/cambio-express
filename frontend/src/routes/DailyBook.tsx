@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 
 import { useDailyPeriod, type DailyReportRow } from "../api/dailybook";
+import { fmtMoney, fmtMoney2 } from "../lib/formatters";
 import {
   Breadcrumbs,
   Button, Card, ErrorState, KpiCard, KpiGrid, Loading, PageHeader, PageShell,
@@ -37,21 +38,7 @@ function lastOfMonthIso(year: number, monthZeroIdx: number): string {
   return `${year}-${pad2(monthZeroIdx + 1)}-${pad2(lastDay)}`;
 }
 
-function fmtMoney(n: number | undefined | null): string {
-  if (n == null || !isFinite(n)) return "$0";
-  return n.toLocaleString(undefined, {
-    style: "currency", currency: "USD",
-    minimumFractionDigits: 0, maximumFractionDigits: 0,
-  });
-}
 
-function fmtMoney2(n: number | undefined | null): string {
-  if (n == null || !isFinite(n)) return "$0.00";
-  return n.toLocaleString(undefined, {
-    style: "currency", currency: "USD",
-    minimumFractionDigits: 2, maximumFractionDigits: 2,
-  });
-}
 
 export default function DailyBook() {
   const [params, setParams] = useSearchParams();

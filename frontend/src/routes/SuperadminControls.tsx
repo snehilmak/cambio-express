@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 
 import { useDashboardSummary } from "../api/dashboard";
+import { fmtNumber } from "../lib/formatters";
 import {
   Breadcrumbs,
   ErrorState, KpiCard, KpiGrid, Loading, PageHeader, PageShell, Section,
@@ -62,19 +63,19 @@ export default function SuperadminControls() {
           <KpiGrid minWidth="180px">
             <KpiCard
               label="Total Stores"
-              value={fmt(d.total_stores)}
+              value={fmtNumber(d.total_stores)}
               tone="primary"
             />
             <KpiCard
               label="Active"
-              value={fmt(d.active_stores)}
+              value={fmtNumber(d.active_stores)}
               tone="positive"
             />
-            <KpiCard label="Trial" value={fmt(d.trial_stores)} tone="warning" />
-            <KpiCard label="Paid" value={fmt(d.paid_stores)} tone="positive" />
+            <KpiCard label="Trial" value={fmtNumber(d.trial_stores)} tone="warning" />
+            <KpiCard label="Paid" value={fmtNumber(d.paid_stores)} tone="positive" />
             <KpiCard
               label="Inactive"
-              value={fmt(d.inactive_stores)}
+              value={fmtNumber(d.inactive_stores)}
               tone={
                 typeof d.inactive_stores === "number" && d.inactive_stores > 0
                   ? "negative"
@@ -83,7 +84,7 @@ export default function SuperadminControls() {
             />
             <KpiCard
               label="Retention queue"
-              value={fmt(d.retention_queue)}
+              value={fmtNumber(d.retention_queue)}
               tone={
                 typeof d.retention_queue === "number" && d.retention_queue > 0
                   ? "warning"
@@ -110,12 +111,12 @@ export default function SuperadminControls() {
             />
             <KpiCard
               label="New (30d)"
-              value={fmt(d.new_stores_30d)}
+              value={fmtNumber(d.new_stores_30d)}
               tone="positive"
             />
             <KpiCard
               label="Cancellations (30d)"
-              value={fmt(d.cancellations_30d)}
+              value={fmtNumber(d.cancellations_30d)}
               tone={
                 typeof d.cancellations_30d === "number" && d.cancellations_30d > 0
                   ? "negative"
@@ -166,9 +167,6 @@ export default function SuperadminControls() {
   );
 }
 
-function fmt(n: number | undefined): React.ReactNode {
-  return typeof n === "number" ? n.toLocaleString() : "—";
-}
 
 function ComingSoon({ title, desc }: { title: string; desc: string }) {
   return (

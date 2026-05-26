@@ -3,6 +3,7 @@ import { useLocation, useSearchParams } from "react-router-dom";
 
 import { ReportDrilldown, fmtMoney } from "../../components/ReportDrilldown";
 import { fontSize } from "../../components/ui";
+import { fmtDateCompact } from "../../lib/formatters";
 
 export default function HighValueTransfers() {
   const isOwner = useLocation().pathname.startsWith("/owner/");
@@ -67,7 +68,7 @@ export default function HighValueTransfers() {
             value: t => fmtMoney(Number(t.tax ?? 0)) },
         ]}
         columns={[
-          { label: "Date",        field: r => fmtDate(r.send_date as string) },
+          { label: "Date",        field: r => fmtDateCompact(r.send_date as string) },
           { label: "Sender",      field: "sender_name" },
           { label: "Recipient",   field: "recipient_name" },
           { label: "Country",     field: "country" },
@@ -82,9 +83,3 @@ export default function HighValueTransfers() {
   );
 }
 
-function fmtDate(iso: string): string {
-  if (!iso) return "";
-  return new Date(iso).toLocaleDateString(undefined, {
-    month: "2-digit", day: "2-digit", year: "2-digit",
-  });
-}
