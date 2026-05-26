@@ -49,7 +49,7 @@ export default function AdminUsers() {
         title="User Management"
         subtitle="Manage who has access and what they can see."
         actions={(
-          <ButtonLink href="/admin/users/new" tone="primary">
+          <ButtonLink href="/admin/users/new" tone="primary" size="sm"> 
             + Add User
           </ButtonLink>
         )}
