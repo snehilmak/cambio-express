@@ -1,5 +1,6 @@
 .filterRow {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.5rem;
 }
 
@@ -79,6 +80,10 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 0.65rem;
+}
+
+@media (max-width: 640px) {
+  .formGrid { grid-template-columns: 1fr; }
 }
 
 .formActions {

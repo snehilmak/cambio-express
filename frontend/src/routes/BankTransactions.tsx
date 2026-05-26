@@ -100,7 +100,7 @@ export default function BankTransactions() {
         actions={
           <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
             <Button
-              tone="primary"
+              tone="primary" size="sm"
               busy={syncing}
               disabled={syncing}
               onClick={async () => {
