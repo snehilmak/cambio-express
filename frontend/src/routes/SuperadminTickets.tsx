@@ -1,7 +1,8 @@
 import { useState, type FormEvent } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
-import { updateTicket, useAllTickets, type TicketRow } from "../api/support";
+import { TICKET_STATUS_TONES, updateTicket, useAllTickets, type TicketRow } from "../api/support";
+import { fmtDateTime } from "../lib/formatters";
 import { ApiError } from "../lib/api";
 import {
   Alert, Breadcrumbs, Button, Card, EmptyState, ErrorState,
@@ -26,12 +27,6 @@ const STATUSES = [
   { value: "closed", label: "Closed" },
 ];
 
-const STATUS_TONES: Record<string, "neutral" | "accent" | "warning" | "success" | "negative"> = {
-  open: "accent",
-  in_progress: "warning",
-  resolved: "success",
-  closed: "neutral",
-};
 
 const PRIORITY_TONES: Record<string, "negative" | "warning" | "info" | "neutral"> = {
   P1: "negative",
@@ -40,14 +35,6 @@ const PRIORITY_TONES: Record<string, "negative" | "warning" | "info" | "neutral"
   P4: "neutral",
 };
 
-function formatDate(iso: string): string {
-  try {
-    return new Date(iso).toLocaleDateString(undefined, {
-      month: "short", day: "numeric", year: "numeric",
-      hour: "2-digit", minute: "2-digit",
-    });
-  } catch { return iso; }
-}
 
 export default function SuperadminTickets() {
   const [statusFilter, setStatusFilter] = useState("");
@@ -135,7 +122,7 @@ function TicketCard({ ticket: t }: { ticket: TicketRow }) {
           <div className={styles.headerLeft}>
             <div className={styles.titleRow}>
               <span className={styles.subject}>{t.subject}</span>
-              <Pill tone={STATUS_TONES[t.status] ?? "neutral"}>
+              <Pill tone={TICKET_STATUS_TONES[t.status] ?? "neutral"}>
                 {t.status.replace("_", " ")}
               </Pill>
               {t.priority && (
@@ -145,7 +132,7 @@ function TicketCard({ ticket: t }: { ticket: TicketRow }) {
               )}
             </div>
             <div className={styles.meta}>
-              {t.submitted_by} · {t.store_name || `Store #${t.store_id}`} · {formatDate(t.created_at)}
+              {t.submitted_by} · {t.store_name || `Store #${t.store_id}`} · {fmtDateTime(t.created_at)}
               {" · "}
               <span className={styles.metaCat}>{t.category}</span>
             </div>
@@ -160,7 +147,7 @@ function TicketCard({ ticket: t }: { ticket: TicketRow }) {
         {t.admin_reply && !replying && (
           <div className={styles.replyBox}>
             <div className={styles.replyMeta}>
-              Reply by {t.replied_by} · {t.replied_at ? formatDate(t.replied_at) : ""}
+              Reply by {t.replied_by} · {t.replied_at ? fmtDateTime(t.replied_at) : ""}
             </div>
             <p className={styles.replyBody}>{t.admin_reply}</p>
           </div>

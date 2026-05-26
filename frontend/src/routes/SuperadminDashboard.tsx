@@ -13,6 +13,7 @@ import {
 } from "chart.js";
 import { Bar, Doughnut, Line } from "react-chartjs-2";
 
+import { fmtDateTime, fmtMoney, fmtShortDate } from "../lib/formatters";
 import {
   useSuperadminDashboard,
   type ActivityEntry,
@@ -38,27 +39,6 @@ ChartJS.register(
   BarElement, ArcElement, Filler, Legend, Title, Tooltip,
 );
 
-function fmtMoney(n: number): string {
-  return `$${n.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
-}
-
-function fmtDate(iso: string): string {
-  if (!iso) return "—";
-  try {
-    return new Date(iso).toLocaleDateString(undefined, {
-      month: "short", day: "numeric",
-    });
-  } catch { return iso; }
-}
-
-function fmtDateTime(iso: string): string {
-  if (!iso) return "—";
-  try {
-    return new Date(iso).toLocaleDateString(undefined, {
-      month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
-    });
-  } catch { return iso; }
-}
 
 export default function SuperadminDashboard() {
   const { data, isLoading, isError, error, refetch } = useSuperadminDashboard();
@@ -225,7 +205,7 @@ function SignupChart({
   referral: number[];
 }) {
   const t = chartTokens();
-  const shortLabels = labels.map((l) => fmtDate(l));
+  const shortLabels = labels.map((l) => fmtShortDate(l));
   return (
     <Line
       data={{

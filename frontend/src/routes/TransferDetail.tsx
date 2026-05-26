@@ -1,6 +1,7 @@
 import { useParams } from "react-router-dom";
 
 import { useTransfer } from "../api/transfers";
+import { fmtMoney2 } from "../lib/formatters";
 import { getCurrentIdentity } from "../lib/auth";
 import {
   Breadcrumbs,
@@ -92,12 +93,12 @@ export default function TransferDetail() {
 
       <Section title="Amounts">
         <Card padding="1.25rem 1.5rem">
-          <DetailRow label="Send amount" value={fmtCurrency(t.send_amount)} mono />
-          <DetailRow label="Fee"         value={fmtCurrency(t.fee)} mono />
-          <DetailRow label="Federal tax" value={fmtCurrency(t.federal_tax)} mono />
+          <DetailRow label="Send amount" value={fmtMoney2(t.send_amount)} mono />
+          <DetailRow label="Fee"         value={fmtMoney2(t.fee)} mono />
+          <DetailRow label="Federal tax" value={fmtMoney2(t.federal_tax)} mono />
           <DetailRow
             label="Total collected"
-            value={fmtCurrency(t.total_collected)}
+            value={fmtMoney2(t.total_collected)}
             mono
             emphasis
           />
@@ -138,6 +139,3 @@ function DetailRow({
 }
 
 
-function fmtCurrency(n: number): string {
-  return `$${n.toFixed(2)}`;
-}

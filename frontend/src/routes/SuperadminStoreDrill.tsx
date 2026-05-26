@@ -3,6 +3,7 @@ import { useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 
 import { api, ApiError } from "../lib/api";
+import { fmtMoney2 } from "../lib/formatters";
 import { emailStore, extendTrial, toggleStoreActive } from "../api/superadmin";
 import { getCurrentIdentity } from "../lib/auth";
 import {
@@ -51,9 +52,6 @@ function useStoreDrill(storeId: number | undefined) {
   });
 }
 
-function fmtMoney(n: number): string {
-  return `$${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
 
 export default function SuperadminStoreDrill() {
   const params = useParams<{ id: string }>();
@@ -146,8 +144,8 @@ export default function SuperadminStoreDrill() {
             } />
             <KpiCard label="Status" value={data.store.is_active ? "Active" : "Disabled"} tone={data.store.is_active ? "positive" : "negative"} />
             <KpiCard label="Transfers (30d)" value={data.stats_30d.transfer_count.toLocaleString()} />
-            <KpiCard label="Volume (30d)" value={fmtMoney(data.stats_30d.volume)} tone="positive" />
-            <KpiCard label="Fees (30d)" value={fmtMoney(data.stats_30d.fees)} />
+            <KpiCard label="Volume (30d)" value={fmtMoney2(data.stats_30d.volume)} tone="positive" />
+            <KpiCard label="Fees (30d)" value={fmtMoney2(data.stats_30d.fees)} />
             <KpiCard label="Team" value={data.team.length} />
           </KpiGrid>
 
@@ -243,7 +241,7 @@ export default function SuperadminStoreDrill() {
                         <td style={tdStyle}>{t.recipient_name || "—"}</td>
                         <td style={tdStyle}>{t.company || "—"}</td>
                         <td style={{ ...tdStyle, textAlign: "right" }}>
-                          <span className={styles.mono}>{fmtMoney(t.send_amount)}</span>
+                          <span className={styles.mono}>{fmtMoney2(t.send_amount)}</span>
                         </td>
                         <td style={tdStyle}>
                           <Pill tone={t.status === "Completed" ? "success" : t.status === "Canceled" ? "negative" : "neutral"}>
