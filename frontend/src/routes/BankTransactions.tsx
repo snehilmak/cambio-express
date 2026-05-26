@@ -15,8 +15,8 @@ import {
 } from "../api/bankSync";
 import {
   Breadcrumbs, Button, ButtonLink,
-  Card, Empty, EmptyState, ErrorState, Field, Input, KpiCard, KpiGrid,
-  monoStyle, PageHeader, PageShell, Pager, Select, Table, TableSkeleton,
+  Card, Empty, Field, Input, KpiCard, KpiGrid,
+  monoStyle, PageHeader, PageShell, Pager, Select, Table, TableStates,
   tdStyle, thStyle,
 } from "../components/ui";
 import { ApiError } from "../lib/api";
@@ -209,16 +209,12 @@ export default function BankTransactions() {
           </Field>
         </div>
 
-        {txns.isLoading && <TableSkeleton rows={5} cols={5} />}
-        {txns.isError && (
-          <ErrorState
-            message={txns.error instanceof Error ? txns.error.message : "Could not load"}
-            onRetry={() => { void txns.refetch(); }}
-          />
-        )}
-        {txns.data && txns.data.rows.length === 0 && !txns.isLoading && (
-          <EmptyState title="No transactions match these filters." />
-        )}
+        <TableStates
+          isLoading={txns.isLoading} isError={txns.isError} error={txns.error}
+          isEmpty={!txns.data || txns.data.rows.length === 0}
+          onRetry={() => { void txns.refetch(); }}
+          emptyTitle="No transactions match these filters."
+        />
         {txns.data && txns.data.rows.length > 0 && (
           <>
             <TxnTable rows={txns.data.rows} />

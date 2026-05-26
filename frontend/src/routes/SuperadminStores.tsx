@@ -10,8 +10,8 @@ import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
 import {
   Alert, Breadcrumbs, Button, ButtonLink, Checkbox,
-  Card, Empty, EmptyState, ErrorState, Input, PageHeader, PageShell, Pill,
-  Select, Table, TableSkeleton, tdStyle, thStyle, useToast, type PillTone,
+  Card, Empty, Input, PageHeader, PageShell, Pill,
+  Select, Table, TableStates, tdStyle, thStyle, useToast, type PillTone,
 } from "../components/ui";
 import styles from "./SuperadminStores.module.css";
 
@@ -135,16 +135,12 @@ export default function SuperadminStores() {
       {bulkError && <Alert tone="error">{bulkError}</Alert>}
 
       <Card>
-        {isLoading && <TableSkeleton rows={5} cols={5} />}
-        {isError && (
-          <ErrorState
-            message={error instanceof Error ? error.message : "Could not load"}
-            onRetry={() => { void refetch(); }}
-          />
-        )}
-        {filtered && filtered.length === 0 && !isLoading && (
-          <EmptyState title="No stores match these filters." />
-        )}
+        <TableStates
+          isLoading={isLoading} isError={isError} error={error}
+          isEmpty={!filtered || filtered.length === 0}
+          onRetry={() => { void refetch(); }}
+          emptyTitle="No stores match these filters."
+        />
         {filtered && filtered.length > 0 && (
           <StoresTable
             rows={filtered}

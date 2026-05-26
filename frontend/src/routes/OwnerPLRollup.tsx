@@ -6,8 +6,8 @@ import {
 } from "../api/owner";
 import {
   Breadcrumbs,
-  Button, Card, Empty, EmptyState, ErrorState, monoStyle, PageHeader,
-  PageShell, Select, Table, TableSkeleton, tdStyle, thStyle,
+  Button, Card, Empty, monoStyle, PageHeader,
+  PageShell, Select, Table, TableStates, tdStyle, thStyle,
 } from "../components/ui";
 import { getCurrentIdentity } from "../lib/auth";
 import styles from "./OwnerPLRollup.module.css";
@@ -112,19 +112,13 @@ export default function OwnerPLRollup() {
       />
 
       <Card>
-        {isLoading && <TableSkeleton rows={5} cols={5} />}
-        {isError && (
-          <ErrorState
-            message={error instanceof Error ? error.message : "Could not load"}
-            onRetry={() => { void refetch(); }}
-          />
-        )}
-        {data && data.rows.length === 0 && !isLoading && (
-          <EmptyState
-            title="No stores connected"
-            body="Ask each store admin to redeem an owner-connect code."
-          />
-        )}
+        <TableStates
+          isLoading={isLoading} isError={isError} error={error}
+          isEmpty={!data || data.rows.length === 0}
+          onRetry={() => { void refetch(); }}
+          emptyTitle="No stores connected"
+          emptyBody="Ask each store admin to redeem an owner-connect code."
+        />
         {data && data.rows.length > 0 && (
           <RollupTable rows={data.rows} totals={data.totals} />
         )}

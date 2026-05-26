@@ -9,8 +9,8 @@ import { getCurrentIdentity } from "../lib/auth";
 import { formatDate } from "../lib/datetime";
 import {
   Breadcrumbs,
-  Button, ButtonLink, Card, Empty, EmptyState, ErrorState, PageHeader,
-  PageShell, Pill, Table, TableSkeleton, tdStyle, thStyle,
+  Button, ButtonLink, Card, Empty, PageHeader,
+  PageShell, Pill, Table, TableStates, tdStyle, thStyle,
 } from "../components/ui";
 import styles from "./AdminUsers.module.css";
 
@@ -56,16 +56,14 @@ export default function AdminUsers() {
       />
 
       <Card>
-        {isLoading && <TableSkeleton rows={4} cols={4} />}
-        {isError && (
-          <ErrorState
-            message={error instanceof Error ? error.message : "Could not load users"}
-            onRetry={() => { void refetch(); }}
-          />
-        )}
-        {data && data.rows.length === 0 && !isLoading && (
-          <EmptyState title="No users yet" body="Add one to get started." />
-        )}
+        <TableStates
+          isLoading={isLoading} isError={isError} error={error}
+          isEmpty={!data || data.rows.length === 0}
+          onRetry={() => { void refetch(); }}
+          emptyTitle="No users yet"
+          emptyBody="Add one to get started."
+          rows={4} cols={4}
+        />
         {data && data.rows.length > 0 && (
           <UserTable
             rows={data.rows}

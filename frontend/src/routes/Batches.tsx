@@ -9,8 +9,8 @@ import {
 import { getCurrentIdentity } from "../lib/auth";
 import {
   Breadcrumbs,
-  ButtonLink, Card, Empty, EmptyState, ErrorState, PageHeader, PageShell,
-  Table, TableSkeleton, tdStyle, thStyle,
+  ButtonLink, Card, Empty, PageHeader, PageShell,
+  Table, TableStates, tdStyle, thStyle,
 } from "../components/ui";
 import styles from "./Batches.module.css";
 
@@ -76,16 +76,12 @@ export default function Batches() {
       />
 
       <Card>
-        {isLoading && <TableSkeleton rows={5} cols={5} />}
-        {isError && (
-          <ErrorState
-            message={error instanceof Error ? error.message : "Could not load"}
-            onRetry={() => { void refetch(); }}
-          />
-        )}
-        {data && data.rows.length === 0 && !isLoading && (
-          <EmptyState title="No ACH batches yet." />
-        )}
+        <TableStates
+          isLoading={isLoading} isError={isError} error={error}
+          isEmpty={!data || data.rows.length === 0}
+          onRetry={() => { void refetch(); }}
+          emptyTitle="No ACH batches yet."
+        />
         {data && data.rows.length > 0 && (
           <BatchesTable
             rows={data.rows}

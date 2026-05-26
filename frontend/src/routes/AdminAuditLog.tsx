@@ -10,8 +10,8 @@ import { formatTimestamp } from "../lib/datetime";
 import { getCurrentIdentity } from "../lib/auth";
 import {
   Breadcrumbs,
-  Button, Card, Empty, EmptyState, ErrorState, Field, PageHeader, PageShell,
-  Pager, Pill, Select, space, Table, TableSkeleton, tdStyle, thStyle,
+  Button, Card, Empty, Field, PageHeader, PageShell,
+  Pager, Pill, Select, space, Table, TableStates, tdStyle, thStyle,
   type PillTone,
 } from "../components/ui";
 import styles from "./AdminAuditLog.module.css";
@@ -134,16 +134,12 @@ export default function AdminAuditLog() {
           )}
         </div>
 
-        {isLoading && <TableSkeleton rows={5} cols={5} />}
-        {isError && (
-          <ErrorState
-            message={error instanceof Error ? error.message : "Could not load"}
-            onRetry={() => { void refetch(); }}
-          />
-        )}
-        {data && data.rows.length === 0 && !isLoading && (
-          <EmptyState title="No activity matches these filters." />
-        )}
+        <TableStates
+          isLoading={isLoading} isError={isError} error={error}
+          isEmpty={!data || data.rows.length === 0}
+          onRetry={() => { void refetch(); }}
+          emptyTitle="No activity matches these filters."
+        />
         {data && data.rows.length > 0 && (
           <>
             <AuditTable

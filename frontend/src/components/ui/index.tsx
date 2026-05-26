@@ -60,6 +60,7 @@ export { Select } from "./Select";
 export { Textarea } from "./Textarea";
 export { KpiCard, KpiGrid, type KpiTone } from "./KpiCard";
 export { Table, TableSkeleton } from "./Table";
+export { TableStates } from "./TableStates";
 export { Empty, EmptyState } from "./Empty";
 export { ErrorState } from "./ErrorState";
 export { Loading } from "./Loading";

@@ -8,8 +8,8 @@ import {
 import { getCurrentIdentity } from "../lib/auth";
 import {
   Breadcrumbs,
-  ButtonLink, Card, Empty, EmptyState, ErrorState, Field, Input,
-  PageHeader, PageShell, Pager, Pill, Select, Table, TableSkeleton,
+  ButtonLink, Card, Empty, Field, Input,
+  PageHeader, PageShell, Pager, Pill, Select, Table, TableStates,
   tdStyle, thStyle,
 } from "../components/ui";
 import styles from "./Transfers.module.css";
@@ -157,16 +157,12 @@ export default function Transfers() {
       />
 
       <Card>
-        {isLoading && <TableSkeleton rows={5} cols={5} />}
-        {isError && (
-          <ErrorState
-            message={error instanceof Error ? error.message : "Could not load transfers"}
-            onRetry={() => { void refetch(); }}
-          />
-        )}
-        {data && data.rows.length === 0 && !isLoading && (
-          <EmptyState title="No transfers match these filters." />
-        )}
+        <TableStates
+          isLoading={isLoading} isError={isError} error={error}
+          isEmpty={!data || data.rows.length === 0}
+          onRetry={() => { void refetch(); }}
+          emptyTitle="No transfers match these filters."
+        />
         {data && data.rows.length > 0 && <TransfersTable rows={data.rows} />}
       </Card>
 
