@@ -1,12 +1,14 @@
+import { useState } from "react";
 import { useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 
-import { api } from "../lib/api";
+import { api, ApiError } from "../lib/api";
+import { emailStore, extendTrial, toggleStoreActive } from "../api/superadmin";
 import { getCurrentIdentity } from "../lib/auth";
 import {
-  Breadcrumbs, ButtonLink, Card, EmptyState, ErrorState,
-  KpiCard, KpiGrid, Loading, PageHeader, PageShell, Pill,
-  Section, Table, tdStyle, thStyle,
+  Alert, Breadcrumbs, Button, ButtonLink, Card, EmptyState, ErrorState, Field,
+  Input, KpiCard, KpiGrid, Loading, Modal, PageHeader, PageShell, Pill,
+  Section, Table, tdStyle, Textarea, thStyle, useToast,
 } from "../components/ui";
 import styles from "./SuperadminStoreDrill.module.css";
 
@@ -57,6 +59,13 @@ export default function SuperadminStoreDrill() {
   const params = useParams<{ id: string }>();
   const storeId = params.id ? Number(params.id) : undefined;
   const { data, isLoading, isError, error, refetch } = useStoreDrill(storeId);
+  const toast = useToast();
+  const [showEmail, setShowEmail] = useState(false);
+  const [emailSubject, setEmailSubject] = useState("");
+  const [emailBody, setEmailBody] = useState("");
+  const [emailBusy, setEmailBusy] = useState(false);
+  const [emailError, setEmailError] = useState<string | null>(null);
+  const [actionBusy, setActionBusy] = useState(false);
 
   return (
     <PageShell gap="1.25rem">
@@ -80,11 +89,49 @@ export default function SuperadminStoreDrill() {
             subtitle={data.store.slug}
             actions={(
               <div className={styles.actions}>
+                <Button
+                  tone="secondary" size="sm"
+                  onClick={() => setShowEmail(true)}
+                >
+                  Email admin
+                </Button>
+                <Button
+                  tone="secondary" size="sm"
+                  busy={actionBusy}
+                  onClick={async () => {
+                    setActionBusy(true);
+                    try {
+                      await extendTrial(data.store.id, 14);
+                      toast({ message: "Trial extended by 14 days.", tone: "success" });
+                      void refetch();
+                    } catch (e) {
+                      toast({ message: e instanceof ApiError ? e.message : "Failed", tone: "error" });
+                    } finally { setActionBusy(false); }
+                  }}
+                >
+                  +14d trial
+                </Button>
+                <Button
+                  tone="secondary" size="sm"
+                  busy={actionBusy}
+                  onClick={async () => {
+                    setActionBusy(true);
+                    try {
+                      const res = await toggleStoreActive(data.store.id);
+                      toast({ message: res.is_active ? "Store enabled." : "Store disabled.", tone: "success" });
+                      void refetch();
+                    } catch (e) {
+                      toast({ message: e instanceof ApiError ? e.message : "Failed", tone: "error" });
+                    } finally { setActionBusy(false); }
+                  }}
+                >
+                  {data.store.is_active ? "Disable" : "Enable"}
+                </Button>
                 <ButtonLink
                   href={`/superadmin/stores/${data.store.id}/edit`}
                   tone="secondary" size="sm"
                 >
-                  Edit store
+                  Edit
                 </ButtonLink>
               </div>
             )}
@@ -212,6 +259,63 @@ export default function SuperadminStoreDrill() {
           </Section>
         </>
       )}
+
+      <Modal
+        open={showEmail}
+        title={`Email ${data?.store.name ?? "store"} admin`}
+        onClose={() => { setShowEmail(false); setEmailError(null); }}
+      >
+        <form
+          onSubmit={async (e) => {
+            e.preventDefault();
+            if (!storeId || !emailSubject.trim() || !emailBody.trim()) return;
+            setEmailBusy(true);
+            setEmailError(null);
+            try {
+              const res = await emailStore(storeId, emailSubject.trim(), emailBody.trim());
+              toast({ message: `Sent to ${res.total} recipient(s).`, tone: "success" });
+              setShowEmail(false);
+              setEmailSubject("");
+              setEmailBody("");
+            } catch (err) {
+              setEmailError(err instanceof ApiError ? err.message : "Could not send.");
+            } finally {
+              setEmailBusy(false);
+            }
+          }}
+          style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}
+        >
+          <Field label="Subject">
+            <Input
+              type="text" value={emailSubject}
+              onChange={(e) => setEmailSubject(e.target.value)}
+              placeholder="Subject line…"
+              maxLength={200} required
+            />
+          </Field>
+          <Field label="Message">
+            <Textarea
+              value={emailBody}
+              onChange={(e) => setEmailBody(e.target.value)}
+              placeholder="Your message to the store admin…"
+              rows={5} maxLength={5000} required
+            />
+          </Field>
+          {emailError && <Alert tone="error">{emailError}</Alert>}
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
+            <Button
+              tone="secondary"
+              onClick={() => { setShowEmail(false); setEmailError(null); }}
+              type="button"
+            >
+              Cancel
+            </Button>
+            <Button type="submit" busy={emailBusy} disabled={emailBusy}>
+              {emailBusy ? "Sending…" : "Send email"}
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </PageShell>
   );
 }

@@ -1150,6 +1150,46 @@ def bulk_action_route(
     return {"ok": True, "count": len(stores), "results": results}
 
 
+# ── Store communication ─────────────────────────────────────
+
+
+@router.post("/stores/{store_id}/email")
+def email_store_route(
+    store_id: int = Path(..., ge=1),
+    body: dict[str, Any] = {},
+    db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
+) -> dict[str, Any]:
+    """Send an email to a store's admin(s)."""
+    _require_superadmin(claims)
+    from api.Modules.Notifications.Services.smtp import send_email
+    from api.Modules.Tenancy.Models import Store, User
+    sa = resolve_superadmin_user(db, claims)
+    store = db.get(Store, store_id)
+    if store is None:
+        raise HTTPException(404, "Store not found")
+    subject = body.get("subject", "").strip()
+    message = body.get("message", "").strip()
+    if not subject or not message:
+        raise HTTPException(422, "Subject and message are required")
+    admins = (
+        db.query(User)
+        .filter(User.store_id == store_id, User.role == "admin", User.is_active == True)
+        .all()
+    )
+    recipients = [u for u in admins if u.email]
+    if not recipients:
+        raise HTTPException(422, "No admin with an email address found for this store")
+    sent_to = []
+    for u in recipients:
+        ok = send_email(db, u.email, subject, message)
+        if ok:
+            sent_to.append(u.email)
+    _audit_store(db, sa, "email_store", target_id=str(store_id),
+                 details=f"Subject: {subject[:60]} → {len(sent_to)} recipient(s)")
+    return {"ok": True, "sent_to": sent_to, "total": len(sent_to)}
+
+
 @router.get("/audit-log", response_model=SuperadminAuditListResponse)
 def list_audit_route(
     page: int = Query(1, ge=1),

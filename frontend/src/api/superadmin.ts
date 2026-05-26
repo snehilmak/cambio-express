@@ -366,6 +366,13 @@ export async function toggleStoreActive(storeId: number) {
   );
 }
 
+export async function emailStore(storeId: number, subject: string, message: string) {
+  return api<{ ok: boolean; sent_to: string[]; total: number }>(
+    `/api/v2/superadmin/stores/${storeId}/email`,
+    { method: "POST", json: { subject, message } },
+  );
+}
+
 export async function bulkStoreAction(
   store_ids: number[],
   action: "extend_trial" | "enable" | "disable",
