@@ -63,6 +63,10 @@ export default function Dashboard() {
     return <Navigate to="/owner/dashboard" replace />;
   }
 
+  if (identity?.role === "superadmin") {
+    return <Navigate to="/superadmin/dashboard" replace />;
+  }
+
   const title =
     identity?.role === "superadmin"
       ? "Platform Dashboard"
