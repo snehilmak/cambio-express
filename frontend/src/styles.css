@@ -73,6 +73,7 @@ body {
   height: 100vh;
   overflow-y: auto;
   scrollbar-width: none;
+  z-index: 41;
 }
 .app-sidebar::-webkit-scrollbar { display: none; }
 
