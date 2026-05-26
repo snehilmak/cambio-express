@@ -14,6 +14,7 @@ announcements/feature-flag CRUD, and impersonation.
 from math import ceil
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from api.Core.Database import get_db
@@ -478,6 +479,248 @@ def impersonate_route(
 
 
 # ── System health ──────────────────────────────────────────
+
+
+# ── Billing overview ────────────────────────────────────────
+
+
+@router.get("/billing-overview")
+def billing_overview_route(
+    db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
+) -> dict[str, Any]:
+    """Billing health: trials expiring, grace, retention queue,
+    recent cancellations, webhook events."""
+    _require_superadmin(claims)
+    from datetime import datetime, timedelta
+    from api.Modules.Billing.Services.trial import get_trial_status
+    from api.Modules.Tenancy.Models import Store
+    from api.Modules.Webhooks.Models import WebhookEvent
+
+    now = datetime.utcnow()
+    stores = db.query(Store).all()
+
+    expiring_soon: list[dict[str, Any]] = []
+    in_grace: list[dict[str, Any]] = []
+    retention_queue: list[dict[str, Any]] = []
+    recent_cancels: list[dict[str, Any]] = []
+
+    for s in stores:
+        status = get_trial_status(s)
+        row = {
+            "store_id": s.id, "name": s.name or "", "slug": s.slug or "",
+            "plan": s.plan or "", "email": s.email or "",
+        }
+        if status == "expiring_soon":
+            row["trial_ends_at"] = _iso(s.trial_ends_at)
+            expiring_soon.append(row)
+        elif status == "grace":
+            row["grace_ends_at"] = _iso(s.grace_ends_at)
+            in_grace.append(row)
+        if (s.plan == "inactive" and s.data_retention_until
+                and s.data_retention_until > now):
+            days_left = (s.data_retention_until - now).days
+            row2 = {**row, "data_retention_until": _iso(s.data_retention_until),
+                    "days_left": days_left}
+            retention_queue.append(row2)
+        if s.canceled_at and s.canceled_at >= now - timedelta(days=30):
+            row3 = {**row, "canceled_at": _iso(s.canceled_at)}
+            recent_cancels.append(row3)
+
+    # Stripe webhook health (7d)
+    webhook_stats: dict[str, int] = {}
+    try:
+        since = now - timedelta(days=7)
+        rows = (
+            db.query(WebhookEvent.status, func.count(WebhookEvent.id))
+            .filter(WebhookEvent.received_at >= since)
+            .group_by(WebhookEvent.status)
+            .all()
+        )
+        for st, cnt in rows:
+            webhook_stats[st] = cnt
+    except Exception:
+        pass
+
+    return {
+        "expiring_soon": expiring_soon,
+        "in_grace": in_grace,
+        "retention_queue": retention_queue,
+        "recent_cancels": recent_cancels,
+        "webhook_stats": webhook_stats,
+    }
+
+
+# ── Email log ──────────────────────────────────────────────
+
+
+@router.get("/email-log")
+def email_log_route(
+    q: str | None = Query(None),
+    event_type: str | None = Query(None),
+    page: int = Query(1, ge=1),
+    per_page: int = Query(50, ge=1, le=200),
+    db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
+) -> dict[str, Any]:
+    """Paginated email event log with search + type filter."""
+    _require_superadmin(claims)
+    from api.Modules.Webhooks.Models import EmailEvent
+    from api.Modules.Tenancy.Models import User
+
+    query = db.query(EmailEvent)
+    if q:
+        needle = f"%{q}%"
+        query = query.filter(EmailEvent.to_addr.ilike(needle))
+    if event_type:
+        query = query.filter(EmailEvent.event_type == event_type)
+    total = query.count()
+    events = (
+        query.order_by(EmailEvent.created_at.desc())
+        .offset((page - 1) * per_page)
+        .limit(per_page)
+        .all()
+    )
+
+    # Suppressed addresses
+    suppressed = (
+        db.query(User.id, User.username, User.email, User.email_bounced_at)
+        .filter(User.email_bounced_at.isnot(None))
+        .all()
+    )
+
+    rows = []
+    for e in events:
+        rows.append({
+            "id": e.id,
+            "to_addr": e.to_addr or "",
+            "event_type": e.event_type or "",
+            "bounce_type": e.bounce_type or "",
+            "message_id": e.message_id or "",
+            "created_at": _iso(e.created_at),
+        })
+
+    suppressed_rows = [
+        {"user_id": u.id, "username": u.username, "email": u.email,
+         "bounced_at": _iso(u.email_bounced_at)}
+        for u in suppressed
+    ]
+
+    return {
+        "rows": rows,
+        "total": total,
+        "page": page,
+        "total_pages": ceil(total / per_page),
+        "suppressed": suppressed_rows,
+    }
+
+
+# ── Store deep-drill ───────────────────────────────────────
+
+
+@router.get("/stores/{store_id}/drill")
+def store_drill_route(
+    store_id: int = Path(..., ge=1),
+    db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
+) -> dict[str, Any]:
+    """Read-only deep view of a store's data for support."""
+    _require_superadmin(claims)
+    from datetime import timedelta
+    from api.Modules.Billing.Services.trial import get_trial_status
+    from api.Modules.Tenancy.Models import Store, StoreEmployee, User
+    from api.Modules.Transfers.Models import Transfer
+
+    store = db.get(Store, store_id)
+    if store is None:
+        raise HTTPException(404, "Store not found")
+
+    # Team
+    users = (
+        db.query(User)
+        .filter(User.store_id == store_id)
+        .order_by(User.created_at)
+        .all()
+    )
+    team = [
+        {"id": u.id, "username": u.username, "full_name": u.full_name or "",
+         "role": u.role or "", "email": u.email or "",
+         "is_active": bool(u.is_active), "has_2fa": bool(u.totp_enrolled_at),
+         "last_login_at": _iso(u.last_login_at)}
+        for u in users
+    ]
+
+    # Employees (roster names)
+    employees = (
+        db.query(StoreEmployee)
+        .filter(StoreEmployee.store_id == store_id)
+        .order_by(StoreEmployee.name)
+        .all()
+    )
+    roster = [
+        {"id": e.id, "name": e.name or "", "is_active": bool(e.is_active)}
+        for e in employees
+    ]
+
+    # Recent transfers (last 20)
+    recent_transfers = (
+        db.query(Transfer)
+        .filter(Transfer.store_id == store_id)
+        .order_by(Transfer.created_at.desc())
+        .limit(20)
+        .all()
+    )
+    transfers = [
+        {"id": t.id, "send_date": t.send_date or "",
+         "sender_name": t.sender_name or "", "recipient_name": t.recipient_name or "",
+         "company": t.company or "", "send_amount": float(t.send_amount or 0),
+         "fee": float(t.fee or 0), "total_collected": float(t.total_collected or 0),
+         "status": t.status or "", "created_at": _iso(t.created_at)}
+        for t in recent_transfers
+    ]
+
+    # Transfer stats
+    from datetime import datetime
+    now = datetime.utcnow()
+    stats_30d = (
+        db.query(
+            func.count(Transfer.id),
+            func.coalesce(func.sum(Transfer.send_amount), 0.0),
+            func.coalesce(func.sum(Transfer.fee), 0.0),
+        )
+        .filter(
+            Transfer.store_id == store_id,
+            Transfer.created_at >= now - timedelta(days=30),
+            Transfer.status.notin_(["Canceled", "Rejected"]),
+        )
+        .first()
+    )
+    transfer_count_30d = stats_30d[0] if stats_30d else 0
+    volume_30d = float(stats_30d[1]) if stats_30d else 0.0
+    fees_30d = float(stats_30d[2]) if stats_30d else 0.0
+
+    return {
+        "store": {
+            "id": store.id, "name": store.name or "", "slug": store.slug or "",
+            "email": store.email or "", "phone": store.phone or "",
+            "address": store.address or "",
+            "plan": store.plan or "", "billing_cycle": store.billing_cycle or "",
+            "is_active": bool(store.is_active),
+            "trial_status": get_trial_status(store),
+            "created_at": _iso(store.created_at),
+            "trial_ends_at": _iso(store.trial_ends_at),
+            "canceled_at": _iso(store.canceled_at),
+            "stripe_customer_id": store.stripe_customer_id or "",
+        },
+        "team": team,
+        "roster": roster,
+        "recent_transfers": transfers,
+        "stats_30d": {
+            "transfer_count": transfer_count_30d,
+            "volume": volume_30d,
+            "fees": fees_30d,
+        },
+    }
 
 
 @router.get("/system-health")
