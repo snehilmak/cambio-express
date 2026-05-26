@@ -91,7 +91,7 @@ def list_my_tickets(
     """List tickets submitted by users in the caller's store.
     Superadmin sees all tickets (same as /all) since they have no store."""
     if claims.get("role") == "superadmin":
-        return list_all_tickets(status=status, db=db, claims=claims)
+        return list_all_tickets(status=status, category=None, db=db, claims=claims)
     sid = resolve_store_scope(claims)
     q = db.query(SupportTicket).filter(
         SupportTicket.store_id == sid,

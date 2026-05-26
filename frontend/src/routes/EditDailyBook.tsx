@@ -22,6 +22,7 @@ import {
   type MTBreakdownRow,
   type MTBreakdownWriteRow,
 } from "../api/dailybook";
+import { fmtMoney2 } from "../lib/formatters";
 import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
 import {
@@ -1455,16 +1456,7 @@ function computeTotals(form: FormState | null, report: DailyReportRow | null | u
 }
 
 // `fmtMoney` retired alongside the TabBar — was only used for the
-// per-tab totals hints in the bar.  `fmtMoney2` (2-decimal form)
-// stays since it backs the TotalsStrip + StickySaveBar.
-
-function fmtMoney2(n: number): string {
-  if (!Number.isFinite(n)) return "$0.00";
-  return n.toLocaleString(undefined, {
-    style: "currency", currency: "USD",
-    minimumFractionDigits: 2, maximumFractionDigits: 2,
-  });
-}
+// fmtMoney2 imported from lib/formatters (was local, consolidated).
 
 function formatHumanDate(iso: string): string {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);

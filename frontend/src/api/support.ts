@@ -2,6 +2,14 @@ import { useQuery } from "@tanstack/react-query";
 
 import { api } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
+import type { PillTone } from "../components/ui";
+
+export const TICKET_STATUS_TONES: Record<string, PillTone> = {
+  open: "accent",
+  in_progress: "warning",
+  resolved: "success",
+  closed: "neutral",
+};
 
 export interface TicketRow {
   id: number;

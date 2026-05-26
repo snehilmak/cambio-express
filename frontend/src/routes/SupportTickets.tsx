@@ -2,7 +2,8 @@ import { useState, type FormEvent } from "react";
 import { Navigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 
-import { createTicket, useMyTickets, type TicketRow } from "../api/support";
+import { createTicket, TICKET_STATUS_TONES, useMyTickets, type TicketRow } from "../api/support";
+import { fmtDateTime } from "../lib/formatters";
 import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
 import {
@@ -19,20 +20,7 @@ const CATEGORIES = [
   { value: "feedback", label: "General feedback" },
 ];
 
-const STATUS_TONES: Record<string, "neutral" | "accent" | "warning" | "success" | "negative"> = {
-  open: "accent",
-  in_progress: "warning",
-  resolved: "success",
-  closed: "neutral",
-};
 
-function formatDate(iso: string): string {
-  try {
-    return new Date(iso).toLocaleDateString(undefined, {
-      month: "short", day: "numeric", year: "numeric",
-    });
-  } catch { return iso; }
-}
 
 export default function SupportTickets() {
   const identity = getCurrentIdentity();
@@ -183,11 +171,11 @@ function TicketRowView({ ticket: t }: { ticket: TicketRow }) {
         <td style={tdStyle}>{t.subject}</td>
         <td style={tdStyle}>{CATEGORIES.find((c) => c.value === t.category)?.label ?? t.category}</td>
         <td style={tdStyle}>
-          <Pill tone={STATUS_TONES[t.status] ?? "neutral"}>
+          <Pill tone={TICKET_STATUS_TONES[t.status] ?? "neutral"}>
             {t.status.replace("_", " ")}
           </Pill>
         </td>
-        <td style={tdStyle}>{formatDate(t.created_at)}</td>
+        <td style={tdStyle}>{fmtDateTime(t.created_at)}</td>
       </tr>
       {expanded && (
         <tr>
@@ -196,7 +184,7 @@ function TicketRowView({ ticket: t }: { ticket: TicketRow }) {
             {t.admin_reply && (
               <div className={styles.replyBox}>
                 <div className={styles.replyMeta}>
-                  Reply from {t.replied_by} · {t.replied_at ? formatDate(t.replied_at) : ""}
+                  Reply from {t.replied_by} · {t.replied_at ? fmtDateTime(t.replied_at) : ""}
                 </div>
                 <p className={styles.replyBody}>{t.admin_reply}</p>
               </div>

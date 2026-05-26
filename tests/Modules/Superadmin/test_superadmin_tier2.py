@@ -295,3 +295,172 @@ class TestPermissions:
     def test_requires_superadmin(self, client):
         resp = client.get("/api/v2/superadmin/permissions")
         assert resp.status_code in (401, 403)
+
+
+class TestDashboard:
+    def test_returns_dashboard_data(self, client, sa_headers):
+        resp = client.get("/api/v2/superadmin/dashboard", headers=sa_headers)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "total_stores" in data
+        assert "estimated_mrr" in data
+        assert "signup_labels" in data
+        assert "plan_dist" in data
+        assert "activity" in data
+        assert "mrr_trend" in data
+
+    def test_requires_superadmin(self, client):
+        resp = client.get("/api/v2/superadmin/dashboard")
+        assert resp.status_code in (401, 403)
+
+
+class TestSystemHealth:
+    def test_returns_health_data(self, client, sa_headers):
+        resp = client.get("/api/v2/superadmin/system-health", headers=sa_headers)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "db" in data
+        assert "stripe" in data
+        assert "email" in data
+        assert "queue" in data
+        assert "env" in data
+        assert data["db"]["ok"] is True
+
+    def test_requires_superadmin(self, client):
+        resp = client.get("/api/v2/superadmin/system-health")
+        assert resp.status_code in (401, 403)
+
+
+class TestMaintenanceMode:
+    def test_get_maintenance(self, client, sa_headers):
+        resp = client.get("/api/v2/superadmin/maintenance", headers=sa_headers)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "enabled" in data
+        assert "message" in data
+
+    def test_toggle_maintenance(self, client, sa_headers):
+        resp = client.post(
+            "/api/v2/superadmin/maintenance",
+            headers=sa_headers,
+            json={"enabled": True, "message": "Test maintenance"},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["enabled"] is True
+        # Turn it off
+        client.post(
+            "/api/v2/superadmin/maintenance",
+            headers=sa_headers,
+            json={"enabled": False, "message": ""},
+        )
+
+    def test_public_status_endpoint(self, client):
+        resp = client.get("/api/v2/maintenance-status")
+        assert resp.status_code == 200
+        assert "enabled" in resp.json()
+
+    def test_requires_superadmin(self, client):
+        resp = client.post("/api/v2/superadmin/maintenance", json={"enabled": True})
+        assert resp.status_code in (401, 403)
+
+
+class TestUserList:
+    def test_list_users(self, client, sa_headers):
+        resp = client.get("/api/v2/superadmin/users", headers=sa_headers)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "rows" in data
+        assert "total" in data
+        assert data["total"] > 0
+
+    def test_search_filter(self, client, sa_headers):
+        resp = client.get("/api/v2/superadmin/users?q=admin", headers=sa_headers)
+        assert resp.status_code == 200
+
+    def test_role_filter(self, client, sa_headers):
+        resp = client.get("/api/v2/superadmin/users?role=superadmin", headers=sa_headers)
+        assert resp.status_code == 200
+        for row in resp.json()["rows"]:
+            assert row["role"] == "superadmin"
+
+    def test_requires_superadmin(self, client):
+        resp = client.get("/api/v2/superadmin/users")
+        assert resp.status_code in (401, 403)
+
+
+class TestBulkAction:
+    def test_bulk_enable(self, client, sa_headers):
+        with db_session():
+            from api.Modules.Tenancy.Models import Store
+            store = db.session.query(Store).first()
+            store_id = store.id
+        resp = client.post(
+            "/api/v2/superadmin/bulk-action",
+            headers=sa_headers,
+            json={"store_ids": [store_id], "action": "enable"},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["count"] == 1
+
+    def test_invalid_action(self, client, sa_headers):
+        resp = client.post(
+            "/api/v2/superadmin/bulk-action",
+            headers=sa_headers,
+            json={"store_ids": [1], "action": "delete"},
+        )
+        assert resp.status_code == 422
+
+    def test_empty_store_ids(self, client, sa_headers):
+        resp = client.post(
+            "/api/v2/superadmin/bulk-action",
+            headers=sa_headers,
+            json={"store_ids": [], "action": "enable"},
+        )
+        assert resp.status_code == 422
+
+    def test_requires_superadmin(self, client):
+        resp = client.post("/api/v2/superadmin/bulk-action",
+                           json={"store_ids": [1], "action": "enable"})
+        assert resp.status_code in (401, 403)
+
+
+class TestExtendTrial:
+    def test_extend_trial(self, client, sa_headers):
+        with db_session():
+            from api.Modules.Tenancy.Models import Store
+            store = db.session.query(Store).filter(Store.plan == "trial").first()
+            if store is None:
+                pytest.skip("No trial store")
+            store_id = store.id
+        resp = client.post(
+            f"/api/v2/superadmin/stores/{store_id}/extend-trial",
+            headers=sa_headers,
+            json={"days": 7},
+        )
+        assert resp.status_code == 200
+        assert "trial_ends_at" in resp.json()
+
+    def test_requires_superadmin(self, client):
+        resp = client.post("/api/v2/superadmin/stores/1/extend-trial",
+                           json={"days": 7})
+        assert resp.status_code in (401, 403)
+
+
+class TestToggleStoreActive:
+    def test_toggle_store(self, client, sa_headers):
+        with db_session():
+            from api.Modules.Tenancy.Models import Store
+            store = db.session.query(Store).first()
+            store_id = store.id
+            was_active = store.is_active
+        resp = client.post(
+            f"/api/v2/superadmin/stores/{store_id}/toggle-active",
+            headers=sa_headers,
+        )
+        assert resp.status_code == 200
+        assert resp.json()["is_active"] == (not was_active)
+        # Restore
+        client.post(
+            f"/api/v2/superadmin/stores/{store_id}/toggle-active",
+            headers=sa_headers,
+        )
