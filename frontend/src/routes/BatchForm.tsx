@@ -11,7 +11,7 @@ import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
 import {
   Breadcrumbs,
-  Alert, Button, ButtonLink, Card, Field, FormActions, Input, Loading,
+  Alert, Button, ButtonLink, Card, DateInput, Field, FormActions, Input, Loading,
   MoneyInput, PageHeader, PageShell, Select, Textarea,
 } from "../components/ui";
 import styles from "./BatchForm.module.css";
@@ -144,7 +144,7 @@ export default function BatchForm() {
         <Card>
           <div className={styles.fieldGrid}>
             <Field label="ACH date" highlight={field === "ach_date"}>
-              <Input type="date" required
+              <DateInput required
                 value={form.ach_date}
                 onChange={(e) => set("ach_date", e.target.value)} />
             </Field>
