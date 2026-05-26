@@ -220,7 +220,7 @@ def test_list_rows_have_total_collected(test_store_id, authed_client):
     with db_session():
         _seed_transfer(test_store_id, send_amount=100.0,
                         fee=2.0, federal_tax=1.0)
-    resp = api_client.get(
+    resp = authed_client.get(
         "/transfers", params={"store_ids": str(test_store_id)},
     )
     body = resp.json()
@@ -231,10 +231,13 @@ def test_list_rows_have_total_collected(test_store_id, authed_client):
 
 
 def test_flask_dispatcher_routes_transfers_to_fastapi(client, test_store_id):
+    from tests.conftest import login_admin
     with db_session():
         _seed_transfer(test_store_id, send_amount=99.0)
+    token = login_admin(client, test_store_id)
     resp = client.get(
         f"/api/v2/transfers?store_ids={test_store_id}",
+        headers={"Authorization": f"Bearer {token}"},
     )
     assert resp.status_code == 200
     assert resp.is_json
