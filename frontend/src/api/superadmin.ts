@@ -351,3 +351,28 @@ export async function impersonateUser(userId: number) {
     { method: "POST" },
   );
 }
+
+export async function extendTrial(storeId: number, days: number = 14) {
+  return api<{ ok: boolean; trial_ends_at: string }>(
+    `/api/v2/superadmin/stores/${storeId}/extend-trial`,
+    { method: "POST", json: { days } },
+  );
+}
+
+export async function toggleStoreActive(storeId: number) {
+  return api<{ ok: boolean; is_active: boolean }>(
+    `/api/v2/superadmin/stores/${storeId}/toggle-active`,
+    { method: "POST" },
+  );
+}
+
+export async function bulkStoreAction(
+  store_ids: number[],
+  action: "extend_trial" | "enable" | "disable",
+  days?: number,
+) {
+  return api<{ ok: boolean; count: number; results: Array<Record<string, unknown>> }>(
+    `/api/v2/superadmin/bulk-action`,
+    { method: "POST", json: { store_ids, action, days } },
+  );
+}

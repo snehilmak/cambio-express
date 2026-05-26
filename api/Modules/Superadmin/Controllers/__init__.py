@@ -1047,6 +1047,109 @@ def update_store_route(
     return SuperadminStoreDetailResponse(store=_adapt_detail(s))
 
 
+# ── Store actions (single + bulk) ──────────────────────────
+
+
+@router.post("/stores/{store_id}/extend-trial")
+def extend_trial_route(
+    store_id: int = Path(..., ge=1),
+    body: dict[str, Any] = {},
+    db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
+) -> dict[str, Any]:
+    """Extend a store's trial by N days (default 14)."""
+    _require_superadmin(claims)
+    from datetime import datetime, timedelta
+    from api.Modules.Tenancy.Models import Store
+    sa = resolve_superadmin_user(db, claims)
+    s = db.get(Store, store_id)
+    if s is None:
+        raise HTTPException(404, "Store not found")
+    days = int(body.get("days", 14))
+    if days < 1 or days > 365:
+        raise HTTPException(422, "Days must be 1–365")
+    base = s.trial_ends_at or datetime.utcnow()
+    s.trial_ends_at = base + timedelta(days=days)
+    if s.grace_ends_at:
+        s.grace_ends_at = s.trial_ends_at + timedelta(days=7)
+    if s.plan == "inactive":
+        s.plan = "trial"
+    db.commit()
+    _audit_store(db, sa, "extend_trial", target_id=str(s.id),
+                 details=f"+{days} days → {s.trial_ends_at.isoformat()[:10]}")
+    return {"ok": True, "trial_ends_at": s.trial_ends_at.isoformat()}
+
+
+@router.post("/stores/{store_id}/toggle-active")
+def toggle_store_active_route(
+    store_id: int = Path(..., ge=1),
+    db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
+) -> dict[str, Any]:
+    """Enable / disable a store."""
+    _require_superadmin(claims)
+    from api.Modules.Tenancy.Models import Store
+    sa = resolve_superadmin_user(db, claims)
+    s = db.get(Store, store_id)
+    if s is None:
+        raise HTTPException(404, "Store not found")
+    s.is_active = not s.is_active
+    db.commit()
+    act = "enable_store" if s.is_active else "disable_store"
+    _audit_store(db, sa, act, target_id=str(s.id),
+                 details=f"{s.name} ({s.slug})")
+    return {"ok": True, "is_active": s.is_active}
+
+
+@router.post("/bulk-action")
+def bulk_action_route(
+    body: dict[str, Any],
+    db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
+) -> dict[str, Any]:
+    """Bulk action on multiple stores. Actions: extend_trial,
+    enable, disable."""
+    _require_superadmin(claims)
+    from datetime import datetime, timedelta
+    from api.Modules.Tenancy.Models import Store
+    sa = resolve_superadmin_user(db, claims)
+    store_ids = body.get("store_ids", [])
+    action = body.get("action", "")
+    if not store_ids or not isinstance(store_ids, list):
+        raise HTTPException(422, "store_ids must be a non-empty list")
+    if action not in ("extend_trial", "enable", "disable"):
+        raise HTTPException(422, f"Invalid action: {action}")
+
+    stores = db.query(Store).filter(Store.id.in_(store_ids)).all()
+    if not stores:
+        raise HTTPException(404, "No stores found")
+
+    results = []
+    for s in stores:
+        if action == "extend_trial":
+            days = int(body.get("days", 14))
+            base = s.trial_ends_at or datetime.utcnow()
+            s.trial_ends_at = base + timedelta(days=days)
+            if s.grace_ends_at:
+                s.grace_ends_at = s.trial_ends_at + timedelta(days=7)
+            if s.plan == "inactive":
+                s.plan = "trial"
+            results.append({"store_id": s.id, "name": s.name,
+                           "trial_ends_at": s.trial_ends_at.isoformat()})
+        elif action == "enable":
+            s.is_active = True
+            results.append({"store_id": s.id, "name": s.name, "is_active": True})
+        elif action == "disable":
+            s.is_active = False
+            results.append({"store_id": s.id, "name": s.name, "is_active": False})
+
+    db.commit()
+    _audit_store(db, sa, f"bulk_{action}",
+                 target_id=",".join(str(s.id) for s in stores),
+                 details=f"{len(stores)} stores")
+    return {"ok": True, "count": len(stores), "results": results}
+
+
 @router.get("/audit-log", response_model=SuperadminAuditListResponse)
 def list_audit_route(
     page: int = Query(1, ge=1),

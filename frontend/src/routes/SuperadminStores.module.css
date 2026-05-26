@@ -40,3 +40,19 @@
  * primitive directly, which carries its own styling via the
  * shared `--db-tone-*` tokens.  Capitalisation lives in TS
  * land (`plan.charAt(0).toUpperCase()`). */
+
+.bulkBar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 1rem;
+  background: var(--db-surface-2, #141414);
+  border: 1px solid var(--db-accent, #3fff00);
+  border-radius: 0.5rem;
+}
+
+.bulkCount {
+  font-weight: 600;
+  font-size: 0.88rem;
+  margin-right: auto;
+}
