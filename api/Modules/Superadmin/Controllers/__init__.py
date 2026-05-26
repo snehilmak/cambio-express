@@ -171,6 +171,43 @@ def dashboard_route(
     }
 
 
+# ── Maintenance mode ───────────────────────────────────────
+
+
+@router.get("/maintenance")
+def get_maintenance_route(
+    db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
+) -> dict[str, Any]:
+    _require_superadmin(claims)
+    from api.Modules.Superadmin.Models import get_setting
+    enabled = get_setting(db, "maintenance_mode", "false") == "true"
+    message = get_setting(db, "maintenance_message", "")
+    return {"enabled": enabled, "message": message}
+
+
+@router.post("/maintenance")
+def set_maintenance_route(
+    body: dict[str, Any],
+    db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
+) -> dict[str, Any]:
+    _require_superadmin(claims)
+    from api.Modules.Superadmin.Models import set_setting
+    sa = resolve_superadmin_user(db, claims)
+    enabled = body.get("enabled", False)
+    message = body.get("message", "")
+    set_setting(db, "maintenance_mode", "true" if enabled else "false")
+    set_setting(db, "maintenance_message", str(message)[:500])
+    _audit_store(
+        db, sa,
+        "maintenance_mode_toggle",
+        target_id="platform",
+        details=f"{'Enabled' if enabled else 'Disabled'}: {message[:100]}",
+    )
+    return {"enabled": enabled, "message": message}
+
+
 # ── Permissions matrix ─────────────────────────────────────
 
 
