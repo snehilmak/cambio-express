@@ -2,10 +2,12 @@ import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
 import {
+  changeUserRole,
   forcePasswordReset,
   impersonateUser,
   resetUser2FA,
   toggleUserActive,
+  useSuperadminStores,
   useSuperadminUsers,
   type SuperadminUserRow,
 } from "../api/superadmin";
@@ -46,16 +48,22 @@ export default function SuperadminUsers() {
   const toast = useToast();
   const [q, setQ] = useState("");
   const [role, setRole] = useState("");
+  const [storeFilter, setStoreFilter] = useState<number | undefined>();
   const [page, setPage] = useState(1);
+  const stores = useSuperadminStores();
   const [busyId, setBusyId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [tempPw, setTempPw] = useState<{ userId: number; password: string } | null>(null);
   const [confirmAction, setConfirmAction] = useState<{
     userId: number; username: string; action: "toggle" | "reset2fa" | "resetpw" | "impersonate";
   } | null>(null);
+  const [roleChange, setRoleChange] = useState<{
+    userId: number; username: string; currentRole: string;
+  } | null>(null);
+  const [newRole, setNewRole] = useState("");
 
   const { data, isLoading, isError, error: fetchError, refetch } =
-    useSuperadminUsers({ q: q || undefined, role: role || undefined, page });
+    useSuperadminUsers({ q: q || undefined, role: role || undefined, store_id: storeFilter, page });
 
   function refresh() {
     qc.invalidateQueries({ queryKey: ["superadmin", "users"] });
@@ -137,6 +145,18 @@ export default function SuperadminUsers() {
                 <option key={r.value} value={r.value}>{r.label}</option>
               ))}
             </Select>
+            <Select
+              value={storeFilter ?? ""}
+              onChange={(e) => {
+                setStoreFilter(e.target.value ? Number(e.target.value) : undefined);
+                setPage(1);
+              }}
+            >
+              <option value="">All stores</option>
+              {(stores.data?.rows ?? []).map((s) => (
+                <option key={s.store_id} value={s.store_id}>{s.name}</option>
+              ))}
+            </Select>
           </div>
         )}
       />
@@ -185,6 +205,10 @@ export default function SuperadminUsers() {
                   onAction={(action) =>
                     setConfirmAction({ userId: u.id, username: u.username, action })
                   }
+                  onChangeRole={() => {
+                    setRoleChange({ userId: u.id, username: u.username, currentRole: u.role });
+                    setNewRole("");
+                  }}
                 />
               ))}
             </tbody>
@@ -217,6 +241,42 @@ export default function SuperadminUsers() {
         onConfirm={() => { void doAction(); }}
         onCancel={() => setConfirmAction(null)}
       />
+
+      <ConfirmDialog
+        open={roleChange != null}
+        title="Change role"
+        message={`Change role for "${roleChange?.username}" from ${roleChange?.currentRole} to:`}
+        confirmLabel={busyId != null ? "Saving…" : "Change role"}
+        busy={busyId != null}
+        onConfirm={() => {
+          if (!roleChange || !newRole) return;
+          setBusyId(roleChange.userId);
+          setError(null);
+          changeUserRole(roleChange.userId, newRole)
+            .then(() => {
+              toast({ message: `Role changed to ${newRole}.`, tone: "success" });
+              refresh();
+              setRoleChange(null);
+              setNewRole("");
+            })
+            .catch((err) => {
+              setError(err instanceof ApiError ? err.message : "Failed to change role.");
+            })
+            .finally(() => setBusyId(null));
+        }}
+        onCancel={() => { setRoleChange(null); setNewRole(""); }}
+      >
+        <Select
+          value={newRole}
+          onChange={(e) => setNewRole(e.target.value)}
+          style={{ marginTop: "0.5rem" }}
+        >
+          <option value="">— Select role —</option>
+          <option value="admin">Admin</option>
+          <option value="employee">Employee</option>
+          <option value="owner">Owner</option>
+        </Select>
+      </ConfirmDialog>
     </PageShell>
   );
 }
@@ -226,10 +286,12 @@ function UserRow({
   user: u,
   busyId,
   onAction,
+  onChangeRole,
 }: {
   user: SuperadminUserRow;
   busyId: number | null;
   onAction: (action: "toggle" | "reset2fa" | "resetpw" | "impersonate") => void;
+  onChangeRole: () => void;
 }) {
   const isSuperadmin = u.role === "superadmin";
   return (
@@ -272,6 +334,11 @@ function UserRow({
         {!isSuperadmin && (
           <RowActions
             actions={[
+              {
+                label: "Change role",
+                onClick: onChangeRole,
+                disabled: busyId === u.id,
+              },
               {
                 label: u.is_active ? "Disable" : "Enable",
                 onClick: () => onAction("toggle"),

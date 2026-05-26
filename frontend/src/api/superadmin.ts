@@ -314,6 +314,13 @@ export function useSuperadminUsers(opts: {
   });
 }
 
+export async function changeUserRole(userId: number, role: string) {
+  return api<{ ok: boolean; role: string }>(
+    `/api/v2/superadmin/users/${userId}/change-role`,
+    { method: "POST", json: { role } },
+  );
+}
+
 export async function toggleUserActive(userId: number) {
   return api<{ ok: boolean; is_active: boolean }>(
     `/api/v2/superadmin/users/${userId}/toggle-active`,

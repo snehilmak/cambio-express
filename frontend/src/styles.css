@@ -72,7 +72,9 @@ body {
   top: 0;
   height: 100vh;
   overflow-y: auto;
+  scrollbar-width: none;
 }
+.app-sidebar::-webkit-scrollbar { display: none; }
 
 .app-topbar {
   grid-column: 2;
