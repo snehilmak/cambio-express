@@ -14,6 +14,7 @@ import { Bar, Line } from "react-chartjs-2";
 
 import { api, downloadCsv } from "../../lib/api";
 import { countChartOptions, moneyChartOptions } from "../../lib/chartOptions";
+import { fmtShortDate } from "../../lib/formatters";
 import {
   Button, Card, EmptyState, ErrorState, KpiCard, KpiGrid,
   PageHeader, PageShell, TableSkeleton, tdStyle, thStyle,
@@ -225,7 +226,7 @@ export default function SuperadminBIDrilldown() {
       )}
 
       <div className={styles.filterRow}>
-        <span className={styles.muted}>{fmtDate(from)} – {fmtDate(to)}</span>
+        <span className={styles.muted}>{fmtShortDate(from)} – {fmtShortDate(to)}</span>
         {data && (
           <span className={styles.muted}>{rows.length.toLocaleString()} {rows.length === 1 ? "row" : "rows"}</span>
         )}
@@ -496,9 +497,3 @@ function humanize(s: string): string {
     .replace(/\b\w/g, c => c.toUpperCase());
 }
 
-function fmtDate(iso: string): string {
-  if (!iso) return "";
-  return new Date(iso + "T00:00:00").toLocaleDateString(undefined, {
-    month: "short", day: "numeric", year: "numeric",
-  });
-}

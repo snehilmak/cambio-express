@@ -52,3 +52,13 @@ export function fmtIsoDate(iso: string | null | undefined): string {
   if (!iso) return "—";
   return iso.slice(0, 10);
 }
+
+/** Compact date: "05/26/26" (MM/DD/YY) — for dense report tables. */
+export function fmtDateCompact(iso: string | null | undefined): string {
+  if (!iso) return "";
+  try {
+    return new Date(iso).toLocaleDateString(undefined, {
+      month: "2-digit", day: "2-digit", year: "2-digit",
+    });
+  } catch { return iso ?? ""; }
+}

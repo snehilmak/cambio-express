@@ -1,6 +1,7 @@
 import { useLocation } from "react-router-dom";
 
 import { ReportDrilldown, fmtMoney } from "../../components/ReportDrilldown";
+import { fmtDateCompact } from "../../lib/formatters";
 
 export default function CancelledTransfers() {
   const isOwner = useLocation().pathname.startsWith("/owner/");
@@ -23,7 +24,7 @@ export default function CancelledTransfers() {
           value: t => fmtMoney(Number(t.amount ?? 0)) },
       ]}
       columns={[
-        { label: "Date",        field: r => fmtDate(r.send_date as string) },
+        { label: "Date",        field: r => fmtDateCompact(r.send_date as string) },
         { label: "Sender",      field: "sender_name" },
         { label: "Recipient",   field: "recipient_name" },
         { label: "Country",     field: "country" },
@@ -37,9 +38,3 @@ export default function CancelledTransfers() {
   );
 }
 
-function fmtDate(iso: string): string {
-  if (!iso) return "";
-  return new Date(iso).toLocaleDateString(undefined, {
-    month: "2-digit", day: "2-digit", year: "2-digit",
-  });
-}
