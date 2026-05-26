@@ -6,6 +6,7 @@ import { clearAccessToken, getCurrentIdentity } from "../lib/auth";
 import { clearVisits, recordVisit } from "../lib/recency";
 import { reconcileTheme } from "../lib/theme";
 import { AnnouncementBanner } from "./AnnouncementBanner";
+import { CommandPalette } from "./CommandPalette";
 import { HelpCenter } from "./HelpCenter";
 import { InstallAppButton } from "./InstallAppButton";
 import { filterNavForRole, SUPPORT_LINK } from "./navConfig";
@@ -106,6 +107,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       {/* Floating help bubble — only inside ``RequireAuth`` so
           the bottom-right CTA never bleeds onto the marketing
           landing or login pages. */}
+      <CommandPalette />
       <HelpCenter />
     </div>
   );
