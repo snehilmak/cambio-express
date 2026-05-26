@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from api.Core.Database import get_db
 from api.Modules.Auth.Controllers import get_principal
 from api.Modules.Auth.Services import resolve_store_scope
+from api.Modules.Auth.Services.principal import require_permission
 from api.Modules.Admin.Repositories import (
     find_store,
     find_store_user,
@@ -140,11 +141,7 @@ def update_store_info_route(
     `admin` (or superadmin / owner) is allowed — the legacy
     settings page is gated by `admin_required`. Cashiers
     (role `employee`) hitting this endpoint return 403."""
-    if claims.get("role") not in ("admin", "owner", "superadmin"):
-        raise HTTPException(
-            status_code=403,
-            detail="Only store admins can update store info",
-        )
+    require_permission(claims, "settings", "update")
     store_id = resolve_store_scope(claims)
     store = find_store(db, store_id)
     if store is None:
@@ -548,11 +545,7 @@ def download_tax_pack_route(
     in one shot. Operators export once a year, so the simpler
     in-memory path is fine; a streaming generator would only pay
     off on multi-GB packs."""
-    if claims.get("role") not in ("admin", "owner", "superadmin"):
-        raise HTTPException(
-            status_code=403,
-            detail="Only store admins can download tax packs.",
-        )
+    require_permission(claims, "reports", "read")
     store_id = resolve_store_scope(claims)
     from api.Modules.Tenancy.Models import Store
     store = db.get(Store, store_id)

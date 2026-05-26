@@ -27,6 +27,7 @@ from sqlalchemy.orm import Session
 from api.Core.Database import get_db
 from api.Modules.Auth.Controllers import get_principal
 from api.Modules.Auth.Services import resolve_store_scope
+from api.Modules.Auth.Services.principal import require_permission
 from api.Modules.TimeClock.Models import TimeClockEntry, TimeClockShift
 from api.Modules.TimeClock.Requests import (
     AdminCreateEntryRequest,
@@ -361,11 +362,7 @@ def admin_entries_route(
     Admin / owner only. The window is required to keep a
     runaway query from pulling the whole history.
     """
-    if claims.get("role") not in ("admin", "owner", "superadmin"):
-        raise HTTPException(
-            status_code=403,
-            detail="Only store admins can view the payroll history.",
-        )
+    require_permission(claims, "time_clock", "update")
     store_id = resolve_store_scope(claims)
     if to <= from_:
         raise HTTPException(
@@ -534,11 +531,7 @@ def export_admin_entries_csv_route(
 
 
 def _require_admin_role(claims: dict[str, Any]) -> None:
-    if claims.get("role") not in ("admin", "owner", "superadmin"):
-        raise HTTPException(
-            status_code=403,
-            detail="Only store admins can edit time-clock entries.",
-        )
+    require_permission(claims, "time_clock", "update")
 
 
 def _parse_iso(value: str, field: str) -> datetime:

@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from api.Core.Database import get_db
 from api.Modules.Auth.Controllers import get_principal
 from api.Modules.Auth.Services import resolve_store_scope
+from api.Modules.Auth.Services.principal import require_permission
 from api.Modules.Monthly.Models import MonthlyFinancial
 from api.Modules.Monthly.Repositories import list_logged_months
 from api.Modules.Monthly.Requests import (
@@ -108,11 +109,7 @@ def update_monthly_route(
 
     Auto-creates the row when missing.
     """
-    if claims.get("role") not in ("admin", "owner", "superadmin"):
-        raise HTTPException(
-            status_code=403,
-            detail="Only store admins can save monthly P&L.",
-        )
+    require_permission(claims, "monthly", "update")
     sid = resolve_store_scope(claims)
     payload = body.model_dump(exclude_unset=True)
     notes = payload.pop("notes", "")

@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from api.Core.Database import get_db
 from api.Modules.Auth.Controllers import get_principal
+from api.Modules.Auth.Services.principal import require_permission
 from api.Modules.Batches.Models import Transfer
 from api.Modules.Batches.Repositories import (
     sum_transfer_totals_for_batch_refs,
@@ -103,11 +104,7 @@ def _require_admin_scope(claims: dict[str, Any]) -> int:
             status_code=403,
             detail="JWT does not carry a store scope.",
         )
-    if claims.get("role") not in ("admin", "owner", "superadmin"):
-        raise HTTPException(
-            status_code=403,
-            detail="Only store admins can manage ACH batches.",
-        )
+    require_permission(claims, "batches", "read")
     return int(sid)
 
 

@@ -29,6 +29,7 @@ from sqlalchemy.orm import Session
 from api.Core.Database import get_db
 from api.Modules.Audit.Services import record_operator_action
 from api.Modules.Auth.Controllers import get_principal
+from api.Modules.Auth.Services.principal import require_permission
 from api.Modules.Auth.Models import User
 from api.Modules.Customers.Repositories import (
     find_by_id_in_stores,
@@ -175,11 +176,7 @@ def export_csv_route(
             status_code=403,
             detail="JWT does not carry a store scope.",
         )
-    if claims.get("role") not in ("admin", "owner", "superadmin"):
-        raise HTTPException(
-            status_code=403,
-            detail="Only store admins can export the customer directory.",
-        )
+    require_permission(claims, "customers", "update")
     sid = int(sid)
     siblings = sibling_store_ids(db, sid)
     rows = list_for_export(db, siblings)
@@ -306,11 +303,7 @@ def merge_route(
     403 because the merge is destructive (loser row is dropped)
     and the audit trail needs admin attribution.
     """
-    if claims.get("role") not in ("admin", "owner", "superadmin"):
-        raise HTTPException(
-            status_code=403,
-            detail="Only store admins can merge customers.",
-        )
+    require_permission(claims, "customers", "delete")
     sid_raw = claims.get("store_id")
     if sid_raw is None:
         raise HTTPException(

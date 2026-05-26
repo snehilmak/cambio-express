@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { DayPicker } from "react-day-picker";
-import "react-day-picker/style.css";
+import "react-day-picker/src/style.css";
 
 import { Input } from "./Input";
 import styles from "./DateInput.module.css";

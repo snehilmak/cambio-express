@@ -26,6 +26,7 @@ from sqlalchemy.orm import Session
 
 from api.Core.Database import get_db
 from api.Modules.Auth.Controllers import get_principal
+from api.Modules.Auth.Services.principal import require_permission
 from api.Modules.ReturnChecks.Repositories import (
     find_return_check,
     list_payments,
@@ -68,11 +69,7 @@ def _require_admin_scope(claims: dict[str, Any]) -> int:
             status_code=403,
             detail="JWT does not carry a store scope.",
         )
-    if claims.get("role") not in ("admin", "owner", "superadmin"):
-        raise HTTPException(
-            status_code=403,
-            detail="Only store admins can manage return checks.",
-        )
+    require_permission(claims, "return_checks", "read")
     return int(sid)
 
 
