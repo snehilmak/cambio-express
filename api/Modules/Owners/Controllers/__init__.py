@@ -20,6 +20,7 @@ from sqlalchemy.orm import Session
 from api.Core.Database import get_db
 from api.Modules.Auth.Controllers import get_principal
 from api.Modules.Auth.Models import User
+from api.Modules.Auth.Services.principal import require_permission
 from api.Modules.Owners.Requests import (
     OwnerBulkAddUserRequest,
     OwnerBulkAddUserResponse,
@@ -86,6 +87,7 @@ def owner_locations_route(
     db: Session = Depends(get_db),
     claims: dict[str, Any] = Depends(get_principal),
 ) -> OwnerLocationsResponse:
+    require_permission(claims, "reports", "read")
     user = _require_owner_principal(db, claims)
     rows, total = owner_locations_payload(db, user, period, q.strip() or None)
     out_rows = [
@@ -133,6 +135,7 @@ def owner_pl_rollup_route(
     the umbrella so the UI can render a year-dropdown without a
     second roundtrip.
     """
+    require_permission(claims, "reports", "read")
     user = _require_owner_principal(db, claims)
     today = date.today()
     y = year or today.year
@@ -239,6 +242,7 @@ def owner_connect_codes_list_route(
 ) -> OwnerConnectCodeListResponse:
     """Every code the owner has minted (active + redeemed +
     revoked + expired). Newest first."""
+    require_permission(claims, "settings", "read")
     user = _require_owner_principal(db, claims)
     from api.Modules.Tenancy.Models import OwnerConnectCode, Store
     rows = (
@@ -271,6 +275,7 @@ def owner_connect_codes_generate_route(
     Owner shares the code with the store admin out of band; the
     store admin redeems it on their settings page to link the
     store to the owner's umbrella."""
+    require_permission(claims, "settings", "create")
     import secrets
     from datetime import datetime, timedelta
     user = _require_owner_principal(db, claims)
@@ -298,6 +303,7 @@ def owner_connect_codes_revoke_route(
     """Revoke an unredeemed code so the recipient can't use it.
     Already-redeemed codes can't be revoked — that disconnect
     flow is /owner/unlink/{store_id} instead."""
+    require_permission(claims, "settings", "update")
     from datetime import datetime
     user = _require_owner_principal(db, claims)
     from api.Modules.Tenancy.Models import OwnerConnectCode
@@ -335,6 +341,7 @@ def owner_bulk_add_user_route(
     (created / skipped / rejected) come back in the response so
     the SPA can show a result table; we don't 4xx the whole
     request just because one store collided."""
+    require_permission(claims, "users", "create")
     user = _require_owner_principal(db, claims)
     try:
         raw_results = bulk_add_user_to_stores(
@@ -397,6 +404,7 @@ def owner_cross_store_defaults_route(
     can show a result table; one validation failure doesn't
     fail the whole batch. Stores outside the umbrella surface
     as ``rejected``."""
+    require_permission(claims, "settings", "update")
     user = _require_owner_principal(db, claims)
     # Convert the Pydantic body to the dict the service wants,
     # skipping unset fields (so ``omit field`` differs from
@@ -459,6 +467,7 @@ def owner_unlink_store_route(
     """Disconnect a store from the owner umbrella. Removes the
     StoreOwnerLink row; the store keeps all its data (transfers,
     P&L, etc.) but the owner can no longer see it."""
+    require_permission(claims, "settings", "delete")
     _ = body  # request body is empty today, schema kept for future
     user = _require_owner_principal(db, claims)
     from api.Modules.Tenancy.Models import StoreOwnerLink
@@ -513,6 +522,7 @@ def owner_reports_route(
 
     Owner role required — admin or employee callers fall back to
     /api/v2/reports."""
+    require_permission(claims, "reports", "read")
     from api.Modules.Reports.Controllers import _build_report_list
     if claims.get("role") != "owner":
         raise HTTPException(
@@ -565,6 +575,7 @@ def owner_dashboard_route(
     `dashboard_context` Service so the SPA + legacy template can
     diverge later without forking aggregation logic.
     """
+    require_permission(claims, "reports", "read")
     user = _require_owner(db, claims)
     if period not in ("today", "month", "year"):
         period = "month"
@@ -589,6 +600,7 @@ def owner_store_detail_route(
     """Drill-down view for a single store the owner is linked to.
     Read-only. Returns period KPIs, the company breakdown, the
     30-day over/short + receipts series, and recent activity."""
+    require_permission(claims, "reports", "read")
     from datetime import date as ddate, timedelta
     from api.Modules.DailyBook.Models import DailyReport
     from api.Modules.Tenancy.Models import Store, StoreOwnerLink

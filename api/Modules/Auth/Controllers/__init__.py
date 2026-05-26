@@ -311,7 +311,7 @@ def _to_login_response(
             sub=result.user_id,
             role=result.role,
             store_id=result.store_id,
-            permissions=list(result.permissions or permissions_for(result.role)),
+            permissions=list(result.permissions or permissions_for(result.role, db, store_id=result.store_id)),
             full_name=result.full_name,
             username=result.username,
             session_id=issued.session_id,
@@ -686,7 +686,7 @@ def refresh_route(
         _clear_access_token_cookie(response)
         _clear_refresh_token_cookie(response)
         raise HTTPException(status_code=401, detail="User unavailable")
-    perms = permissions_for(user.role)
+    perms = permissions_for(user.role, db, store_id=user.store_id)
     new_access = issue_access_token(JWTIssuer(
         sub=user.id, role=user.role or "",
         store_id=user.store_id, permissions=perms,
@@ -1045,7 +1045,7 @@ def signup_route(
     # Issue a refresh token first (mints the session_id), then the
     # access JWT (which embeds the session_id). Same flow the
     # password-login path uses via ``_to_login_response``.
-    perms = permissions_for(result.admin.role)
+    perms = permissions_for(result.admin.role, db, store_id=result.store.id)
     from api.Modules.Auth.Services.refresh import (
         DEFAULT_REFRESH_TOKEN_TTL_SECONDS, issue as _issue_refresh,
     )
@@ -1132,7 +1132,7 @@ def signup_owner_route(
         )
     db.commit()
 
-    perms = permissions_for(result.owner.role)
+    perms = permissions_for(result.owner.role, db, store_id=result.owner.store_id)
     from api.Modules.Auth.Services.refresh import (
         DEFAULT_REFRESH_TOKEN_TTL_SECONDS, issue as _issue_refresh,
     )

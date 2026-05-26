@@ -14,8 +14,9 @@ this Controller does. PR 14+ will add the write-side
 (POST /transfers, PUT /transfers/{id}) once the create/edit business
 logic moves into Services.
 
-Auth gating intentionally NOT here yet — auth migration is module 5
-of 6 in the ADR.
+Auth gating: every endpoint calls ``require_permission(claims,
+"transfers", action)`` — read for GET, create for POST, update for
+PUT, delete for DELETE.
 
 Layer rules:
     Controller → Service     ✓
@@ -29,6 +30,7 @@ from sqlalchemy.orm import Session
 
 from api.Core.Database import get_db
 from api.Modules.Auth.Controllers import get_principal
+from api.Modules.Auth.Services.principal import require_permission
 from api.Modules.Transfers.Repositories import (
     TransferFilters,
     get_by_id_in_stores,
@@ -113,6 +115,7 @@ def employees_route(
     Returns 403 when the JWT has no store scope (superadmin) — the
     roster is store-specific.
     """
+    require_permission(claims, "transfers", "read")
     store_id = claims.get("store_id")
     if store_id is None:
         raise HTTPException(
@@ -153,7 +156,9 @@ def list_route(
     page: int = Query(1, ge=1),
     per_page: int = Query(50, ge=1, le=500),
     db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> TransferListResponse:
+    require_permission(claims, "transfers", "read")
     ids = _parse_store_ids(store_ids)
     filters = TransferFilters.from_query({
         "company": company, "status": status,
@@ -214,6 +219,7 @@ def create_route(
     can't lie about the rate. Audited in the same transaction
     via `record_transfer_audit`.
     """
+    require_permission(claims, "transfers", "create")
     store_id_claim = claims.get("store_id")
     if store_id_claim is None:
         raise HTTPException(
@@ -284,6 +290,7 @@ def get_receipt_route(
         ),
     ),
     db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> TransferReceiptResponse:
     """Printable-receipt payload — transfer fields + the store's
     branding metadata (logo URL, footer copy, tax ID) merged into
@@ -295,6 +302,7 @@ def get_receipt_route(
     stores. Returns 404 (never 403) to keep store boundaries
     opaque.
     """
+    require_permission(claims, "transfers", "read")
     from api.Modules.Tenancy.Models import Store
     ids = _parse_store_ids(store_ids)
     transfer = get_by_id_in_stores(db, transfer_id, ids)
@@ -355,7 +363,9 @@ def get_route(
         ),
     ),
     db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> TransferResponse:
+    require_permission(claims, "transfers", "read")
     ids = _parse_store_ids(store_ids)
     transfer = get_by_id_in_stores(db, transfer_id, ids)
     if transfer is None:
@@ -376,6 +386,7 @@ def update_route(
     create. Audit log captures the diff via summarize_transfer_changes.
     Cross-tenant updates return 404 to keep tenancy opaque.
     """
+    require_permission(claims, "transfers", "update")
     store_id_claim = claims.get("store_id")
     if store_id_claim is None:
         raise HTTPException(
@@ -452,7 +463,6 @@ def delete_transfer_route(
     label / summary format ("sender → recipient — $amount" /
     "confirm=… company=… status=…").
     """
-    from api.Modules.Auth.Services.principal import require_permission
     require_permission(claims, "transfers", "delete")
     sid = claims.get("store_id")
     if sid is None:

@@ -69,7 +69,6 @@ def _require_admin_scope(claims: dict[str, Any]) -> int:
             status_code=403,
             detail="JWT does not carry a store scope.",
         )
-    require_permission(claims, "return_checks", "read")
     return int(sid)
 
 
@@ -164,6 +163,7 @@ def list_route(
             status_code=403,
             detail="JWT does not carry a store scope.",
         )
+    require_permission(claims, "return_checks", "read")
     rows = list_return_checks(db, int(sid), status=status)
     return ReturnCheckListResponse(rows=[_row(r) for r in rows])
 
@@ -180,6 +180,7 @@ def get_route(
             status_code=403,
             detail="JWT does not carry a store scope.",
         )
+    require_permission(claims, "return_checks", "read")
     rc = find_return_check(db, int(sid), rc_id)
     if rc is None:
         raise HTTPException(status_code=404, detail="Return check not found")
@@ -193,6 +194,7 @@ def create_route(
     claims: dict[str, Any] = Depends(get_principal),
 ) -> ReturnCheckResponse:
     sid = _require_admin_scope(claims)
+    require_permission(claims, "return_checks", "create")
     payload = _parse_payload(body)
     user_id = int(claims["sub"])
     row = create_return_check(
@@ -219,6 +221,7 @@ def update_route(
     claims: dict[str, Any] = Depends(get_principal),
 ) -> ReturnCheckResponse:
     sid = _require_admin_scope(claims)
+    require_permission(claims, "return_checks", "update")
     payload = _parse_payload(body)
     try:
         row = update_return_check(
@@ -273,6 +276,7 @@ def mark_loss_route(
     claims: dict[str, Any] = Depends(get_principal),
 ) -> ReturnCheckResponse:
     sid = _require_admin_scope(claims)
+    require_permission(claims, "return_checks", "update")
     return _transition(
         db, sid, rc_id, mark_loss, claims=claims, action="mark_loss",
     )
@@ -288,6 +292,7 @@ def mark_fraud_route(
     claims: dict[str, Any] = Depends(get_principal),
 ) -> ReturnCheckResponse:
     sid = _require_admin_scope(claims)
+    require_permission(claims, "return_checks", "update")
     return _transition(
         db, sid, rc_id, mark_fraud, claims=claims, action="mark_fraud",
     )
@@ -303,6 +308,7 @@ def reopen_route(
     claims: dict[str, Any] = Depends(get_principal),
 ) -> ReturnCheckResponse:
     sid = _require_admin_scope(claims)
+    require_permission(claims, "return_checks", "update")
     return _transition(
         db, sid, rc_id, reopen, claims=claims, action="reopen_return_check",
     )
@@ -334,6 +340,7 @@ def payments_route(
             status_code=403,
             detail="JWT does not carry a store scope.",
         )
+    require_permission(claims, "return_checks", "read")
     rc = find_return_check(db, int(sid), rc_id)
     if rc is None:
         raise HTTPException(status_code=404, detail="Return check not found")
@@ -359,6 +366,7 @@ def record_payment_route(
     ``DailyLineItem(kind='return_payback')`` and re-derives the
     daily-book total + parent status."""
     sid = _require_admin_scope(claims)
+    require_permission(claims, "return_checks", "update")
     try:
         paid_on = datetime.strptime(body.paid_on, "%Y-%m-%d").date()
     except ValueError:
@@ -419,6 +427,7 @@ def delete_payment_route(
     claims: dict[str, Any] = Depends(get_principal),
 ) -> ReturnCheckPaymentResponse:
     sid = _require_admin_scope(claims)
+    require_permission(claims, "return_checks", "delete")
     # Snapshot the payment before the Service deletes it so the audit
     # row carries the amount that walked out the door — answers
     # "we deleted payment #PID — how much was that?".

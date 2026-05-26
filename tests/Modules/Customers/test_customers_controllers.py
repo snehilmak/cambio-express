@@ -60,19 +60,39 @@ def api_client():
         yield c
 
 
+@pytest.fixture
+def authed_client(test_store_id, api_client):
+    """TestClient with admin auth headers injected."""
+    from api.Modules.Tenancy.Models import User
+    with db_session():
+        u = db.session.query(User).filter_by(
+            store_id=test_store_id, role="admin",
+        ).first()
+        assert u is not None
+        username = u.username
+    resp = api_client.post(
+        "/auth/login",
+        json={"username": username, "password": "testpass123!",
+              "store_id": test_store_id},
+    )
+    token = resp.json()["access_token"]
+    api_client.headers["Authorization"] = f"Bearer {token}"
+    return api_client
+
+
 # ── /search ─────────────────────────────────────────────────
 
 
-def test_search_requires_store_id(api_client):
-    """`store_id` is a required Query — missing it must 422."""
+def test_search_requires_auth(api_client):
+    """Search requires authentication — missing auth must 401."""
     resp = api_client.get("/customers/search", params={"q": "alice"})
-    assert resp.status_code == 422
+    assert resp.status_code == 401
 
 
-def test_search_short_query_returns_empty_envelope(test_store_id, api_client):
+def test_search_short_query_returns_empty_envelope(test_store_id, authed_client):
     with db_session():
         _seed_customer(test_store_id, full_name="Alice", phone_number="5550000")
-    resp = api_client.get(
+    resp = authed_client.get(
         "/customers/search",
         params={"store_id": test_store_id, "q": "a"},
     )
@@ -81,11 +101,11 @@ def test_search_short_query_returns_empty_envelope(test_store_id, api_client):
     assert body == {"matches": [], "suggestions": []}
 
 
-def test_search_returns_envelope_with_matches(test_store_id, api_client):
+def test_search_returns_envelope_with_matches(test_store_id, authed_client):
     with db_session():
         _seed_customer(test_store_id, full_name="Alice Smith",
                         phone_country="+1", phone_number="5551234")
-    resp = api_client.get(
+    resp = authed_client.get(
         "/customers/search",
         params={"store_id": test_store_id, "q": "alice"},
     )
@@ -102,7 +122,7 @@ def test_search_returns_envelope_with_matches(test_store_id, api_client):
     assert row["home_store_id"] == test_store_id
 
 
-def test_search_decorates_cross_store_rows_with_home_name(test_store_id, api_client):
+def test_search_decorates_cross_store_rows_with_home_name(test_store_id, authed_client):
     """Customer logged at sibling store → row carries `home_store_name`
     so the UI can label it "from Store B"."""
     from tests._app import db
@@ -113,7 +133,7 @@ def test_search_decorates_cross_store_rows_with_home_name(test_store_id, api_cli
         _link(oid, s2_id)
         _seed_customer(s2_id, full_name="Maria",
                         phone_country="+1", phone_number="5559999")
-    resp = api_client.get(
+    resp = authed_client.get(
         "/customers/search",
         params={"store_id": test_store_id, "q": "maria"},
     )
@@ -125,13 +145,13 @@ def test_search_decorates_cross_store_rows_with_home_name(test_store_id, api_cli
     assert matches[0]["home_store_id"] == s2_id
 
 
-def test_search_excludes_stores_outside_umbrella(test_store_id, api_client):
+def test_search_excludes_stores_outside_umbrella(test_store_id, authed_client):
     """Security property: a stranger store's customer must not leak
     through the autocomplete."""
     with db_session():
         s2_id = _seed_store("stranger")
         _seed_customer(s2_id, full_name="Hidden", phone_number="5550000")
-    resp = api_client.get(
+    resp = authed_client.get(
         "/customers/search",
         params={"store_id": test_store_id, "q": "hidden"},
     )
@@ -139,12 +159,12 @@ def test_search_excludes_stores_outside_umbrella(test_store_id, api_client):
     assert resp.json()["matches"] == []
 
 
-def test_search_fuzzy_suggestions_in_response(test_store_id, api_client):
+def test_search_fuzzy_suggestions_in_response(test_store_id, authed_client):
     """A typo of an existing customer surfaces them under `suggestions`."""
     with db_session():
         _seed_customer(test_store_id, full_name="Maria Gonzalez",
                         phone_number="5551234")
-    resp = api_client.get(
+    resp = authed_client.get(
         "/customers/search",
         params={"store_id": test_store_id, "q": "Maria Gonzales"},
     )
@@ -158,14 +178,14 @@ def test_search_fuzzy_suggestions_in_response(test_store_id, api_client):
 # ── /upsert ─────────────────────────────────────────────────
 
 
-def test_upsert_creates_customer(test_store_id, api_client):
+def test_upsert_creates_customer(test_store_id, authed_client):
     body = {
         "full_name": "Alice",
         "phone_country": "+1",
         "phone_number": "5551234",
         "address": "123 Main",
     }
-    resp = api_client.post(
+    resp = authed_client.post(
         "/customers/upsert",
         params={"store_id": test_store_id}, json=body,
     )
@@ -177,12 +197,12 @@ def test_upsert_creates_customer(test_store_id, api_client):
     assert out["home_store_id"] == test_store_id
 
 
-def test_upsert_reuses_existing_phone(test_store_id, api_client):
+def test_upsert_reuses_existing_phone(test_store_id, authed_client):
     """Second upsert with same phone returns the same id."""
     with db_session():
         cid = _seed_customer(test_store_id, full_name="Alice Old",
                               phone_number="5551234")
-    resp = api_client.post(
+    resp = authed_client.post(
         "/customers/upsert",
         params={"store_id": test_store_id},
         json={
@@ -197,8 +217,8 @@ def test_upsert_reuses_existing_phone(test_store_id, api_client):
     assert out["full_name"] == "Alice New"
 
 
-def test_upsert_rejects_invalid_dob(test_store_id, api_client):
-    resp = api_client.post(
+def test_upsert_rejects_invalid_dob(test_store_id, authed_client):
+    resp = authed_client.post(
         "/customers/upsert",
         params={"store_id": test_store_id},
         json={
@@ -211,8 +231,8 @@ def test_upsert_rejects_invalid_dob(test_store_id, api_client):
     assert resp.status_code == 422
 
 
-def test_upsert_accepts_well_formed_dob(test_store_id, api_client):
-    resp = api_client.post(
+def test_upsert_accepts_well_formed_dob(test_store_id, authed_client):
+    resp = authed_client.post(
         "/customers/upsert",
         params={"store_id": test_store_id},
         json={
@@ -226,10 +246,10 @@ def test_upsert_accepts_well_formed_dob(test_store_id, api_client):
     assert resp.json()["customer"]["dob"] == "1990-01-15"
 
 
-def test_upsert_rejects_extra_fields(test_store_id, api_client):
+def test_upsert_rejects_extra_fields(test_store_id, authed_client):
     """Pydantic schema sets `extra="forbid"` — typos in the request
     body should fail loudly instead of being silently dropped."""
-    resp = api_client.post(
+    resp = authed_client.post(
         "/customers/upsert",
         params={"store_id": test_store_id},
         json={
@@ -242,8 +262,8 @@ def test_upsert_rejects_extra_fields(test_store_id, api_client):
     assert resp.status_code == 422
 
 
-def test_upsert_requires_full_name(test_store_id, api_client):
-    resp = api_client.post(
+def test_upsert_requires_full_name(test_store_id, authed_client):
+    resp = authed_client.post(
         "/customers/upsert",
         params={"store_id": test_store_id}, json={},
     )
@@ -254,11 +274,14 @@ def test_upsert_requires_full_name(test_store_id, api_client):
 
 
 def test_flask_dispatcher_routes_customers_to_fastapi(client, test_store_id):
+    from tests.conftest import login_admin
+    token = login_admin(client, test_store_id)
     with db_session():
         _seed_customer(test_store_id, full_name="Alice",
                         phone_number="5551234")
     resp = client.get(
         f"/api/v2/customers/search?store_id={test_store_id}&q=alice",
+        headers={"Authorization": f"Bearer {token}"},
     )
     assert resp.status_code == 200
     assert resp.is_json
@@ -504,7 +527,7 @@ def _seed_transfer_for_recipient(
     return t.id
 
 
-def test_recent_recipients_returns_distinct_rows(test_store_id, api_client):
+def test_recent_recipients_returns_distinct_rows(test_store_id, authed_client):
     with db_session():
         cid = _seed_customer(test_store_id, full_name="Sender One")
         _seed_transfer_for_recipient(
@@ -517,7 +540,7 @@ def test_recent_recipients_returns_distinct_rows(test_store_id, api_client):
         _seed_transfer_for_recipient(
             test_store_id, cid, recipient_name="Maria Lopez",
         )
-    resp = api_client.get(
+    resp = authed_client.get(
         f"/customers/{cid}/recent-recipients",
         params={"store_id": test_store_id},
     )
@@ -527,7 +550,7 @@ def test_recent_recipients_returns_distinct_rows(test_store_id, api_client):
     assert names == ["Jose Garcia", "Maria Lopez"]
 
 
-def test_recent_recipients_excludes_canceled(test_store_id, api_client):
+def test_recent_recipients_excludes_canceled(test_store_id, authed_client):
     """Canceled / Rejected transfers don't surface — those aren't
     recipients the cashier would expect to reuse."""
     with db_session():
@@ -540,7 +563,7 @@ def test_recent_recipients_excludes_canceled(test_store_id, api_client):
             test_store_id, cid, recipient_name="Dead Person",
             status="Canceled",
         )
-    resp = api_client.get(
+    resp = authed_client.get(
         f"/customers/{cid}/recent-recipients",
         params={"store_id": test_store_id},
     )
@@ -551,12 +574,12 @@ def test_recent_recipients_excludes_canceled(test_store_id, api_client):
 
 
 def test_recent_recipients_unknown_customer_returns_empty(
-    test_store_id, api_client,
+    test_store_id, authed_client,
 ):
     """Unknown customer (or one outside the umbrella) returns an
     empty list, never 404. The SPA renders the empty case the same
     as "no history" — a 404 here would just be extra error handling."""
-    resp = api_client.get(
+    resp = authed_client.get(
         "/customers/9999999/recent-recipients",
         params={"store_id": test_store_id},
     )
@@ -564,7 +587,7 @@ def test_recent_recipients_unknown_customer_returns_empty(
     assert resp.json()["rows"] == []
 
 
-def test_recent_recipients_respects_limit(test_store_id, api_client):
+def test_recent_recipients_respects_limit(test_store_id, authed_client):
     """``limit=2`` caps the result to 2 rows even when more
     distinct recipients exist."""
     with db_session():
@@ -573,7 +596,7 @@ def test_recent_recipients_respects_limit(test_store_id, api_client):
             _seed_transfer_for_recipient(
                 test_store_id, cid, recipient_name=f"Recipient {i}",
             )
-    resp = api_client.get(
+    resp = authed_client.get(
         f"/customers/{cid}/recent-recipients",
         params={"store_id": test_store_id, "limit": 2},
     )

@@ -32,6 +32,7 @@ from sqlalchemy.orm import Session
 
 from api.Core.Database import get_db
 from api.Modules.Auth.Controllers import get_principal
+from api.Modules.Auth.Services.principal import require_permission
 from api.Modules.Reports.Requests import (
     ByDestinationCountryResponse,
     CashierProductivityResponse,
@@ -53,7 +54,13 @@ from api.Modules.Reports.Services import (
 from typing import Any
 
 
-router = APIRouter()
+def _check_reports_read(
+    claims: dict = Depends(get_principal),
+) -> None:
+    require_permission(claims, "reports", "read")
+
+
+router = APIRouter(dependencies=[Depends(_check_reports_read)])
 
 
 # ── Shared dependencies ─────────────────────────────────────

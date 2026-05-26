@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from api.Core.Database import get_db
 from api.Modules.Auth.Controllers import get_principal
+from api.Modules.Auth.Services.principal import require_permission
 from api.Modules.DailyBook.Models import DailyLineItem
 from api.Modules.DailyBook.Repositories import list_line_items
 from api.Modules.DailyBook.Requests import (
@@ -103,7 +104,9 @@ def period_route(
     from_: str = Query(..., alias="from"),
     to: str = Query(...),
     db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> PeriodSummaryResponse:
+    require_permission(claims, "daily_book", "read")
     d_from = _parse_date(from_, field="from")
     d_to = _parse_date(to, field="to")
     if d_from > d_to:
@@ -126,7 +129,9 @@ def daily_route(
     store_id: int = Path(..., ge=1),
     report_date: str = Path(...),
     db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> DailyReportResponse:
+    require_permission(claims, "daily_book", "read")
     d = _parse_date(report_date, field="report_date")
     summary = summarize_report(db, store_id, d)
     if summary is None:
@@ -164,6 +169,7 @@ def update_daily_route(
     company breakdowns) are NOT writable here — they're driven
     by their own tables and migrate in follow-up PRs.
     """
+    require_permission(claims, "daily_book", "update")
     d = _parse_date(report_date, field="report_date")
 
     claim_store = claims.get("store_id")
@@ -295,6 +301,7 @@ def lock_daily_route(
     locked → locked). Already-locked re-lock attempts are no-ops
     and don't append a second audit row, matching the legacy
     contract."""
+    require_permission(claims, "daily_book", "update")
     d = _parse_date(report_date, field="report_date")
     claim_store = claims.get("store_id")
     if claim_store is None or int(claim_store) != int(store_id):
@@ -369,6 +376,7 @@ def unlock_daily_route(
     Writes an OperatorAuditLog row (`action='unlock'`) on a state
     transition (was-locked → not-locked). Already-unlocked report
     is a no-op + no second audit row."""
+    require_permission(claims, "daily_book", "update")
     d = _parse_date(report_date, field="report_date")
     claim_store = claims.get("store_id")
     if claim_store is None or int(claim_store) != int(store_id):
@@ -450,6 +458,7 @@ def line_items_list_route(
     """Read-side endpoint for the daily book's line-item table.
     Auth + tenancy gate is the same as the rest of the daily-
     book write-side endpoints."""
+    require_permission(claims, "daily_book", "read")
     _require_store_match(claims, store_id)
     d = _parse_date(report_date, field="report_date")
     if kind and not is_known_kind(kind):
@@ -484,6 +493,7 @@ def line_items_create_route(
     re-derived from the kind's running total so the daily P&L
     stays consistent without an explicit re-save.
     """
+    require_permission(claims, "daily_book", "create")
     _require_store_match(claims, store_id)
     d = _parse_date(report_date, field="report_date")
     user_id = int(claims["sub"])
@@ -570,6 +580,7 @@ def line_items_update_route(
     successful patch so the parent field stays accurate.  Every
     patch writes an operator-audit row.
     """
+    require_permission(claims, "daily_book", "update")
     _require_store_match(claims, store_id)
     item = (
         db.query(DailyLineItem)
@@ -662,6 +673,7 @@ def line_items_delete_route(
     those mirror Return-Checks-side state and must be removed
     from there. We also re-derive the DailyReport field after
     the delete so the daily P&L stays accurate."""
+    require_permission(claims, "daily_book", "delete")
     _require_store_match(claims, store_id)
     item = (
         db.query(DailyLineItem)
@@ -722,6 +734,7 @@ def transfers_summary_route(
     Cross-store + superadmin → 403 with the same opaque message as
     the rest of the daily-book write surface.
     """
+    require_permission(claims, "daily_book", "read")
     _require_store_match(claims, store_id)
     d = _parse_date(report_date, field="report_date")
     summary = summarize_transfers_for_day(db, int(store_id), d)
@@ -765,6 +778,7 @@ def mt_breakdown_get_route(
     auto-otherwise, so a fresh day picks up the log automatically
     and overridden days keep the operator's edits.
     """
+    require_permission(claims, "daily_book", "read")
     _require_store_match(claims, store_id)
     d = _parse_date(report_date, field="report_date")
     breakdown = read_mt_breakdown(db, int(store_id), d)
@@ -814,6 +828,7 @@ def mt_breakdown_put_route(
     Locked-day returns 403 — same UX as the rest of the daily-book
     write surface.
     """
+    require_permission(claims, "daily_book", "update")
     _require_store_match(claims, store_id)
     d = _parse_date(report_date, field="report_date")
     try:

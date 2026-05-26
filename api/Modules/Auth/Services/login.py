@@ -88,7 +88,10 @@ RBAC_DEFAULTS: dict[str, list[str]] = {
     "owner": [
         f"{r}.read" for r in RBAC_RESOURCES
     ] + [
+        "settings.create",
         "settings.update",
+        "settings.delete",
+        "users.create",
     ],
 }
 
@@ -196,7 +199,7 @@ class TotpEnrollmentRequired(Exception):
 
 
 def _issue_full_login(user: User, db: "Session | None" = None) -> LoginResult:
-    perms = permissions_for(user.role, db)
+    perms = permissions_for(user.role, db, store_id=user.store_id)
     issuer = JWTIssuer(
         sub=user.id,
         role=user.role,

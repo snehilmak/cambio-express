@@ -535,7 +535,7 @@ def impersonate_route(
         sub=user.id,
         role=user.role or "employee",
         store_id=user.store_id,
-        permissions=permissions_for(user.role or "employee"),
+        permissions=permissions_for(user.role or "employee", db, store_id=user.store_id),
         full_name=user.full_name or "",
         username=user.username,
     )

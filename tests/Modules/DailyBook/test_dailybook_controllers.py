@@ -23,16 +23,35 @@ def api_client():
         yield c
 
 
+@pytest.fixture
+def authed_client(test_store_id, api_client):
+    from api.Modules.Tenancy.Models import User
+    with db_session():
+        u = db.session.query(User).filter_by(
+            store_id=test_store_id, role="admin",
+        ).first()
+        assert u is not None
+        username = u.username
+    resp = api_client.post(
+        "/auth/login",
+        json={"username": username, "password": "testpass123!",
+              "store_id": test_store_id},
+    )
+    token = resp.json()["access_token"]
+    api_client.headers["Authorization"] = f"Bearer {token}"
+    return api_client
+
+
 # ── /daily/{store_id}/{report_date} ─────────────────────────
 
 
-def test_get_report_returns_404_when_missing(test_store_id, api_client):
+def test_get_report_returns_404_when_missing(test_store_id, authed_client):
     today = date.today().isoformat()
-    resp = api_client.get(f"/daily/{test_store_id}/{today}")
+    resp = authed_client.get(f"/daily/{test_store_id}/{today}")
     assert resp.status_code == 404
 
 
-def test_get_report_returns_summary(test_store_id, api_client):
+def test_get_report_returns_summary(test_store_id, authed_client):
     today = date.today()
     with db_session():
         _seed_report(
@@ -40,7 +59,7 @@ def test_get_report_returns_summary(test_store_id, api_client):
             taxable_sales=100.0, sales_tax=10.0,
             cash_expense=20.0,
         )
-    resp = api_client.get(f"/daily/{test_store_id}/{today.isoformat()}")
+    resp = authed_client.get(f"/daily/{test_store_id}/{today.isoformat()}")
     assert resp.status_code == 200
     body = resp.json()
     assert body["report"]["taxable_sales"] == 100.0
@@ -48,27 +67,27 @@ def test_get_report_returns_summary(test_store_id, api_client):
     assert body["report"]["locked"] is False
 
 
-def test_get_report_rejects_malformed_date(test_store_id, api_client):
-    resp = api_client.get(f"/daily/{test_store_id}/not-a-date")
+def test_get_report_rejects_malformed_date(test_store_id, authed_client):
+    resp = authed_client.get(f"/daily/{test_store_id}/not-a-date")
     assert resp.status_code == 422
 
 
-def test_get_report_rejects_zero_store_id(api_client):
+def test_get_report_rejects_zero_store_id(authed_client):
     """Path validation: store_id must be ≥ 1."""
-    resp = api_client.get("/daily/0/2026-05-06")
+    resp = authed_client.get("/daily/0/2026-05-06")
     assert resp.status_code == 422
 
 
 # ── /daily/{store_id}/period ────────────────────────────────
 
 
-def test_period_returns_summary(test_store_id, api_client):
+def test_period_returns_summary(test_store_id, authed_client):
     today = date.today()
     yesterday = today - timedelta(days=1)
     with db_session():
         _seed_report(test_store_id, yesterday, taxable_sales=100.0)
         _seed_report(test_store_id, today, taxable_sales=200.0)
-    resp = api_client.get(
+    resp = authed_client.get(
         f"/daily/{test_store_id}/period",
         params={"from": yesterday.isoformat(), "to": today.isoformat()},
     )
@@ -78,14 +97,14 @@ def test_period_returns_summary(test_store_id, api_client):
     assert body["total_receipts"] == 300.0
 
 
-def test_period_swaps_when_from_after_to(test_store_id, api_client):
+def test_period_swaps_when_from_after_to(test_store_id, authed_client):
     """Mirror the Reports period dependency: if from > to, swap so the
     SQL window stays non-empty."""
     today = date.today()
     yesterday = today - timedelta(days=1)
     with db_session():
         _seed_report(test_store_id, today, taxable_sales=42.0)
-    resp = api_client.get(
+    resp = authed_client.get(
         f"/daily/{test_store_id}/period",
         params={"from": today.isoformat(), "to": yesterday.isoformat()},
     )
@@ -93,22 +112,22 @@ def test_period_swaps_when_from_after_to(test_store_id, api_client):
     assert resp.json()["total_receipts"] == 42.0
 
 
-def test_period_requires_from_and_to(test_store_id, api_client):
-    resp = api_client.get(f"/daily/{test_store_id}/period")
+def test_period_requires_from_and_to(test_store_id, authed_client):
+    resp = authed_client.get(f"/daily/{test_store_id}/period")
     assert resp.status_code == 422
 
 
-def test_period_rejects_malformed_dates(test_store_id, api_client):
-    resp = api_client.get(
+def test_period_rejects_malformed_dates(test_store_id, authed_client):
+    resp = authed_client.get(
         f"/daily/{test_store_id}/period",
         params={"from": "not-a-date", "to": "2026-05-06"},
     )
     assert resp.status_code == 422
 
 
-def test_period_empty_range_returns_zeros(test_store_id, api_client):
+def test_period_empty_range_returns_zeros(test_store_id, authed_client):
     today = date.today().isoformat()
-    resp = api_client.get(
+    resp = authed_client.get(
         f"/daily/{test_store_id}/period",
         params={"from": today, "to": today},
     )
@@ -125,16 +144,18 @@ def test_flask_dispatcher_routes_daily_to_fastapi(client, test_store_id):
     today = date.today()
     with db_session():
         _seed_report(test_store_id, today, taxable_sales=99.0)
+    token = _login_admin_token(client, test_store_id)
     resp = client.get(
         f"/api/v2/daily/{test_store_id}/{today.isoformat()}",
+        headers={"Authorization": f"Bearer {token}"},
     )
     assert resp.status_code == 200
     assert resp.is_json
     assert resp.get_json()["report"]["taxable_sales"] == 99.0
 
 
-def test_openapi_includes_daily_paths(api_client):
-    resp = api_client.get("/openapi.json")
+def test_openapi_includes_daily_paths(authed_client):
+    resp = authed_client.get("/openapi.json")
     assert resp.status_code == 200
     paths = set(resp.json()["paths"].keys())
     assert "/daily/{store_id}/{report_date}" in paths

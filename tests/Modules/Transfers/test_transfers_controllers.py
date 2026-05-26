@@ -44,37 +44,62 @@ def api_client():
         yield c
 
 
+@pytest.fixture
+def authed_client(test_store_id, api_client):
+    from api.Modules.Tenancy.Models import User
+    with db_session():
+        u = db.session.query(User).filter_by(
+            store_id=test_store_id, role="admin",
+        ).first()
+        assert u is not None
+        username = u.username
+    resp = api_client.post(
+        "/auth/login",
+        json={"username": username, "password": "testpass123!",
+              "store_id": test_store_id},
+    )
+    token = resp.json()["access_token"]
+    api_client.headers["Authorization"] = f"Bearer {token}"
+    return api_client
+
+
 # ── parse_store_ids contract ────────────────────────────────
 
 
-def test_list_requires_store_ids(api_client):
+def test_list_requires_auth(api_client):
+    """No bearer header → 401."""
     resp = api_client.get("/transfers")
+    assert resp.status_code == 401
+
+
+def test_list_requires_store_ids(authed_client):
+    resp = authed_client.get("/transfers")
     assert resp.status_code == 422
 
 
-def test_list_rejects_non_numeric_store_ids(api_client):
-    resp = api_client.get("/transfers", params={"store_ids": "abc"})
+def test_list_rejects_non_numeric_store_ids(authed_client):
+    resp = authed_client.get("/transfers", params={"store_ids": "abc"})
     assert resp.status_code == 422
 
 
-def test_list_rejects_empty_store_ids(api_client):
-    resp = api_client.get("/transfers", params={"store_ids": ""})
+def test_list_rejects_empty_store_ids(authed_client):
+    resp = authed_client.get("/transfers", params={"store_ids": ""})
     assert resp.status_code == 422
 
 
-def test_list_rejects_invalid_dir(api_client):
-    resp = api_client.get(
+def test_list_rejects_invalid_dir(authed_client):
+    resp = authed_client.get(
         "/transfers", params={"store_ids": "1", "dir": "garbage"},
     )
     assert resp.status_code == 422
 
 
-def test_list_rejects_out_of_range_per_page(api_client):
-    resp = api_client.get(
+def test_list_rejects_out_of_range_per_page(authed_client):
+    resp = authed_client.get(
         "/transfers", params={"store_ids": "1", "per_page": 0},
     )
     assert resp.status_code == 422
-    resp = api_client.get(
+    resp = authed_client.get(
         "/transfers", params={"store_ids": "1", "per_page": 1000},
     )
     assert resp.status_code == 422
@@ -83,11 +108,11 @@ def test_list_rejects_out_of_range_per_page(api_client):
 # ── Happy paths ─────────────────────────────────────────────
 
 
-def test_list_response_envelope(test_store_id, api_client):
+def test_list_response_envelope(test_store_id, authed_client):
     with db_session():
         for i in range(3):
             _seed_transfer(test_store_id, send_amount=100.0)
-    resp = api_client.get(
+    resp = authed_client.get(
         "/transfers", params={"store_ids": str(test_store_id)},
     )
     assert resp.status_code == 200
@@ -99,13 +124,13 @@ def test_list_response_envelope(test_store_id, api_client):
     assert len(body["rows"]) == 3
 
 
-def test_list_filters_company(test_store_id, api_client):
+def test_list_filters_company(test_store_id, authed_client):
     with db_session():
         _seed_transfer(test_store_id, company="Intermex",
                         confirm_number="X-Intermex")
         _seed_transfer(test_store_id, company="Maxi",
                         confirm_number="X-Maxi")
-    resp = api_client.get(
+    resp = authed_client.get(
         "/transfers",
         params={"store_ids": str(test_store_id), "company": "Maxi"},
     )
@@ -115,13 +140,13 @@ def test_list_filters_company(test_store_id, api_client):
     assert body["rows"][0]["company"] == "Maxi"
 
 
-def test_list_global_search_q(test_store_id, api_client):
+def test_list_global_search_q(test_store_id, authed_client):
     with db_session():
         _seed_transfer(test_store_id, sender_name="Alice",
                         confirm_number="X-A")
         _seed_transfer(test_store_id, sender_name="Bob",
                         confirm_number="X-B")
-    resp = api_client.get(
+    resp = authed_client.get(
         "/transfers",
         params={"store_ids": str(test_store_id), "q": "alice"},
     )
@@ -129,11 +154,11 @@ def test_list_global_search_q(test_store_id, api_client):
     assert resp.json()["total"] == 1
 
 
-def test_list_pagination(test_store_id, api_client):
+def test_list_pagination(test_store_id, authed_client):
     with db_session():
         for i in range(5):
             _seed_transfer(test_store_id, send_amount=100.0 * (i + 1))
-    resp = api_client.get(
+    resp = authed_client.get(
         "/transfers",
         params={"store_ids": str(test_store_id), "per_page": 2, "page": 1},
     )
@@ -145,7 +170,7 @@ def test_list_pagination(test_store_id, api_client):
     assert len(body["rows"]) == 2
 
 
-def test_list_filters_date_range_string_input(test_store_id, api_client):
+def test_list_filters_date_range_string_input(test_store_id, authed_client):
     """Controller takes `date_from`/`date_to` as YYYY-MM-DD strings;
     the underlying TransferFilters parses them. Malformed strings drop
     the filter (legacy behavior)."""
@@ -157,7 +182,7 @@ def test_list_filters_date_range_string_input(test_store_id, api_client):
                         confirm_number="X-LW")
         _seed_transfer(test_store_id, send_date=today,
                         confirm_number="X-T")
-    resp = api_client.get(
+    resp = authed_client.get(
         "/transfers",
         params={
             "store_ids": str(test_store_id),
@@ -170,7 +195,7 @@ def test_list_filters_date_range_string_input(test_store_id, api_client):
     assert confirms == {"X-T"}
 
 
-def test_list_multi_store_aggregation(test_store_id, api_client):
+def test_list_multi_store_aggregation(test_store_id, authed_client):
     from api.Modules.Tenancy.Models import Store
     from tests._app import db
     with db_session():
@@ -180,7 +205,7 @@ def test_list_multi_store_aggregation(test_store_id, api_client):
         sid2 = s2.id
         _seed_transfer(test_store_id, confirm_number="X-Mine")
         _seed_transfer(sid2, confirm_number="X-Theirs")
-    resp = api_client.get(
+    resp = authed_client.get(
         "/transfers",
         params={"store_ids": f"{test_store_id},{sid2}"},
     )
@@ -188,7 +213,7 @@ def test_list_multi_store_aggregation(test_store_id, api_client):
     assert resp.json()["total"] == 2
 
 
-def test_list_rows_have_total_collected(test_store_id, api_client):
+def test_list_rows_have_total_collected(test_store_id, authed_client):
     """Wire test: the row payload must include `total_collected`
     (send + fee + tax) so the React table can render the column
     without recomputing client-side."""

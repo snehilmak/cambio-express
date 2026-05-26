@@ -116,6 +116,7 @@ def get_store_info(
     db: Session = Depends(get_db),
     claims: dict[str, Any] = Depends(get_principal),
 ) -> StoreInfoResponse:
+    require_permission(claims, "settings", "read")
     store_id = resolve_store_scope(claims)
     store = find_store(db, store_id)
     if store is None:
@@ -195,6 +196,7 @@ def list_team_route(
     (active + inactive). Inactive rows are surfaced so the
     admin can reactivate them — the legacy "Processed by"
     dropdown filters to active separately."""
+    require_permission(claims, "users", "read")
     store_id = resolve_store_scope(claims)
     rows = list_team(db, store_id)
     return TeamListResponse(members=[_team_row(r) for r in rows])
@@ -208,9 +210,8 @@ def create_team_member_route(
     db: Session = Depends(get_db),
     claims: dict[str, Any] = Depends(get_principal),
 ) -> TeamMemberRow:
-    """Create a new active StoreEmployee row. Admin role
-    required."""
-    _require_admin_role(claims)
+    """Create a new active StoreEmployee row."""
+    require_permission(claims, "users", "create")
     store_id = resolve_store_scope(claims)
     try:
         row = add_team_member(
@@ -240,7 +241,7 @@ def update_team_member_route(
 ) -> TeamMemberRow:
     """Rename and/or toggle active. Cross-store IDs → 404
     (opaque tenancy)."""
-    _require_admin_role(claims)
+    require_permission(claims, "users", "update")
     store_id = resolve_store_scope(claims)
     member = find_team_member(db, store_id, employee_id)
     if member is None:
@@ -288,7 +289,7 @@ def deactivate_team_member_route(
     """Soft-delete: flips is_active=False. We never hard-delete
     StoreEmployee rows so historical employee_name / employee_id
     attribution on past Transfer rows survives."""
-    _require_admin_role(claims)
+    require_permission(claims, "users", "delete")
     store_id = resolve_store_scope(claims)
     member = find_team_member(db, store_id, employee_id)
     if member is None:
@@ -330,6 +331,7 @@ def subscription_summary_route(
     Mirrors the legacy /admin/subscription Jinja context so the
     SPA can render the page without a second round-trip.
     """
+    require_permission(claims, "settings", "read")
     sid = resolve_store_scope(claims)
     store = find_store(db, sid)
     if store is None:
@@ -431,6 +433,7 @@ def list_addons_route(
     its is_active flag. has_paid_plan tells the SPA whether the
     Toggle button should be enabled — add-ons require an active
     Basic or Pro subscription per the legacy contract."""
+    require_permission(claims, "settings", "read")
     sid = resolve_store_scope(claims)
     from api.Modules.Billing.Services import (
         ADDONS_CATALOG,
@@ -464,6 +467,7 @@ def toggle_addon_route(
     legacy /admin/subscription/addons/<key> form. Requires an
     active paid plan; coming-soon add-ons can be requested but
     not flipped on."""
+    require_permission(claims, "settings", "update")
     sid = resolve_store_scope(claims)
     from api.Modules.Billing.Services import (
         ADDONS_CATALOG,
@@ -517,6 +521,7 @@ def list_tax_export_years_route(
     """Years offered in the tax-pack year picker, plus the default
     selection (last calendar year). Powers the year dropdown on
     ``/app/admin/tax-export``."""
+    require_permission(claims, "reports", "read")
     store_id = resolve_store_scope(claims)
     years = tax_export_year_choices(db, store_id)
     return TaxExportYearsResponse(
@@ -580,6 +585,7 @@ def get_admin_audit_log_route(
     Flask page exactly: target=transfer|daily_report|batch,
     action=create|update|delete|lock|unlock|status_changed,
     user=<id>. `page` is 1-based; per-page is the legacy 50."""
+    require_permission(claims, "reports", "read")
     store_id = resolve_store_scope(claims)
     payload = list_audit_rows(
         db, store_id=store_id,
@@ -620,6 +626,7 @@ def export_admin_audit_log_csv_route(
     compliance pull is one click — typical store has a few
     thousand rows / year which fits in memory comfortably.
     """
+    require_permission(claims, "reports", "read")
     import csv as csv_lib
     import io
     from datetime import datetime as _datetime
@@ -752,7 +759,7 @@ def list_users_route(
     /app/admin/users roster. Includes inactive rows so admins
     can spot + reactivate them — the SPA filters/badges them
     in the UI."""
-    _require_admin_role(claims)
+    require_permission(claims, "users", "read")
     store_id = resolve_store_scope(claims)
     rows = list_store_users(db, store_id)
     return AdminUserListResponse(rows=[_user_row(u) for u in rows])
@@ -770,7 +777,7 @@ def create_user_route(
     be unique within the store; password is hashed via
     `User.set_password` (never stored raw). Role limited to
     'admin' / 'employee'."""
-    _require_admin_role(claims)
+    require_permission(claims, "users", "create")
     store_id = resolve_store_scope(claims)
     try:
         user = create_store_user(
@@ -809,7 +816,7 @@ def get_user_route(
 ) -> AdminUserDetailResponse:
     """Single-user fetch for the Edit form prefill. Cross-store
     IDs and unknown IDs both return 404 — opaque tenancy."""
-    _require_admin_role(claims)
+    require_permission(claims, "users", "read")
     store_id = resolve_store_scope(claims)
     user = find_store_user(db, store_id, user_id)
     if user is None:
@@ -831,7 +838,7 @@ def update_user_route(
     own account through this endpoint — that returns 422 with a
     field-level error so the SPA can render it inline. Cross-
     store IDs return 404."""
-    _require_admin_role(claims)
+    require_permission(claims, "users", "update")
     store_id = resolve_store_scope(claims)
     user = find_store_user(db, store_id, user_id)
     if user is None:
@@ -929,7 +936,7 @@ def get_store_permissions_route(
 ) -> dict:
     """Get the effective permission matrix for this store.
     Shows per-store overrides if any, else global defaults."""
-    from math import ceil
+    require_permission(claims, "settings", "read")
     sid = resolve_store_scope(claims)
     role = claims.get("role", "")
     from api.Modules.Auth.Models import RolePermission, StoreRoleOverride
@@ -987,6 +994,7 @@ def update_store_permissions_route(
 ) -> dict:
     """Update per-store permission overrides. Only editable roles
     allowed (admin can only edit employee, owner can edit admin+employee)."""
+    require_permission(claims, "settings", "update")
     sid = resolve_store_scope(claims)
     role = claims.get("role", "")
     editable_roles = _editable_roles_for(role)
@@ -1025,6 +1033,7 @@ def reset_store_permissions_route(
     claims: dict = Depends(get_principal),
 ) -> dict:
     """Reset a role's permissions to global defaults (delete all overrides)."""
+    require_permission(claims, "settings", "update")
     sid = resolve_store_scope(claims)
     role = claims.get("role", "")
     target_role = body.get("role", "")

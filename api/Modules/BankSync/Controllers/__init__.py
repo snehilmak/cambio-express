@@ -98,6 +98,7 @@ def list_transactions_route(
     db: Session = Depends(get_db),
     claims: dict[str, Any] = Depends(get_principal),
 ) -> BankTransactionListResponse:
+    require_permission(claims, "bank_sync", "read")
     sid = resolve_store_scope(claims)
     filters = BankTransactionFilters.from_query({
         "posted_from": posted_from, "posted_to": posted_to,
@@ -146,6 +147,7 @@ def list_rules_route(
     """Operator-managed BankRule list. Order matches the auto-
     categorize sync's evaluation order (priority asc, id tie-break)
     so the rules-manager UI shows what would actually fire first."""
+    require_permission(claims, "bank_sync", "read")
     sid = resolve_store_scope(claims)
     rules = list_rules(db, [sid], enabled_only=enabled_only)
     account_filter_ids = [
@@ -189,6 +191,7 @@ def list_accounts_route(
     principal's store. Includes both enabled + disconnected accounts
     so the UI can show "previously connected" history; clients filter
     on `enabled` if they only want active ones."""
+    require_permission(claims, "bank_sync", "read")
     sid = resolve_store_scope(claims)
     accounts = list_accounts(db, [sid])
     rows = [
@@ -274,6 +277,7 @@ def categorize_route(
     keeps the metadata-only path for operators who want a P&L tag
     without a daily-book mirror.
     """
+    require_permission(claims, "bank_sync", "update")
     sid = resolve_store_scope(claims)
     txn = _find_owned_txn(db, sid, txn_id)
     from api.Modules.BankSync.Services import is_daily_book_kind
@@ -299,6 +303,7 @@ def uncategorize_route(
     """Clear a transaction's category and remove any auto-created
     DailyLineItem. The row stays in the table — it just goes back
     to "uncategorized" so it can be re-tagged."""
+    require_permission(claims, "bank_sync", "update")
     sid = resolve_store_scope(claims)
     txn = _find_owned_txn(db, sid, txn_id)
     uncategorize_transaction(db, txn)
@@ -404,6 +409,7 @@ def create_rule_route(
     db: Session = Depends(get_db),
     claims: dict[str, Any] = Depends(get_principal),
 ) -> BankRuleResponse:
+    require_permission(claims, "bank_sync", "create")
     sid = resolve_store_scope(claims)
     _validate_rule_body(body)
     _validate_account_owned(db, sid, body.account_filter_id)
@@ -433,6 +439,7 @@ def update_rule_route(
     db: Session = Depends(get_db),
     claims: dict[str, Any] = Depends(get_principal),
 ) -> BankRuleResponse:
+    require_permission(claims, "bank_sync", "update")
     sid = resolve_store_scope(claims)
     _validate_rule_body(body)
     _validate_account_owned(db, sid, body.account_filter_id)
@@ -459,6 +466,7 @@ def toggle_rule_route(
     db: Session = Depends(get_db),
     claims: dict[str, Any] = Depends(get_principal),
 ) -> BankRuleResponse:
+    require_permission(claims, "bank_sync", "update")
     sid = resolve_store_scope(claims)
     r = _find_owned_rule(db, sid, rule_id)
     r.enabled = body.enabled
@@ -472,6 +480,7 @@ def delete_rule_route(
     db: Session = Depends(get_db),
     claims: dict[str, Any] = Depends(get_principal),
 ) -> None:
+    require_permission(claims, "bank_sync", "delete")
     sid = resolve_store_scope(claims)
     r = _find_owned_rule(db, sid, rule_id)
     db.delete(r)
@@ -483,10 +492,10 @@ def delete_rule_route(
 # ── Stripe Financial Connections lifecycle ─────────────────
 
 
-def _require_admin_bank_scope(claims: dict[str, Any]) -> int:
+def _require_admin_bank_scope(claims: dict[str, Any], action: str = "read") -> int:
     """Bank-sync mutations are admin-only.  Returns the store_id;
     raises 403 on missing store scope or non-admin role."""
-    require_permission(claims, "bank_sync", "read")
+    require_permission(claims, "bank_sync", action)
     sid = claims.get("store_id")
     if sid is None:
         raise HTTPException(
@@ -542,7 +551,7 @@ def connect_route(
     from api.Modules.Billing.Services.customer import ensure_stripe_customer
     from api.Modules.Tenancy.Models import Store
 
-    sid = _require_admin_bank_scope(claims)
+    sid = _require_admin_bank_scope(claims, "update")
     try:
         require_stripe_configured()
     except StripeNotConfiguredError:
@@ -622,7 +631,7 @@ def connect_complete_route(
     import stripe
     from api.Modules.BankSync.Services.fc_accounts import upsert_fc_account
 
-    sid = _require_admin_bank_scope(claims)
+    sid = _require_admin_bank_scope(claims, "update")
     try:
         session = stripe.financial_connections.Session.retrieve(
             body.sessionId,
@@ -682,7 +691,7 @@ def disconnect_account_route(
     transactions are preserved + still appear in /bank-transactions
     with the account label."""
     from datetime import datetime
-    sid = _require_admin_bank_scope(claims)
+    sid = _require_admin_bank_scope(claims, "update")
     row = (
         db.query(StripeBankAccount)
           .filter(
@@ -726,7 +735,7 @@ def refresh_balances_route(
     from api.Modules.BankSync.Services.fc_accounts import refresh_bank_balances
     from api.Modules.Tenancy.Models import Store
 
-    sid = _require_admin_bank_scope(claims)
+    sid = _require_admin_bank_scope(claims, "update")
     store = db.get(Store, sid)
     if store is None:
         raise HTTPException(status_code=404, detail="Store not found")
@@ -762,7 +771,7 @@ def sync_transactions_route(
     from api.Modules.BankSync.Services.sync import sync_bank_transactions
     from api.Modules.Tenancy.Models import Store
 
-    sid = _require_admin_bank_scope(claims)
+    sid = _require_admin_bank_scope(claims, "update")
     store = db.get(Store, sid)
     if store is None:
         raise HTTPException(status_code=404, detail="Store not found")
@@ -803,7 +812,7 @@ def set_account_nickname_route(
 
     Admin-role + same-store gated; cross-tenant ids opaque 404.
     """
-    sid = _require_admin_bank_scope(claims)
+    sid = _require_admin_bank_scope(claims, "update")
     row = (
         db.query(StripeBankAccount)
           .filter(

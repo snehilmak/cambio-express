@@ -79,6 +79,7 @@ def list_route(
     """List ACH batches in the JWT principal's store. Superadmin
     JWTs (no store_id claim) → 403 — this endpoint is store-
     scoped."""
+    require_permission(claims, "batches", "read")
     store_id = claims.get("store_id")
     if store_id is None:
         raise HTTPException(
@@ -97,14 +98,15 @@ def list_route(
 def _require_admin_scope(claims: dict[str, Any]) -> int:
     """Both store_id (write is store-scoped) AND admin role
     (cashiers can't manage batches in the legacy admin_required
-    path)."""
+    path).  Permission guard is NOT here — callers add their own
+    ``require_permission(claims, "batches", "<action>")`` so
+    create / update / delete each carry the correct action."""
     sid = claims.get("store_id")
     if sid is None:
         raise HTTPException(
             status_code=403,
             detail="JWT does not carry a store scope.",
         )
-    require_permission(claims, "batches", "read")
     return int(sid)
 
 
@@ -209,6 +211,7 @@ def get_batch_route(
     claims: dict[str, Any] = Depends(get_principal),
 ) -> BatchResponse:
     """Single-batch detail. Cross-tenant lookups → 404."""
+    require_permission(claims, "batches", "read")
     sid = claims.get("store_id")
     if sid is None:
         raise HTTPException(
@@ -233,6 +236,7 @@ def create_batch_route(
     target_type='batch'`) so the audit trail mirrors what the legacy
     /batches/new Flask handler used to record. Without this, SPA
     creates would silently bypass the audit log."""
+    require_permission(claims, "batches", "create")
     sid = _require_admin_scope(claims)
     payload = _parse_payload(body)
     try:
@@ -264,6 +268,7 @@ def update_batch_route(
     summarising before→after diffs on the fields the legacy form
     tracked (amount, status, reconciled) so the operator-side audit
     trail stays consistent with the SPA cutover."""
+    require_permission(claims, "batches", "update")
     sid = _require_admin_scope(claims)
     payload = _parse_payload(body)
     # Snapshot the fields that the legacy edit handler diffed before
@@ -312,6 +317,7 @@ def batch_transfers_route(
     """List the transfers linked to one ACH batch by
     `batch_id == batch_ref`. Mirrors the legacy
     /batches/<id>/transfers Jinja page."""
+    require_permission(claims, "batches", "read")
     sid = claims.get("store_id")
     if sid is None:
         raise HTTPException(

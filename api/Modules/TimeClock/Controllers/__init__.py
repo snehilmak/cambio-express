@@ -154,6 +154,7 @@ def clock_in_route(
     open shift; 404 when the roster id doesn't belong to this
     store; 401 when the store requires a passkey and the
     assertion is missing / invalid."""
+    require_permission(claims, "time_clock", "create")
     store_id = resolve_store_scope(claims)
     user_id = _user_id_from(claims)
     _enforce_passkey_gate(
@@ -207,6 +208,7 @@ def clock_out_route(
     nobody's clocked in for that name; 404 when the roster id
     doesn't belong to this store; 401 when the store requires
     a passkey and the assertion is missing / invalid."""
+    require_permission(claims, "time_clock", "update")
     store_id = resolve_store_scope(claims)
     user_id = _user_id_from(claims)
     _enforce_passkey_gate(
@@ -258,6 +260,7 @@ def break_start_route(
     """Pause the picked roster member's open shift. Sets
     ``break_started_at`` to now. 409 when nobody's clocked in
     or when the shift is already on break."""
+    require_permission(claims, "time_clock", "update")
     store_id = resolve_store_scope(claims)
     user_id = _user_id_from(claims)
     try:
@@ -296,6 +299,7 @@ def break_stop_route(
     """Resume the picked roster member's shift. Adds the
     elapsed break time to ``break_minutes`` and clears
     ``break_started_at``. 409 when no break is in progress."""
+    require_permission(claims, "time_clock", "update")
     store_id = resolve_store_scope(claims)
     user_id = _user_id_from(claims)
     try:
@@ -333,6 +337,7 @@ def status_route(
     """Currently-open shifts at the principal's store — feeds
     the live "who's on the clock?" panel + powers the
     Clock-in/Clock-out button toggle."""
+    require_permission(claims, "time_clock", "read")
     store_id = resolve_store_scope(claims)
     open_entries = open_entries_for_store(db, store_id)
     names = _names_for(db, open_entries)
@@ -1074,6 +1079,7 @@ def punch_challenge_route(
     422 when the roster member doesn't have a passkey
     registered yet — the SPA surfaces a "ask the admin to
     enroll your device" message."""
+    require_permission(claims, "time_clock", "create")
     store_id = resolve_store_scope(claims)
     from api.Modules.Tenancy.Models import StoreEmployee
     emp = db.get(StoreEmployee, body.store_employee_id)
