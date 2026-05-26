@@ -55,6 +55,7 @@ export { Card } from "./Card";
 export { Section, SectionTitle } from "./Section";
 export { Field } from "./Field";
 export { Input } from "./Input";
+export { DateInput } from "./DateInput";
 export { MoneyInput } from "./MoneyInput";
 export { Select } from "./Select";
 export { Textarea } from "./Textarea";

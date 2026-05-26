@@ -69,7 +69,7 @@ export default function Batches() {
         title="ACH batches"
         subtitle={data ? `${data.rows.length.toLocaleString()} batches` : "—"}
         actions={(
-          <ButtonLink href="/batches/new" tone="primary">
+          <ButtonLink href="/batches/new" tone="primary" size="sm"> 
             + New batch
           </ButtonLink>
         )}

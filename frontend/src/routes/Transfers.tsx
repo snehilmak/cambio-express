@@ -139,7 +139,7 @@ export default function Transfers() {
                 {isFetching ? "Syncing…" : `Live · synced ${formatSyncTime(dataUpdatedAt)}`}
               </Pill>
             )}
-            <ButtonLink href="/transfers/new" tone="primary">
+            <ButtonLink href="/transfers/new" tone="primary" size="sm"> 
               + New transfer
             </ButtonLink>
           </div>
