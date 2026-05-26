@@ -168,7 +168,50 @@ def dashboard_route(
         "direct_signups": ctx["direct_signups"],
         "referral_signups": ctx["referral_signups"],
         "activity": activity,
+        "mrr_trend": _compute_mrr_trend(db),
     }
+
+
+def _compute_mrr_trend(db: Session) -> dict[str, Any]:
+    """Approximate MRR for each of the last 12 months.
+
+    Uses current paid-store counts as of today — doesn't track
+    historical plan changes. Good enough for a trend chart until
+    we add a monthly MRR snapshot table."""
+    from datetime import date, timedelta
+    from api.Modules.Superadmin.Services.dashboard import compute_mrr
+    from api.Modules.Tenancy.Models import Store
+
+    today = date.today()
+    labels: list[str] = []
+    values: list[int] = []
+    for i in range(11, -1, -1):
+        d = today.replace(day=1) - timedelta(days=i * 30)
+        month_end = d.replace(day=28)
+        stores = (
+            db.query(Store.plan, Store.billing_cycle)
+            .filter(
+                Store.created_at <= month_end,
+                Store.plan.in_(["basic", "pro"]),
+            )
+            .all()
+        )
+        bm = by = pm = py_ = 0
+        for plan, cycle in stores:
+            if plan == "basic":
+                if cycle == "yearly":
+                    by += 1
+                else:
+                    bm += 1
+            elif plan == "pro":
+                if cycle == "yearly":
+                    py_ += 1
+                else:
+                    pm += 1
+        _, _, _, _, total = compute_mrr(bm, by, pm, py_)
+        labels.append(d.strftime("%b %Y"))
+        values.append(total)
+    return {"labels": labels, "values": values}
 
 
 # ── Maintenance mode ───────────────────────────────────────

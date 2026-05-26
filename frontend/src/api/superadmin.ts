@@ -262,6 +262,7 @@ export interface SuperadminDashboardData {
   direct_signups: number;
   referral_signups: number;
   activity: ActivityEntry[];
+  mrr_trend: { labels: string[]; values: number[] };
 }
 
 export function useSuperadminDashboard() {
