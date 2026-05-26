@@ -162,18 +162,11 @@ export const NAV: NavGroup[] = [
     ],
   },
   {
-    title: "Dashboard",
-    roles: ["superadmin"],
-    icon: iconDashboard(),
-    items: [
-      { to: "/superadmin/dashboard",     label: "Dashboard",     icon: iconDashboard() },
-    ],
-  },
-  {
     title: "Manage",
     roles: ["superadmin"],
     icon: iconPlatform(),
     items: [
+      { to: "/superadmin/dashboard",     label: "Dashboard",     icon: iconDashboard() },
       { to: "/superadmin/stores",        label: "Stores",        icon: iconPlatform() },
       { to: "/superadmin/users",         label: "Users",         icon: iconCustomers() },
       { to: "/superadmin/announcements", label: "Announcements", icon: iconBanner() },
