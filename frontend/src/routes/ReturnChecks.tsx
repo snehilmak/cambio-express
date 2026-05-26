@@ -59,7 +59,7 @@ export default function ReturnChecks() {
             } check${data.rows.length === 1 ? "" : "s"}`
           : "—"}
         actions={(
-          <ButtonLink href="/return-checks/new" tone="primary">
+          <ButtonLink href="/return-checks/new" tone="primary" size="sm">
             + New return check
           </ButtonLink>
         )}
@@ -82,6 +82,7 @@ export default function ReturnChecks() {
       </div>
 
       <Card>
+        <div style={{ overflowX: "auto" }}>
         <TableStates
           isLoading={isLoading} isError={isError} error={error}
           isEmpty={!data || data.rows.length === 0}
@@ -89,6 +90,7 @@ export default function ReturnChecks() {
           emptyTitle={`No return checks ${status ? `with status ${status}` : "yet"}.`}
         />
         {data && data.rows.length > 0 && <Table rows={data.rows} />}
+        </div>
       </Card>
     </PageShell>
   );
