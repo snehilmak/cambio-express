@@ -57,37 +57,64 @@ def api_client():
         yield c
 
 
+
+
+@pytest.fixture
+def authed_client(test_store_id, api_client):
+    from api.Modules.Tenancy.Models import User
+    from tests._app import db, db_session as _ds
+    with _ds():
+        u = db.session.query(User).filter_by(
+            store_id=test_store_id, role="admin",
+        ).first()
+        assert u is not None
+        username = u.username
+    resp = api_client.post(
+        "/auth/login",
+        json={"username": username, "password": "testpass123!",
+              "store_id": test_store_id},
+    )
+    token = resp.json()["access_token"]
+    api_client.headers["Authorization"] = f"Bearer {token}"
+    return api_client
+
 # ── parse_period / parse_store_ids dependency contracts ─────
 
 
-def test_store_ids_required_returns_422(test_store_id, api_client):
-    """`store_ids` is a required Query — missing it must 422."""
+def test_reports_require_auth(api_client):
+    """Reports require authentication."""
     resp = api_client.get("/reports/sales-by-company")
+    assert resp.status_code == 401
+
+
+def test_store_ids_required_returns_422(test_store_id, authed_client):
+    """`store_ids` is a required Query — missing it must 422."""
+    resp = authed_client.get("/reports/sales-by-company")
     assert resp.status_code == 422
 
 
-def test_store_ids_non_numeric_returns_422(test_store_id, api_client):
-    resp = api_client.get(
+def test_store_ids_non_numeric_returns_422(test_store_id, authed_client):
+    resp = authed_client.get(
         "/reports/sales-by-company", params={"store_ids": "abc,def"},
     )
     assert resp.status_code == 422
 
 
-def test_store_ids_empty_string_returns_422(test_store_id, api_client):
-    resp = api_client.get(
+def test_store_ids_empty_string_returns_422(test_store_id, authed_client):
+    resp = authed_client.get(
         "/reports/sales-by-company", params={"store_ids": ""},
     )
     assert resp.status_code == 422
 
 
-def test_period_swaps_when_from_after_to(test_store_id, api_client):
+def test_period_swaps_when_from_after_to(test_store_id, authed_client):
     """Mirrors `_report_period`: if the caller passes `from > to`,
     the dependency swaps them so the SQL window is non-empty."""
     today = date.today()
     yesterday = today - timedelta(days=1)
     with db_session():
         _seed_transfer(test_store_id, send_amount=100.0, send_date=yesterday)
-    resp = api_client.get(
+    resp = authed_client.get(
         "/reports/sales-by-company",
         params={
             "store_ids": str(test_store_id),
@@ -101,13 +128,13 @@ def test_period_swaps_when_from_after_to(test_store_id, api_client):
     assert body["totals"]["sent"] == 100.0
 
 
-def test_period_falls_back_to_defaults_on_garbage_input(test_store_id, api_client):
+def test_period_falls_back_to_defaults_on_garbage_input(test_store_id, authed_client):
     """`_report_period` swallows ValueError and falls back to today /
     first-of-month. The dependency mirrors that."""
     today = date.today()
     with db_session():
         _seed_transfer(test_store_id, send_amount=42.0)
-    resp = api_client.get(
+    resp = authed_client.get(
         "/reports/sales-by-company",
         params={
             "store_ids": str(test_store_id),
@@ -123,11 +150,11 @@ def test_period_falls_back_to_defaults_on_garbage_input(test_store_id, api_clien
 # ── Per-route happy-path response envelopes ─────────────────
 
 
-def test_sales_by_company_envelope(test_store_id, api_client):
+def test_sales_by_company_envelope(test_store_id, authed_client):
     with db_session():
         _seed_transfer(test_store_id, send_amount=100.0, company="Intermex")
         _seed_transfer(test_store_id, send_amount=300.0, company="Maxi")
-    resp = api_client.get(
+    resp = authed_client.get(
         "/reports/sales-by-company",
         params={"store_ids": str(test_store_id)},
     )
@@ -139,13 +166,13 @@ def test_sales_by_company_envelope(test_store_id, api_client):
     assert body["totals"]["sent"] == 400.0
 
 
-def test_sales_by_service_envelope(test_store_id, api_client):
+def test_sales_by_service_envelope(test_store_id, authed_client):
     with db_session():
         _seed_transfer(test_store_id, send_amount=100.0,
                         service_type="Money Transfer")
         _seed_transfer(test_store_id, send_amount=200.0,
                         service_type="Bill Payment")
-    resp = api_client.get(
+    resp = authed_client.get(
         "/reports/sales-by-service",
         params={"store_ids": str(test_store_id)},
     )
@@ -155,11 +182,11 @@ def test_sales_by_service_envelope(test_store_id, api_client):
     assert types == {"Money Transfer", "Bill Payment"}
 
 
-def test_by_destination_country_envelope(test_store_id, api_client):
+def test_by_destination_country_envelope(test_store_id, authed_client):
     with db_session():
         _seed_transfer(test_store_id, send_amount=100.0, country="MX")
         _seed_transfer(test_store_id, send_amount=200.0, country="GT")
-    resp = api_client.get(
+    resp = authed_client.get(
         "/reports/by-destination-country",
         params={"store_ids": str(test_store_id)},
     )
@@ -169,12 +196,12 @@ def test_by_destination_country_envelope(test_store_id, api_client):
     assert countries == {"MX", "GT"}
 
 
-def test_top_recipients_respects_limit_query_param(test_store_id, api_client):
+def test_top_recipients_respects_limit_query_param(test_store_id, authed_client):
     with db_session():
         for i in range(5):
             _seed_transfer(test_store_id, send_amount=100.0 * (i + 1),
                             recipient_name=f"R{i}")
-    resp = api_client.get(
+    resp = authed_client.get(
         "/reports/top-recipients",
         params={"store_ids": str(test_store_id), "limit": 2},
     )
@@ -185,21 +212,21 @@ def test_top_recipients_respects_limit_query_param(test_store_id, api_client):
     assert body["totals"]["sent"] == 1500.0
 
 
-def test_top_recipients_rejects_out_of_range_limit(test_store_id, api_client):
+def test_top_recipients_rejects_out_of_range_limit(test_store_id, authed_client):
     """`limit` is bounded `[1, 500]` — out-of-range values 422."""
-    resp = api_client.get(
+    resp = authed_client.get(
         "/reports/top-recipients",
         params={"store_ids": str(test_store_id), "limit": 0},
     )
     assert resp.status_code == 422
-    resp = api_client.get(
+    resp = authed_client.get(
         "/reports/top-recipients",
         params={"store_ids": str(test_store_id), "limit": 501},
     )
     assert resp.status_code == 422
 
 
-def test_top_customers_respects_sort_by(test_store_id, api_client):
+def test_top_customers_respects_sort_by(test_store_id, authed_client):
     from api.Modules.Customers.Models import Customer
     from tests._app import db
     today = date.today()
@@ -214,7 +241,7 @@ def test_top_customers_respects_sort_by(test_store_id, api_client):
             test_store_id, send_amount=500.0, customer_id=cid,
             recipient_name="R1",
         )
-    resp = api_client.get(
+    resp = authed_client.get(
         "/reports/top-customers",
         params={"store_ids": str(test_store_id), "sort_by": "sent"},
     )
@@ -224,16 +251,16 @@ def test_top_customers_respects_sort_by(test_store_id, api_client):
     assert body["rows"][0]["phone"] == "+15551234"
 
 
-def test_top_customers_rejects_invalid_sort_by(test_store_id, api_client):
+def test_top_customers_rejects_invalid_sort_by(test_store_id, authed_client):
     """`sort_by` is regex-restricted to `sent|count`."""
-    resp = api_client.get(
+    resp = authed_client.get(
         "/reports/top-customers",
         params={"store_ids": str(test_store_id), "sort_by": "garbage"},
     )
     assert resp.status_code == 422
 
 
-def test_sales_by_employee_resolves_user(test_store_id, api_client):
+def test_sales_by_employee_resolves_user(test_store_id, authed_client):
     from api.Modules.Tenancy.Models import User
     from tests._app import db
     with db_session():
@@ -245,7 +272,7 @@ def test_sales_by_employee_resolves_user(test_store_id, api_client):
         db.session.add(u); db.session.commit()
         uid = u.id
         _seed_transfer(test_store_id, created_by=uid, send_amount=300.0)
-    resp = api_client.get(
+    resp = authed_client.get(
         "/reports/sales-by-employee",
         params={"store_ids": str(test_store_id)},
     )
@@ -255,7 +282,7 @@ def test_sales_by_employee_resolves_user(test_store_id, api_client):
     assert body["rows"][0]["username"] == "cash@x.com"
 
 
-def test_cashier_productivity_resolves_storeemployee(test_store_id, api_client):
+def test_cashier_productivity_resolves_storeemployee(test_store_id, authed_client):
     from api.Modules.Tenancy.Models import StoreEmployee
     from tests._app import db
     with db_session():
@@ -265,7 +292,7 @@ def test_cashier_productivity_resolves_storeemployee(test_store_id, api_client):
         db.session.add(e); db.session.commit()
         eid = e.id
         _seed_transfer(test_store_id, employee_id=eid, send_amount=50.0)
-    resp = api_client.get(
+    resp = authed_client.get(
         "/reports/cashier-productivity",
         params={"store_ids": str(test_store_id)},
     )
@@ -278,7 +305,7 @@ def test_cashier_productivity_resolves_storeemployee(test_store_id, api_client):
 # ── Multi-store + period filtering through the controller ──
 
 
-def test_store_ids_multi_value_aggregates_across_stores(test_store_id, api_client):
+def test_store_ids_multi_value_aggregates_across_stores(test_store_id, authed_client):
     """Comma-separated `store_ids=1,2` must aggregate across both."""
     from api.Modules.Tenancy.Models import Store
     from tests._app import db
@@ -289,7 +316,7 @@ def test_store_ids_multi_value_aggregates_across_stores(test_store_id, api_clien
         sid2 = s2.id
         _seed_transfer(test_store_id, send_amount=100.0)
         _seed_transfer(sid2, send_amount=200.0)
-    resp = api_client.get(
+    resp = authed_client.get(
         "/reports/sales-by-company",
         params={"store_ids": f"{test_store_id},{sid2}"},
     )
@@ -297,13 +324,13 @@ def test_store_ids_multi_value_aggregates_across_stores(test_store_id, api_clien
     assert resp.json()["totals"]["sent"] == 300.0
 
 
-def test_period_filter_excludes_out_of_range_rows(test_store_id, api_client):
+def test_period_filter_excludes_out_of_range_rows(test_store_id, authed_client):
     today = date.today()
     last_year = today - timedelta(days=365)
     with db_session():
         _seed_transfer(test_store_id, send_amount=100.0, send_date=last_year)
         _seed_transfer(test_store_id, send_amount=200.0, send_date=today)
-    resp = api_client.get(
+    resp = authed_client.get(
         "/reports/sales-by-company",
         params={
             "store_ids": str(test_store_id),
@@ -316,22 +343,6 @@ def test_period_filter_excludes_out_of_range_rows(test_store_id, api_client):
     assert resp.json()["totals"]["sent"] == 200.0
 
 
-# ── Strangler-fig dispatch via Flask ────────────────────────
-
-
-def test_flask_dispatcher_routes_reports_to_fastapi(client, test_store_id):
-    """The DispatcherMiddleware must forward `/api/v2/reports/*` into
-    FastAPI. Hitting one route is enough to pin the wiring; the
-    standalone TestClient cases above cover route logic."""
-    with db_session():
-        _seed_transfer(test_store_id, send_amount=99.0, company="Intermex")
-    resp = client.get(
-        f"/api/v2/reports/sales-by-company?store_ids={test_store_id}",
-    )
-    assert resp.status_code == 200
-    assert resp.is_json
-    body = resp.get_json()
-    assert body["totals"]["sent"] == 99.0
 
 
 def test_openapi_includes_reports_paths(api_client):

@@ -110,7 +110,9 @@ def search_route(
         "", description="Search text. <2 chars returns an empty envelope.",
     ),
     db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> CustomerSearchResponse:
+    require_permission(claims, "customers", "read")
     matches, suggestions = search(db, store_id, q)
     home_names = _resolve_home_names(
         db, list(matches) + list(suggestions), store_id,
@@ -126,7 +128,9 @@ def upsert_route(
     body: CustomerUpsertRequest,
     store_id: int = Query(..., description="Caller's current store."),
     db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> CustomerUpsertResponse:
+    require_permission(claims, "customers", "create")
     parsed_dob: date | None = None
     if body.dob:
         try:
@@ -238,6 +242,7 @@ def recent_recipients_route(
         description="Cap on the number of distinct recipients returned.",
     ),
     db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> RecentRecipientsResponse:
     """Distinct recipients this customer has sent to before, newest
     first. Powers the chip-row above the recipient_name input on the
@@ -248,6 +253,7 @@ def recent_recipients_route(
     Service applies that filter). Unknown customer or customer
     outside the umbrella returns an empty list, never 404 — the
     caller's render path is the same either way."""
+    require_permission(claims, "customers", "read")
     rows = list_recent_recipients(
         db, customer_id, store_id, limit=limit,
     )
@@ -268,7 +274,9 @@ def get_route(
         ),
     ),
     db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> CustomerResponse:
+    require_permission(claims, "customers", "read")
     siblings = sibling_store_ids(db, store_id)
     cust = find_by_id_in_stores(db, customer_id, siblings)
     if cust is None:

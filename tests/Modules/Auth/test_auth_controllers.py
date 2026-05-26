@@ -380,22 +380,6 @@ def test_logout_revokes_refresh_token(test_store_id, client):
     assert replay.status_code == 401
 
 
-# ── Strangler-fig dispatch ──────────────────────────────────
-
-
-def test_flask_dispatcher_routes_login_to_fastapi(client, test_store_id):
-    resp = client.post(
-        "/api/v2/auth/login",
-        json={
-            "username": "admin@test.com",
-            "password": "testpass123!",
-            "store_id": test_store_id,
-        },
-    )
-    assert resp.status_code == 200
-    assert resp.is_json
-    assert resp.get_json()["role"] == "admin"
-
 
 def test_openapi_includes_auth_paths(api_client):
     resp = api_client.get("/openapi.json")

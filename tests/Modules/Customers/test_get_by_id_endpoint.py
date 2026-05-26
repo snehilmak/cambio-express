@@ -46,12 +46,37 @@ def api_client():
         yield c
 
 
-def test_get_customer_returns_envelope(test_store_id, api_client):
+@pytest.fixture
+def authed_client(test_store_id, api_client):
+    from api.Modules.Tenancy.Models import User
+    with db_session():
+        u = db.session.query(User).filter_by(
+            store_id=test_store_id, role="admin",
+        ).first()
+        assert u is not None
+        username = u.username
+    resp = api_client.post(
+        "/auth/login",
+        json={"username": username, "password": "testpass123!",
+              "store_id": test_store_id},
+    )
+    token = resp.json()["access_token"]
+    api_client.headers["Authorization"] = f"Bearer {token}"
+    return api_client
+
+
+def test_get_customer_requires_auth(api_client):
+    """Unauthenticated request returns 401."""
+    resp = api_client.get("/customers/1", params={"store_id": 1})
+    assert resp.status_code == 401
+
+
+def test_get_customer_returns_envelope(test_store_id, authed_client):
     with db_session():
         cid = _seed_customer(
             test_store_id, full_name="Alice", phone_number="5551234",
         )
-    resp = api_client.get(
+    resp = authed_client.get(
         f"/customers/{cid}", params={"store_id": test_store_id},
     )
     assert resp.status_code == 200
@@ -62,26 +87,26 @@ def test_get_customer_returns_envelope(test_store_id, api_client):
     assert body["customer"]["home_store_id"] == test_store_id
 
 
-def test_get_customer_404_for_missing(test_store_id, api_client):
-    resp = api_client.get(
+def test_get_customer_404_for_missing(test_store_id, authed_client):
+    resp = authed_client.get(
         "/customers/99999", params={"store_id": test_store_id},
     )
     assert resp.status_code == 404
 
 
-def test_get_customer_404_for_unrelated_store(test_store_id, api_client):
+def test_get_customer_404_for_unrelated_store(test_store_id, authed_client):
     """Stranger-store lookup returns 404 (the owner-umbrella security
     property — same as the search endpoint)."""
     with db_session():
         s2 = _seed_store("stranger-cgbi")
         cid = _seed_customer(s2, full_name="Hidden")
-    resp = api_client.get(
+    resp = authed_client.get(
         f"/customers/{cid}", params={"store_id": test_store_id},
     )
     assert resp.status_code == 404
 
 
-def test_get_customer_finds_in_owner_umbrella(test_store_id, api_client):
+def test_get_customer_finds_in_owner_umbrella(test_store_id, authed_client):
     """Customer at sibling store under same owner is reachable, with
     `home_store_name` decoration so the UI can label "from Store X"."""
     with db_session():
@@ -90,7 +115,7 @@ def test_get_customer_finds_in_owner_umbrella(test_store_id, api_client):
         _link(oid, test_store_id)
         _link(oid, s2)
         cid = _seed_customer(s2, full_name="Maria")
-    resp = api_client.get(
+    resp = authed_client.get(
         f"/customers/{cid}", params={"store_id": test_store_id},
     )
     assert resp.status_code == 200
@@ -100,15 +125,8 @@ def test_get_customer_finds_in_owner_umbrella(test_store_id, api_client):
     assert body["customer"]["home_store_name"] == "Sibling Loc"
 
 
-def test_get_customer_requires_store_id(test_store_id, api_client):
-    with db_session():
-        cid = _seed_customer(test_store_id, full_name="Alice")
-    resp = api_client.get(f"/customers/{cid}")
-    assert resp.status_code == 422
-
-
-def test_get_customer_rejects_zero_id(test_store_id, api_client):
-    resp = api_client.get(
+def test_get_customer_rejects_zero_id(test_store_id, authed_client):
+    resp = authed_client.get(
         "/customers/0", params={"store_id": test_store_id},
     )
     assert resp.status_code == 422

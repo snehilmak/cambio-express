@@ -60,6 +60,7 @@ def months_route(
     db: Session = Depends(get_db),
     claims: dict[str, Any] = Depends(get_principal),
 ) -> MonthsLoggedResponse:
+    require_permission(claims, "monthly", "read")
     store_id = resolve_store_scope(claims)
     pairs = list_logged_months(db, store_id)
     return MonthsLoggedResponse(
@@ -77,6 +78,7 @@ def monthly_route(
     db: Session = Depends(get_db),
     claims: dict[str, Any] = Depends(get_principal),
 ) -> MonthlyResponse:
+    require_permission(claims, "monthly", "read")
     store_id = resolve_store_scope(claims)
     summary = summarize_monthly(db, store_id, int(year), int(month))
     if summary is None:
