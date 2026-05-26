@@ -245,7 +245,21 @@ export default function SuperadminUsers() {
       <ConfirmDialog
         open={roleChange != null}
         title="Change role"
-        message={`Change role for "${roleChange?.username}" from ${roleChange?.currentRole} to:`}
+        message={(
+          <>
+            Change role for &quot;{roleChange?.username}&quot; from {roleChange?.currentRole} to:
+            <Select
+              value={newRole}
+              onChange={(e) => setNewRole(e.target.value)}
+              style={{ marginTop: "0.5rem" }}
+            >
+              <option value="">— Select role —</option>
+              <option value="admin">Admin</option>
+              <option value="employee">Employee</option>
+              <option value="owner">Owner</option>
+            </Select>
+          </>
+        )}
         confirmLabel={busyId != null ? "Saving…" : "Change role"}
         busy={busyId != null}
         onConfirm={() => {
@@ -265,18 +279,7 @@ export default function SuperadminUsers() {
             .finally(() => setBusyId(null));
         }}
         onCancel={() => { setRoleChange(null); setNewRole(""); }}
-      >
-        <Select
-          value={newRole}
-          onChange={(e) => setNewRole(e.target.value)}
-          style={{ marginTop: "0.5rem" }}
-        >
-          <option value="">— Select role —</option>
-          <option value="admin">Admin</option>
-          <option value="employee">Employee</option>
-          <option value="owner">Owner</option>
-        </Select>
-      </ConfirmDialog>
+      />
     </PageShell>
   );
 }
