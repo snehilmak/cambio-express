@@ -213,7 +213,36 @@ class RolePermission(Base):
     )
 
 
+class StoreRoleOverride(Base):
+    """Per-store permission override: (store_id, role, resource, action).
+
+    A row here means "this store grants this permission" — overriding
+    the global RolePermission matrix. When a store has ANY overrides
+    for a role, the global defaults for that role are fully replaced
+    (not merged) — this keeps the mental model simple: either the
+    store uses the global defaults or it has its own complete matrix.
+
+    Editable by:
+    - Superadmin (any store, any role)
+    - Owner (their connected stores, admin + employee roles only)
+    - Admin (their own store, employee role only)
+    """
+    __tablename__ = "store_role_override"
+    id       = Column(Integer, primary_key=True)
+    store_id = Column(Integer, ForeignKey("store.id"), nullable=False)
+    role     = Column(String(20), nullable=False)
+    resource = Column(String(40), nullable=False)
+    action   = Column(String(20), nullable=False)
+    __table_args__ = (
+        UniqueConstraint("store_id", "role", "resource", "action",
+                         name="uq_store_role_resource_action"),
+        Index("ix_store_role_override_store", "store_id"),
+        Index("ix_store_role_override_store_role", "store_id", "role"),
+    )
+
+
 __all__ = [
     "LoginEvent", "Passkey", "PasswordResetToken", "RecoveryCode",
-    "RefreshToken", "RolePermission", "Store", "StoreOwnerLink", "User",
+    "RefreshToken", "RolePermission", "Store", "StoreRoleOverride",
+    "StoreOwnerLink", "User",
 ]

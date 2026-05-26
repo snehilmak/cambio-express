@@ -110,6 +110,11 @@ export const NAV: NavGroup[] = [
         roles: ["admin"],
         icon: iconCustomers(),
       },
+      {
+        to: "/admin/store-permissions", label: "Permissions",
+        roles: ["admin"],
+        icon: iconShield(),
+      },
     ],
   },
   {

@@ -917,3 +917,134 @@ def get_admin_referrals_route(
             ReferralRedemptionRow(**r) for r in payload["redemptions"]
         ],
     )
+
+
+# ── Per-store role permissions ─────────────────────────────
+
+
+@router.get("/store-permissions")
+def get_store_permissions_route(
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> dict:
+    """Get the effective permission matrix for this store.
+    Shows per-store overrides if any, else global defaults."""
+    from math import ceil
+    sid = resolve_store_scope(claims)
+    role = claims.get("role", "")
+    from api.Modules.Auth.Models import RolePermission, StoreRoleOverride
+    from api.Modules.Auth.Services.login import (
+        RBAC_ACTIONS, RBAC_DEFAULTS, RBAC_RESOURCES,
+    )
+    editable_roles = _editable_roles_for(role)
+    visible_roles = ["admin", "employee"] if role != "superadmin" else ["admin", "employee", "owner"]
+
+    global_granted: set[tuple[str, str, str]] = set()
+    global_rows = db.query(RolePermission).all()
+    for r in global_rows:
+        global_granted.add((r.role, r.resource, r.action))
+    if not global_granted:
+        for rl, perms in RBAC_DEFAULTS.items():
+            for perm in perms:
+                res, act = perm.split(".", 1)
+                global_granted.add((rl, res, act))
+
+    store_rows = (
+        db.query(StoreRoleOverride)
+        .filter(StoreRoleOverride.store_id == sid)
+        .all()
+    )
+    store_granted: set[tuple[str, str, str]] = set()
+    store_has_overrides: set[str] = set()
+    for r in store_rows:
+        store_granted.add((r.role, r.resource, r.action))
+        store_has_overrides.add(r.role)
+
+    matrix: dict[str, dict[str, dict[str, bool]]] = {}
+    for rl in visible_roles:
+        matrix[rl] = {}
+        source = store_granted if rl in store_has_overrides else global_granted
+        for resource in RBAC_RESOURCES:
+            matrix[rl][resource] = {}
+            for action in RBAC_ACTIONS:
+                matrix[rl][resource][action] = (rl, resource, action) in source
+
+    return {
+        "roles": visible_roles,
+        "editable_roles": editable_roles,
+        "resources": RBAC_RESOURCES,
+        "actions": RBAC_ACTIONS,
+        "matrix": matrix,
+        "has_overrides": list(store_has_overrides),
+    }
+
+
+@router.put("/store-permissions")
+def update_store_permissions_route(
+    body: dict,
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> dict:
+    """Update per-store permission overrides. Only editable roles
+    allowed (admin can only edit employee, owner can edit admin+employee)."""
+    sid = resolve_store_scope(claims)
+    role = claims.get("role", "")
+    editable_roles = _editable_roles_for(role)
+    from api.Modules.Auth.Models import StoreRoleOverride
+    from api.Modules.Auth.Services.login import RBAC_ACTIONS, RBAC_RESOURCES
+
+    changes = body.get("changes", [])
+    for ch in changes:
+        target_role = ch.get("role", "")
+        resource = ch.get("resource", "")
+        action = ch.get("action", "")
+        allowed = ch.get("allowed", False)
+        if target_role not in editable_roles:
+            raise HTTPException(403, f"Cannot edit {target_role} permissions")
+        if resource not in RBAC_RESOURCES or action not in RBAC_ACTIONS:
+            continue
+        existing = (
+            db.query(StoreRoleOverride)
+            .filter_by(store_id=sid, role=target_role, resource=resource, action=action)
+            .first()
+        )
+        if allowed and not existing:
+            db.add(StoreRoleOverride(
+                store_id=sid, role=target_role, resource=resource, action=action,
+            ))
+        elif not allowed and existing:
+            db.delete(existing)
+    db.commit()
+    return get_store_permissions_route(db=db, claims=claims)
+
+
+@router.post("/store-permissions/reset")
+def reset_store_permissions_route(
+    body: dict,
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> dict:
+    """Reset a role's permissions to global defaults (delete all overrides)."""
+    sid = resolve_store_scope(claims)
+    role = claims.get("role", "")
+    target_role = body.get("role", "")
+    editable_roles = _editable_roles_for(role)
+    if target_role not in editable_roles:
+        raise HTTPException(403, f"Cannot reset {target_role} permissions")
+    from api.Modules.Auth.Models import StoreRoleOverride
+    db.query(StoreRoleOverride).filter_by(
+        store_id=sid, role=target_role,
+    ).delete()
+    db.commit()
+    return get_store_permissions_route(db=db, claims=claims)
+
+
+def _editable_roles_for(caller_role: str) -> list[str]:
+    """Which roles the caller can edit permissions for."""
+    if caller_role == "superadmin":
+        return ["admin", "employee", "owner"]
+    if caller_role == "owner":
+        return ["admin", "employee"]
+    if caller_role == "admin":
+        return ["employee"]
+    return []

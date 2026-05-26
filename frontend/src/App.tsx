@@ -65,6 +65,7 @@ const ResetPassword = lazy(() => import("./routes/ResetPassword"));
 const ReturnCheckForm = lazy(() => import("./routes/ReturnCheckForm"));
 const ReturnChecks = lazy(() => import("./routes/ReturnChecks"));
 const Settings = lazy(() => import("./routes/Settings"));
+const StorePermissions = lazy(() => import("./routes/StorePermissions"));
 const SettingsProfile = lazy(
   () => import("./routes/Settings").then(
     (m) => ({ default: m.SettingsProfile }),
@@ -302,6 +303,7 @@ export default function App() {
           <Route path="admin/timeclock/schedule"      element={<AdminTimeClockSchedule />} />
           <Route path="admin/timeclock/paystub/:id"   element={<TimeClockPaystub />} />
           <Route path="admin/audit-log"       element={<AdminAuditLog />} />
+          <Route path="admin/store-permissions" element={<StorePermissions />} />
           <Route path="admin/users"             element={<AdminUsers />} />
           <Route path="admin/users/new"         element={<AdminUserForm />} />
           <Route path="admin/users/:uid/edit"   element={<AdminUserForm />} />
