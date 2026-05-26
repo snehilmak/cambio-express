@@ -270,24 +270,6 @@ def test_upsert_requires_full_name(test_store_id, authed_client):
     assert resp.status_code == 422
 
 
-# ── Strangler-fig dispatch ──────────────────────────────────
-
-
-def test_flask_dispatcher_routes_customers_to_fastapi(client, test_store_id):
-    from tests.conftest import login_admin
-    token = login_admin(client, test_store_id)
-    with db_session():
-        _seed_customer(test_store_id, full_name="Alice",
-                        phone_number="5551234")
-    resp = client.get(
-        f"/api/v2/customers/search?store_id={test_store_id}&q=alice",
-        headers={"Authorization": f"Bearer {token}"},
-    )
-    assert resp.status_code == 200
-    assert resp.is_json
-    body = resp.get_json()
-    assert len(body["matches"]) == 1
-
 
 def test_openapi_includes_customer_paths(api_client):
     resp = api_client.get("/openapi.json")

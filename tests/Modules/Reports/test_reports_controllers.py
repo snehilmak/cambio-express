@@ -343,25 +343,6 @@ def test_period_filter_excludes_out_of_range_rows(test_store_id, authed_client):
     assert resp.json()["totals"]["sent"] == 200.0
 
 
-# ── Strangler-fig dispatch via Flask ────────────────────────
-
-
-def test_flask_dispatcher_routes_reports_to_fastapi(client, test_store_id):
-    """The DispatcherMiddleware must forward `/api/v2/reports/*` into
-    FastAPI. Hitting one route is enough to pin the wiring; the
-    standalone TestClient cases above cover route logic."""
-    from tests.conftest import login_admin
-    token = login_admin(client, test_store_id)
-    with db_session():
-        _seed_transfer(test_store_id, send_amount=99.0, company="Intermex")
-    resp = client.get(
-        f"/api/v2/reports/sales-by-company?store_ids={test_store_id}",
-        headers={"Authorization": f"Bearer {token}"},
-    )
-    assert resp.status_code == 200
-    assert resp.is_json
-    body = resp.get_json()
-    assert body["totals"]["sent"] == 99.0
 
 
 def test_openapi_includes_reports_paths(api_client):

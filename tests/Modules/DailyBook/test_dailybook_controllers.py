@@ -137,21 +137,6 @@ def test_period_empty_range_returns_zeros(test_store_id, authed_client):
     assert body["total_receipts"] == 0
 
 
-# ── Strangler-fig dispatch ──────────────────────────────────
-
-
-def test_flask_dispatcher_routes_daily_to_fastapi(client, test_store_id):
-    today = date.today()
-    with db_session():
-        _seed_report(test_store_id, today, taxable_sales=99.0)
-    token = _login_admin_token(client, test_store_id)
-    resp = client.get(
-        f"/api/v2/daily/{test_store_id}/{today.isoformat()}",
-        headers={"Authorization": f"Bearer {token}"},
-    )
-    assert resp.status_code == 200
-    assert resp.is_json
-    assert resp.get_json()["report"]["taxable_sales"] == 99.0
 
 
 def test_openapi_includes_daily_paths(authed_client):

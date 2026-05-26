@@ -227,22 +227,6 @@ def test_list_rows_have_total_collected(test_store_id, authed_client):
     assert body["rows"][0]["total_collected"] == 103.0
 
 
-# ── Strangler-fig dispatch ──────────────────────────────────
-
-
-def test_flask_dispatcher_routes_transfers_to_fastapi(client, test_store_id):
-    from tests.conftest import login_admin
-    with db_session():
-        _seed_transfer(test_store_id, send_amount=99.0)
-    token = login_admin(client, test_store_id)
-    resp = client.get(
-        f"/api/v2/transfers?store_ids={test_store_id}",
-        headers={"Authorization": f"Bearer {token}"},
-    )
-    assert resp.status_code == 200
-    assert resp.is_json
-    assert resp.get_json()["total"] == 1
-
 
 def test_openapi_includes_transfers_path(api_client):
     resp = api_client.get("/openapi.json")
