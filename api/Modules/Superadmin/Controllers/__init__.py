@@ -317,6 +317,37 @@ def list_users_route(
     }
 
 
+@router.post("/users/{user_id}/change-role")
+def change_user_role_route(
+    user_id: int = Path(..., ge=1),
+    body: dict[str, Any] = {},
+    db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
+) -> dict[str, Any]:
+    """Change a user's role. Valid roles: admin, employee, owner."""
+    _require_superadmin(claims)
+    from api.Modules.Tenancy.Models import User
+    user = db.get(User, user_id)
+    if user is None:
+        raise HTTPException(404, "User not found")
+    if user.role == "superadmin":
+        raise HTTPException(403, "Cannot change superadmin role")
+    new_role = body.get("role", "")
+    if new_role not in ("admin", "employee", "owner"):
+        raise HTTPException(422, f"Invalid role: {new_role}")
+    sa = resolve_superadmin_user(db, claims)
+    old_role = user.role
+    user.role = new_role
+    db.commit()
+    _audit_store(
+        db, sa,
+        "change_user_role",
+        target_id=str(user.id),
+        details=f"User {user.username}: {old_role} → {new_role}",
+    )
+    return {"ok": True, "role": new_role}
+
+
 @router.post("/users/{user_id}/toggle-active")
 def toggle_user_active_route(
     user_id: int = Path(..., ge=1),
