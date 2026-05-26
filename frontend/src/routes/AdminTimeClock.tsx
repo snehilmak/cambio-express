@@ -112,7 +112,7 @@ export default function AdminTimeClock() {
         title="Payroll history"
         subtitle="Approved hours feed payroll; pending shifts are still waiting on admin review."
         actions={(
-          <Button onClick={() => setModal({ kind: "create" })}>
+          <Button size="sm" onClick={() => setModal({ kind: "create" })}>
             + New entry
           </Button>
         )}

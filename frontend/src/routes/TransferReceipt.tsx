@@ -176,6 +176,7 @@ export default function TransferReceipt() {
           </div>
         </section>
 
+        <div style={{ overflowX: "auto" }}>
         <table className={styles.amounts}>
           <thead>
             <tr>
@@ -206,6 +207,7 @@ export default function TransferReceipt() {
             </tr>
           </tbody>
         </table>
+        </div>
 
         <div className={styles.totalBlock}>
           <span className={styles.totalLabel}>Customer paid</span>

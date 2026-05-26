@@ -71,7 +71,7 @@ function SupportTicketsInner() {
         title="Support tickets"
         subtitle="Report bugs, request features, or ask questions."
         actions={
-          <Button onClick={() => setShowForm((v) => !v)}>
+          <Button size="sm" onClick={() => setShowForm((v) => !v)}>
             {showForm ? "Cancel" : "+ New ticket"}
           </Button>
         }
