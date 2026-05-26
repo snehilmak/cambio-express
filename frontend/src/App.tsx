@@ -3,6 +3,7 @@ import { Navigate, Outlet, Route, Routes, useLocation } from "react-router-dom";
 
 import AppShell from "./components/AppShell";
 import RequireAuth from "./components/RequireAuth";
+import RequirePermission from "./components/RequirePermission";
 import { RouteErrorBoundary } from "./components/RouteErrorBoundary";
 import { Loading, ToastProvider } from "./components/ui";
 import Home from "./routes/Home";
@@ -205,15 +206,15 @@ export default function App() {
         <Route element={<AuthedShell />}>
           <Route path="home"             element={<Navigate to="/dashboard" replace />} />
           <Route path="dashboard"        element={<Dashboard />} />
-          <Route path="transfers"        element={<Transfers />} />
-          <Route path="transfers/new"      element={<NewTransfer />} />
-          <Route path="transfers/:id"         element={<TransferDetail />} />
-          <Route path="transfers/:id/edit"    element={<EditTransfer />} />
+          <Route path="transfers"        element={<RequirePermission resource="transfers" action="read"><Transfers /></RequirePermission>} />
+          <Route path="transfers/new"      element={<RequirePermission resource="transfers" action="create"><NewTransfer /></RequirePermission>} />
+          <Route path="transfers/:id"         element={<RequirePermission resource="transfers" action="read"><TransferDetail /></RequirePermission>} />
+          <Route path="transfers/:id/edit"    element={<RequirePermission resource="transfers" action="update"><EditTransfer /></RequirePermission>} />
           {/* Receipt printing surface hidden — see lazy-import comment above. */}
-          <Route path="customers"        element={<Customers />} />
-          <Route path="daily"            element={<DailyBook />} />
-          <Route path="daily/edit"       element={<EditDailyBook />} />
-          <Route path="reports"          element={<Reports />} />
+          <Route path="customers"        element={<RequirePermission resource="customers" action="read"><Customers /></RequirePermission>} />
+          <Route path="daily"            element={<RequirePermission resource="daily_book" action="read"><DailyBook /></RequirePermission>} />
+          <Route path="daily/edit"       element={<RequirePermission resource="daily_book" action="update"><EditDailyBook /></RequirePermission>} />
+          <Route path="reports"          element={<RequirePermission resource="reports" action="read"><Reports /></RequirePermission>} />
           <Route path="reports/sales-by-company"      element={<SalesByCompany />} />
           <Route path="reports/sales-by-service-type" element={<SalesByService />} />
           <Route path="reports/sales-by-employee"     element={<SalesByEmployee />} />
@@ -259,17 +260,17 @@ export default function App() {
           <Route path="owner/reports/period-comparison"           element={<PeriodComparison />} />
           <Route path="owner/reports/employee-activity"           element={<EmployeeActivity />} />
           <Route path="owner/reports/period-pl"                   element={<PeriodPL />} />
-          <Route path="batches"          element={<Batches />} />
-          <Route path="batches/new"      element={<BatchForm />} />
-          <Route path="batches/:id/edit" element={<BatchForm />} />
-          <Route path="bank"             element={<Bank />} />
-          <Route path="bank/rules"       element={<BankRules />} />
-          <Route path="bank-transactions" element={<BankTransactions />} />
-          <Route path="monthly"          element={<Monthly />} />
-          <Route path="monthly/edit"     element={<EditMonthly />} />
-          <Route path="return-checks"          element={<ReturnChecks />} />
-          <Route path="return-checks/new"      element={<ReturnCheckForm />} />
-          <Route path="return-checks/:id/edit" element={<ReturnCheckForm />} />
+          <Route path="batches"          element={<RequirePermission resource="batches" action="read"><Batches /></RequirePermission>} />
+          <Route path="batches/new"      element={<RequirePermission resource="batches" action="create"><BatchForm /></RequirePermission>} />
+          <Route path="batches/:id/edit" element={<RequirePermission resource="batches" action="update"><BatchForm /></RequirePermission>} />
+          <Route path="bank"             element={<RequirePermission resource="bank_sync" action="read"><Bank /></RequirePermission>} />
+          <Route path="bank/rules"       element={<RequirePermission resource="bank_sync" action="read"><BankRules /></RequirePermission>} />
+          <Route path="bank-transactions" element={<RequirePermission resource="bank_sync" action="read"><BankTransactions /></RequirePermission>} />
+          <Route path="monthly"          element={<RequirePermission resource="monthly" action="read"><Monthly /></RequirePermission>} />
+          <Route path="monthly/edit"     element={<RequirePermission resource="monthly" action="update"><EditMonthly /></RequirePermission>} />
+          <Route path="return-checks"          element={<RequirePermission resource="return_checks" action="read"><ReturnChecks /></RequirePermission>} />
+          <Route path="return-checks/new"      element={<RequirePermission resource="return_checks" action="create"><ReturnCheckForm /></RequirePermission>} />
+          <Route path="return-checks/:id/edit" element={<RequirePermission resource="return_checks" action="update"><ReturnCheckForm /></RequirePermission>} />
           <Route path="owner/connect"        element={<OwnerConnect />} />
           <Route path="owner/dashboard"      element={<OwnerDashboard />} />
           <Route path="owner/locations"      element={<OwnerLocations />} />

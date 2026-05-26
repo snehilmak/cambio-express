@@ -41,21 +41,25 @@ export const NAV: NavGroup[] = [
       {
         to: "/transfers", label: "Transfers",
         roles: ["admin", "employee"],
+        perm: "transfers.read",
         icon: iconTransfers(),
       },
       {
         to: "/customers", label: "Customers",
         roles: ["admin", "employee"],
+        perm: "customers.read",
         icon: iconCustomers(),
       },
       {
         to: "/daily", label: "Daily book",
         roles: ["admin", "employee"],
+        perm: "daily_book.read",
         icon: iconDaily(),
       },
       {
         to: "/return-checks", label: "Return checks",
         roles: ["admin", "employee"],
+        perm: "return_checks.read",
         icon: iconReturnChecks(),
       },
       {
@@ -83,6 +87,7 @@ export const NAV: NavGroup[] = [
       {
         to: "/timeclock", label: "Time clock",
         roles: ["admin", "employee"],
+        perm: "time_clock.read",
         icon: iconClock(),
       },
       {
@@ -126,10 +131,10 @@ export const NAV: NavGroup[] = [
     roles: ["admin"],
     icon: iconReports(),
     items: [
-      { to: "/reports",            label: "Reports",     icon: iconReports() },
-      { to: "/monthly",            label: "Monthly P&L", icon: iconMonthly() },
-      { to: "/admin/audit-log",    label: "Audit log",   icon: iconAudit() },
-      { to: "/admin/data-export",  label: "Data export", icon: iconReports() },
+      { to: "/reports",            label: "Reports",     perm: "reports.read",  icon: iconReports() },
+      { to: "/monthly",            label: "Monthly P&L", perm: "monthly.read",  icon: iconMonthly() },
+      { to: "/admin/audit-log",    label: "Audit log",   perm: "reports.read",  icon: iconAudit() },
+      { to: "/admin/data-export",  label: "Data export", perm: "reports.read",  icon: iconReports() },
     ],
   },
   {
@@ -137,9 +142,9 @@ export const NAV: NavGroup[] = [
     roles: ["admin"],
     icon: iconBank(),
     items: [
-      { to: "/batches",            label: "ACH batches", icon: iconBatches() },
-      { to: "/bank",               label: "Bank sync",   icon: iconBank() },
-      { to: "/bank-transactions",  label: "Bank txns",   icon: iconBank() },
+      { to: "/batches",            label: "ACH batches", perm: "batches.read",    icon: iconBatches() },
+      { to: "/bank",               label: "Bank sync",   perm: "bank_sync.read", icon: iconBank() },
+      { to: "/bank-transactions",  label: "Bank txns",   perm: "bank_sync.read", icon: iconBank() },
     ],
   },
   {
@@ -249,8 +254,17 @@ export const SUPPORT_LINK: NavItem = {
 // can see. A group is dropped entirely if its `roles` excludes
 // this user OR if every item gets filtered out (so we don't
 // render an empty icon-only button).
-export function filterNavForRole(role: string): NavGroup[] {
-  const visible = (i: NavItem) => !i.roles || i.roles.includes(role);
+export function filterNavForRole(
+  role: string,
+  permissions: string[] = [],
+): NavGroup[] {
+  const hasPerm = (p: string) =>
+    role === "superadmin" || permissions.includes(p);
+  const visible = (i: NavItem) => {
+    if (i.roles && !i.roles.includes(role)) return false;
+    if (i.perm && !hasPerm(i.perm)) return false;
+    return true;
+  };
   return NAV
     .filter((g) => !g.roles || g.roles.includes(role))
     .map((g) => ({ ...g, items: g.items.filter(visible) }))

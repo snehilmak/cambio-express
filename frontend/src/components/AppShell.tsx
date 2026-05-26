@@ -87,7 +87,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   const role = identity?.role ?? "";
-  const groups = filterNavForRole(role);
+  const perms = identity?.permissions ?? [];
+  const groups = filterNavForRole(role, perms);
   return (
     <div className="app-shell">
       <SlimSidebar groups={groups} drawerOpen={drawerOpen} supportLink={SUPPORT_LINK} />
