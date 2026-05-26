@@ -452,11 +452,8 @@ def delete_transfer_route(
     label / summary format ("sender → recipient — $amount" /
     "confirm=… company=… status=…").
     """
-    if claims.get("role") not in ("admin", "owner", "superadmin"):
-        raise HTTPException(
-            status_code=403,
-            detail="Only store admins can delete transfers.",
-        )
+    from api.Modules.Auth.Services.principal import require_permission
+    require_permission(claims, "transfers", "delete")
     sid = claims.get("store_id")
     if sid is None:
         raise HTTPException(
