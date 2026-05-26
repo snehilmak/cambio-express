@@ -152,3 +152,146 @@ class TestChangeRole:
             json={"role": "admin"},
         )
         assert resp.status_code in (401, 403)
+
+
+class TestToggleActive:
+    def test_toggle_user(self, client, sa_headers):
+        with db_session():
+            from api.Modules.Tenancy.Models import User
+            user = db.session.query(User).filter(
+                User.role != "superadmin", User.store_id.isnot(None),
+            ).first()
+            if user is None:
+                pytest.skip("No store user")
+            user_id = user.id
+            was_active = user.is_active
+        resp = client.post(
+            f"/api/v2/superadmin/users/{user_id}/toggle-active",
+            headers=sa_headers,
+        )
+        assert resp.status_code == 200
+        assert resp.json()["is_active"] == (not was_active)
+        # Restore
+        client.post(
+            f"/api/v2/superadmin/users/{user_id}/toggle-active",
+            headers=sa_headers,
+        )
+
+    def test_cannot_disable_superadmin(self, client, sa_headers):
+        with db_session():
+            from api.Modules.Tenancy.Models import User
+            sa = db.session.query(User).filter_by(role="superadmin").first()
+            sa_id = sa.id
+        resp = client.post(
+            f"/api/v2/superadmin/users/{sa_id}/toggle-active",
+            headers=sa_headers,
+        )
+        assert resp.status_code == 403
+
+
+class TestForcePasswordReset:
+    def test_resets_password(self, client, sa_headers):
+        with db_session():
+            from api.Modules.Tenancy.Models import User
+            user = db.session.query(User).filter(
+                User.role != "superadmin", User.store_id.isnot(None),
+            ).first()
+            if user is None:
+                pytest.skip("No store user")
+            user_id = user.id
+        resp = client.post(
+            f"/api/v2/superadmin/users/{user_id}/force-password-reset",
+            headers=sa_headers,
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["ok"] is True
+        assert len(data["temp_password"]) > 8
+
+    def test_cannot_reset_superadmin(self, client, sa_headers):
+        with db_session():
+            from api.Modules.Tenancy.Models import User
+            sa = db.session.query(User).filter_by(role="superadmin").first()
+            sa_id = sa.id
+        resp = client.post(
+            f"/api/v2/superadmin/users/{sa_id}/force-password-reset",
+            headers=sa_headers,
+        )
+        assert resp.status_code == 403
+
+
+class TestImpersonate:
+    def test_impersonate_returns_token(self, client, sa_headers):
+        with db_session():
+            from api.Modules.Tenancy.Models import User
+            user = db.session.query(User).filter(
+                User.role != "superadmin", User.store_id.isnot(None),
+            ).first()
+            if user is None:
+                pytest.skip("No store user")
+            user_id = user.id
+            username = user.username
+        resp = client.post(
+            f"/api/v2/superadmin/impersonate/{user_id}",
+            headers=sa_headers,
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "token" in data
+        assert data["user"]["username"] == username
+
+    def test_cannot_impersonate_superadmin(self, client, sa_headers):
+        with db_session():
+            from api.Modules.Tenancy.Models import User
+            sa = db.session.query(User).filter_by(role="superadmin").first()
+            sa_id = sa.id
+        resp = client.post(
+            f"/api/v2/superadmin/impersonate/{sa_id}",
+            headers=sa_headers,
+        )
+        assert resp.status_code == 403
+
+    def test_404_for_missing_user(self, client, sa_headers):
+        resp = client.post(
+            "/api/v2/superadmin/impersonate/99999",
+            headers=sa_headers,
+        )
+        assert resp.status_code == 404
+
+
+class TestPermissions:
+    def test_get_permissions_matrix(self, client, sa_headers):
+        resp = client.get("/api/v2/superadmin/permissions", headers=sa_headers)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "roles" in data
+        assert "resources" in data
+        assert "actions" in data
+        assert "matrix" in data
+        assert "admin" in data["matrix"]
+        assert "employee" in data["matrix"]
+        assert "owner" in data["matrix"]
+
+    def test_update_permissions(self, client, sa_headers):
+        resp = client.put(
+            "/api/v2/superadmin/permissions",
+            headers=sa_headers,
+            json={"changes": [
+                {"role": "employee", "resource": "settings", "action": "delete", "allowed": True},
+            ]},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["matrix"]["employee"]["settings"]["delete"] is True
+        # Revert
+        client.put(
+            "/api/v2/superadmin/permissions",
+            headers=sa_headers,
+            json={"changes": [
+                {"role": "employee", "resource": "settings", "action": "delete", "allowed": False},
+            ]},
+        )
+
+    def test_requires_superadmin(self, client):
+        resp = client.get("/api/v2/superadmin/permissions")
+        assert resp.status_code in (401, 403)
