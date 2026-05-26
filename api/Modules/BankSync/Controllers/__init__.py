@@ -21,6 +21,7 @@ from sqlalchemy.orm import Session
 from api.Core.Database import get_db
 from api.Modules.Auth.Controllers import get_principal
 from api.Modules.Auth.Services import resolve_store_scope
+from api.Modules.Auth.Services.principal import require_permission
 from api.Modules.BankSync.Models import (
     BankRule, BankTransaction, StripeBankAccount,
 )
@@ -485,11 +486,7 @@ def delete_rule_route(
 def _require_admin_bank_scope(claims: dict[str, Any]) -> int:
     """Bank-sync mutations are admin-only.  Returns the store_id;
     raises 403 on missing store scope or non-admin role."""
-    if claims.get("role") not in ("admin", "owner", "superadmin"):
-        raise HTTPException(
-            status_code=403,
-            detail="Only store admins can manage bank connections.",
-        )
+    require_permission(claims, "bank_sync", "read")
     sid = claims.get("store_id")
     if sid is None:
         raise HTTPException(
