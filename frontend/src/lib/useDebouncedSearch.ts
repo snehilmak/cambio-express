@@ -22,7 +22,7 @@ export function useDebouncedSearch(
   const [sp, setSP] = useSearchParams();
   const committed = sp.get(paramKey) ?? "";
   const [draft, setDraft] = useState(committed);
-  const timer = useRef<ReturnType<typeof setTimeout>>();
+  const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   useEffect(() => {
     clearTimeout(timer.current);
