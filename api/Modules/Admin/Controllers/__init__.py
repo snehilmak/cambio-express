@@ -108,6 +108,9 @@ def _to_row(s) -> StoreInfoRow:
         timeclock_late_minutes_threshold=int(
             getattr(s, "timeclock_late_minutes_threshold", 5) or 5
         ),
+        legal_name=getattr(s, "legal_name", "") or "",
+        ein=getattr(s, "ein", "") or "",
+        business_address=getattr(s, "business_address", "") or "",
     )
 
 

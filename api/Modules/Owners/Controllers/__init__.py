@@ -917,3 +917,160 @@ def owner_reset_store_permissions_route(
     return owner_store_permissions_route(
         store_id=store_id, db=db, claims=claims,
     )
+
+
+# ── Cross-store activity stream ────────────────────────────
+
+
+@router.get("/activity")
+def owner_activity_route(
+    store_id: int | None = Query(None, ge=1),
+    q: str = Query("", max_length=100),
+    page: int = Query(1, ge=1),
+    db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
+):
+    """Activity stream across all stores in the owner's umbrella.
+    Merges OperatorAuditLog + TransferAudit, newest first. Paginated."""
+    require_permission(claims, "reports", "read")
+    user = _require_owner_principal(db, claims)
+    sids = owner_store_ids(db, user)
+    if not sids:
+        return {"rows": [], "total": 0, "page": 1, "total_pages": 0}
+    if store_id is not None:
+        if store_id not in sids:
+            raise HTTPException(403, "Store not in your umbrella")
+        sids = [store_id]
+
+    from api.Modules.Audit.Models import OperatorAuditLog, TransferAudit
+    from api.Modules.Tenancy.Models import Store
+
+    store_names = {
+        s.id: s.name
+        for s in db.query(Store).filter(Store.id.in_(sids)).all()
+    }
+
+    per_page = 50
+    needle = q.strip()
+
+    oal_q = db.query(OperatorAuditLog).filter(
+        OperatorAuditLog.store_id.in_(sids)
+    )
+    ta_q = db.query(TransferAudit).filter(
+        TransferAudit.store_id.in_(sids)
+    )
+    if needle:
+        like = f"%{needle}%"
+        oal_q = oal_q.filter(
+            OperatorAuditLog.summary.ilike(like)
+            | OperatorAuditLog.user_name.ilike(like)
+            | OperatorAuditLog.action.ilike(like)
+        )
+        ta_q = ta_q.filter(
+            TransferAudit.summary.ilike(like)
+            | TransferAudit.employee_name.ilike(like)
+            | TransferAudit.action.ilike(like)
+        )
+
+    oal_rows = oal_q.order_by(OperatorAuditLog.created_at.desc()).limit(500).all()
+    ta_rows = ta_q.order_by(TransferAudit.created_at.desc()).limit(500).all()
+
+    merged: list[dict] = []
+    for r in oal_rows:
+        merged.append({
+            "type": "audit",
+            "store_id": r.store_id,
+            "store_name": store_names.get(r.store_id, ""),
+            "user_name": r.user_name or "",
+            "user_role": r.user_role or "",
+            "action": r.action or "",
+            "target_type": r.target_type or "",
+            "target_label": r.target_label or "",
+            "summary": r.summary or "",
+            "created_at": r.created_at.isoformat() if r.created_at else "",
+        })
+    for r in ta_rows:
+        merged.append({
+            "type": "transfer",
+            "store_id": r.store_id,
+            "store_name": store_names.get(r.store_id, ""),
+            "user_name": r.employee_name or "",
+            "user_role": "",
+            "action": r.action or "",
+            "target_type": "transfer",
+            "target_label": str(r.transfer_id),
+            "summary": r.summary or "",
+            "created_at": r.created_at.isoformat() if r.created_at else "",
+        })
+
+    merged.sort(key=lambda x: x["created_at"], reverse=True)
+    total = len(merged)
+    total_pages = max(1, -(-total // per_page))
+    start = (page - 1) * per_page
+    return {
+        "rows": merged[start:start + per_page],
+        "total": total,
+        "page": page,
+        "total_pages": total_pages,
+    }
+
+
+# ── Bulk permission push ───────────────────────────────────
+
+
+@router.post("/bulk-permissions")
+def owner_bulk_permissions_route(
+    body: dict = ...,
+    db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
+) -> dict:
+    """Push permission overrides to multiple stores at once.
+    Only employee role is editable by owners."""
+    require_permission(claims, "settings", "update")
+    user = _require_owner_principal(db, claims)
+    sids = owner_store_ids(db, user)
+    if not sids:
+        raise HTTPException(422, "No linked stores")
+
+    target_ids: list[int] = body.get("store_ids", [])
+    changes: list[dict] = body.get("changes", [])
+    if not target_ids or not changes:
+        raise HTTPException(422, "store_ids and changes required")
+
+    from api.Modules.Auth.Models import StoreRoleOverride
+    from api.Modules.Auth.Services.login import RBAC_ACTIONS, RBAC_RESOURCES
+    editable_roles = ["employee"]
+
+    results: list[dict] = []
+    for sid in target_ids:
+        if sid not in sids:
+            results.append({"store_id": sid, "status": "rejected", "reason": "not in umbrella"})
+            continue
+        applied = 0
+        for ch in changes:
+            target_role = ch.get("role", "")
+            resource = ch.get("resource", "")
+            action = ch.get("action", "")
+            allowed = ch.get("allowed", False)
+            if target_role not in editable_roles:
+                continue
+            if resource not in RBAC_RESOURCES or action not in RBAC_ACTIONS:
+                continue
+            existing = (
+                db.query(StoreRoleOverride)
+                .filter_by(store_id=sid, role=target_role,
+                           resource=resource, action=action)
+                .first()
+            )
+            if allowed and not existing:
+                db.add(StoreRoleOverride(
+                    store_id=sid, role=target_role,
+                    resource=resource, action=action,
+                ))
+                applied += 1
+            elif not allowed and existing:
+                db.delete(existing)
+                applied += 1
+        results.append({"store_id": sid, "status": "applied", "changes": applied})
+    db.commit()
+    return {"results": results}

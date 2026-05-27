@@ -34,9 +34,15 @@ class NotificationsResponse(BaseModel):
     notify_announcement_push:       bool
     notify_locked_day_digest_push:  bool
     notify_daily_summary_push:      bool
+    notify_high_variance:           bool = False
+    notify_high_variance_push:      bool = False
+    notify_store_offline:           bool = False
+    notify_store_offline_push:      bool = False
     trial_toggle_applies:          bool
     locked_day_digest_applies:     bool
     daily_summary_applies:         bool
+    high_variance_applies:         bool = False
+    store_offline_applies:         bool = False
     role:                          str
 
 
@@ -54,3 +60,7 @@ class NotificationsUpdateRequest(BaseModel):
     notify_announcement_push:      Optional[bool] = None
     notify_locked_day_digest_push: Optional[bool] = None
     notify_daily_summary_push:     Optional[bool] = None
+    notify_high_variance:          Optional[bool] = None
+    notify_high_variance_push:     Optional[bool] = None
+    notify_store_offline:          Optional[bool] = None
+    notify_store_offline_push:     Optional[bool] = None
