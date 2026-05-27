@@ -95,6 +95,8 @@ const SuperadminAnnouncements = lazy(() => import("./routes/SuperadminAnnounceme
 const SuperadminAuditLog = lazy(() => import("./routes/SuperadminAuditLog"));
 const SuperadminControls = lazy(() => import("./routes/SuperadminControls"));
 const SuperadminDashboard = lazy(() => import("./routes/SuperadminDashboard"));
+const SuperadminDiscounts = lazy(() => import("./routes/SuperadminDiscounts"));
+const SuperadminFeatureFlags = lazy(() => import("./routes/SuperadminFeatureFlags"));
 const SuperadminBilling = lazy(() => import("./routes/SuperadminBilling"));
 const SuperadminEmailLog = lazy(() => import("./routes/SuperadminEmailLog"));
 const SuperadminHealth = lazy(() => import("./routes/SuperadminHealth"));
@@ -294,6 +296,8 @@ export default function App() {
           <Route path="superadmin/announcements" element={<SuperadminAnnouncements />} />
           <Route path="superadmin/tickets"       element={<SuperadminTickets />} />
           <Route path="superadmin/controls"      element={<SuperadminControls />} />
+          <Route path="superadmin/feature-flags" element={<SuperadminFeatureFlags />} />
+          <Route path="superadmin/discounts"     element={<SuperadminDiscounts />} />
           <Route path="superadmin/reports"       element={<SuperadminReports />} />
           <Route path="subscribe"             element={<Subscribe />} />
           <Route path="subscribe/success"     element={<SubscribeSuccess />} />
