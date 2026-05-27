@@ -10,15 +10,9 @@ import styles from "./SuperadminControls.module.css";
 
 // /app/superadmin/controls — Platform hub. KPI tiles fed by the
 // existing /api/v2/dashboard/summary (superadmin-shaped payload),
-// plus quick links into the dedicated SPA routes that already
-// exist for Stores, Audit Log, Announcements, and Reports.
-//
-// Discounts + Feature Flags + TV catalog curation tabs from the
-// legacy Jinja page haven't been ported to dedicated SPA routes
-// yet — their POST mutation endpoints stay live on Flask, but the
-// edit UI is deferred to a follow-up. Discounts links to the
-// legacy /superadmin/discounts (still on Flask) for now; same for
-// /superadmin/features.
+// plus quick links into the dedicated SPA routes for Stores, Audit
+// Log, Announcements, Reports, Feature Flags, and Discounts.
+// TV catalog curation is the only remaining "Coming soon" item.
 
 interface SuperadminLite {
   total_stores?: number;
@@ -149,13 +143,15 @@ export default function SuperadminControls() {
             title="Platform Reports"
             desc="MRR/ARR, churn cohorts, adoption, payouts."
           />
-          <ComingSoon
+          <QuickLink
+            to="/superadmin/discounts"
             title="Discounts"
-            desc="Coupon codes — issue, toggle, view redemptions. POST endpoints stay on Flask; SPA UI lands in a follow-up."
+            desc="Coupon codes — toggle visibility, view redemptions."
           />
-          <ComingSoon
+          <QuickLink
+            to="/superadmin/feature-flags"
             title="Feature Flags"
-            desc="Platform-wide flags + per-store overrides. POST endpoints stay on Flask; SPA UI lands in a follow-up."
+            desc="Platform-wide flags + per-store overrides."
           />
           <ComingSoon
             title="TV Catalogs"
