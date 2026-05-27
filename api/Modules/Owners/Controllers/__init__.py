@@ -550,18 +550,8 @@ def _safe_value(v):
     return v
 
 
-def _require_owner(db: Session, claims: dict[str, Any]):
-    if claims.get("role") != "owner":
-        raise HTTPException(
-            status_code=403, detail="Owner scope required.",
-        )
-    uid = claims.get("user_id") or claims.get("sub")
-    if uid is None:
-        raise HTTPException(status_code=401, detail="Missing user id.")
-    user = db.get(User, int(uid))
-    if user is None:
-        raise HTTPException(status_code=404, detail="User not found.")
-    return user
+def _require_owner(db: Session, claims: dict[str, Any]) -> User:
+    return _require_owner_principal(db, claims)
 
 
 @router.get("/dashboard")
@@ -624,6 +614,8 @@ def owner_store_detail_route(
         period, today,
     )
     store = db.get(Store, store_id)
+    if store is None:
+        raise HTTPException(status_code=404, detail="Store not found.")
 
     from sqlalchemy import func
     co_rows = db.query(
@@ -736,7 +728,7 @@ def owner_users_route(
         return {"rows": [], "total": 0, "page": 1, "total_pages": 0}
     if store_id is not None:
         if store_id not in sids:
-            raise HTTPException(403, "Store not in your umbrella")
+            raise HTTPException(status_code=403, detail="Store not in your umbrella")
         sids = [store_id]
 
     from api.Modules.Tenancy.Models import Store
@@ -794,7 +786,7 @@ def owner_store_permissions_route(
     user = _require_owner_principal(db, claims)
     sids = owner_store_ids(db, user)
     if store_id not in sids:
-        raise HTTPException(403, "Store not in your umbrella")
+        raise HTTPException(status_code=403, detail="Store not in your umbrella")
 
     from api.Modules.Auth.Models import RolePermission, StoreRoleOverride
     from api.Modules.Auth.Services.login import (
@@ -857,7 +849,7 @@ def owner_update_store_permissions_route(
     user = _require_owner_principal(db, claims)
     sids = owner_store_ids(db, user)
     if store_id not in sids:
-        raise HTTPException(403, "Store not in your umbrella")
+        raise HTTPException(status_code=403, detail="Store not in your umbrella")
 
     from api.Modules.Auth.Models import StoreRoleOverride
     from api.Modules.Auth.Services.login import RBAC_ACTIONS, RBAC_RESOURCES
@@ -870,7 +862,7 @@ def owner_update_store_permissions_route(
         action = ch.get("action", "")
         allowed = ch.get("allowed", False)
         if target_role not in editable_roles:
-            raise HTTPException(403, f"Cannot edit {target_role} permissions")
+            raise HTTPException(status_code=403, detail=f"Cannot edit {target_role} permissions")
         if resource not in RBAC_RESOURCES or action not in RBAC_ACTIONS:
             continue
         existing = (
@@ -886,6 +878,20 @@ def owner_update_store_permissions_route(
             ))
         elif not allowed and existing:
             db.delete(existing)
+
+    from api.Modules.Audit.Services import record_operator_action
+    record_operator_action(
+        db,
+        store_id=store_id,
+        user_id=int(claims.get("sub", 0)),
+        user_name=claims.get("full_name", ""),
+        user_role=claims.get("role", ""),
+        target_type="store_role_override",
+        target_id=str(store_id),
+        target_label=f"{len(changes)} permission change(s)",
+        action="update_store_permissions",
+        summary=f"owner updated employee permissions for store {store_id}",
+    )
     db.commit()
     return owner_store_permissions_route(
         store_id=store_id, db=db, claims=claims,
@@ -905,14 +911,27 @@ def owner_reset_store_permissions_route(
     user = _require_owner_principal(db, claims)
     sids = owner_store_ids(db, user)
     if store_id not in sids:
-        raise HTTPException(403, "Store not in your umbrella")
+        raise HTTPException(status_code=403, detail="Store not in your umbrella")
     target_role = body.get("role", "")
     if target_role not in ["employee"]:
-        raise HTTPException(403, f"Cannot reset {target_role} permissions")
+        raise HTTPException(status_code=403, detail=f"Cannot reset {target_role} permissions")
     from api.Modules.Auth.Models import StoreRoleOverride
     db.query(StoreRoleOverride).filter_by(
         store_id=store_id, role=target_role,
     ).delete()
+    from api.Modules.Audit.Services import record_operator_action
+    record_operator_action(
+        db,
+        store_id=store_id,
+        user_id=int(claims.get("sub", 0)),
+        user_name=claims.get("full_name", ""),
+        user_role=claims.get("role", ""),
+        target_type="store_role_override",
+        target_id=str(store_id),
+        target_label=f"reset {target_role} permissions",
+        action="reset_store_permissions",
+        summary=f"owner reset {target_role} permissions to global defaults for store {store_id}",
+    )
     db.commit()
     return owner_store_permissions_route(
         store_id=store_id, db=db, claims=claims,
@@ -939,7 +958,7 @@ def owner_activity_route(
         return {"rows": [], "total": 0, "page": 1, "total_pages": 0}
     if store_id is not None:
         if store_id not in sids:
-            raise HTTPException(403, "Store not in your umbrella")
+            raise HTTPException(status_code=403, detail="Store not in your umbrella")
         sids = [store_id]
 
     from api.Modules.Audit.Models import OperatorAuditLog, TransferAudit
@@ -1030,12 +1049,12 @@ def owner_bulk_permissions_route(
     user = _require_owner_principal(db, claims)
     sids = owner_store_ids(db, user)
     if not sids:
-        raise HTTPException(422, "No linked stores")
+        raise HTTPException(status_code=422, detail="No linked stores")
 
     target_ids: list[int] = body.get("store_ids", [])
     changes: list[dict] = body.get("changes", [])
     if not target_ids or not changes:
-        raise HTTPException(422, "store_ids and changes required")
+        raise HTTPException(status_code=422, detail="store_ids and changes required")
 
     from api.Modules.Auth.Models import StoreRoleOverride
     from api.Modules.Auth.Services.login import RBAC_ACTIONS, RBAC_RESOURCES
@@ -1071,6 +1090,20 @@ def owner_bulk_permissions_route(
             elif not allowed and existing:
                 db.delete(existing)
                 applied += 1
+        if applied > 0:
+            from api.Modules.Audit.Services import record_operator_action
+            record_operator_action(
+                db,
+                store_id=sid,
+                user_id=int(claims.get("sub", 0)),
+                user_name=claims.get("full_name", ""),
+                user_role=claims.get("role", ""),
+                target_type="store_role_override",
+                target_id=str(sid),
+                target_label=f"{applied} permission change(s)",
+                action="bulk_update_store_permissions",
+                summary=f"owner bulk-pushed permissions to store {sid}",
+            )
         results.append({"store_id": sid, "status": "applied", "changes": applied})
     db.commit()
     return {"results": results}

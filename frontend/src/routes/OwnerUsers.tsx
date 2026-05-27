@@ -118,11 +118,11 @@ export default function OwnerUsers() {
           </Table>
           {data.total_pages > 1 && (
             <div style={{ display: "flex", justifyContent: "center", gap: "0.5rem", padding: "0.75rem" }}>
-              <button disabled={page <= 1} onClick={() => setPage(page - 1)}>← Prev</button>
+              <button type="button" aria-label="Previous page" disabled={page <= 1} onClick={() => setPage(page - 1)}>← Prev</button>
               <span style={{ fontSize: "0.85rem", color: "var(--db-text-muted)" }}>
                 Page {data.page} of {data.total_pages} ({data.total} users)
               </span>
-              <button disabled={page >= data.total_pages} onClick={() => setPage(page + 1)}>Next →</button>
+              <button type="button" aria-label="Next page" disabled={page >= data.total_pages} onClick={() => setPage(page + 1)}>Next →</button>
             </div>
           )}
         </Card>

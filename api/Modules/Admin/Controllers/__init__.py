@@ -1011,7 +1011,7 @@ def update_store_permissions_route(
         action = ch.get("action", "")
         allowed = ch.get("allowed", False)
         if target_role not in editable_roles:
-            raise HTTPException(403, f"Cannot edit {target_role} permissions")
+            raise HTTPException(status_code=403, detail=f"Cannot edit {target_role} permissions")
         if resource not in RBAC_RESOURCES or action not in RBAC_ACTIONS:
             continue
         existing = (
@@ -1042,7 +1042,7 @@ def reset_store_permissions_route(
     target_role = body.get("role", "")
     editable_roles = _editable_roles_for(role)
     if target_role not in editable_roles:
-        raise HTTPException(403, f"Cannot reset {target_role} permissions")
+        raise HTTPException(status_code=403, detail=f"Cannot reset {target_role} permissions")
     from api.Modules.Auth.Models import StoreRoleOverride
     db.query(StoreRoleOverride).filter_by(
         store_id=sid, role=target_role,
@@ -1077,26 +1077,26 @@ def redeem_connect_code_route(
     sid = resolve_store_scope(claims)
     code_str = (body.get("code") or "").strip().upper()
     if not code_str:
-        raise HTTPException(422, "Code is required")
+        raise HTTPException(status_code=422, detail="Code is required")
 
     from datetime import datetime
     from api.Modules.Tenancy.Models import OwnerConnectCode, StoreOwnerLink, User
 
     occ = db.query(OwnerConnectCode).filter_by(code=code_str).first()
     if occ is None:
-        raise HTTPException(404, "Code not found")
+        raise HTTPException(status_code=404, detail="Code not found")
     if occ.revoked_at is not None:
-        raise HTTPException(422, "Code has been revoked")
+        raise HTTPException(status_code=422, detail="Code has been revoked")
     if occ.used_at is not None:
-        raise HTTPException(422, "Code has already been redeemed")
+        raise HTTPException(status_code=422, detail="Code has already been redeemed")
     if occ.expires_at and occ.expires_at < datetime.utcnow():
-        raise HTTPException(422, "Code has expired")
+        raise HTTPException(status_code=422, detail="Code has expired")
 
     existing = db.query(StoreOwnerLink).filter_by(
         owner_id=occ.owner_id, store_id=sid,
     ).first()
     if existing:
-        raise HTTPException(409, "Store is already linked to this owner")
+        raise HTTPException(status_code=409, detail="Store is already linked to this owner")
 
     sub = claims.get("sub")
     link = StoreOwnerLink(owner_id=occ.owner_id, store_id=sid)
