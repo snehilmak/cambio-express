@@ -1,15 +1,16 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ApiError } from "../lib/api";
 import { fmtMoney2 } from "../lib/formatters";
 import { emailStore, extendTrial, toggleStoreActive } from "../api/superadmin";
 import { getCurrentIdentity } from "../lib/auth";
 import {
-  Alert, Breadcrumbs, Button, ButtonLink, Card, EmptyState, ErrorState, Field,
-  Input, KpiCard, KpiGrid, Loading, Modal, PageHeader, PageShell, Pill,
-  Section, Table, tdStyle, Textarea, thStyle, useToast,
+  Alert, Breadcrumbs, Button, ButtonLink, Card, Checkbox, EmptyState,
+  ErrorState, Field, Input, KpiCard, KpiGrid, Loading, Modal,
+  PageHeader, PageShell, Pill, Section, SectionTitle, Table, tdStyle,
+  Textarea, thStyle, useToast,
 } from "../components/ui";
 import styles from "./SuperadminStoreDrill.module.css";
 
@@ -255,6 +256,10 @@ export default function SuperadminStoreDrill() {
               )}
             </Card>
           </Section>
+
+          <Section title="Permissions">
+            <StorePermissionsPanel storeId={data.store.id} storeName={data.store.name} />
+          </Section>
         </>
       )}
 
@@ -324,5 +329,153 @@ function InfoRow({ label, value }: { label: string; value: string }) {
       <span className={styles.infoLabel}>{label}</span>
       <span className={styles.infoValue}>{value}</span>
     </div>
+  );
+}
+
+interface PermMatrix {
+  store_id: number;
+  store_name: string;
+  roles: string[];
+  editable_roles: string[];
+  resources: string[];
+  actions: string[];
+  matrix: Record<string, Record<string, Record<string, boolean>>>;
+  has_overrides: string[];
+}
+
+const RESOURCE_LABELS: Record<string, string> = {
+  transfers: "Transfers", customers: "Customers", daily_book: "Daily book",
+  monthly: "Monthly P&L", batches: "ACH batches", bank_sync: "Bank sync",
+  reports: "Reports", settings: "Settings", users: "Users / Team",
+  time_clock: "Time clock", return_checks: "Return checks",
+};
+
+function StorePermissionsPanel({ storeId, storeName }: { storeId: number; storeName: string }) {
+  const qc = useQueryClient();
+  const toast = useToast();
+  const { data, isLoading } = useQuery<PermMatrix>({
+    queryKey: ["superadmin", "store-permissions", storeId],
+    queryFn: () => api<PermMatrix>(`/api/v2/superadmin/stores/${storeId}/permissions`),
+  });
+  const [draft, setDraft] = useState<PermMatrix | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (data) setDraft(structuredClone(data)); // eslint-disable-line react-hooks/set-state-in-effect -- hydrate local editable draft from server-fetched permissions
+  }, [data]);
+
+  const isDirty = data && draft
+    ? JSON.stringify(data.matrix) !== JSON.stringify(draft.matrix)
+    : false;
+
+  function toggle(role: string, resource: string, action: string) {
+    if (!draft) return;
+    setDraft((prev) => {
+      if (!prev) return prev;
+      const next = structuredClone(prev);
+      next.matrix[role][resource][action] = !next.matrix[role][resource][action];
+      return next;
+    });
+  }
+
+  async function save() {
+    if (!data || !draft) return;
+    setBusy(true);
+    const changes: Array<{ role: string; resource: string; action: string; allowed: boolean }> = [];
+    for (const role of draft.editable_roles) {
+      for (const resource of draft.resources) {
+        for (const action of draft.actions) {
+          const was = data.matrix[role][resource][action];
+          const now = draft.matrix[role][resource][action];
+          if (was !== now) changes.push({ role, resource, action, allowed: now });
+        }
+      }
+    }
+    try {
+      const result = await api<PermMatrix>(`/api/v2/superadmin/stores/${storeId}/permissions`, {
+        method: "PUT", json: { changes },
+      });
+      setDraft(structuredClone(result));
+      qc.setQueryData(["superadmin", "store-permissions", storeId], result);
+      toast({ message: `${changes.length} permission(s) updated for ${storeName}.`, tone: "success" });
+    } catch (err) {
+      toast({ message: err instanceof ApiError ? err.message : "Failed to save.", tone: "error" });
+    } finally { setBusy(false); }
+  }
+
+  async function resetRole(role: string) {
+    setBusy(true);
+    try {
+      const result = await api<PermMatrix>(`/api/v2/superadmin/stores/${storeId}/permissions/reset`, {
+        method: "POST", json: { role },
+      });
+      setDraft(structuredClone(result));
+      qc.setQueryData(["superadmin", "store-permissions", storeId], result);
+      toast({ message: `${role} permissions reset to global defaults.`, tone: "success" });
+    } catch (err) {
+      toast({ message: err instanceof ApiError ? err.message : "Failed to reset.", tone: "error" });
+    } finally { setBusy(false); }
+  }
+
+  if (isLoading || !draft) return <Card><Loading /></Card>;
+
+  return (
+    <Card>
+      <p style={{ fontSize: "0.85rem", color: "var(--db-text-muted)", margin: "0 0 1rem" }}>
+        Per-store permission overrides. Changes take effect immediately (affected users are logged out).
+      </p>
+      {draft.editable_roles.map((role) => (
+        <div key={role} style={{ marginBottom: "1.25rem" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
+            <SectionTitle>
+              <Pill tone={role === "admin" ? "accent" : "neutral"}>{role}</Pill>
+              {draft.has_overrides.includes(role) && (
+                <span style={{ fontSize: "0.75rem", color: "var(--db-text-muted)", marginLeft: "0.5rem" }}>customized</span>
+              )}
+            </SectionTitle>
+            {draft.has_overrides.includes(role) && (
+              <Button size="sm" tone="secondary" onClick={() => { void resetRole(role); }} disabled={busy}>
+                Reset to defaults
+              </Button>
+            )}
+          </div>
+          <div style={{ overflowX: "auto" }}>
+            <table className={styles.permMatrix}>
+              <thead>
+                <tr>
+                  <th>Resource</th>
+                  {draft.actions.map((a) => <th key={a}>{a}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {draft.resources.map((resource) => (
+                  <tr key={resource}>
+                    <td>{RESOURCE_LABELS[resource] ?? resource}</td>
+                    {draft.actions.map((action) => (
+                      <td key={action} style={{ textAlign: "center" }}>
+                        <Checkbox
+                          checked={draft.matrix[role][resource][action]}
+                          onChange={() => toggle(role, resource, action)}
+                        >{""}</Checkbox>
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ))}
+      {isDirty && (
+        <div style={{ display: "flex", gap: "0.5rem", justifyContent: "flex-end" }}>
+          <Button tone="secondary" onClick={() => { if (data) setDraft(structuredClone(data)); }} disabled={busy}>
+            Discard
+          </Button>
+          <Button onClick={() => { void save(); }} busy={busy}>
+            Save permissions
+          </Button>
+        </div>
+      )}
+    </Card>
   );
 }

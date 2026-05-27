@@ -21,7 +21,6 @@ const AccountNotifications = lazy(() => import("./routes/AccountNotifications"))
 const AccountSessions = lazy(() => import("./routes/AccountSessions"));
 const AdminAuditLog = lazy(() => import("./routes/AdminAuditLog"));
 const AdminCashiers = lazy(() => import("./routes/AdminCashiers"));
-const AdminReferrals = lazy(() => import("./routes/AdminReferrals"));
 const AdminSubscription = lazy(() => import("./routes/AdminSubscription"));
 const AdminDataExport = lazy(() => import("./routes/AdminDataExport"));
 const SupportTickets = lazy(() => import("./routes/SupportTickets"));
@@ -97,6 +96,7 @@ const SettingsSecurity = lazy(
     (m) => ({ default: m.SettingsSecurity }),
   ),
 );
+const SettingsReferrals = lazy(() => import("./routes/AdminReferrals"));
 const Signup = lazy(() => import("./routes/Signup"));
 const SignupOwner = lazy(() => import("./routes/SignupOwner"));
 const Subscribe = lazy(() => import("./routes/Subscribe"));
@@ -332,7 +332,7 @@ export default function App() {
               redirects below for bookmarks. */}
           <Route path="admin/cashiers"          element={<RequirePermission resource="users" action="read"><AdminCashiers /></RequirePermission>} />
           <Route path="timeclock"             element={<RequirePermission resource="time_clock" action="read"><TimeClock /></RequirePermission>} />
-          <Route path="account/referrals"     element={<RequirePermission resource="settings" action="read"><AdminReferrals /></RequirePermission>} />
+          <Route path="account/referrals"     element={<Navigate to="/settings/referrals" replace />} />
           <Route path="account/tickets"      element={<SupportTickets />} />
           {/* Legacy /account/profile — profile is now the first
               tab inside /settings (see the consolidation that
@@ -363,6 +363,7 @@ export default function App() {
                 section.  Keep a redirect for bookmarks. */}
             <Route path="team" element={<Navigate to="/admin/cashiers" replace />} />
             <Route path="billing" element={<SettingsBilling />} />
+            <Route path="referrals" element={<SettingsReferrals />} />
             <Route path="security" element={<SettingsSecurity />} />
           </Route>
           {/* Authed catch-all keeps the AppShell chrome around the 404

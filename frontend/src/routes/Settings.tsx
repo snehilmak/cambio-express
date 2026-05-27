@@ -54,6 +54,7 @@ export default function Settings() {
   const role = identity?.role;
   const showGeneral = role !== "superadmin";
   const showBilling = role !== "owner" && role !== "superadmin";
+  const showReferrals = role === "admin";
 
   return (
     <PageShell maxWidth="60rem" gap="1rem">
@@ -66,6 +67,7 @@ export default function Settings() {
         <TabsLink to="/settings/profile">Profile</TabsLink>
         {showGeneral && <TabsLink to="/settings/general">General</TabsLink>}
         {showBilling && <TabsLink to="/settings/billing">Billing</TabsLink>}
+        {showReferrals && <TabsLink to="/settings/referrals">Referrals</TabsLink>}
         <TabsLink to="/settings/security">Security</TabsLink>
       </TabsBar>
 

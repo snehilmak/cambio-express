@@ -249,11 +249,6 @@ export const NAV: NavGroup[] = [
         to: "/account/sessions", label: "Devices",
         icon: iconDevice(),
       },
-      {
-        to: "/account/referrals", label: "Referrals",
-        roles: ["admin"],
-        icon: iconBanner(),
-      },
     ],
   },
 ];
