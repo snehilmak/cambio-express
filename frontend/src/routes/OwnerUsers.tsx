@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { api } from "../lib/api";
@@ -44,12 +44,12 @@ export default function OwnerUsers() {
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [page, setPage] = useState(1);
   const { data, isLoading, isError } = useOwnerUsers(storeFilter, debouncedSearch, page);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  let debounceTimer: ReturnType<typeof setTimeout> | null = null;
   function handleSearch(val: string) {
     setSearch(val);
-    if (debounceTimer) clearTimeout(debounceTimer);
-    debounceTimer = setTimeout(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
       setDebouncedSearch(val);
       setPage(1);
     }, 300);

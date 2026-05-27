@@ -54,7 +54,7 @@ export default function OwnerStorePermissions() {
   const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (data) setDraft(structuredClone(data));
+    if (data) setDraft(structuredClone(data)); // eslint-disable-line react-hooks/set-state-in-effect -- hydrate local editable draft from server data
   }, [data]);
 
   const isDirty = data && draft
