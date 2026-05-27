@@ -98,3 +98,24 @@ def require_permission(
             status_code=403,
             detail=f"Missing permission: {resource}.{action}",
         )
+
+
+def invalidate_sessions_for_role(db: Session, store_id: int, role: str) -> None:
+    """Revoke active refresh tokens for all users of a given role at a
+    store. Forces re-login so fresh permissions take effect immediately
+    instead of waiting up to 30 minutes for the access token to expire."""
+    from datetime import datetime
+    from api.Modules.Auth.Models import RefreshToken
+    now = datetime.utcnow()
+    db.query(RefreshToken).filter(
+        RefreshToken.user_id.in_(
+            db.query(User.id).filter(
+                User.store_id == store_id,
+                User.role == role,
+                User.is_active.is_(True),
+            )
+        ),
+        RefreshToken.revoked_at.is_(None),
+        RefreshToken.expires_at > now,
+    ).update({"revoked_at": now}, synchronize_session="fetch")
+    db.flush()

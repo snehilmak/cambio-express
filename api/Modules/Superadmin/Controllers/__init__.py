@@ -328,6 +328,23 @@ def update_permissions_route(
         elif not allowed and existing:
             db.delete(existing)
             removed += 1
+    if added or removed:
+        from datetime import datetime as _dt
+        from api.Modules.Auth.Models import RefreshToken
+        from api.Modules.Tenancy.Models import User as _User
+        affected_roles = {ch.get("role") for ch in changes if ch.get("role") in valid_roles}
+        now = _dt.utcnow()
+        for r in affected_roles:
+            db.query(RefreshToken).filter(
+                RefreshToken.user_id.in_(
+                    db.query(_User.id).filter(
+                        _User.role == r,
+                        _User.is_active.is_(True),
+                    )
+                ),
+                RefreshToken.revoked_at.is_(None),
+                RefreshToken.expires_at > now,
+            ).update({"revoked_at": now}, synchronize_session="fetch")
     db.commit()
     _audit_store(
         db, sa,

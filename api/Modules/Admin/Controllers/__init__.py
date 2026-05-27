@@ -1034,6 +1034,10 @@ def update_store_permissions_route(
             target_label=f"{len(changes)} permission change(s)",
             summary=f"updated store permission overrides",
         )
+        from api.Modules.Auth.Services.principal import invalidate_sessions_for_role
+        affected_roles = {ch.get("role") for ch in changes if ch.get("role")}
+        for r in affected_roles:
+            invalidate_sessions_for_role(db, sid, r)
     db.commit()
     return get_store_permissions_route(db=db, claims=claims)
 
@@ -1063,6 +1067,8 @@ def reset_store_permissions_route(
         target_label=f"reset {target_role} permissions",
         summary=f"reset {target_role} permissions to global defaults",
     )
+    from api.Modules.Auth.Services.principal import invalidate_sessions_for_role
+    invalidate_sessions_for_role(db, sid, target_role)
     db.commit()
     return get_store_permissions_route(db=db, claims=claims)
 
