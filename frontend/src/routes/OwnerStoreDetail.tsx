@@ -1,14 +1,15 @@
 import { useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   CategoryScale, Chart as ChartJS, Filler, LinearScale, LineElement,
   PointElement, Tooltip, BarElement,
 } from "chart.js";
 import { Bar, Line } from "react-chartjs-2";
 
-import { useOwnerStoreDetail } from "../api/owner";
+import { unlinkStore, useOwnerStoreDetail } from "../api/owner";
+import { ApiError } from "../lib/api";
 import {
-  Breadcrumbs,
+  Breadcrumbs, Button,
   Card, ErrorState, KpiCard, KpiGrid, Loading, PageHeader, PageShell,
   Section, TabsBar, TabsButton, Table, tdStyle, thStyle,
 } from "../components/ui";
@@ -34,8 +35,20 @@ const tdStyleR: React.CSSProperties = { ...tdStyle, textAlign: "right" };
 export default function OwnerStoreDetail() {
   const { storeId } = useParams<{ storeId: string }>();
   const sid = Number(storeId);
+  const navigate = useNavigate();
   const [period, setPeriod] = useState<Period>("month");
   const { data, isLoading, isError, error, refetch } = useOwnerStoreDetail(sid, period);
+
+  async function handleUnlink() {
+    const name = data?.store?.name ?? `store ${sid}`;
+    if (!confirm(`Disconnect "${name}" from your umbrella? The store keeps all its data but you will no longer see it.`)) return;
+    try {
+      await unlinkStore(sid);
+      navigate("/owner/locations");
+    } catch (err) {
+      alert(err instanceof ApiError ? err.message : "Could not unlink store.");
+    }
+  }
 
   return (
     <PageShell gap="1.25rem">
@@ -47,17 +60,27 @@ export default function OwnerStoreDetail() {
         <PageHeader
           title={data?.store.name || "Store"}
           actions={(
-            <TabsBar>
-              {PERIODS.map((p) => (
-                <TabsButton
-                  key={p.value}
-                  active={p.value === period}
-                  onClick={() => setPeriod(p.value)}
-                >
-                  {p.label}
-                </TabsButton>
-              ))}
-            </TabsBar>
+            <div style={{ display: "flex", gap: "0.75rem", alignItems: "center", flexWrap: "wrap" }}>
+              <TabsBar>
+                {PERIODS.map((p) => (
+                  <TabsButton
+                    key={p.value}
+                    active={p.value === period}
+                    onClick={() => setPeriod(p.value)}
+                  >
+                    {p.label}
+                  </TabsButton>
+                ))}
+              </TabsBar>
+              <Link to={`/owner/store/${sid}/permissions`}>
+                <Button size="sm" tone="secondary" type="button">
+                  Permissions
+                </Button>
+              </Link>
+              <Button size="sm" tone="secondary" onClick={() => { void handleUnlink(); }}>
+                Disconnect store
+              </Button>
+            </div>
           )}
         />
       </div>

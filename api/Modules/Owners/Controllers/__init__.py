@@ -714,3 +714,206 @@ def owner_store_detail_route(
             for t in recent_transfers
         ],
     }
+
+
+# ── Owner user management ──────────────────────────────────
+
+
+@router.get("/users")
+def owner_users_route(
+    store_id: int | None = Query(None, ge=1),
+    q: str = Query("", max_length=100),
+    page: int = Query(1, ge=1),
+    db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
+):
+    """List users across all stores in the owner's umbrella.
+    Optional store_id filter narrows to one store. Paginated at 50."""
+    require_permission(claims, "users", "read")
+    user = _require_owner_principal(db, claims)
+    sids = owner_store_ids(db, user)
+    if not sids:
+        return {"rows": [], "total": 0, "page": 1, "total_pages": 0}
+    if store_id is not None:
+        if store_id not in sids:
+            raise HTTPException(403, "Store not in your umbrella")
+        sids = [store_id]
+
+    from api.Modules.Tenancy.Models import Store
+    query = db.query(User).filter(User.store_id.in_(sids))
+    needle = q.strip()
+    if needle:
+        like = f"%{needle}%"
+        query = query.filter(
+            User.username.ilike(like) | User.full_name.ilike(like)
+        )
+    total = query.count()
+    per_page = 50
+    total_pages = max(1, -(-total // per_page))
+    rows = (
+        query.order_by(User.store_id, User.full_name)
+        .offset((page - 1) * per_page)
+        .limit(per_page)
+        .all()
+    )
+    store_names = {
+        s.id: s.name
+        for s in db.query(Store).filter(Store.id.in_(sids)).all()
+    }
+    return {
+        "rows": [
+            {
+                "id": u.id,
+                "username": u.username,
+                "full_name": u.full_name or "",
+                "role": u.role or "",
+                "is_active": bool(getattr(u, "is_active", True)),
+                "store_id": u.store_id,
+                "store_name": store_names.get(u.store_id, ""),
+            }
+            for u in rows
+        ],
+        "total": total,
+        "page": page,
+        "total_pages": total_pages,
+    }
+
+
+# ── Owner store permissions ────────────────────────────────
+
+
+@router.get("/store/{store_id}/permissions")
+def owner_store_permissions_route(
+    store_id: int = Path(..., ge=1),
+    db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
+) -> dict:
+    """Get the permission matrix for a specific store in the owner's
+    umbrella. Shows per-store overrides if any, else global defaults."""
+    require_permission(claims, "settings", "read")
+    user = _require_owner_principal(db, claims)
+    sids = owner_store_ids(db, user)
+    if store_id not in sids:
+        raise HTTPException(403, "Store not in your umbrella")
+
+    from api.Modules.Auth.Models import RolePermission, StoreRoleOverride
+    from api.Modules.Auth.Services.login import (
+        RBAC_ACTIONS, RBAC_DEFAULTS, RBAC_RESOURCES,
+    )
+    editable_roles = ["employee"]
+    visible_roles = ["admin", "employee"]
+
+    global_granted: set[tuple[str, str, str]] = set()
+    global_rows = db.query(RolePermission).all()
+    for r in global_rows:
+        global_granted.add((r.role, r.resource, r.action))
+    if not global_granted:
+        for rl, perms in RBAC_DEFAULTS.items():
+            for perm in perms:
+                res, act = perm.split(".", 1)
+                global_granted.add((rl, res, act))
+
+    store_rows = (
+        db.query(StoreRoleOverride)
+        .filter(StoreRoleOverride.store_id == store_id)
+        .all()
+    )
+    store_granted: set[tuple[str, str, str]] = set()
+    store_has_overrides: set[str] = set()
+    for r in store_rows:
+        store_granted.add((r.role, r.resource, r.action))
+        store_has_overrides.add(r.role)
+
+    matrix: dict[str, dict[str, dict[str, bool]]] = {}
+    for rl in visible_roles:
+        matrix[rl] = {}
+        source = store_granted if rl in store_has_overrides else global_granted
+        for resource in RBAC_RESOURCES:
+            matrix[rl][resource] = {}
+            for action in RBAC_ACTIONS:
+                matrix[rl][resource][action] = (rl, resource, action) in source
+
+    return {
+        "store_id": store_id,
+        "roles": visible_roles,
+        "editable_roles": editable_roles,
+        "resources": RBAC_RESOURCES,
+        "actions": RBAC_ACTIONS,
+        "matrix": matrix,
+        "has_overrides": list(store_has_overrides),
+    }
+
+
+@router.put("/store/{store_id}/permissions")
+def owner_update_store_permissions_route(
+    store_id: int = Path(..., ge=1),
+    body: dict = ...,
+    db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
+) -> dict:
+    """Update per-store permission overrides for a store in the owner's
+    umbrella. Owner can edit admin + employee roles."""
+    require_permission(claims, "settings", "update")
+    user = _require_owner_principal(db, claims)
+    sids = owner_store_ids(db, user)
+    if store_id not in sids:
+        raise HTTPException(403, "Store not in your umbrella")
+
+    from api.Modules.Auth.Models import StoreRoleOverride
+    from api.Modules.Auth.Services.login import RBAC_ACTIONS, RBAC_RESOURCES
+    editable_roles = ["employee"]
+
+    changes = body.get("changes", [])
+    for ch in changes:
+        target_role = ch.get("role", "")
+        resource = ch.get("resource", "")
+        action = ch.get("action", "")
+        allowed = ch.get("allowed", False)
+        if target_role not in editable_roles:
+            raise HTTPException(403, f"Cannot edit {target_role} permissions")
+        if resource not in RBAC_RESOURCES or action not in RBAC_ACTIONS:
+            continue
+        existing = (
+            db.query(StoreRoleOverride)
+            .filter_by(store_id=store_id, role=target_role,
+                       resource=resource, action=action)
+            .first()
+        )
+        if allowed and not existing:
+            db.add(StoreRoleOverride(
+                store_id=store_id, role=target_role,
+                resource=resource, action=action,
+            ))
+        elif not allowed and existing:
+            db.delete(existing)
+    db.commit()
+    return owner_store_permissions_route(
+        store_id=store_id, db=db, claims=claims,
+    )
+
+
+@router.post("/store/{store_id}/permissions/reset")
+def owner_reset_store_permissions_route(
+    store_id: int = Path(..., ge=1),
+    body: dict = ...,
+    db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
+) -> dict:
+    """Reset a role's permissions to global defaults for a store
+    in the owner's umbrella."""
+    require_permission(claims, "settings", "update")
+    user = _require_owner_principal(db, claims)
+    sids = owner_store_ids(db, user)
+    if store_id not in sids:
+        raise HTTPException(403, "Store not in your umbrella")
+    target_role = body.get("role", "")
+    if target_role not in ["employee"]:
+        raise HTTPException(403, f"Cannot reset {target_role} permissions")
+    from api.Modules.Auth.Models import StoreRoleOverride
+    db.query(StoreRoleOverride).filter_by(
+        store_id=store_id, role=target_role,
+    ).delete()
+    db.commit()
+    return owner_store_permissions_route(
+        store_id=store_id, db=db, claims=claims,
+    )

@@ -160,6 +160,7 @@ export const NAV: NavGroup[] = [
     items: [
       { to: "/owner/locations",      label: "Locations",   icon: iconOwner() },
       { to: "/owner/connect",        label: "Connect",     icon: iconBanner() },
+      { to: "/owner/users",                   label: "Team users",        icon: iconCustomers() },
       { to: "/owner/bulk-add-user",          label: "Bulk add user",     icon: iconOwner() },
       { to: "/owner/cross-store-defaults",   label: "Cross-store defaults", icon: iconRollup() },
     ],

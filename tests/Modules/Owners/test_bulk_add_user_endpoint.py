@@ -94,7 +94,7 @@ def test_bulk_add_user_creates_at_every_umbrella_store(client):
             "username": "regional@example.com",
             "password": "regional1!pw",
             "full_name": "Regional Manager",
-            "role": "admin",
+            "role": "employee",
             "store_ids": [sid_a, sid_b],
         },
         headers={"Authorization": f"Bearer {token}"},
@@ -115,7 +115,7 @@ def test_bulk_add_user_creates_at_every_umbrella_store(client):
                   .filter_by(store_id=sid, username="regional@example.com")
                   .one()
             )
-            assert u.role == "admin"
+            assert u.role == "employee"
             assert u.full_name == "Regional Manager"
 
 
@@ -262,8 +262,8 @@ def test_bulk_add_user_rejects_empty_store_ids(client):
 
 
 def test_bulk_add_user_rejects_bad_role(client):
-    """Only 'admin' / 'employee' allowed — 'owner' / 'superadmin'
-    must be created out-of-band via the signup flow."""
+    """Only 'employee' allowed — owners can't create admin-role users.
+    'owner' / 'superadmin' must be created out-of-band via the signup flow."""
     with db_session():
         owner_id, _, pw = _make_owner()
         sid = _link_store(owner_id, name="A", slug="a-role")
