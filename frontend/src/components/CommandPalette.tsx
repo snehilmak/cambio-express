@@ -13,8 +13,8 @@ interface CommandItem {
   keywords?: string;
 }
 
-function buildItems(role: string): CommandItem[] {
-  const groups = filterNavForRole(role);
+function buildItems(role: string, permissions: string[] = []): CommandItem[] {
+  const groups = filterNavForRole(role, permissions);
   const items: CommandItem[] = [];
   for (const g of groups) {
     for (const item of g.items) {
@@ -33,7 +33,7 @@ export function CommandPalette() {
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
   const identity = getCurrentIdentity();
-  const items = identity ? buildItems(identity.role) : [];
+  const items = identity ? buildItems(identity.role, identity.permissions) : [];
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {

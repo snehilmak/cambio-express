@@ -130,6 +130,31 @@ export function clearRefreshFallback(): void {
 }
 
 
+export async function refreshToken(): Promise<boolean> {
+  try {
+    const fallbackJti = getRefreshFallback();
+    const resp = await fetch("/api/v2/auth/refresh", {
+      method: "POST",
+      credentials: "include",
+      headers: fallbackJti
+        ? { "Content-Type": "application/json" }
+        : undefined,
+      body: fallbackJti
+        ? JSON.stringify({ refresh_token: fallbackJti })
+        : undefined,
+    });
+    if (resp.ok) {
+      const body = await resp.json();
+      if (body && typeof body.user_id === "number") {
+        persistLoginResponse(body);
+        return true;
+      }
+    }
+  } catch { /* network failure */ }
+  return false;
+}
+
+
 // ── Back-compat aliases for the localStorage-token era ─────────
 //
 // Routes still call ``setAccessToken(result.access_token)`` after

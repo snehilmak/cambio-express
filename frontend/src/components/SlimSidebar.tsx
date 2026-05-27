@@ -9,6 +9,8 @@ export interface NavItem {
   icon: ReactNode;
   /** Roles that should see this item. Omit for "everyone authed". */
   roles?: string[];
+  /** Required permission as "resource.action". Hidden when missing. */
+  perm?: string;
 }
 
 export interface NavGroup {

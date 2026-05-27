@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ApiError } from "../lib/api";
-import { getCurrentIdentity } from "../lib/auth";
+import { getCurrentIdentity, refreshToken } from "../lib/auth";
 import {
   Alert, Breadcrumbs, Button, Card, Checkbox, Loading,
   PageHeader, PageShell, Pill, SectionTitle, useToast,
@@ -105,7 +105,8 @@ export default function StorePermissions() {
       });
       setDraft(structuredClone(result));
       qc.setQueryData(["store-permissions"], result);
-      toast({ message: `${changes.length} permission${changes.length === 1 ? "" : "s"} updated for this store.`, tone: "success" });
+      await refreshToken();
+      toast({ message: `${changes.length} permission${changes.length === 1 ? "" : "s"} updated for this store. Session refreshed.`, tone: "success" });
     } catch (err) {
       setSaveError(err instanceof ApiError ? err.message : "Could not save permissions.");
     } finally {
@@ -123,6 +124,7 @@ export default function StorePermissions() {
       });
       setDraft(structuredClone(result));
       qc.setQueryData(["store-permissions"], result);
+      await refreshToken();
       toast({ message: `${ROLE_LABELS[role] ?? role} permissions reset to defaults.`, tone: "success" });
     } catch (err) {
       setSaveError(err instanceof ApiError ? err.message : "Could not reset.");
