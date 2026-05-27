@@ -1057,3 +1057,66 @@ def _editable_roles_for(caller_role: str) -> list[str]:
     if caller_role == "admin":
         return ["employee"]
     return []
+
+
+# ── Connect-code redemption (store admin) ──────────────────
+
+
+@router.post("/redeem-connect-code")
+def redeem_connect_code_route(
+    body: dict,
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> dict:
+    """Store admin redeems an owner connect code to link this store
+    to the owner's umbrella. Creates StoreOwnerLink + marks code used."""
+    require_permission(claims, "settings", "update")
+    sid = resolve_store_scope(claims)
+    code_str = (body.get("code") or "").strip().upper()
+    if not code_str:
+        raise HTTPException(422, "Code is required")
+
+    from datetime import datetime
+    from api.Modules.Tenancy.Models import OwnerConnectCode, StoreOwnerLink, User
+
+    occ = db.query(OwnerConnectCode).filter_by(code=code_str).first()
+    if occ is None:
+        raise HTTPException(404, "Code not found")
+    if occ.revoked_at is not None:
+        raise HTTPException(422, "Code has been revoked")
+    if occ.used_at is not None:
+        raise HTTPException(422, "Code has already been redeemed")
+    if occ.expires_at and occ.expires_at < datetime.utcnow():
+        raise HTTPException(422, "Code has expired")
+
+    existing = db.query(StoreOwnerLink).filter_by(
+        owner_id=occ.owner_id, store_id=sid,
+    ).first()
+    if existing:
+        raise HTTPException(409, "Store is already linked to this owner")
+
+    sub = claims.get("sub")
+    link = StoreOwnerLink(owner_id=occ.owner_id, store_id=sid)
+    db.add(link)
+    occ.used_at = datetime.utcnow()
+    occ.used_by_user_id = int(sub) if sub else None
+    occ.used_by_store_id = sid
+
+    owner = db.get(User, occ.owner_id)
+    owner_name = (owner.full_name or owner.username or "") if owner else ""
+
+    from api.Modules.Audit.Services import record_operator_action
+    record_operator_action(
+        db,
+        store_id=sid,
+        user_id=int(sub) if sub else 0,
+        user_name=claims.get("full_name", ""),
+        user_role=claims.get("role", ""),
+        target_type="store_owner_link",
+        target_id=str(occ.owner_id),
+        target_label=owner_name[:160],
+        action="redeem_owner_connect_code",
+        summary=f"redeemed code {code_str} — linked to owner '{owner_name}'",
+    )
+    db.commit()
+    return {"owner_name": owner_name}

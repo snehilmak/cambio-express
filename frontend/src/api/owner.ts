@@ -329,3 +329,17 @@ export async function applyCrossStoreDefaults(
     { method: "POST", json: body },
   );
 }
+
+export async function unlinkStore(storeId: number): Promise<void> {
+  await api(`/api/v2/owner/unlink/${storeId}`, {
+    method: "POST",
+    json: {},
+  });
+}
+
+export async function redeemConnectCode(code: string): Promise<{ owner_name: string }> {
+  return api<{ owner_name: string }>("/api/v2/admin/redeem-connect-code", {
+    method: "POST",
+    json: { code },
+  });
+}

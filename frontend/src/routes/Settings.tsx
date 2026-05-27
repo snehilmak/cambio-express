@@ -15,6 +15,7 @@ import {
   type ProfileUpdateBody,
   type StoreHourEntry,
 } from "../api/account";
+import { redeemConnectCode } from "../api/owner";
 import { ApiError } from "../lib/api";
 import { formatTimestamp } from "../lib/datetime";
 import { getCurrentIdentity } from "../lib/auth";
@@ -83,7 +84,12 @@ export function SettingsProfile() {
 }
 
 export function SettingsGeneral() {
-  return <StoreInfoCard />;
+  return (
+    <>
+      <StoreInfoCard />
+      <OwnerAccessCard />
+    </>
+  );
 }
 
 export function SettingsBilling() {
@@ -1132,5 +1138,60 @@ function StoreHoursEditor({
         </Fragment>
       ))}
     </div>
+  );
+}
+
+
+function OwnerAccessCard() {
+  const toast = useToast();
+  const [code, setCode] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [linked, setLinked] = useState<string | null>(null);
+
+  async function handleRedeem(e: FormEvent) {
+    e.preventDefault();
+    if (!code.trim()) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const result = await redeemConnectCode(code.trim());
+      setLinked(result.owner_name);
+      setCode("");
+      toast({ message: `Store linked to owner "${result.owner_name}"`, tone: "success" });
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not redeem code.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Card>
+      <SectionTitle>Owner access</SectionTitle>
+      <p style={{ fontSize: "0.88rem", color: "var(--db-text-muted)", margin: "0.25rem 0 0.75rem" }}>
+        If a multi-store owner gave you a connect code, enter it here to link this store to their umbrella.
+      </p>
+      {linked && (
+        <Alert tone="success">
+          Linked to owner: <strong>{linked}</strong>
+        </Alert>
+      )}
+      {error && <Alert tone="error">{error}</Alert>}
+      <form onSubmit={(e) => { void handleRedeem(e); }} style={{ display: "flex", gap: "0.5rem", alignItems: "flex-end" }}>
+        <Field label="Connect code">
+          <Input
+            value={code}
+            onChange={(e) => setCode(e.target.value.toUpperCase())}
+            placeholder="ABCD1234"
+            maxLength={8}
+            style={{ fontFamily: "var(--db-font-mono, monospace)", letterSpacing: "0.15em", width: "12rem" }}
+          />
+        </Field>
+        <Button type="submit" busy={busy} disabled={!code.trim()}>
+          Link store
+        </Button>
+      </form>
+    </Card>
   );
 }
