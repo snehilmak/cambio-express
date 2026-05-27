@@ -29,13 +29,18 @@ def resolve_store_scope(claims: dict[str, Any]) -> int:
     """
     sid = claims.get("store_id")
     if sid is None:
-        raise HTTPException(
-            status_code=403,
-            detail=(
-                "JWT does not carry a store scope. Sign in as a "
-                "store admin or owner."
-            ),
-        )
+        role = claims.get("role", "")
+        if role == "owner":
+            detail = (
+                "This endpoint requires a store scope. "
+                "Use the /owner/* endpoints instead."
+            )
+        else:
+            detail = (
+                "JWT does not carry a store scope. "
+                "Sign in to a specific store first."
+            )
+        raise HTTPException(status_code=403, detail=detail)
     return int(sid)
 
 

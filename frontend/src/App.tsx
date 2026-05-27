@@ -4,6 +4,7 @@ import { Navigate, Outlet, Route, Routes, useLocation } from "react-router-dom";
 import AppShell from "./components/AppShell";
 import RequireAuth from "./components/RequireAuth";
 import RequirePermission from "./components/RequirePermission";
+import RequireRole from "./components/RequireRole";
 import { RouteErrorBoundary } from "./components/RouteErrorBoundary";
 import { Loading, ToastProvider } from "./components/ui";
 import Home from "./routes/Home";
@@ -249,28 +250,28 @@ export default function App() {
           <Route path="reports/employee-activity"           element={<RequirePermission resource="reports" action="read"><EmployeeActivity /></RequirePermission>} />
           <Route path="reports/period-pl"                   element={<RequirePermission resource="reports" action="read"><PeriodPL /></RequirePermission>} />
           <Route path="superadmin/reports/:slug"            element={<SuperadminBIDrilldown />} />
-          <Route path="owner/reports/sales-by-company"      element={<SalesByCompany />} />
-          <Route path="owner/reports/sales-by-service-type" element={<SalesByService />} />
-          <Route path="owner/reports/sales-by-employee"     element={<SalesByEmployee />} />
-          <Route path="owner/reports/cashier-productivity"  element={<CashierProductivity />} />
-          <Route path="owner/reports/top-customers"  element={<TopCustomers />} />
-          <Route path="owner/reports/top-senders"    element={<TopSenders />} />
-          <Route path="owner/reports/top-recipients"        element={<TopRecipients />} />
-          <Route path="owner/reports/new-vs-returning"       element={<NewVsReturning />} />
-          <Route path="owner/reports/by-destination-country" element={<ByDestinationCountry />} />
-          <Route path="owner/reports/fees-vs-tax"            element={<FeesVsTax />} />
-          <Route path="owner/reports/high-value-transfers"   element={<HighValueTransfers />} />
-          <Route path="owner/reports/cancelled-transfers"    element={<CancelledTransfers />} />
-          <Route path="owner/reports/ach-volume"             element={<AchVolume />} />
-          <Route path="owner/reports/returned-check-status"       element={<ReturnedCheckStatus />} />
-          <Route path="owner/reports/bank-transactions-breakdown" element={<BankTxnBreakdown />} />
-          <Route path="owner/reports/daily-drops"                 element={<DailyDrops />} />
-          <Route path="owner/reports/check-deposits"              element={<CheckDeposits />} />
-          <Route path="owner/reports/bank-rule-audit"             element={<BankRuleAudit />} />
-          <Route path="owner/reports/bank-charges-by-account"     element={<BankChargesByAccount />} />
-          <Route path="owner/reports/period-comparison"           element={<PeriodComparison />} />
-          <Route path="owner/reports/employee-activity"           element={<EmployeeActivity />} />
-          <Route path="owner/reports/period-pl"                   element={<PeriodPL />} />
+          <Route path="owner/reports/sales-by-company"      element={<RequireRole roles={["owner"]}><SalesByCompany /></RequireRole>} />
+          <Route path="owner/reports/sales-by-service-type" element={<RequireRole roles={["owner"]}><SalesByService /></RequireRole>} />
+          <Route path="owner/reports/sales-by-employee"     element={<RequireRole roles={["owner"]}><SalesByEmployee /></RequireRole>} />
+          <Route path="owner/reports/cashier-productivity"  element={<RequireRole roles={["owner"]}><CashierProductivity /></RequireRole>} />
+          <Route path="owner/reports/top-customers"  element={<RequireRole roles={["owner"]}><TopCustomers /></RequireRole>} />
+          <Route path="owner/reports/top-senders"    element={<RequireRole roles={["owner"]}><TopSenders /></RequireRole>} />
+          <Route path="owner/reports/top-recipients"        element={<RequireRole roles={["owner"]}><TopRecipients /></RequireRole>} />
+          <Route path="owner/reports/new-vs-returning"       element={<RequireRole roles={["owner"]}><NewVsReturning /></RequireRole>} />
+          <Route path="owner/reports/by-destination-country" element={<RequireRole roles={["owner"]}><ByDestinationCountry /></RequireRole>} />
+          <Route path="owner/reports/fees-vs-tax"            element={<RequireRole roles={["owner"]}><FeesVsTax /></RequireRole>} />
+          <Route path="owner/reports/high-value-transfers"   element={<RequireRole roles={["owner"]}><HighValueTransfers /></RequireRole>} />
+          <Route path="owner/reports/cancelled-transfers"    element={<RequireRole roles={["owner"]}><CancelledTransfers /></RequireRole>} />
+          <Route path="owner/reports/ach-volume"             element={<RequireRole roles={["owner"]}><AchVolume /></RequireRole>} />
+          <Route path="owner/reports/returned-check-status"       element={<RequireRole roles={["owner"]}><ReturnedCheckStatus /></RequireRole>} />
+          <Route path="owner/reports/bank-transactions-breakdown" element={<RequireRole roles={["owner"]}><BankTxnBreakdown /></RequireRole>} />
+          <Route path="owner/reports/daily-drops"                 element={<RequireRole roles={["owner"]}><DailyDrops /></RequireRole>} />
+          <Route path="owner/reports/check-deposits"              element={<RequireRole roles={["owner"]}><CheckDeposits /></RequireRole>} />
+          <Route path="owner/reports/bank-rule-audit"             element={<RequireRole roles={["owner"]}><BankRuleAudit /></RequireRole>} />
+          <Route path="owner/reports/bank-charges-by-account"     element={<RequireRole roles={["owner"]}><BankChargesByAccount /></RequireRole>} />
+          <Route path="owner/reports/period-comparison"           element={<RequireRole roles={["owner"]}><PeriodComparison /></RequireRole>} />
+          <Route path="owner/reports/employee-activity"           element={<RequireRole roles={["owner"]}><EmployeeActivity /></RequireRole>} />
+          <Route path="owner/reports/period-pl"                   element={<RequireRole roles={["owner"]}><PeriodPL /></RequireRole>} />
           <Route path="batches"          element={<RequirePermission resource="batches" action="read"><Batches /></RequirePermission>} />
           <Route path="batches/new"      element={<RequirePermission resource="batches" action="create"><BatchForm /></RequirePermission>} />
           <Route path="batches/:id/edit" element={<RequirePermission resource="batches" action="update"><BatchForm /></RequirePermission>} />
@@ -282,19 +283,19 @@ export default function App() {
           <Route path="return-checks"          element={<RequirePermission resource="return_checks" action="read"><ReturnChecks /></RequirePermission>} />
           <Route path="return-checks/new"      element={<RequirePermission resource="return_checks" action="create"><ReturnCheckForm /></RequirePermission>} />
           <Route path="return-checks/:id/edit" element={<RequirePermission resource="return_checks" action="update"><ReturnCheckForm /></RequirePermission>} />
-          <Route path="owner/connect"        element={<OwnerConnect />} />
-          <Route path="owner/dashboard"      element={<OwnerDashboard />} />
-          <Route path="owner/locations"      element={<OwnerLocations />} />
-          <Route path="owner/pl-rollup"      element={<OwnerPLRollup />} />
-          <Route path="owner/reports"        element={<OwnerReports />} />
-          <Route path="owner/bulk-add-user"          element={<OwnerBulkAddUser />} />
-          <Route path="owner/cross-store-defaults"   element={<OwnerCrossStoreDefaults />} />
-          <Route path="owner/users"                  element={<OwnerUsers />} />
-          <Route path="owner/settings"               element={<OwnerSettings />} />
-          <Route path="owner/activity"               element={<OwnerActivity />} />
-          <Route path="owner/bulk-permissions"        element={<OwnerBulkPermissions />} />
-          <Route path="owner/store/:storeId/permissions" element={<OwnerStorePermissions />} />
-          <Route path="owner/store/:storeId" element={<OwnerStoreDetail />} />
+          <Route path="owner/connect"        element={<RequireRole roles={["owner"]}><OwnerConnect /></RequireRole>} />
+          <Route path="owner/dashboard"      element={<RequireRole roles={["owner"]}><OwnerDashboard /></RequireRole>} />
+          <Route path="owner/locations"      element={<RequireRole roles={["owner"]}><OwnerLocations /></RequireRole>} />
+          <Route path="owner/pl-rollup"      element={<RequireRole roles={["owner"]}><OwnerPLRollup /></RequireRole>} />
+          <Route path="owner/reports"        element={<RequireRole roles={["owner"]}><OwnerReports /></RequireRole>} />
+          <Route path="owner/bulk-add-user"          element={<RequireRole roles={["owner"]}><OwnerBulkAddUser /></RequireRole>} />
+          <Route path="owner/cross-store-defaults"   element={<RequireRole roles={["owner"]}><OwnerCrossStoreDefaults /></RequireRole>} />
+          <Route path="owner/users"                  element={<RequireRole roles={["owner"]}><OwnerUsers /></RequireRole>} />
+          <Route path="owner/settings"               element={<RequireRole roles={["owner"]}><OwnerSettings /></RequireRole>} />
+          <Route path="owner/activity"               element={<RequireRole roles={["owner"]}><OwnerActivity /></RequireRole>} />
+          <Route path="owner/bulk-permissions"        element={<RequireRole roles={["owner"]}><OwnerBulkPermissions /></RequireRole>} />
+          <Route path="owner/store/:storeId/permissions" element={<RequireRole roles={["owner"]}><OwnerStorePermissions /></RequireRole>} />
+          <Route path="owner/store/:storeId" element={<RequireRole roles={["owner"]}><OwnerStoreDetail /></RequireRole>} />
           <Route path="superadmin/dashboard"     element={<SuperadminDashboard />} />
           <Route path="superadmin/billing"       element={<SuperadminBilling />} />
           <Route path="superadmin/email-log"     element={<SuperadminEmailLog />} />

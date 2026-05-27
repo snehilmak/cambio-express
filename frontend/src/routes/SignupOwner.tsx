@@ -39,7 +39,7 @@ export default function SignupOwner() {
         password,
       });
       setAccessToken(result.access_token);
-      navigate("/home", { replace: true });
+      navigate("/owner/dashboard", { replace: true });
     } catch (err) {
       if (err instanceof ApiError) {
         setError(err.message);
