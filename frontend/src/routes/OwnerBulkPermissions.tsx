@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { api, ApiError } from "../lib/api";
@@ -58,8 +58,7 @@ export default function OwnerBulkPermissions() {
     );
   }
 
-  async function handlePush(e: FormEvent) {
-    e.preventDefault();
+  async function handlePush() {
     if (!templatePerms || selectedStores.size === 0) return;
     setBusy(true);
     setError(null);
@@ -190,7 +189,7 @@ export default function OwnerBulkPermissions() {
 
       <div style={{ display: "flex", gap: "0.75rem", alignItems: "center" }}>
         <Button
-          onClick={(e) => { void handlePush(e as unknown as FormEvent); }}
+          onClick={() => { void handlePush(); }}
           busy={busy}
           disabled={!templatePerms || selectedStores.size === 0}
         >

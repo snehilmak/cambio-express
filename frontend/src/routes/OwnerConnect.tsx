@@ -164,7 +164,7 @@ export default function OwnerConnect() {
                   className={styles.codeInput}
                   onFocus={(e) => e.currentTarget.select()}
                 />
-                <Button tone="secondary" onClick={handleCopy}>
+                <Button tone="secondary" onClick={handleCopy} aria-label={copied ? "Code copied to clipboard" : "Copy code to clipboard"}>
                   {copied ? "Copied" : "Copy"}
                 </Button>
               </div>
