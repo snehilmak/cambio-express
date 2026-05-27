@@ -1053,7 +1053,7 @@ def _editable_roles_for(caller_role: str) -> list[str]:
     if caller_role == "superadmin":
         return ["admin", "employee", "owner"]
     if caller_role == "owner":
-        return ["admin", "employee"]
+        return ["employee"]
     if caller_role == "admin":
         return ["employee"]
     return []

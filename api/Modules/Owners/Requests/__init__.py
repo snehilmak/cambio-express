@@ -153,7 +153,7 @@ class OwnerBulkAddUserRequest(BaseModel):
     username:  str = Field(..., min_length=1, max_length=80)
     password:  str = Field(..., min_length=8, max_length=200)
     full_name: str = Field("", max_length=120)
-    role:      Literal["admin", "employee"] = "employee"
+    role:      Literal["employee"] = "employee"
     store_ids: list[int] = Field(..., min_length=1, max_length=50)
 
 

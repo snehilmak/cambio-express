@@ -9,7 +9,7 @@ import { getCurrentIdentity } from "../lib/auth";
 import {
   Breadcrumbs,
   Alert, Button, Card, Empty, ErrorState, Field, Input, Loading,
-  PageHeader, PageShell, Pill, Section, Select, Table, tdStyle, thStyle,
+  PageHeader, PageShell, Pill, Section, Table, tdStyle, thStyle,
 } from "../components/ui";
 import styles from "./OwnerBulkAddUser.module.css";
 
@@ -28,7 +28,7 @@ export default function OwnerBulkAddUser() {
   const [username, setUsername]   = useState("");
   const [password, setPassword]   = useState("");
   const [fullName, setFullName]   = useState("");
-  const [role, setRole]           = useState<"admin" | "employee">("employee");
+  const [role]                    = useState<"employee">("employee");
   const [storeIds, setStoreIds]   = useState<number[]>([]);
   const [busy, setBusy]           = useState(false);
   const [err, setErr]             = useState<string | null>(null);
@@ -154,15 +154,7 @@ export default function OwnerBulkAddUser() {
                   />
                 </Field>
                 <Field label="Role">
-                  <Select
-                    value={role}
-                    onChange={(e) => setRole(
-                      e.target.value === "admin" ? "admin" : "employee",
-                    )}
-                  >
-                    <option value="employee">Employee (cashier)</option>
-                    <option value="admin">Admin</option>
-                  </Select>
+                  <Input value="Employee (cashier)" disabled />
                 </Field>
               </div>
             </Section>

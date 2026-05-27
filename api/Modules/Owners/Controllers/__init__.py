@@ -800,7 +800,7 @@ def owner_store_permissions_route(
     from api.Modules.Auth.Services.login import (
         RBAC_ACTIONS, RBAC_DEFAULTS, RBAC_RESOURCES,
     )
-    editable_roles = ["admin", "employee"]
+    editable_roles = ["employee"]
     visible_roles = ["admin", "employee"]
 
     global_granted: set[tuple[str, str, str]] = set()
@@ -861,7 +861,7 @@ def owner_update_store_permissions_route(
 
     from api.Modules.Auth.Models import StoreRoleOverride
     from api.Modules.Auth.Services.login import RBAC_ACTIONS, RBAC_RESOURCES
-    editable_roles = ["admin", "employee"]
+    editable_roles = ["employee"]
 
     changes = body.get("changes", [])
     for ch in changes:
@@ -907,7 +907,7 @@ def owner_reset_store_permissions_route(
     if store_id not in sids:
         raise HTTPException(403, "Store not in your umbrella")
     target_role = body.get("role", "")
-    if target_role not in ["admin", "employee"]:
+    if target_role not in ["employee"]:
         raise HTTPException(403, f"Cannot reset {target_role} permissions")
     from api.Modules.Auth.Models import StoreRoleOverride
     db.query(StoreRoleOverride).filter_by(
