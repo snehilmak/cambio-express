@@ -1562,3 +1562,161 @@ def superadmin_report_drilldown_route(
         payload.update(extras)
     return payload
 
+
+# ── Per-store permission overrides (from store drill) ──────
+
+
+@router.get("/stores/{store_id}/permissions")
+def superadmin_store_permissions_route(
+    store_id: int = Path(..., ge=1),
+    db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
+) -> dict:
+    """Permission matrix for a specific store. Superadmin can see
+    and edit admin + employee roles."""
+    _require_superadmin(claims)
+    store = db.get(Store, store_id)
+    if not store:
+        raise HTTPException(status_code=404, detail="Store not found")
+
+    from api.Modules.Auth.Models import RolePermission, StoreRoleOverride
+    from api.Modules.Auth.Services.login import (
+        RBAC_ACTIONS, RBAC_DEFAULTS, RBAC_RESOURCES,
+    )
+    editable_roles = ["admin", "employee"]
+    visible_roles = ["admin", "employee"]
+
+    global_granted: set[tuple[str, str, str]] = set()
+    global_rows = db.query(RolePermission).all()
+    for r in global_rows:
+        global_granted.add((r.role, r.resource, r.action))
+    if not global_granted:
+        for rl, perms in RBAC_DEFAULTS.items():
+            for perm in perms:
+                res, act = perm.split(".", 1)
+                global_granted.add((rl, res, act))
+
+    store_rows = (
+        db.query(StoreRoleOverride)
+        .filter(StoreRoleOverride.store_id == store_id)
+        .all()
+    )
+    store_granted: set[tuple[str, str, str]] = set()
+    store_has_overrides: set[str] = set()
+    for r in store_rows:
+        store_granted.add((r.role, r.resource, r.action))
+        store_has_overrides.add(r.role)
+
+    matrix: dict[str, dict[str, dict[str, bool]]] = {}
+    for rl in visible_roles:
+        matrix[rl] = {}
+        source = store_granted if rl in store_has_overrides else global_granted
+        for resource in RBAC_RESOURCES:
+            matrix[rl][resource] = {}
+            for action in RBAC_ACTIONS:
+                matrix[rl][resource][action] = (rl, resource, action) in source
+
+    return {
+        "store_id": store_id,
+        "store_name": store.name or "",
+        "roles": visible_roles,
+        "editable_roles": editable_roles,
+        "resources": RBAC_RESOURCES,
+        "actions": RBAC_ACTIONS,
+        "matrix": matrix,
+        "has_overrides": list(store_has_overrides),
+    }
+
+
+@router.put("/stores/{store_id}/permissions")
+def superadmin_update_store_permissions_route(
+    store_id: int = Path(..., ge=1),
+    body: dict = ...,
+    db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
+) -> dict:
+    """Update per-store permission overrides. Superadmin can edit
+    admin + employee roles."""
+    _require_superadmin(claims)
+    store = db.get(Store, store_id)
+    if not store:
+        raise HTTPException(status_code=404, detail="Store not found")
+
+    from api.Modules.Auth.Models import StoreRoleOverride
+    from api.Modules.Auth.Services.login import RBAC_ACTIONS, RBAC_RESOURCES
+    editable_roles = ["admin", "employee"]
+
+    changes = body.get("changes", [])
+    for ch in changes:
+        target_role = ch.get("role", "")
+        resource = ch.get("resource", "")
+        action = ch.get("action", "")
+        allowed = ch.get("allowed", False)
+        if target_role not in editable_roles:
+            continue
+        if resource not in RBAC_RESOURCES or action not in RBAC_ACTIONS:
+            continue
+        existing = (
+            db.query(StoreRoleOverride)
+            .filter_by(store_id=store_id, role=target_role,
+                       resource=resource, action=action)
+            .first()
+        )
+        if allowed and not existing:
+            db.add(StoreRoleOverride(
+                store_id=store_id, role=target_role,
+                resource=resource, action=action,
+            ))
+        elif not allowed and existing:
+            db.delete(existing)
+    if changes:
+        sa = resolve_superadmin_user(db, claims)
+        _audit_store(
+            db, sa,
+            "update_store_permissions",
+            target_id=str(store_id),
+            details=f"superadmin updated permissions for store '{store.name}' ({len(changes)} changes)",
+        )
+        from api.Modules.Auth.Services.principal import invalidate_sessions_for_role
+        affected_roles = {ch.get("role") for ch in changes if ch.get("role")}
+        for r in affected_roles:
+            invalidate_sessions_for_role(db, store_id, r)
+    db.commit()
+    return superadmin_store_permissions_route(
+        store_id=store_id, db=db, claims=claims,
+    )
+
+
+@router.post("/stores/{store_id}/permissions/reset")
+def superadmin_reset_store_permissions_route(
+    store_id: int = Path(..., ge=1),
+    body: dict = ...,
+    db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
+) -> dict:
+    """Reset a role's per-store overrides to global defaults."""
+    _require_superadmin(claims)
+    store = db.get(Store, store_id)
+    if not store:
+        raise HTTPException(status_code=404, detail="Store not found")
+    target_role = body.get("role", "")
+    if target_role not in ["admin", "employee"]:
+        raise HTTPException(status_code=403, detail=f"Cannot reset {target_role} permissions")
+    from api.Modules.Auth.Models import StoreRoleOverride
+    db.query(StoreRoleOverride).filter_by(
+        store_id=store_id, role=target_role,
+    ).delete()
+    sa = resolve_superadmin_user(db, claims)
+    _audit_store(
+        db, sa,
+        "reset_store_permissions",
+        target_id=str(store_id),
+        details=f"superadmin reset {target_role} permissions to global defaults for store '{store.name}'",
+    )
+    from api.Modules.Auth.Services.principal import invalidate_sessions_for_role
+    invalidate_sessions_for_role(db, store_id, target_role)
+    db.commit()
+    return superadmin_store_permissions_route(
+        store_id=store_id, db=db, claims=claims,
+    )
+

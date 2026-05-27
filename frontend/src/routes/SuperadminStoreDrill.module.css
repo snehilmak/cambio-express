@@ -65,3 +65,20 @@
   gap: 0.5rem;
   flex-wrap: wrap;
 }
+
+.permMatrix {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+.permMatrix th,
+.permMatrix td {
+  padding: 0.35rem 0.5rem;
+  border-bottom: 1px solid var(--db-border);
+  text-align: left;
+}
+.permMatrix th {
+  font-weight: 600;
+  text-transform: capitalize;
+  color: var(--db-text-muted);
+}
