@@ -215,28 +215,28 @@ export default function App() {
           <Route path="daily"            element={<RequirePermission resource="daily_book" action="read"><DailyBook /></RequirePermission>} />
           <Route path="daily/edit"       element={<RequirePermission resource="daily_book" action="update"><EditDailyBook /></RequirePermission>} />
           <Route path="reports"          element={<RequirePermission resource="reports" action="read"><Reports /></RequirePermission>} />
-          <Route path="reports/sales-by-company"      element={<SalesByCompany />} />
-          <Route path="reports/sales-by-service-type" element={<SalesByService />} />
-          <Route path="reports/sales-by-employee"     element={<SalesByEmployee />} />
-          <Route path="reports/cashier-productivity"  element={<CashierProductivity />} />
-          <Route path="reports/top-customers"   element={<TopCustomers />} />
-          <Route path="reports/top-senders"     element={<TopSenders />} />
-          <Route path="reports/top-recipients"  element={<TopRecipients />} />
-          <Route path="reports/new-vs-returning"       element={<NewVsReturning />} />
-          <Route path="reports/by-destination-country" element={<ByDestinationCountry />} />
-          <Route path="reports/fees-vs-tax"            element={<FeesVsTax />} />
-          <Route path="reports/high-value-transfers"   element={<HighValueTransfers />} />
-          <Route path="reports/cancelled-transfers"    element={<CancelledTransfers />} />
-          <Route path="reports/ach-volume"             element={<AchVolume />} />
-          <Route path="reports/returned-check-status"       element={<ReturnedCheckStatus />} />
-          <Route path="reports/bank-transactions-breakdown" element={<BankTxnBreakdown />} />
-          <Route path="reports/daily-drops"                 element={<DailyDrops />} />
-          <Route path="reports/check-deposits"              element={<CheckDeposits />} />
-          <Route path="reports/bank-rule-audit"             element={<BankRuleAudit />} />
-          <Route path="reports/bank-charges-by-account"     element={<BankChargesByAccount />} />
-          <Route path="reports/period-comparison"           element={<PeriodComparison />} />
-          <Route path="reports/employee-activity"           element={<EmployeeActivity />} />
-          <Route path="reports/period-pl"                   element={<PeriodPL />} />
+          <Route path="reports/sales-by-company"      element={<RequirePermission resource="reports" action="read"><SalesByCompany /></RequirePermission>} />
+          <Route path="reports/sales-by-service-type" element={<RequirePermission resource="reports" action="read"><SalesByService /></RequirePermission>} />
+          <Route path="reports/sales-by-employee"     element={<RequirePermission resource="reports" action="read"><SalesByEmployee /></RequirePermission>} />
+          <Route path="reports/cashier-productivity"  element={<RequirePermission resource="reports" action="read"><CashierProductivity /></RequirePermission>} />
+          <Route path="reports/top-customers"   element={<RequirePermission resource="reports" action="read"><TopCustomers /></RequirePermission>} />
+          <Route path="reports/top-senders"     element={<RequirePermission resource="reports" action="read"><TopSenders /></RequirePermission>} />
+          <Route path="reports/top-recipients"  element={<RequirePermission resource="reports" action="read"><TopRecipients /></RequirePermission>} />
+          <Route path="reports/new-vs-returning"       element={<RequirePermission resource="reports" action="read"><NewVsReturning /></RequirePermission>} />
+          <Route path="reports/by-destination-country" element={<RequirePermission resource="reports" action="read"><ByDestinationCountry /></RequirePermission>} />
+          <Route path="reports/fees-vs-tax"            element={<RequirePermission resource="reports" action="read"><FeesVsTax /></RequirePermission>} />
+          <Route path="reports/high-value-transfers"   element={<RequirePermission resource="reports" action="read"><HighValueTransfers /></RequirePermission>} />
+          <Route path="reports/cancelled-transfers"    element={<RequirePermission resource="reports" action="read"><CancelledTransfers /></RequirePermission>} />
+          <Route path="reports/ach-volume"             element={<RequirePermission resource="reports" action="read"><AchVolume /></RequirePermission>} />
+          <Route path="reports/returned-check-status"       element={<RequirePermission resource="reports" action="read"><ReturnedCheckStatus /></RequirePermission>} />
+          <Route path="reports/bank-transactions-breakdown" element={<RequirePermission resource="reports" action="read"><BankTxnBreakdown /></RequirePermission>} />
+          <Route path="reports/daily-drops"                 element={<RequirePermission resource="reports" action="read"><DailyDrops /></RequirePermission>} />
+          <Route path="reports/check-deposits"              element={<RequirePermission resource="reports" action="read"><CheckDeposits /></RequirePermission>} />
+          <Route path="reports/bank-rule-audit"             element={<RequirePermission resource="reports" action="read"><BankRuleAudit /></RequirePermission>} />
+          <Route path="reports/bank-charges-by-account"     element={<RequirePermission resource="reports" action="read"><BankChargesByAccount /></RequirePermission>} />
+          <Route path="reports/period-comparison"           element={<RequirePermission resource="reports" action="read"><PeriodComparison /></RequirePermission>} />
+          <Route path="reports/employee-activity"           element={<RequirePermission resource="reports" action="read"><EmployeeActivity /></RequirePermission>} />
+          <Route path="reports/period-pl"                   element={<RequirePermission resource="reports" action="read"><PeriodPL /></RequirePermission>} />
           <Route path="superadmin/reports/:slug"            element={<SuperadminBIDrilldown />} />
           <Route path="owner/reports/sales-by-company"      element={<SalesByCompany />} />
           <Route path="owner/reports/sales-by-service-type" element={<SalesByService />} />
@@ -297,22 +297,22 @@ export default function App() {
           <Route path="superadmin/reports"       element={<SuperadminReports />} />
           <Route path="subscribe"             element={<Subscribe />} />
           <Route path="subscribe/success"     element={<SubscribeSuccess />} />
-          <Route path="admin/subscription"    element={<AdminSubscription />} />
-          <Route path="admin/data-export"     element={<AdminDataExport />} />
-          <Route path="admin/timeclock"               element={<AdminTimeClock />} />
-          <Route path="admin/timeclock/credentials"   element={<AdminTimeClockCredentials />} />
-          <Route path="admin/timeclock/schedule"      element={<AdminTimeClockSchedule />} />
-          <Route path="admin/timeclock/paystub/:id"   element={<TimeClockPaystub />} />
-          <Route path="admin/audit-log"       element={<AdminAuditLog />} />
-          <Route path="admin/store-permissions" element={<StorePermissions />} />
-          <Route path="admin/users"             element={<AdminUsers />} />
-          <Route path="admin/users/new"         element={<AdminUserForm />} />
-          <Route path="admin/users/:uid/edit"   element={<AdminUserForm />} />
+          <Route path="admin/subscription"    element={<RequirePermission resource="settings" action="read"><AdminSubscription /></RequirePermission>} />
+          <Route path="admin/data-export"     element={<RequirePermission resource="reports" action="read"><AdminDataExport /></RequirePermission>} />
+          <Route path="admin/timeclock"               element={<RequirePermission resource="time_clock" action="read"><AdminTimeClock /></RequirePermission>} />
+          <Route path="admin/timeclock/credentials"   element={<RequirePermission resource="time_clock" action="read"><AdminTimeClockCredentials /></RequirePermission>} />
+          <Route path="admin/timeclock/schedule"      element={<RequirePermission resource="time_clock" action="read"><AdminTimeClockSchedule /></RequirePermission>} />
+          <Route path="admin/timeclock/paystub/:id"   element={<RequirePermission resource="time_clock" action="read"><TimeClockPaystub /></RequirePermission>} />
+          <Route path="admin/audit-log"       element={<RequirePermission resource="reports" action="read"><AdminAuditLog /></RequirePermission>} />
+          <Route path="admin/store-permissions" element={<RequirePermission resource="settings" action="read"><StorePermissions /></RequirePermission>} />
+          <Route path="admin/users"             element={<RequirePermission resource="users" action="read"><AdminUsers /></RequirePermission>} />
+          <Route path="admin/users/new"         element={<RequirePermission resource="users" action="create"><AdminUserForm /></RequirePermission>} />
+          <Route path="admin/users/:uid/edit"   element={<RequirePermission resource="users" action="update"><AdminUserForm /></RequirePermission>} />
           {/* Cashier roster — lifted out of the /settings/team tab
               when HR became its own sidebar group.  The old URL
               redirects below for bookmarks. */}
-          <Route path="admin/cashiers"          element={<AdminCashiers />} />
-          <Route path="timeclock"             element={<TimeClock />} />
+          <Route path="admin/cashiers"          element={<RequirePermission resource="users" action="read"><AdminCashiers /></RequirePermission>} />
+          <Route path="timeclock"             element={<RequirePermission resource="time_clock" action="read"><TimeClock /></RequirePermission>} />
           <Route path="account/referrals"     element={<AdminReferrals />} />
           <Route path="account/tickets"      element={<SupportTickets />} />
           {/* Legacy /account/profile — profile is now the first

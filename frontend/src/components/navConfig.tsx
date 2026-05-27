@@ -93,31 +93,37 @@ export const NAV: NavGroup[] = [
       {
         to: "/admin/timeclock", label: "Payroll",
         roles: ["admin"],
+        perm: "time_clock.read",
         icon: iconReports(),
       },
       {
         to: "/admin/timeclock/schedule", label: "Schedule",
         roles: ["admin"],
+        perm: "time_clock.read",
         icon: iconCalendarStar(),
       },
       {
         to: "/admin/timeclock/credentials", label: "Punch credentials",
         roles: ["admin"],
+        perm: "time_clock.read",
         icon: iconClock(),
       },
       {
         to: "/admin/cashiers", label: "Cashiers",
         roles: ["admin"],
+        perm: "users.read",
         icon: iconCustomers(),
       },
       {
         to: "/admin/users", label: "Team users",
         roles: ["admin"],
+        perm: "users.read",
         icon: iconCustomers(),
       },
       {
         to: "/admin/store-permissions", label: "Permissions",
         roles: ["admin"],
+        perm: "settings.read",
         icon: iconShield(),
       },
     ],
@@ -131,10 +137,10 @@ export const NAV: NavGroup[] = [
     roles: ["admin"],
     icon: iconReports(),
     items: [
-      { to: "/reports",            label: "Reports",     perm: "reports.read",  icon: iconReports() },
-      { to: "/monthly",            label: "Monthly P&L", perm: "monthly.read",  icon: iconMonthly() },
-      { to: "/admin/audit-log",    label: "Audit log",   perm: "reports.read",  icon: iconAudit() },
-      { to: "/admin/data-export",  label: "Data export", perm: "reports.read",  icon: iconReports() },
+      { to: "/reports",            label: "Reports",     perm: "reports.read",    icon: iconReports() },
+      { to: "/monthly",            label: "Monthly P&L", perm: "monthly.read",   icon: iconMonthly() },
+      { to: "/admin/audit-log",    label: "Audit log",   perm: "reports.read",   icon: iconAudit() },
+      { to: "/admin/data-export",  label: "Data export", perm: "reports.read",   icon: iconReports() },
     ],
   },
   {
