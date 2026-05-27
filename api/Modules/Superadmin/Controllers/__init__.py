@@ -410,12 +410,12 @@ def change_user_role_route(
     from api.Modules.Tenancy.Models import User
     user = db.get(User, user_id)
     if user is None:
-        raise HTTPException(404, "User not found")
+        raise HTTPException(status_code=404, detail="User not found")
     if user.role == "superadmin":
-        raise HTTPException(403, "Cannot change superadmin role")
+        raise HTTPException(status_code=403, detail="Cannot change superadmin role")
     new_role = body.get("role", "")
     if new_role not in ("admin", "employee", "owner"):
-        raise HTTPException(422, f"Invalid role: {new_role}")
+        raise HTTPException(status_code=422, detail=f"Invalid role: {new_role}")
     sa = resolve_superadmin_user(db, claims)
     old_role = user.role
     user.role = new_role
@@ -440,9 +440,9 @@ def toggle_user_active_route(
     from api.Modules.Tenancy.Models import User
     user = db.get(User, user_id)
     if user is None:
-        raise HTTPException(404, "User not found")
+        raise HTTPException(status_code=404, detail="User not found")
     if user.role == "superadmin":
-        raise HTTPException(403, "Cannot disable superadmin")
+        raise HTTPException(status_code=403, detail="Cannot disable superadmin")
     sa = resolve_superadmin_user(db, claims)
     user.is_active = not user.is_active
     db.commit()
@@ -466,9 +466,9 @@ def reset_2fa_route(
     from api.Modules.Tenancy.Models import User
     user = db.get(User, user_id)
     if user is None:
-        raise HTTPException(404, "User not found")
+        raise HTTPException(status_code=404, detail="User not found")
     if user.role == "superadmin":
-        raise HTTPException(403, "Cannot reset superadmin 2FA via API")
+        raise HTTPException(status_code=403, detail="Cannot reset superadmin 2FA via API")
     sa = resolve_superadmin_user(db, claims)
     user.totp_secret = None
     user.totp_enrolled_at = None
@@ -494,9 +494,9 @@ def force_password_reset_route(
     import secrets
     user = db.get(User, user_id)
     if user is None:
-        raise HTTPException(404, "User not found")
+        raise HTTPException(status_code=404, detail="User not found")
     if user.role == "superadmin":
-        raise HTTPException(403, "Cannot reset superadmin password via API")
+        raise HTTPException(status_code=403, detail="Cannot reset superadmin password via API")
     sa = resolve_superadmin_user(db, claims)
     temp_pw = secrets.token_urlsafe(12)
     user.set_password(temp_pw)
@@ -527,9 +527,9 @@ def impersonate_route(
     from api.Modules.Tenancy.Models import User
     user = db.get(User, user_id)
     if user is None:
-        raise HTTPException(404, "User not found")
+        raise HTTPException(status_code=404, detail="User not found")
     if user.role == "superadmin":
-        raise HTTPException(403, "Cannot impersonate superadmin")
+        raise HTTPException(status_code=403, detail="Cannot impersonate superadmin")
     sa = resolve_superadmin_user(db, claims)
     issuer = JWTIssuer(
         sub=user.id,
@@ -713,7 +713,7 @@ def store_drill_route(
 
     store = db.get(Store, store_id)
     if store is None:
-        raise HTTPException(404, "Store not found")
+        raise HTTPException(status_code=404, detail="Store not found")
 
     # Team
     users = (
@@ -1107,10 +1107,10 @@ def extend_trial_route(
     sa = resolve_superadmin_user(db, claims)
     s = db.get(Store, store_id)
     if s is None:
-        raise HTTPException(404, "Store not found")
+        raise HTTPException(status_code=404, detail="Store not found")
     days = int(body.get("days", 14))
     if days < 1 or days > 365:
-        raise HTTPException(422, "Days must be 1–365")
+        raise HTTPException(status_code=422, detail="Days must be 1–365")
     base = s.trial_ends_at or datetime.utcnow()
     s.trial_ends_at = base + timedelta(days=days)
     if s.grace_ends_at:
@@ -1135,7 +1135,7 @@ def toggle_store_active_route(
     sa = resolve_superadmin_user(db, claims)
     s = db.get(Store, store_id)
     if s is None:
-        raise HTTPException(404, "Store not found")
+        raise HTTPException(status_code=404, detail="Store not found")
     s.is_active = not s.is_active
     db.commit()
     act = "enable_store" if s.is_active else "disable_store"
@@ -1159,13 +1159,13 @@ def bulk_action_route(
     store_ids = body.get("store_ids", [])
     action = body.get("action", "")
     if not store_ids or not isinstance(store_ids, list):
-        raise HTTPException(422, "store_ids must be a non-empty list")
+        raise HTTPException(status_code=422, detail="store_ids must be a non-empty list")
     if action not in ("extend_trial", "enable", "disable"):
-        raise HTTPException(422, f"Invalid action: {action}")
+        raise HTTPException(status_code=422, detail=f"Invalid action: {action}")
 
     stores = db.query(Store).filter(Store.id.in_(store_ids)).all()
     if not stores:
-        raise HTTPException(404, "No stores found")
+        raise HTTPException(status_code=404, detail="No stores found")
 
     results = []
     for s in stores:
@@ -1210,11 +1210,11 @@ def email_store_route(
     sa = resolve_superadmin_user(db, claims)
     store = db.get(Store, store_id)
     if store is None:
-        raise HTTPException(404, "Store not found")
+        raise HTTPException(status_code=404, detail="Store not found")
     subject = body.get("subject", "").strip()
     message = body.get("message", "").strip()
     if not subject or not message:
-        raise HTTPException(422, "Subject and message are required")
+        raise HTTPException(status_code=422, detail="Subject and message are required")
     admins = (
         db.query(User)
         .filter(User.store_id == store_id, User.role == "admin", User.is_active == True)
@@ -1222,7 +1222,7 @@ def email_store_route(
     )
     recipients = [u for u in admins if u.email]
     if not recipients:
-        raise HTTPException(422, "No admin with an email address found for this store")
+        raise HTTPException(status_code=422, detail="No admin with an email address found for this store")
     sent_to = []
     for u in recipients:
         ok = send_email(db, u.email, subject, message)

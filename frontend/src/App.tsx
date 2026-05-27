@@ -249,7 +249,7 @@ export default function App() {
           <Route path="reports/period-comparison"           element={<RequirePermission resource="reports" action="read"><PeriodComparison /></RequirePermission>} />
           <Route path="reports/employee-activity"           element={<RequirePermission resource="reports" action="read"><EmployeeActivity /></RequirePermission>} />
           <Route path="reports/period-pl"                   element={<RequirePermission resource="reports" action="read"><PeriodPL /></RequirePermission>} />
-          <Route path="superadmin/reports/:slug"            element={<SuperadminBIDrilldown />} />
+          <Route path="superadmin/reports/:slug"            element={<RequireRole roles={["superadmin"]}><SuperadminBIDrilldown /></RequireRole>} />
           <Route path="owner/reports/sales-by-company"      element={<RequireRole roles={["owner"]}><SalesByCompany /></RequireRole>} />
           <Route path="owner/reports/sales-by-service-type" element={<RequireRole roles={["owner"]}><SalesByService /></RequireRole>} />
           <Route path="owner/reports/sales-by-employee"     element={<RequireRole roles={["owner"]}><SalesByEmployee /></RequireRole>} />
@@ -296,24 +296,24 @@ export default function App() {
           <Route path="owner/bulk-permissions"        element={<RequireRole roles={["owner"]}><OwnerBulkPermissions /></RequireRole>} />
           <Route path="owner/store/:storeId/permissions" element={<RequireRole roles={["owner"]}><OwnerStorePermissions /></RequireRole>} />
           <Route path="owner/store/:storeId" element={<RequireRole roles={["owner"]}><OwnerStoreDetail /></RequireRole>} />
-          <Route path="superadmin/dashboard"     element={<SuperadminDashboard />} />
-          <Route path="superadmin/billing"       element={<SuperadminBilling />} />
-          <Route path="superadmin/email-log"     element={<SuperadminEmailLog />} />
-          <Route path="superadmin/health"        element={<SuperadminHealth />} />
-          <Route path="superadmin/maintenance"   element={<SuperadminMaintenance />} />
-          <Route path="superadmin/stores/:id/drill" element={<SuperadminStoreDrill />} />
-          <Route path="superadmin/permissions"   element={<SuperadminPermissions />} />
-          <Route path="superadmin/stores"        element={<SuperadminStores />} />
-          <Route path="superadmin/users"         element={<SuperadminUsers />} />
-          <Route path="superadmin/stores/new"    element={<SuperadminStoreForm />} />
-          <Route path="superadmin/stores/:id/edit" element={<SuperadminStoreForm />} />
-          <Route path="superadmin/audit-log"     element={<SuperadminAuditLog />} />
-          <Route path="superadmin/announcements" element={<SuperadminAnnouncements />} />
-          <Route path="superadmin/tickets"       element={<SuperadminTickets />} />
-          <Route path="superadmin/controls"      element={<SuperadminControls />} />
-          <Route path="superadmin/feature-flags" element={<SuperadminFeatureFlags />} />
-          <Route path="superadmin/discounts"     element={<SuperadminDiscounts />} />
-          <Route path="superadmin/reports"       element={<SuperadminReports />} />
+          <Route path="superadmin/dashboard"     element={<RequireRole roles={["superadmin"]}><SuperadminDashboard /></RequireRole>} />
+          <Route path="superadmin/billing"       element={<RequireRole roles={["superadmin"]}><SuperadminBilling /></RequireRole>} />
+          <Route path="superadmin/email-log"     element={<RequireRole roles={["superadmin"]}><SuperadminEmailLog /></RequireRole>} />
+          <Route path="superadmin/health"        element={<RequireRole roles={["superadmin"]}><SuperadminHealth /></RequireRole>} />
+          <Route path="superadmin/maintenance"   element={<RequireRole roles={["superadmin"]}><SuperadminMaintenance /></RequireRole>} />
+          <Route path="superadmin/stores/:id/drill" element={<RequireRole roles={["superadmin"]}><SuperadminStoreDrill /></RequireRole>} />
+          <Route path="superadmin/permissions"   element={<RequireRole roles={["superadmin"]}><SuperadminPermissions /></RequireRole>} />
+          <Route path="superadmin/stores"        element={<RequireRole roles={["superadmin"]}><SuperadminStores /></RequireRole>} />
+          <Route path="superadmin/users"         element={<RequireRole roles={["superadmin"]}><SuperadminUsers /></RequireRole>} />
+          <Route path="superadmin/stores/new"    element={<RequireRole roles={["superadmin"]}><SuperadminStoreForm /></RequireRole>} />
+          <Route path="superadmin/stores/:id/edit" element={<RequireRole roles={["superadmin"]}><SuperadminStoreForm /></RequireRole>} />
+          <Route path="superadmin/audit-log"     element={<RequireRole roles={["superadmin"]}><SuperadminAuditLog /></RequireRole>} />
+          <Route path="superadmin/announcements" element={<RequireRole roles={["superadmin"]}><SuperadminAnnouncements /></RequireRole>} />
+          <Route path="superadmin/tickets"       element={<RequireRole roles={["superadmin"]}><SuperadminTickets /></RequireRole>} />
+          <Route path="superadmin/controls"      element={<RequireRole roles={["superadmin"]}><SuperadminControls /></RequireRole>} />
+          <Route path="superadmin/feature-flags" element={<RequireRole roles={["superadmin"]}><SuperadminFeatureFlags /></RequireRole>} />
+          <Route path="superadmin/discounts"     element={<RequireRole roles={["superadmin"]}><SuperadminDiscounts /></RequireRole>} />
+          <Route path="superadmin/reports"       element={<RequireRole roles={["superadmin"]}><SuperadminReports /></RequireRole>} />
           <Route path="subscribe"             element={<Subscribe />} />
           <Route path="subscribe/success"     element={<SubscribeSuccess />} />
           <Route path="admin/subscription"    element={<RequirePermission resource="settings" action="read"><AdminSubscription /></RequirePermission>} />
