@@ -899,6 +899,7 @@ def get_admin_referrals_route(
     Lazily mints a ReferralCode if missing (per CLAUDE.md
     invariant #12 — paid plans only; trial → 409). Powers
     /app/account/referrals."""
+    require_permission(claims, "settings", "read")
     store_id = resolve_store_scope(claims)
     # Build the share URL on the canonical host so the SPA copy
     # button always offers a public-facing link, even when the
@@ -1025,6 +1026,14 @@ def update_store_permissions_route(
             ))
         elif not allowed and existing:
             db.delete(existing)
+    if changes:
+        _audit_admin_action(
+            db, claims=claims, action="update_store_permissions",
+            target_type="store_role_override",
+            target_id=str(sid),
+            target_label=f"{len(changes)} permission change(s)",
+            summary=f"updated store permission overrides",
+        )
     db.commit()
     return get_store_permissions_route(db=db, claims=claims)
 
@@ -1047,6 +1056,13 @@ def reset_store_permissions_route(
     db.query(StoreRoleOverride).filter_by(
         store_id=sid, role=target_role,
     ).delete()
+    _audit_admin_action(
+        db, claims=claims, action="reset_store_permissions",
+        target_type="store_role_override",
+        target_id=str(sid),
+        target_label=f"reset {target_role} permissions",
+        summary=f"reset {target_role} permissions to global defaults",
+    )
     db.commit()
     return get_store_permissions_route(db=db, claims=claims)
 
@@ -1054,7 +1070,7 @@ def reset_store_permissions_route(
 def _editable_roles_for(caller_role: str) -> list[str]:
     """Which roles the caller can edit permissions for."""
     if caller_role == "superadmin":
-        return ["admin", "employee", "owner"]
+        return ["admin", "employee"]
     if caller_role == "owner":
         return ["employee"]
     if caller_role == "admin":

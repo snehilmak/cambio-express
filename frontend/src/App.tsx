@@ -332,7 +332,7 @@ export default function App() {
               redirects below for bookmarks. */}
           <Route path="admin/cashiers"          element={<RequirePermission resource="users" action="read"><AdminCashiers /></RequirePermission>} />
           <Route path="timeclock"             element={<RequirePermission resource="time_clock" action="read"><TimeClock /></RequirePermission>} />
-          <Route path="account/referrals"     element={<AdminReferrals />} />
+          <Route path="account/referrals"     element={<RequirePermission resource="settings" action="read"><AdminReferrals /></RequirePermission>} />
           <Route path="account/tickets"      element={<SupportTickets />} />
           {/* Legacy /account/profile — profile is now the first
               tab inside /settings (see the consolidation that
@@ -342,7 +342,7 @@ export default function App() {
           <Route path="account/notifications" element={<AccountNotifications />} />
           <Route path="account/activity"      element={<AccountActivity />} />
           <Route path="account/sessions"      element={<AccountSessions />} />
-          <Route path="tv-display" element={<TVDisplayAdmin />}>
+          <Route path="tv-display" element={<RequirePermission resource="settings" action="read"><TVDisplayAdmin /></RequirePermission>}>
             <Route index element={<Navigate to="overview" replace />} />
             <Route path="overview" element={<TVDisplayOverview />} />
             <Route path="content" element={<TVDisplayContent />} />
