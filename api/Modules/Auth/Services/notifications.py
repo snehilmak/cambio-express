@@ -65,6 +65,20 @@ def get_notifications_payload(db: Session, user: User) -> dict[str, Any]:
         "trial_toggle_applies":      trial_toggle_applies(db, user),
         "locked_day_digest_applies": locked_day_digest_applies(user),
         "daily_summary_applies":     daily_summary_applies(user),
+        "notify_high_variance":      bool(
+            getattr(user, "notify_high_variance", False),
+        ),
+        "notify_high_variance_push": bool(
+            getattr(user, "notify_high_variance_push", False),
+        ),
+        "notify_store_offline":      bool(
+            getattr(user, "notify_store_offline", False),
+        ),
+        "notify_store_offline_push": bool(
+            getattr(user, "notify_store_offline_push", False),
+        ),
+        "high_variance_applies":     user.role in ("owner", "admin", "superadmin"),
+        "store_offline_applies":     user.role in ("owner", "admin", "superadmin"),
         "role":                      user.role or "",
     }
 
@@ -79,6 +93,10 @@ def update_notifications(
     notify_announcement_push:      Optional[bool] = None,
     notify_locked_day_digest_push: Optional[bool] = None,
     notify_daily_summary_push:     Optional[bool] = None,
+    notify_high_variance:          Optional[bool] = None,
+    notify_high_variance_push:     Optional[bool] = None,
+    notify_store_offline:          Optional[bool] = None,
+    notify_store_offline_push:     Optional[bool] = None,
 ) -> None:
     """Apply changes. None = don't touch. Caller commits.
 
@@ -101,4 +119,12 @@ def update_notifications(
         setattr(user, "notify_locked_day_digest_push", bool(notify_locked_day_digest_push))
     if notify_daily_summary_push is not None:
         setattr(user, "notify_daily_summary_push", bool(notify_daily_summary_push))
+    if notify_high_variance is not None:
+        setattr(user, "notify_high_variance", bool(notify_high_variance))
+    if notify_high_variance_push is not None:
+        setattr(user, "notify_high_variance_push", bool(notify_high_variance_push))
+    if notify_store_offline is not None:
+        setattr(user, "notify_store_offline", bool(notify_store_offline))
+    if notify_store_offline_push is not None:
+        setattr(user, "notify_store_offline_push", bool(notify_store_offline_push))
     db.flush()

@@ -54,6 +54,10 @@ export default function AccountNotifications() {
       notify_announcement_push:      data.notify_announcement_push,
       notify_locked_day_digest_push: data.notify_locked_day_digest_push,
       notify_daily_summary_push:     data.notify_daily_summary_push,
+      notify_high_variance:          data.notify_high_variance,
+      notify_high_variance_push:     data.notify_high_variance_push,
+      notify_store_offline:          data.notify_store_offline,
+      notify_store_offline_push:     data.notify_store_offline_push,
     });
   }, [data]);
 
@@ -210,6 +214,38 @@ export default function AccountNotifications() {
                   </>
                 )}
               </PrefKindRow>
+
+              {data.high_variance_applies && (
+                <PrefKindRow
+                  id="high-variance"
+                  title="High over/short alert"
+                  disabled={busy}
+                  emailChecked={draft.notify_high_variance ?? false}
+                  emailOnChange={(v) => set("notify_high_variance", v)}
+                  pushChecked={draft.notify_high_variance_push ?? false}
+                  pushOnChange={(v) => set("notify_high_variance_push", v)}
+                >
+                  Alert when a store's daily over/short exceeds the
+                  normal range. Helps catch cash discrepancies early.
+                  Available to owners and admins.
+                </PrefKindRow>
+              )}
+
+              {data.store_offline_applies && (
+                <PrefKindRow
+                  id="store-offline"
+                  title="Store inactivity alert"
+                  disabled={busy}
+                  emailChecked={draft.notify_store_offline ?? false}
+                  emailOnChange={(v) => set("notify_store_offline", v)}
+                  pushChecked={draft.notify_store_offline_push ?? false}
+                  pushOnChange={(v) => set("notify_store_offline_push", v)}
+                >
+                  Alert when a store has had no transfer activity for
+                  an unusual period. Helps catch operational issues.
+                  Available to owners and admins.
+                </PrefKindRow>
+              )}
 
               <div style={{ marginTop: "1.25rem" }}>
                 <Button type="submit" busy={busy} disabled={busy}>

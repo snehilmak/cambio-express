@@ -58,6 +58,9 @@ class StoreInfoRow(BaseModel):
     timeclock_geofence_radius_m:  int  = 100
     timeclock_require_geofence:   bool = False
     timeclock_late_minutes_threshold: int = 5
+    legal_name:       str = ""
+    ein:              str = ""
+    business_address: str = ""
 
 
 class StoreInfoResponse(BaseModel):

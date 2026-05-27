@@ -816,6 +816,10 @@ def update_notifications_route(
         notify_announcement_push=body.notify_announcement_push,
         notify_locked_day_digest_push=body.notify_locked_day_digest_push,
         notify_daily_summary_push=body.notify_daily_summary_push,
+        notify_high_variance=body.notify_high_variance,
+        notify_high_variance_push=body.notify_high_variance_push,
+        notify_store_offline=body.notify_store_offline,
+        notify_store_offline_push=body.notify_store_offline_push,
     )
     db.commit()
     return NotificationsResponse(**get_notifications_payload(db, user))

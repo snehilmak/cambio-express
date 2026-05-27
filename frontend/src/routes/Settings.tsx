@@ -542,6 +542,9 @@ function StoreInfoCard() {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [address, setAddress] = useState("");
+  const [legalName, setLegalName] = useState("");
+  const [ein, setEin] = useState("");
+  const [businessAddress, setBusinessAddress] = useState("");
   const [taxRatePct, setTaxRatePct] = useState("");
   const [receiptLogoUrl, setReceiptLogoUrl] = useState("");
   const [receiptFooter, setReceiptFooter] = useState("");
@@ -574,6 +577,9 @@ function StoreInfoCard() {
     setEmail(data.store.email);
     setPhone(data.store.phone);
     setAddress(data.store.address);
+    setLegalName(data.store.legal_name);
+    setEin(data.store.ein);
+    setBusinessAddress(data.store.business_address);
     setTaxRatePct(((data.store.federal_tax_rate || 0) * 100).toFixed(2));
     setReceiptLogoUrl(data.store.receipt_logo_url);
     setReceiptFooter(data.store.receipt_footer);
@@ -634,6 +640,9 @@ function StoreInfoCard() {
       }
       await updateStoreInfo({
         name, email, phone, address,
+        legal_name: legalName,
+        ein,
+        business_address: businessAddress,
         federal_tax_rate: Number(taxRatePct) / 100,
         receipt_logo_url: receiptLogoUrl,
         receipt_footer:   receiptFooter,
@@ -760,6 +769,23 @@ function StoreInfoCard() {
           <Field label="Address">
             <Input type="text" value={address}
               onChange={(e) => setAddress(e.target.value)}
+              disabled={!canEdit} />
+          </Field>
+          <SectionTitle>Business / Legal</SectionTitle>
+          <Field label="Legal name" hint="Official business name for compliance filings">
+            <Input type="text" value={legalName}
+              onChange={(e) => setLegalName(e.target.value)}
+              disabled={!canEdit} />
+          </Field>
+          <Field label="EIN" hint="Federal employer identification number">
+            <Input type="text" value={ein} placeholder="XX-XXXXXXX"
+              maxLength={20}
+              onChange={(e) => setEin(e.target.value)}
+              disabled={!canEdit} />
+          </Field>
+          <Field label="Business address" hint="Legal address (if different from store address)">
+            <Input type="text" value={businessAddress}
+              onChange={(e) => setBusinessAddress(e.target.value)}
               disabled={!canEdit} />
           </Field>
           <Field label="Federal tax rate (%)">

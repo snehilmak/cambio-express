@@ -172,6 +172,9 @@ export interface StoreInfoRow {
   timeclock_geofence_radius_m:  number;
   timeclock_require_geofence:   boolean;
   timeclock_late_minutes_threshold: number;
+  legal_name:       string;
+  ein:              string;
+  business_address: string;
 }
 
 export interface StoreHourEntry {
@@ -199,6 +202,9 @@ export interface StoreInfoUpdateBody {
   timeclock_geofence_radius_m?:  number;
   timeclock_require_geofence?:   boolean;
   timeclock_late_minutes_threshold?: number;
+  legal_name?:       string;
+  ein?:              string;
+  business_address?: string;
 }
 
 // Allowed values for the per-user theme toggle. Dark is the
@@ -252,9 +258,15 @@ export interface NotificationsResponse {
   notify_announcement_push:      boolean;
   notify_locked_day_digest_push: boolean;
   notify_daily_summary_push:     boolean;
+  notify_high_variance:          boolean;
+  notify_high_variance_push:     boolean;
+  notify_store_offline:          boolean;
+  notify_store_offline_push:     boolean;
   trial_toggle_applies:          boolean;
   locked_day_digest_applies:     boolean;
   daily_summary_applies:         boolean;
+  high_variance_applies:         boolean;
+  store_offline_applies:         boolean;
   role:                          string;
 }
 
@@ -267,6 +279,10 @@ export interface NotificationsUpdateBody {
   notify_announcement_push?:      boolean;
   notify_locked_day_digest_push?: boolean;
   notify_daily_summary_push?:     boolean;
+  notify_high_variance?:          boolean;
+  notify_high_variance_push?:     boolean;
+  notify_store_offline?:          boolean;
+  notify_store_offline_push?:     boolean;
 }
 
 export function useNotifications() {

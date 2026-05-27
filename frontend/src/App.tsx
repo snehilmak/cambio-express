@@ -58,6 +58,11 @@ const OwnerUsers = lazy(() => import("./routes/OwnerUsers"));
 const OwnerStorePermissions = lazy(
   () => import("./routes/OwnerStorePermissions"),
 );
+const OwnerSettings = lazy(() => import("./routes/OwnerSettings"));
+const OwnerActivity = lazy(() => import("./routes/OwnerActivity"));
+const OwnerBulkPermissions = lazy(
+  () => import("./routes/OwnerBulkPermissions"),
+);
 const OwnerConnect = lazy(() => import("./routes/OwnerConnect"));
 const OwnerDashboard = lazy(() => import("./routes/OwnerDashboard"));
 const OwnerLocations = lazy(() => import("./routes/OwnerLocations"));
@@ -285,6 +290,9 @@ export default function App() {
           <Route path="owner/bulk-add-user"          element={<OwnerBulkAddUser />} />
           <Route path="owner/cross-store-defaults"   element={<OwnerCrossStoreDefaults />} />
           <Route path="owner/users"                  element={<OwnerUsers />} />
+          <Route path="owner/settings"               element={<OwnerSettings />} />
+          <Route path="owner/activity"               element={<OwnerActivity />} />
+          <Route path="owner/bulk-permissions"        element={<OwnerBulkPermissions />} />
           <Route path="owner/store/:storeId/permissions" element={<OwnerStorePermissions />} />
           <Route path="owner/store/:storeId" element={<OwnerStoreDetail />} />
           <Route path="superadmin/dashboard"     element={<SuperadminDashboard />} />

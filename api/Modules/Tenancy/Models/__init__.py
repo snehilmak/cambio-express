@@ -99,6 +99,9 @@ class Store(Base):
     receipt_logo_url = Column(String(500), default="")
     receipt_footer   = Column(String(500), default="")
     receipt_tax_id   = Column(String(40),  default="")
+    legal_name       = Column(String(200), default="")
+    ein              = Column(String(20),  default="")
+    business_address = Column(String(500), default="")
     # IANA timezone (e.g. ``America/Chicago``). Used as a fallback
     # for date / time rendering when the viewing user hasn't set
     # their own ``User.timezone``. Empty string means "unset" —
@@ -217,6 +220,10 @@ class User(Base):
     notify_announcement_push       = Column(Boolean, default=True)
     notify_locked_day_digest_push  = Column(Boolean, default=True)
     notify_daily_summary_push      = Column(Boolean, default=True)
+    notify_high_variance           = Column(Boolean, default=False)
+    notify_high_variance_push      = Column(Boolean, default=False)
+    notify_store_offline           = Column(Boolean, default=False)
+    notify_store_offline_push      = Column(Boolean, default=False)
     # Deliverability suppression — stamped when Resend reports a hard
     # bounce on this user's email. ``_send_email()`` skips suppressed
     # recipients.

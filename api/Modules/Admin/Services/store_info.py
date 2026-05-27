@@ -48,6 +48,9 @@ EDITABLE_STORE_FIELDS: tuple[str, ...] = (
     # Lateness threshold (store-local minutes) for the
     # "Late by Xm" pill on the payroll history view.  Default 5.
     "timeclock_late_minutes_threshold",
+    "legal_name",
+    "ein",
+    "business_address",
 )
 
 
