@@ -892,6 +892,10 @@ def owner_update_store_permissions_route(
         action="update_store_permissions",
         summary=f"owner updated employee permissions for store {store_id}",
     )
+    from api.Modules.Auth.Services.principal import invalidate_sessions_for_role
+    affected_roles = {ch.get("role") for ch in changes if ch.get("role")}
+    for r in affected_roles:
+        invalidate_sessions_for_role(db, store_id, r)
     db.commit()
     return owner_store_permissions_route(
         store_id=store_id, db=db, claims=claims,
@@ -932,6 +936,8 @@ def owner_reset_store_permissions_route(
         action="reset_store_permissions",
         summary=f"owner reset {target_role} permissions to global defaults for store {store_id}",
     )
+    from api.Modules.Auth.Services.principal import invalidate_sessions_for_role
+    invalidate_sessions_for_role(db, store_id, target_role)
     db.commit()
     return owner_store_permissions_route(
         store_id=store_id, db=db, claims=claims,
@@ -1104,6 +1110,10 @@ def owner_bulk_permissions_route(
                 action="bulk_update_store_permissions",
                 summary=f"owner bulk-pushed permissions to store {sid}",
             )
+            from api.Modules.Auth.Services.principal import invalidate_sessions_for_role
+            affected = {ch.get("role") for ch in changes if ch.get("role")}
+            for r in affected:
+                invalidate_sessions_for_role(db, sid, r)
         results.append({"store_id": sid, "status": "applied", "changes": applied})
     db.commit()
     return {"results": results}
