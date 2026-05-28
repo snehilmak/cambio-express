@@ -1658,40 +1658,84 @@ def superadmin_update_store_permissions_route(
     from api.Modules.Auth.Services.login import RBAC_ACTIONS, RBAC_RESOURCES
     editable_roles = ["admin", "employee"]
 
+    matrix = body.get("matrix", {})
+    if not matrix:
+        changes = body.get("changes", [])
+        affected_roles = {ch.get("role") for ch in changes if ch.get("role") in editable_roles}
+        for role in affected_roles:
+            has_overrides = db.query(StoreRoleOverride).filter_by(
+                store_id=store_id, role=role,
+            ).first()
+            if not has_overrides:
+                from api.Modules.Auth.Services.login import permissions_for
+                current = permissions_for(role, db=db, store_id=store_id)
+                for perm in current:
+                    if "." not in perm:
+                        continue
+                    parts = perm.split(".", 1)
+                    if len(parts) != 2:
+                        continue
+                    res, act = parts
+                    if res not in RBAC_RESOURCES or act not in RBAC_ACTIONS:
+                        continue
+                    db.add(StoreRoleOverride(
+                        store_id=store_id, role=role,
+                        resource=res, action=act,
+                    ))
+                db.flush()
+
+        for ch in changes:
+            target_role = ch.get("role", "")
+            resource = ch.get("resource", "")
+            action = ch.get("action", "")
+            allowed = ch.get("allowed", False)
+            if target_role not in editable_roles:
+                continue
+            if resource not in RBAC_RESOURCES or action not in RBAC_ACTIONS:
+                continue
+            existing = (
+                db.query(StoreRoleOverride)
+                .filter_by(store_id=store_id, role=target_role,
+                           resource=resource, action=action)
+                .first()
+            )
+            if allowed and not existing:
+                db.add(StoreRoleOverride(
+                    store_id=store_id, role=target_role,
+                    resource=resource, action=action,
+                ))
+            elif not allowed and existing:
+                db.delete(existing)
+    else:
+        for role, resources in matrix.items():
+            if role not in editable_roles:
+                continue
+            db.query(StoreRoleOverride).filter_by(
+                store_id=store_id, role=role,
+            ).delete()
+            for resource, actions in resources.items():
+                if resource not in RBAC_RESOURCES:
+                    continue
+                for action, allowed in actions.items():
+                    if action not in RBAC_ACTIONS:
+                        continue
+                    if allowed:
+                        db.add(StoreRoleOverride(
+                            store_id=store_id, role=role,
+                            resource=resource, action=action,
+                        ))
     changes = body.get("changes", [])
-    for ch in changes:
-        target_role = ch.get("role", "")
-        resource = ch.get("resource", "")
-        action = ch.get("action", "")
-        allowed = ch.get("allowed", False)
-        if target_role not in editable_roles:
-            continue
-        if resource not in RBAC_RESOURCES or action not in RBAC_ACTIONS:
-            continue
-        existing = (
-            db.query(StoreRoleOverride)
-            .filter_by(store_id=store_id, role=target_role,
-                       resource=resource, action=action)
-            .first()
-        )
-        if allowed and not existing:
-            db.add(StoreRoleOverride(
-                store_id=store_id, role=target_role,
-                resource=resource, action=action,
-            ))
-        elif not allowed and existing:
-            db.delete(existing)
-    if changes:
+    if changes or matrix:
         sa = resolve_superadmin_user(db, claims)
         _audit_store(
             db, sa,
             "update_store_permissions",
             target_id=str(store_id),
-            details=f"superadmin updated permissions for store '{store.name}' ({len(changes)} changes)",
+            details=f"superadmin updated permissions for store '{store.name}'",
         )
         from api.Modules.Auth.Services.principal import invalidate_sessions_for_role
-        affected_roles = {ch.get("role") for ch in changes if ch.get("role")}
-        for r in affected_roles:
+        affected = set(matrix.keys()) if matrix else {ch.get("role") for ch in changes if ch.get("role")}
+        for r in affected:
             invalidate_sessions_for_role(db, store_id, r)
     db.commit()
     return superadmin_store_permissions_route(

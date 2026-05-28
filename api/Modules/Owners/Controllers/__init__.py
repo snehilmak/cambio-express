@@ -863,29 +863,25 @@ def owner_update_store_permissions_route(
     from api.Modules.Auth.Services.login import RBAC_ACTIONS, RBAC_RESOURCES
     editable_roles = ["employee"]
 
-    changes = body.get("changes", [])
-    for ch in changes:
-        target_role = ch.get("role", "")
-        resource = ch.get("resource", "")
-        action = ch.get("action", "")
-        allowed = ch.get("allowed", False)
-        if target_role not in editable_roles:
-            raise HTTPException(status_code=403, detail=f"Cannot edit {target_role} permissions")
-        if resource not in RBAC_RESOURCES or action not in RBAC_ACTIONS:
-            continue
-        existing = (
-            db.query(StoreRoleOverride)
-            .filter_by(store_id=store_id, role=target_role,
-                       resource=resource, action=action)
-            .first()
-        )
-        if allowed and not existing:
-            db.add(StoreRoleOverride(
-                store_id=store_id, role=target_role,
-                resource=resource, action=action,
-            ))
-        elif not allowed and existing:
-            db.delete(existing)
+    matrix = body.get("matrix", {})
+    if matrix:
+        for role, resources in matrix.items():
+            if role not in editable_roles:
+                raise HTTPException(status_code=403, detail=f"Cannot edit {role} permissions")
+            db.query(StoreRoleOverride).filter_by(
+                store_id=store_id, role=role,
+            ).delete()
+            for resource, actions in resources.items():
+                if resource not in RBAC_RESOURCES:
+                    continue
+                for action, allowed in actions.items():
+                    if action not in RBAC_ACTIONS:
+                        continue
+                    if allowed:
+                        db.add(StoreRoleOverride(
+                            store_id=store_id, role=role,
+                            resource=resource, action=action,
+                        ))
 
     from api.Modules.Audit.Services import record_operator_action
     record_operator_action(
@@ -1081,6 +1077,27 @@ def owner_bulk_permissions_route(
         if sid not in sids:
             results.append({"store_id": sid, "status": "rejected", "reason": "not in umbrella"})
             continue
+        affected_roles = {ch.get("role") for ch in changes if ch.get("role") in editable_roles}
+        for ar in affected_roles:
+            has_overrides = db.query(StoreRoleOverride).filter_by(
+                store_id=sid, role=ar,
+            ).first()
+            if not has_overrides:
+                from api.Modules.Auth.Services.login import permissions_for
+                current = permissions_for(ar, db=db, store_id=sid)
+                for perm in current:
+                    if "." not in perm:
+                        continue
+                    parts = perm.split(".", 1)
+                    if len(parts) != 2:
+                        continue
+                    res, act = parts
+                    if res not in RBAC_RESOURCES or act not in RBAC_ACTIONS:
+                        continue
+                    db.add(StoreRoleOverride(
+                        store_id=sid, role=ar, resource=res, action=act,
+                    ))
+                db.flush()
         applied = 0
         for ch in changes:
             target_role = ch.get("role", "")
