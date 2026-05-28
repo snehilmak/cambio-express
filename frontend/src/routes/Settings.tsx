@@ -103,7 +103,48 @@ export function SettingsSecurity() {
     <>
       <ChangePasswordCard />
       <PasskeysCard />
+      <DataExportCard />
     </>
+  );
+}
+
+
+function DataExportCard() {
+  const [busy, setBusy] = useState(false);
+  async function handleExport() {
+    setBusy(true);
+    try {
+      const resp = await fetch("/api/v2/auth/account/export", {
+        credentials: "include",
+      });
+      if (!resp.ok) throw new Error("Export failed");
+      const blob = await resp.blob();
+      const cd = resp.headers.get("content-disposition") || "";
+      const match = cd.match(/filename="([^"]+)"/);
+      const filename = match ? match[1] : "dinerobook-data.json";
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <Card>
+      <SectionTitle>Download your data</SectionTitle>
+      <p style={{ fontSize: "0.88rem", color: "var(--db-text-muted)", margin: "0.25rem 0 0.75rem" }}>
+        Export a JSON file containing your profile, notification preferences,
+        session history, registered passkeys, and audit log entries.
+      </p>
+      <Button onClick={() => { void handleExport(); }} busy={busy} type="button">
+        Download my data (JSON)
+      </Button>
+    </Card>
   );
 }
 

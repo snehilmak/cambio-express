@@ -115,7 +115,14 @@ def init_db(logger: Optional[logging.Logger] = None) -> None:
             )
             session.add(sa)
             session.commit()
-            print("✅ Superadmin: superadmin / super2025!")
+            if not os.environ.get("SUPERADMIN_PASSWORD"):
+                log.warning(
+                    "Seeded superadmin with default password. "
+                    "Change immediately on first login or set "
+                    "SUPERADMIN_PASSWORD env var.",
+                )
+            else:
+                log.info("Seeded superadmin user (custom password set via env).")
 
         from api.Modules.Auth.Services.login import seed_rbac_defaults
         seed_rbac_defaults(session)
