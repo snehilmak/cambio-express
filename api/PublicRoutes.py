@@ -33,6 +33,7 @@ from starlette.routing import Route
 from starlette.templating import Jinja2Templates
 
 from api.Core.Database import SessionLocal
+from api.Core.Clock import utc_now
 
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
@@ -233,7 +234,7 @@ async def tv_device_display(request: Request) -> Response:
         store = s.get(Store, display.store_id)
         if not store or not store_has_addon(store, "tv_display"):
             return Response(status_code=404)
-        pairing.last_seen_at = datetime.utcnow()
+        pairing.last_seen_at = utc_now()
         s.commit()
         ctx = build_tv_board_context(display, store, s)
         return _templates.TemplateResponse(
@@ -261,7 +262,7 @@ async def tv_pair_init(request: Request) -> JSONResponse:
     except Exception:
         payload = {}
     device_label = (payload.get("device_label") or "").strip()[:80]
-    now = datetime.utcnow()
+    now = utc_now()
 
     with SessionLocal() as s:
         # Loop on code collision (rare with a 387M space, free to retry).
@@ -331,7 +332,7 @@ async def tv_pair_status(request: Request) -> JSONResponse:
                     .filter_by(device_token=token).first())
         if not pending:
             return JSONResponse({"status": "expired"})
-        if pending.expires_at < datetime.utcnow():
+        if pending.expires_at < utc_now():
             return JSONResponse({"status": "expired"})
         if pending.claimed_at is not None:
             # Pending row was claimed but the resulting TVPairing
@@ -339,7 +340,7 @@ async def tv_pair_status(request: Request) -> JSONResponse:
             return JSONResponse({"status": "expired"})
         # Still pending. Return the code so the Fire TV can
         # re-display it after a process death / config change.
-        ttl = int((pending.expires_at - datetime.utcnow()).total_seconds())
+        ttl = int((pending.expires_at - utc_now()).total_seconds())
         return JSONResponse({
             "status":      "pending",
             "code":        pending.code,

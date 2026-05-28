@@ -17,6 +17,7 @@ from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 
 from api.Modules.Auth.Models import PasswordResetToken, User
+from api.Core.Clock import utc_now
 
 
 # Default expiry window. The legacy module-level constant is
@@ -76,7 +77,7 @@ def issue_password_reset_token(
     if user is None or not user.is_active:
         return None
 
-    now = datetime.utcnow()
+    now = utc_now()
     # Invalidate any still-valid tokens for this user (race-prevention
     # against an attacker who already has a stale link).
     (
@@ -117,7 +118,7 @@ def verify_password_reset_token(
     )
     if row is None or row.used_at is not None:
         return None
-    if row.expires_at <= datetime.utcnow():
+    if row.expires_at <= utc_now():
         return None
     target = db.get(User, row.user_id)
     if target is None or target.role == "superadmin":
@@ -136,6 +137,6 @@ def consume_password_reset_token(
     if user is None:
         raise LookupError(f"User id={token.user_id} no longer exists")
     user.set_password(new_password)
-    setattr(token, "used_at", datetime.utcnow())
+    setattr(token, "used_at", utc_now())
     db.flush()
     return user

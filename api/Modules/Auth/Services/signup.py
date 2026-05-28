@@ -16,6 +16,7 @@ from slugify import slugify
 from sqlalchemy.orm import Session
 
 from api.Modules.Auth.Models import Store, User
+from api.Core.Clock import utc_now
 
 
 # Trial window. Fresh signups get 7 days of free trial + 4 grace
@@ -134,7 +135,7 @@ def create_store_and_admin(
         )
 
     slug = _allocate_unique_slug(db, store_name)
-    now = datetime.utcnow()
+    now = utc_now()
     trial_end = now + timedelta(days=trial_days)
     grace_end = trial_end + timedelta(days=grace_days)
     store = Store(

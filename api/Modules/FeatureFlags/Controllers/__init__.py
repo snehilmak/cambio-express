@@ -36,6 +36,7 @@ from api.Modules.FeatureFlags.Requests import (
     StoreOverrideRow,
 )
 from typing import Any
+from api.Core.Clock import utc_now
 
 
 router = APIRouter()
@@ -241,7 +242,7 @@ def upsert_override_route(
         db.add(o); db.flush()
     else:
         o.enabled = body.enabled
-        o.updated_at = datetime.utcnow()
+        o.updated_at = utc_now()
         o.updated_by = user.id
     _audit(
         db, user, "set_feature_override",

@@ -19,6 +19,7 @@ from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 
 from api.Modules.Billing.Models import Store
+from api.Core.Clock import utc_now
 
 
 # Default retention window after a paid subscription is cancelled.
@@ -59,7 +60,7 @@ def apply_subscription_cancelled(
     subscription can't end up with a stale (already-elapsed)
     retention timer.
     """
-    now = datetime.utcnow()
+    now = utc_now()
     store.plan = "inactive"
     store.billing_cycle = ""
     store.stripe_subscription_id = ""

@@ -30,6 +30,7 @@ from datetime import datetime
 from typing import Any
 
 from sqlalchemy.orm import Session
+from api.Core.Clock import utc_now
 
 
 # Per-store models, in purge order. Kept as a list of class-name
@@ -286,7 +287,7 @@ def purge_expired_stores(db: Session) -> int:
     job retries on the next run.
     """
     from api.Modules.Tenancy.Models import Store
-    now = datetime.utcnow()
+    now = utc_now()
     expired = _expired_stores(db, now)
     purged = 0
     for store in expired:

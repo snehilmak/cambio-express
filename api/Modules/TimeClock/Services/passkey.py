@@ -30,6 +30,7 @@ from api.Modules.Auth.Services.jwt_issuer import (
 )
 from api.Modules.TimeClock.Models import StoreEmployeePasskey
 from webauthn.helpers.structs import PublicKeyCredentialDescriptor
+from api.Core.Clock import utc_now
 
 
 # 5 minutes mirrors the user-side ``DEFAULT_PASSKEY_REGISTER_TTL_SECONDS``.
@@ -135,7 +136,7 @@ def decode_assert_token(token: str) -> dict[str, Any]:
 
 
 def _now() -> datetime:
-    return datetime.utcnow()
+    return utc_now()
 
 
 def _encode_token(

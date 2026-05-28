@@ -22,6 +22,7 @@ from api.Modules.DailyBook.Repositories import (
     find_report_by_date,
     list_reports_in_period,
 )
+from api.Core.Clock import utc_now
 
 
 @dataclass
@@ -228,7 +229,7 @@ def update_daily_report(
         if field in fields:
             setattr(report, field, float(fields[field] or 0))
     report.notes = notes or ""
-    report.updated_at = datetime.utcnow()
+    report.updated_at = utc_now()
     db.flush()
     return report
 
@@ -244,7 +245,7 @@ def lock_report(
     so the user can lock an empty day on purpose."""
     report = ensure_daily_report(db, store_id, report_date)
     if report.locked_at is None:
-        now = datetime.utcnow()
+        now = utc_now()
         report.locked_at = now
         report.locked_by = locked_by_user_id
         report.updated_at = now
@@ -262,6 +263,6 @@ def unlock_report(
         return report
     setattr(report, "locked_at", None)
     setattr(report, "locked_by", None)
-    setattr(report, "updated_at", datetime.utcnow())
+    setattr(report, "updated_at", utc_now())
     db.flush()
     return report

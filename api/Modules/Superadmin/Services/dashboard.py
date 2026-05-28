@@ -23,6 +23,7 @@ from datetime import date, datetime, timedelta
 from sqlalchemy import case, func
 from sqlalchemy.orm import Session
 from typing import Any
+from api.Core.Clock import utc_now
 
 
 # Plan pricing in dollars. Yearly buckets are amortised to /12
@@ -62,7 +63,7 @@ def superadmin_dashboard_context(db: Session) -> dict[str, Any]:
     from api.Modules.Tenancy.Models import Store
     from api.Modules.Transfers.Models import Transfer
 
-    now = datetime.utcnow()
+    now = utc_now()
     today_d = date.today()
     d30_ago = now - timedelta(days=30)
     d60_ago = now - timedelta(days=60)

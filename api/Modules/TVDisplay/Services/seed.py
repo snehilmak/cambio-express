@@ -24,6 +24,7 @@ from datetime import datetime
 
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
+from api.Core.Clock import utc_now
 
 
 # Curated default lists for the TV-display country editor's
@@ -305,7 +306,7 @@ def seed_logos_from_disk(session: Session, repo_root: str) -> int:
                 catalog_type=catalog_type, slug=slug,
                 mime_type=normalized_mime,
                 blob=blob, file_size=len(blob),
-                updated_at=datetime.utcnow(),
+                updated_at=utc_now(),
             ))
             # Mirror the public URL into the parent row's logo_url
             # so non-superadmin code can resolve without a logo-table

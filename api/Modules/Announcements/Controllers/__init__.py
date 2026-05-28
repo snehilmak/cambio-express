@@ -37,6 +37,7 @@ from api.Modules.Auth.Controllers import get_principal
 from api.Modules.Auth.Models import User
 from api.Modules.Auth.Services import resolve_superadmin_user
 from typing import Any
+from api.Core.Clock import utc_now
 
 
 router = APIRouter()
@@ -68,7 +69,7 @@ def _is_visible(a) -> bool:
     is_active AND inside its starts_at/expires_at window."""
     if not a.is_active:
         return False
-    now = datetime.utcnow()
+    now = utc_now()
     if a.starts_at and now < a.starts_at:
         return False
     if a.expires_at and now > a.expires_at:
@@ -174,7 +175,7 @@ def create_route(
     falls back to "start now"."""
     user = resolve_superadmin_user(db, claims)
     from api.Modules.Announcements.Models import Announcement
-    now = datetime.utcnow()
+    now = utc_now()
     starts_at = _parse_starts_at(body.start_at_iso, fallback=now)
     # expires_days is measured from the start time so a scheduled
     # banner gets its full visibility window — "10-day banner that

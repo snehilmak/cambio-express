@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 
 from api.Modules.Auth.Models import User
 from typing import Any
+from api.Core.Clock import utc_now
 
 
 def resolve_store_scope(claims: dict[str, Any]) -> int:
@@ -106,7 +107,7 @@ def invalidate_sessions_for_role(db: Session, store_id: int, role: str) -> None:
     instead of waiting up to 30 minutes for the access token to expire."""
     from datetime import datetime
     from api.Modules.Auth.Models import RefreshToken
-    now = datetime.utcnow()
+    now = utc_now()
     db.query(RefreshToken).filter(
         RefreshToken.user_id.in_(
             db.query(User.id).filter(

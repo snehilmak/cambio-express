@@ -124,6 +124,16 @@ export async function api<T = unknown>(
       _bounceToLogin();
     } else if (resp.status === 401) {
       _bounceToLogin();
+    } else if (
+      resp.status === 403 && _retryAfterRefresh &&
+      typeof parsed === "object" && parsed &&
+      "detail" in parsed &&
+      String((parsed as Record<string, unknown>).detail).startsWith("Missing permission")
+    ) {
+      const refreshed = await _silentRefresh();
+      if (refreshed) {
+        return api<T>(path, options, false);
+      }
     }
     let message = `Request failed (${resp.status})`;
     if (typeof parsed === "object" && parsed && "detail" in parsed) {

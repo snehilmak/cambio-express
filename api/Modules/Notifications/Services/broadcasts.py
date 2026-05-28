@@ -22,6 +22,7 @@ from sqlalchemy.orm import Session
 
 from api.Modules.Notifications.Services.smtp import send_email
 from api.Modules.Notifications.Services.templates import render_email_template
+from api.Core.Clock import utc_now
 
 
 # Subject fallback when the announcement message is empty / blank.
@@ -111,7 +112,7 @@ def run(
 
     subject = derive_broadcast_subject(ann.message)
     recipients = eligible_recipients(session)
-    now = datetime.utcnow()
+    now = utc_now()
     notifications_url = f"{base_url}/account/notifications"
     plain_body = BROADCAST_PLAIN_BODY.format(
         message=ann.message,

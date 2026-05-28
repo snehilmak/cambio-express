@@ -44,6 +44,7 @@ from api.Modules.BankSync.Services.builtin_rules import (
     BUILTIN_BANK_RULES,
 )
 from api.Modules.Billing.Services.config import stripe_is_configured
+from api.Core.Clock import utc_now
 
 
 logger = logging.getLogger(__name__)
@@ -236,7 +237,7 @@ def sync_bank_transactions(
     new_rows = 0
     total = 0
     last_error = ""
-    now = datetime.utcnow()
+    now = utc_now()
     fallback_since = datetime.combine(
         (now - timedelta(days=INITIAL_SYNC_DAYS_BACK)).date(),
         datetime.min.time(),
@@ -282,7 +283,7 @@ def sync_bank_transactions(
                 lo = since
             else:
                 lo = max(
-                    datetime.utcnow() - timedelta(days=7),
+                    utc_now() - timedelta(days=7),
                     fallback_since,
                 )
             params = {

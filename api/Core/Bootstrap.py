@@ -37,6 +37,7 @@ from typing import Sequence
 from sqlalchemy import inspect
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session
+from api.Core.Clock import utc_now
 
 
 _log = logging.getLogger(__name__)
@@ -316,7 +317,7 @@ def migrate_legacy_line_item_tables(session: Session) -> int:
                 kind="drop", at_time=dd.drop_time,
                 amount=dd.amount, note=dd.note or "",
                 created_by=dd.created_by,
-                created_at=dd.created_at or datetime.utcnow(),
+                created_at=dd.created_at or utc_now(),
             ))
             inserted += 1
     try:
@@ -334,7 +335,7 @@ def migrate_legacy_line_item_tables(session: Session) -> int:
                 kind="check_deposit", at_time=cd.deposit_time,
                 amount=cd.amount, note=cd.note or "",
                 created_by=cd.created_by,
-                created_at=cd.created_at or datetime.utcnow(),
+                created_at=cd.created_at or utc_now(),
             ))
             inserted += 1
     if inserted:

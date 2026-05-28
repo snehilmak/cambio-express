@@ -32,6 +32,7 @@ from typing import Any, Optional
 
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
+from api.Core.Clock import utc_now
 
 
 _log = logging.getLogger(__name__)
@@ -196,7 +197,7 @@ def run(
     "good news!" emails.
     """
     if on_date is None:
-        on_date = (datetime.utcnow() - timedelta(days=1)).date()
+        on_date = (utc_now() - timedelta(days=1)).date()
 
     from api.Modules.Notifications.Services.push import (
         send_push, user_wants_push,

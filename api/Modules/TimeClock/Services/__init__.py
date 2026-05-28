@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from api.Modules.TimeClock.Models import TimeClockEntry
 from api.Modules.Tenancy.Models import StoreEmployee
+from api.Core.Clock import utc_now
 
 
 # ── Exceptions ──────────────────────────────────────────────
@@ -109,7 +110,7 @@ def clock_in(
         store_id=store_id,
         store_employee_id=store_employee_id,
         clock_in_user_id=user_id,
-        clock_in_at=datetime.utcnow(),
+        clock_in_at=utc_now(),
         notes=(notes or "")[:500],
     )
     db.add(entry)
@@ -142,7 +143,7 @@ def clock_out(
         raise NotClockedInError(
             f"{emp.name} is not currently clocked in.",
         )
-    now = datetime.utcnow()
+    now = utc_now()
     # Auto-end any open break — common case is the cashier
     # forgets to tap "End break" and just clocks out. Counts
     # the time-on-break against the running ``break_minutes``
@@ -196,7 +197,7 @@ def start_break(
         raise AlreadyOnBreakError(
             f"{emp.name} is already on break.",
         )
-    entry.break_started_at = datetime.utcnow()
+    entry.break_started_at = utc_now()
     db.flush()
     return entry
 
@@ -224,7 +225,7 @@ def end_break(
         raise NotOnBreakError(
             f"{emp.name} is not currently on break.",
         )
-    elapsed_sec = (datetime.utcnow() - entry.break_started_at).total_seconds()
+    elapsed_sec = (utc_now() - entry.break_started_at).total_seconds()
     setattr(entry, "break_minutes", round(
         float(entry.break_minutes or 0.0) + elapsed_sec / 60, 4,
     ))

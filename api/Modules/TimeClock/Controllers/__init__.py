@@ -75,6 +75,7 @@ from api.Modules.TimeClock.Services.shifts import (
     update_shift,
 )
 from typing import Any
+from api.Core.Clock import utc_now
 
 
 router = APIRouter()
@@ -1058,7 +1059,7 @@ def _enforce_passkey_gate(
             detail="Authenticator clone suspected (sign count reset).",
         )
     pk.sign_count   = new_count
-    pk.last_used_at = datetime.utcnow()
+    pk.last_used_at = utc_now()
     db.flush()
 
 
@@ -1320,7 +1321,7 @@ def admin_credentials_register_finish_route(
         sign_count=int(getattr(verification, "sign_count", 0) or 0),
         aaguid=str(aaguid)[:64],
         name=name,
-        registered_at=datetime.utcnow(),
+        registered_at=utc_now(),
         registered_by_user_id=_user_id_from(claims),
     )
     db.add(pk)

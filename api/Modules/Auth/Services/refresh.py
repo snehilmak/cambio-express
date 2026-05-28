@@ -38,6 +38,7 @@ from typing import Optional
 from sqlalchemy.orm import Session
 
 from api.Modules.Auth.Models import RefreshToken
+from api.Core.Clock import utc_now
 
 
 # 14 days — long enough that returning users don't see a login
@@ -63,7 +64,7 @@ class IssuedRefreshToken:
 
 def _now() -> datetime:
     """Wall-clock — one place to mock in tests if we ever need to."""
-    return datetime.utcnow()
+    return utc_now()
 
 
 def _mint_jti() -> str:

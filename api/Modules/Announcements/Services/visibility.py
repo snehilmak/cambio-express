@@ -12,6 +12,7 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 
 from api.Modules.Announcements.Models import Announcement
+from api.Core.Clock import utc_now
 
 
 def active_announcements(db: Session) -> list[Announcement]:
@@ -25,7 +26,7 @@ def active_announcements(db: Session) -> list[Announcement]:
     Sort order: newest-first by `created_at` so the most recent
     superadmin post lands at the top of the banner stack.
     """
-    now = datetime.utcnow()
+    now = utc_now()
     rows = (
         db.query(Announcement)
           .filter_by(is_active=True)
