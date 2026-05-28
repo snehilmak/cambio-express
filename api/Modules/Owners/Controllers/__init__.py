@@ -14,7 +14,7 @@ connect/unlink invitation flow.
 """
 from datetime import date
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Query
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
 from sqlalchemy.orm import Session
 
 from api.Core.Database import get_db
@@ -329,10 +329,15 @@ def owner_connect_codes_revoke_route(
     return OwnerConnectCodeResponse(code=_adapt_code(c))
 
 
+from api.Core.RateLimit import limiter as _rate_limiter
+
+
 @router.post(
     "/bulk-add-user", response_model=OwnerBulkAddUserResponse,
 )
+@_rate_limiter.limit("10/minute")
 def owner_bulk_add_user_route(
+    request: Request,
     body: OwnerBulkAddUserRequest,
     db: Session = Depends(get_db),
     claims: dict[str, Any] = Depends(get_principal),
@@ -393,7 +398,9 @@ def owner_bulk_add_user_route(
 @router.post(
     "/cross-store-defaults", response_model=OwnerCrossStoreResponse,
 )
+@_rate_limiter.limit("10/minute")
 def owner_cross_store_defaults_route(
+    request: Request,
     body: OwnerCrossStoreDefaultsRequest,
     db: Session = Depends(get_db),
     claims: dict[str, Any] = Depends(get_principal),
@@ -1045,7 +1052,9 @@ def owner_activity_route(
 
 
 @router.post("/bulk-permissions")
+@_rate_limiter.limit("10/minute")
 def owner_bulk_permissions_route(
+    request: Request,
     body: dict = ...,
     db: Session = Depends(get_db),
     claims: dict[str, Any] = Depends(get_principal),

@@ -533,8 +533,13 @@ def list_tax_export_years_route(
     )
 
 
+from api.Core.RateLimit import limiter as _rate_limiter
+
+
 @router.get("/tax-export.zip")
+@_rate_limiter.limit("5/minute")
 def download_tax_pack_route(
+    request: Request,
     year: int = Query(
         ..., ge=2000, le=2100,
         description="Calendar year to pack (inclusive both ends).",
@@ -614,7 +619,9 @@ def get_admin_audit_log_route(
 
 
 @router.get("/audit-log.csv")
+@_rate_limiter.limit("5/minute")
 def export_admin_audit_log_csv_route(
+    request: Request,
     target: str = Query("", max_length=40),
     action: str = Query("", max_length=40),
     user:   str = Query("", max_length=20),

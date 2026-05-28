@@ -126,7 +126,7 @@ def permissions_for(role: str, db: "Session | None" = None, store_id: "int | Non
     if role == "superadmin":
         all_granular = [f"{r}.{a}" for r in RBAC_RESOURCES for a in RBAC_ACTIONS]
         return legacy + all_granular
-    granular: list[str] = []
+    granular: list[str] | None = None
     if db is not None and store_id is not None:
         try:
             from api.Modules.Auth.Models import StoreRoleOverride
@@ -138,9 +138,13 @@ def permissions_for(role: str, db: "Session | None" = None, store_id: "int | Non
             )
             if store_rows:
                 granular = [f"{r}.{a}" for r, a in store_rows]
-        except Exception:
-            pass
-    if not granular and db is not None:
+        except Exception as exc:
+            import logging
+            logging.getLogger(__name__).warning(
+                "permissions_for: StoreRoleOverride query failed for "
+                "store_id=%s role=%s: %s", store_id, role, exc,
+            )
+    if granular is None and db is not None:
         try:
             from api.Modules.Auth.Models import RolePermission
             rows = (
@@ -148,10 +152,17 @@ def permissions_for(role: str, db: "Session | None" = None, store_id: "int | Non
                 .filter(RolePermission.role == role)
                 .all()
             )
-            granular = [f"{r}.{a}" for r, a in rows]
-        except Exception:
-            pass
-    if not granular:
+            if rows:
+                granular = [f"{r}.{a}" for r, a in rows]
+            elif db.query(RolePermission.id).first() is not None:
+                granular = []
+        except Exception as exc:
+            import logging
+            logging.getLogger(__name__).warning(
+                "permissions_for: RolePermission query failed for "
+                "role=%s: %s", role, exc,
+            )
+    if granular is None:
         granular = list(RBAC_DEFAULTS.get(role, []))
     return legacy + granular
 

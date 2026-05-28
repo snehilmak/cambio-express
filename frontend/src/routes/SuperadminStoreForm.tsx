@@ -217,7 +217,13 @@ export default function SuperadminStoreForm() {
     <PageShell maxWidth="44rem">
       <div className={styles.headerRow}>
 
-        <Breadcrumbs crumbs={[{ label: "All stores", to: "/superadmin/stores" }, { label: "Store" }]} />
+        <Breadcrumbs crumbs={[
+          { label: "All stores", to: "/superadmin/stores" },
+          ...(isEdit && storeId
+            ? [{ label: name || `Store #${storeId}`, to: `/superadmin/stores/${storeId}/drill` }]
+            : []),
+          { label: isEdit ? "Edit" : "New store" },
+        ]} />
 
         <PageHeader title={heading} />
         <ButtonLink to="/superadmin/stores" tone="secondary">
