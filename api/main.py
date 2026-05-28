@@ -196,6 +196,9 @@ def create_app() -> FastAPI:
 
     app.add_middleware(RequestIDMiddleware)
 
+    from api.Core.Observability.security_headers import SecurityHeadersMiddleware
+    app.add_middleware(SecurityHeadersMiddleware)
+
     # Rate limiting (BACKLOG D6). slowapi reads its storage backend
     # from RATELIMIT_STORAGE_URI (Redis in prod, in-memory in dev/CI).
     # The module-level singleton lives in api/Core/RateLimit.py so

@@ -826,6 +826,141 @@ def update_notifications_route(
     return NotificationsResponse(**get_notifications_payload(db, user))
 
 
+# ── User data export (GDPR portability) ────────────────────
+
+
+@router.get("/account/export")
+def export_my_data_route(
+    db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
+) -> Response:
+    """Download a JSON dump of the authed user's personal data.
+
+    Includes profile fields, notification preferences, session
+    history, audit log entries the user generated, and an
+    inventory of authenticators (passkey names, not secrets).
+    Does NOT include other users' data or store-wide records the
+    user just happened to view.
+    """
+    import json
+    from datetime import datetime
+    user = db.get(User, int(claims["sub"]))
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    def _iso(dt: Any) -> str | None:
+        if dt is None:
+            return None
+        if hasattr(dt, "isoformat"):
+            return dt.isoformat()
+        return str(dt)
+
+    profile = {
+        "user_id": user.id,
+        "username": user.username,
+        "full_name": user.full_name or "",
+        "email": getattr(user, "email", "") or "",
+        "phone": getattr(user, "phone", "") or "",
+        "role": user.role,
+        "store_id": user.store_id,
+        "timezone": getattr(user, "timezone", "") or "",
+        "theme_preference": getattr(user, "theme_preference", "") or "",
+        "is_active": bool(user.is_active),
+        "created_at": _iso(getattr(user, "created_at", None)),
+        "last_login_at": _iso(getattr(user, "last_login_at", None)),
+        "totp_enrolled": bool(getattr(user, "totp_secret", None)),
+    }
+
+    notifications = {
+        "notify_trial_reminders": bool(getattr(user, "notify_trial_reminders", True)),
+        "notify_announcement_email": bool(getattr(user, "notify_announcement_email", False)),
+        "notify_locked_day_digest": bool(getattr(user, "notify_locked_day_digest", True)),
+        "notify_daily_summary": bool(getattr(user, "notify_daily_summary", True)),
+        "notify_high_variance": bool(getattr(user, "notify_high_variance", False)),
+        "notify_store_offline": bool(getattr(user, "notify_store_offline", False)),
+    }
+
+    sessions = []
+    try:
+        from api.Modules.Auth.Models import RefreshToken
+        rows = (
+            db.query(RefreshToken)
+            .filter(RefreshToken.user_id == user.id)
+            .order_by(RefreshToken.created_at.desc())
+            .limit(100)
+            .all()
+        )
+        for r in rows:
+            sessions.append({
+                "session_id": r.session_id,
+                "user_agent": r.user_agent or "",
+                "ip_address": r.ip_address or "",
+                "created_at": _iso(r.created_at),
+                "expires_at": _iso(r.expires_at),
+                "revoked_at": _iso(r.revoked_at),
+            })
+    except Exception:
+        pass
+
+    passkeys = []
+    try:
+        from api.Modules.Auth.Models import Passkey
+        rows = (
+            db.query(Passkey)
+            .filter(Passkey.user_id == user.id)
+            .all()
+        )
+        for p in rows:
+            passkeys.append({
+                "name": p.name or "",
+                "registered_at": _iso(getattr(p, "registered_at", None)),
+                "last_used_at": _iso(getattr(p, "last_used_at", None)),
+            })
+    except Exception:
+        pass
+
+    audit_entries: list[dict[str, Any]] = []
+    try:
+        from api.Modules.Audit.Models import OperatorAuditLog
+        rows = (
+            db.query(OperatorAuditLog)
+            .filter(OperatorAuditLog.user_id == user.id)
+            .order_by(OperatorAuditLog.created_at.desc())
+            .limit(500)
+            .all()
+        )
+        for a in rows:
+            audit_entries.append({
+                "store_id": a.store_id,
+                "action": a.action or "",
+                "target_type": a.target_type or "",
+                "target_label": a.target_label or "",
+                "summary": a.summary or "",
+                "created_at": _iso(a.created_at),
+            })
+    except Exception:
+        pass
+
+    payload = {
+        "exported_at": datetime.utcnow().isoformat(),
+        "export_version": 1,
+        "profile": profile,
+        "notification_preferences": notifications,
+        "sessions": sessions,
+        "passkeys": passkeys,
+        "audit_log_entries": audit_entries,
+    }
+
+    filename = f"dinerobook-data-{user.username}-{datetime.utcnow().strftime('%Y%m%d')}.json"
+    return Response(
+        content=json.dumps(payload, indent=2, default=str),
+        media_type="application/json",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+        },
+    )
+
+
 # ── Push subscriptions ─────────────────────────────────────
 
 
