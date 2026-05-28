@@ -1,12 +1,7 @@
-"""Permission resolution tests — covers the full permissions_for() flow.
+"""Casbin permission system tests.
 
-Tests the three-tier resolution:
-  1. Per-store override (StoreRoleOverride)
-  2. Global defaults (RolePermission)
-  3. Hardcoded RBAC_DEFAULTS fallback
-
-Plus: the seeding logic that populates RolePermission from
-RBAC_DEFAULTS on first edit, and admin role boundary enforcement.
+Covers the full resolution chain, permission management endpoints,
+role boundary enforcement, and edge cases.
 """
 from tests._app import db, db_session
 from tests.conftest import login_superadmin, login_admin
@@ -16,11 +11,11 @@ def _headers(token):
     return {"Authorization": f"Bearer {token}"}
 
 
-class TestPermissionsFor:
-    """Unit-level tests for the permissions_for() resolution chain."""
+class TestCasbinPermissions:
+    """Unit-level tests for the Casbin permission service."""
 
     def test_superadmin_gets_all_permissions(self):
-        from api.Modules.Auth.Services.login import (
+        from api.Core.Permissions import (
             RBAC_ACTIONS, RBAC_RESOURCES, permissions_for,
         )
         perms = permissions_for("superadmin")
@@ -28,112 +23,238 @@ class TestPermissionsFor:
             for a in RBAC_ACTIONS:
                 assert f"{r}.{a}" in perms
 
-    def test_empty_table_falls_through_to_defaults(self):
-        from api.Modules.Auth.Services.login import (
-            RBAC_DEFAULTS, permissions_for,
+    def test_superadmin_check_always_true(self):
+        from api.Core.Permissions import check_permission
+        assert check_permission("superadmin", None, "anything", "read") is True
+        assert check_permission("superadmin", 999, "fake", "delete") is True
+
+    def test_defaults_returned_when_no_casbin_rules(self):
+        from api.Core.Permissions import (
+            RBAC_DEFAULTS, permissions_for, _get_enforcer, seed_defaults,
         )
-        from api.Modules.Auth.Models import RolePermission
-        with db_session():
-            db.session.query(RolePermission).delete()
-            db.session.flush()
-            perms = permissions_for("admin", db=db.session, store_id=1)
+        e = _get_enforcer()
+        e.clear_policy()
+        e.save_policy()
+        e.load_policy()
+        perms = permissions_for("admin", store_id=1)
         expected = RBAC_DEFAULTS.get("admin", [])
         for p in expected:
             assert p in perms, f"Expected {p} in permissions"
+        seed_defaults()
 
-    def test_role_permission_table_overrides_defaults(self):
-        from api.Modules.Auth.Models import RolePermission
-        from api.Modules.Auth.Services.login import permissions_for
-        with db_session():
-            db.session.query(RolePermission).delete()
-            db.session.add(RolePermission(
-                role="admin", resource="reports", action="read",
-            ))
-            db.session.flush()
-            perms = permissions_for("admin", db=db.session, store_id=1)
+    def test_global_rules_override_defaults(self):
+        from api.Core.Permissions import (
+            set_global_permissions, permissions_for, seed_defaults,
+            _get_enforcer,
+        )
+        set_global_permissions("admin", {
+            "reports": {"read": True, "create": False, "update": False, "delete": False},
+        })
+        perms = permissions_for("admin", store_id=1)
         assert "reports.read" in perms
         assert "transfers.read" not in perms
+        e = _get_enforcer()
+        e.remove_filtered_policy(0, "admin", "global")
+        e.save_policy()
+        seed_defaults()
 
-    def test_populated_table_with_zero_rows_for_role_gives_empty(self):
-        """If RolePermission has rows for other roles but none for admin,
-        admin should get zero granular permissions (not fall through)."""
-        from api.Modules.Auth.Models import RolePermission
-        from api.Modules.Auth.Services.login import permissions_for
-        with db_session():
-            db.session.query(RolePermission).delete()
-            db.session.add(RolePermission(
-                role="employee", resource="transfers", action="read",
-            ))
-            db.session.flush()
-            perms = permissions_for("admin", db=db.session, store_id=1)
-        granular = [p for p in perms if "." in p and not p.startswith("store.")]
-        assert granular == [], f"Expected no granular perms but got {granular}"
-
-    def test_store_override_takes_priority_over_global(self):
-        from api.Modules.Auth.Models import RolePermission, StoreRoleOverride
-        from api.Modules.Auth.Services.login import permissions_for
-        with db_session():
-            db.session.query(RolePermission).delete()
-            db.session.add(RolePermission(
-                role="admin", resource="transfers", action="read",
-            ))
-            db.session.add(RolePermission(
-                role="admin", resource="transfers", action="create",
-            ))
-            db.session.query(StoreRoleOverride).filter_by(
-                store_id=1, role="admin",
-            ).delete()
-            db.session.add(StoreRoleOverride(
-                store_id=1, role="admin",
-                resource="reports", action="read",
-            ))
-            db.session.flush()
-            perms = permissions_for("admin", db=db.session, store_id=1)
+    def test_store_override_takes_priority(self):
+        from api.Core.Permissions import (
+            set_store_permissions, permissions_for, reset_store_to_defaults,
+        )
+        set_store_permissions(997, "admin", {
+            "reports": {"read": True, "create": False, "update": False, "delete": False},
+        })
+        perms = permissions_for("admin", store_id=997)
         assert "reports.read" in perms
         assert "transfers.read" not in perms
+        reset_store_to_defaults(997, "admin")
+
+    def test_check_permission_live(self):
+        from api.Core.Permissions import (
+            check_permission, set_store_permissions, reset_store_to_defaults,
+        )
+        assert check_permission("admin", 996, "transfers", "read") is True
+        set_store_permissions(996, "admin", {
+            "reports": {"read": True, "create": False, "update": False, "delete": False},
+        })
+        assert check_permission("admin", 996, "transfers", "read") is False
+        assert check_permission("admin", 996, "reports", "read") is True
+        reset_store_to_defaults(996, "admin")
+
+    def test_reset_falls_back_to_global(self):
+        from api.Core.Permissions import (
+            set_store_permissions, reset_store_to_defaults,
+            check_permission,
+        )
+        set_store_permissions(995, "employee", {
+            "transfers": {"read": False, "create": False, "update": False, "delete": False},
+        })
+        assert check_permission("employee", 995, "transfers", "read") is False
+        reset_store_to_defaults(995, "employee")
+        assert check_permission("employee", 995, "transfers", "read") is True
+
+    def test_cross_store_isolation(self):
+        from api.Core.Permissions import (
+            set_store_permissions, check_permission, reset_store_to_defaults,
+        )
+        set_store_permissions(994, "employee", {
+            "transfers": {"read": False, "create": False, "update": False, "delete": False},
+        })
+        assert check_permission("employee", 994, "transfers", "read") is False
+        assert check_permission("employee", 993, "transfers", "read") is True
+        reset_store_to_defaults(994, "employee")
+
+    def test_owner_role_permissions(self):
+        from api.Core.Permissions import permissions_for
+        perms = permissions_for("owner", store_id=1)
+        assert "transfers.read" in perms
+        assert "settings.update" in perms
         assert "transfers.create" not in perms
+
+    def test_employee_role_default_permissions(self):
+        from api.Core.Permissions import permissions_for
+        perms = permissions_for("employee", store_id=1)
+        assert "transfers.create" in perms
+        assert "transfers.read" in perms
+        assert "reports.read" not in perms
+        assert "settings.update" not in perms
+
+    def test_permission_matrix_builder(self):
+        from api.Core.Permissions import get_permission_matrix
+        result = get_permission_matrix(1)
+        assert "matrix" in result
+        assert "admin" in result["matrix"]
+        assert "employee" in result["matrix"]
+        assert result["matrix"]["admin"]["transfers"]["read"] is True
+
+    def test_global_matrix_builder(self):
+        from api.Core.Permissions import get_global_matrix
+        result = get_global_matrix()
+        assert "admin" in result["matrix"]
+        assert "employee" in result["matrix"]
+        assert "owner" in result["matrix"]
+
+    def test_all_permissions_off_persists(self):
+        """Setting ALL permissions off should result in zero access,
+        not silently fall back to global defaults (sentinel marker)."""
+        from api.Core.Permissions import (
+            set_store_permissions, check_permission, reset_store_to_defaults,
+            RBAC_RESOURCES, RBAC_ACTIONS,
+        )
+        empty_matrix = {
+            r: {a: False for a in RBAC_ACTIONS} for r in RBAC_RESOURCES
+        }
+        set_store_permissions(992, "employee", empty_matrix)
+        for r in RBAC_RESOURCES:
+            for a in RBAC_ACTIONS:
+                assert check_permission("employee", 992, r, a) is False, \
+                    f"employee.{r}.{a} should be False"
+        reset_store_to_defaults(992, "employee")
+
+    def test_invalid_resource_ignored_in_write(self):
+        from api.Core.Permissions import (
+            set_store_permissions, check_permission, reset_store_to_defaults,
+        )
+        set_store_permissions(991, "employee", {
+            "fake_resource": {"read": True, "create": True, "update": True, "delete": True},
+            "transfers": {"read": True, "create": False, "update": False, "delete": False},
+        })
+        assert check_permission("employee", 991, "transfers", "read") is True
+        assert check_permission("employee", 991, "fake_resource", "read") is False
+        reset_store_to_defaults(991, "employee")
+
+    def test_invalid_action_ignored_in_write(self):
+        from api.Core.Permissions import (
+            set_store_permissions, check_permission, reset_store_to_defaults,
+        )
+        set_store_permissions(990, "employee", {
+            "transfers": {"read": True, "fake_action": True, "create": False, "update": False, "delete": False},
+        })
+        assert check_permission("employee", 990, "transfers", "read") is True
+        assert check_permission("employee", 990, "transfers", "fake_action") is False
+        reset_store_to_defaults(990, "employee")
+
+    def test_permission_check_with_none_store_id(self):
+        """Roles with no store scope (owners) use RBAC_DEFAULTS."""
+        from api.Core.Permissions import check_permission
+        assert check_permission("owner", None, "transfers", "read") is True
+        assert check_permission("admin", None, "transfers", "create") is True
+        assert check_permission("employee", None, "settings", "delete") is False
+
+    def test_reset_when_no_overrides_exist_is_noop(self):
+        """Reset on a store with no overrides should not crash."""
+        from api.Core.Permissions import (
+            reset_store_to_defaults, check_permission,
+        )
+        reset_store_to_defaults(989, "employee")
+        assert check_permission("employee", 989, "transfers", "read") is True
+
+    def test_set_then_overwrite(self):
+        """Saving a matrix twice should replace, not accumulate."""
+        from api.Core.Permissions import (
+            set_store_permissions, check_permission, reset_store_to_defaults,
+        )
+        set_store_permissions(988, "employee", {
+            "reports": {"read": True, "create": True, "update": True, "delete": True},
+        })
+        assert check_permission("employee", 988, "reports", "create") is True
+        set_store_permissions(988, "employee", {
+            "reports": {"read": True, "create": False, "update": False, "delete": False},
+        })
+        assert check_permission("employee", 988, "reports", "create") is False
+        assert check_permission("employee", 988, "reports", "read") is True
+        reset_store_to_defaults(988, "employee")
+
+    def test_global_change_does_not_affect_overridden_store(self):
+        """A store with overrides should not be affected by global default changes."""
+        from api.Core.Permissions import (
+            set_store_permissions, set_global_permissions, check_permission,
+            reset_store_to_defaults, _get_enforcer, seed_defaults,
+        )
+        set_store_permissions(987, "employee", {
+            "reports": {"read": True, "create": False, "update": False, "delete": False},
+        })
+        set_global_permissions("employee", {
+            "transfers": {"read": True, "create": True, "update": True, "delete": True},
+        })
+        # Store 987 still has only reports.read; global changes don't leak in
+        assert check_permission("employee", 987, "reports", "read") is True
+        assert check_permission("employee", 987, "transfers", "read") is False
+        # Cleanup
+        reset_store_to_defaults(987, "employee")
+        e = _get_enforcer()
+        e.remove_filtered_policy(0, "employee", "global")
+        e.save_policy()
+        seed_defaults()
 
 
 class TestGlobalPermissionUpdate:
     """Integration tests for the superadmin global permissions endpoint."""
 
-    def test_seed_and_remove_permission(self, client, test_store_id):
+    def test_update_and_read_back(self, client, test_store_id):
         token = login_superadmin(client)
         resp = client.put(
             "/api/v2/superadmin/permissions",
             json={"changes": [
                 {"role": "admin", "resource": "transfers", "action": "read", "allowed": False},
-                {"role": "admin", "resource": "transfers", "action": "create", "allowed": False},
-                {"role": "admin", "resource": "transfers", "action": "update", "allowed": False},
             ]},
             headers=_headers(token),
         )
         assert resp.status_code == 200
         matrix = resp.get_json()["matrix"]
         assert matrix["admin"]["transfers"]["read"] is False
-        assert matrix["admin"]["transfers"]["create"] is False
-
-    def test_seed_actually_populates_table(self, client, test_store_id):
-        """The first edit seeds RolePermission from RBAC_DEFAULTS.
-        After seeding, the table has rows for each default role."""
-        token = login_superadmin(client)
-        client.put(
+        resp2 = client.put(
             "/api/v2/superadmin/permissions",
             json={"changes": [
                 {"role": "admin", "resource": "transfers", "action": "read", "allowed": True},
             ]},
             headers=_headers(token),
         )
-        resp = client.get(
-            "/api/v2/superadmin/permissions",
-            headers=_headers(token),
-        )
-        assert resp.status_code == 200
-        matrix = resp.get_json()["matrix"]
-        assert matrix["admin"]["transfers"]["read"] is True
+        assert resp2.get_json()["matrix"]["admin"]["transfers"]["read"] is True
 
 
-class TestPerStorePermissionOverride:
+class TestPerStorePermissions:
     """Integration tests for per-store permission overrides."""
 
     def test_admin_can_read_permissions(self, client, test_store_id):
@@ -143,116 +264,75 @@ class TestPerStorePermissionOverride:
             headers=_headers(token),
         )
         assert resp.status_code == 200
-        data = resp.get_json()
-        assert "matrix" in data
-        assert "admin" in data["roles"]
-        assert "employee" in data["roles"]
+        assert "matrix" in resp.get_json()
 
     def test_admin_cannot_edit_admin_role(self, client, test_store_id):
         token = login_admin(client, test_store_id)
         resp = client.put(
             "/api/v2/admin/store-permissions",
-            json={"changes": [
-                {"role": "admin", "resource": "transfers", "action": "read", "allowed": False},
-            ]},
+            json={"matrix": {
+                "admin": {"transfers": {"read": False, "create": False, "update": False, "delete": False}},
+            }},
             headers=_headers(token),
         )
         assert resp.status_code == 403
 
-    def test_admin_can_edit_employee_role(self, client, test_store_id):
+    def test_admin_can_edit_employee_via_matrix(self, client, test_store_id):
         token = login_admin(client, test_store_id)
+        resp_get = client.get("/api/v2/admin/store-permissions", headers=_headers(token))
+        current = resp_get.get_json()["matrix"]["employee"]
+        current["transfers"]["create"] = False
         resp = client.put(
             "/api/v2/admin/store-permissions",
-            json={"changes": [
-                {"role": "employee", "resource": "transfers", "action": "create", "allowed": False},
-            ]},
+            json={"matrix": {"employee": current}},
             headers=_headers(token),
         )
         assert resp.status_code == 200
-
-    def test_removing_permission_on_fresh_store_persists(self, client, test_store_id):
-        """Sending a full matrix with transfers.create/update/delete=false
-        should persist correctly, even on a fresh store."""
-        token = login_admin(client, test_store_id)
-        with db_session():
-            from api.Modules.Auth.Models import StoreRoleOverride
-            db.session.query(StoreRoleOverride).filter_by(
-                store_id=test_store_id, role="employee",
-            ).delete()
-            db.session.commit()
-
-        resp_get = client.get(
-            "/api/v2/admin/store-permissions",
-            headers=_headers(token),
-        )
-        current_matrix = resp_get.get_json()["matrix"]["employee"]
-        current_matrix["transfers"]["create"] = False
-        current_matrix["transfers"]["update"] = False
-        current_matrix["transfers"]["delete"] = False
-
-        resp = client.put(
-            "/api/v2/admin/store-permissions",
-            json={"matrix": {"employee": current_matrix}},
-            headers=_headers(token),
-        )
-        assert resp.status_code == 200
-        matrix = resp.get_json()["matrix"]
-        assert matrix["employee"]["transfers"]["read"] is True
-        assert matrix["employee"]["transfers"]["create"] is False
-        assert matrix["employee"]["transfers"]["update"] is False
-
+        assert resp.get_json()["matrix"]["employee"]["transfers"]["create"] is False
+        assert resp.get_json()["matrix"]["employee"]["transfers"]["read"] is True
 
     def test_partial_removal_persists(self, client, test_store_id):
-        """Keeping only transfers.read and removing create/update/delete
-        should persist — the most common per-store customization."""
         token = login_admin(client, test_store_id)
-        resp_get = client.get(
-            "/api/v2/admin/store-permissions",
-            headers=_headers(token),
-        )
-        current_matrix = resp_get.get_json()["matrix"]["employee"]
-        current_matrix["transfers"]["create"] = False
-        current_matrix["transfers"]["update"] = False
-
+        resp_get = client.get("/api/v2/admin/store-permissions", headers=_headers(token))
+        current = resp_get.get_json()["matrix"]["employee"]
+        current["transfers"]["create"] = False
+        current["transfers"]["update"] = False
         resp = client.put(
             "/api/v2/admin/store-permissions",
-            json={"matrix": {"employee": current_matrix}},
+            json={"matrix": {"employee": current}},
             headers=_headers(token),
         )
         assert resp.status_code == 200
-        matrix = resp.get_json()["matrix"]
-        assert matrix["employee"]["transfers"]["read"] is True
-        assert matrix["employee"]["transfers"]["create"] is False
-        assert matrix["employee"]["transfers"]["update"] is False
+        m = resp.get_json()["matrix"]
+        assert m["employee"]["transfers"]["read"] is True
+        assert m["employee"]["transfers"]["create"] is False
+        assert m["employee"]["transfers"]["update"] is False
 
-    def test_save_then_save_again_is_idempotent(self, client, test_store_id):
-        """Saving the same permission change twice should not duplicate
-        rows or change the outcome."""
+    def test_save_idempotent(self, client, test_store_id):
         token = login_admin(client, test_store_id)
-        change = [{"role": "employee", "resource": "transfers", "action": "create", "allowed": False}]
+        resp_get = client.get("/api/v2/admin/store-permissions", headers=_headers(token))
+        current = resp_get.get_json()["matrix"]["employee"]
+        current["transfers"]["create"] = False
         resp1 = client.put(
             "/api/v2/admin/store-permissions",
-            json={"changes": change},
+            json={"matrix": {"employee": current}},
             headers=_headers(token),
         )
-        assert resp1.status_code == 200
         resp2 = client.put(
             "/api/v2/admin/store-permissions",
-            json={"changes": change},
+            json={"matrix": {"employee": current}},
             headers=_headers(token),
         )
-        assert resp2.status_code == 200
         assert resp1.get_json()["matrix"] == resp2.get_json()["matrix"]
 
-    def test_reset_then_edit_works(self, client, test_store_id):
-        """After resetting to defaults, a subsequent edit should still
-        seed and apply correctly."""
+    def test_reset_then_edit(self, client, test_store_id):
         token = login_admin(client, test_store_id)
+        resp_get = client.get("/api/v2/admin/store-permissions", headers=_headers(token))
+        current = resp_get.get_json()["matrix"]["employee"]
+        current["reports"]["read"] = False
         client.put(
             "/api/v2/admin/store-permissions",
-            json={"changes": [
-                {"role": "employee", "resource": "reports", "action": "read", "allowed": False},
-            ]},
+            json={"matrix": {"employee": current}},
             headers=_headers(token),
         )
         client.post(
@@ -260,45 +340,29 @@ class TestPerStorePermissionOverride:
             json={"role": "employee"},
             headers=_headers(token),
         )
+        resp_get2 = client.get("/api/v2/admin/store-permissions", headers=_headers(token))
+        current2 = resp_get2.get_json()["matrix"]["employee"]
+        current2["transfers"]["create"] = False
         resp = client.put(
             "/api/v2/admin/store-permissions",
-            json={"changes": [
-                {"role": "employee", "resource": "transfers", "action": "create", "allowed": False},
-            ]},
+            json={"matrix": {"employee": current2}},
             headers=_headers(token),
         )
         assert resp.status_code == 200
-        matrix = resp.get_json()["matrix"]
-        assert matrix["employee"]["transfers"]["read"] is True
-        assert matrix["employee"]["transfers"]["create"] is False
+        m = resp.get_json()["matrix"]
+        assert m["employee"]["transfers"]["read"] is True
+        assert m["employee"]["transfers"]["create"] is False
 
     def test_invalid_role_rejected(self, client, test_store_id):
-        """Trying to edit a role outside the allowed set returns 403."""
         token = login_admin(client, test_store_id)
         resp = client.put(
             "/api/v2/admin/store-permissions",
-            json={"changes": [
-                {"role": "superadmin", "resource": "transfers", "action": "read", "allowed": False},
-            ]},
+            json={"matrix": {"superadmin": {"transfers": {"read": False}}}},
             headers=_headers(token),
         )
         assert resp.status_code == 403
 
-    def test_invalid_resource_ignored(self, client, test_store_id):
-        """A change with an invalid resource name should be silently
-        ignored — no error, no side effect."""
-        token = login_admin(client, test_store_id)
-        resp = client.put(
-            "/api/v2/admin/store-permissions",
-            json={"changes": [
-                {"role": "employee", "resource": "nonexistent", "action": "read", "allowed": False},
-            ]},
-            headers=_headers(token),
-        )
-        assert resp.status_code == 200
-
-    def test_empty_changes_is_noop(self, client, test_store_id):
-        """An empty changes array should succeed without side effects."""
+    def test_empty_changes_noop(self, client, test_store_id):
         token = login_admin(client, test_store_id)
         resp = client.put(
             "/api/v2/admin/store-permissions",
@@ -309,34 +373,45 @@ class TestPerStorePermissionOverride:
 
 
 class TestSuperadminPerStorePermissions:
-    """Superadmin per-store permission overrides from the store drill."""
 
-    def test_superadmin_can_remove_permission_on_fresh_store(self, client, test_store_id):
+    def test_superadmin_per_store_edit(self, client, test_store_id):
         token = login_superadmin(client)
-        with db_session():
-            from api.Modules.Auth.Models import StoreRoleOverride
-            db.session.query(StoreRoleOverride).filter_by(
-                store_id=test_store_id, role="admin",
-            ).delete()
-            db.session.commit()
-
         resp_get = client.get(
             f"/api/v2/superadmin/stores/{test_store_id}/permissions",
             headers=_headers(token),
         )
-        current_matrix = resp_get.get_json()["matrix"]["admin"]
-        current_matrix["transfers"]["create"] = False
-        current_matrix["transfers"]["update"] = False
-        current_matrix["transfers"]["delete"] = False
-
+        current = resp_get.get_json()["matrix"]["admin"]
+        current["transfers"]["create"] = False
+        current["transfers"]["update"] = False
+        current["transfers"]["delete"] = False
         resp = client.put(
             f"/api/v2/superadmin/stores/{test_store_id}/permissions",
-            json={"matrix": {"admin": current_matrix}},
+            json={"matrix": {"admin": current}},
             headers=_headers(token),
         )
         assert resp.status_code == 200
-        matrix = resp.get_json()["matrix"]
-        assert matrix["admin"]["transfers"]["read"] is True
-        assert matrix["admin"]["transfers"]["create"] is False
-        assert matrix["admin"]["transfers"]["update"] is False
-        assert matrix["admin"]["transfers"]["delete"] is False
+        m = resp.get_json()["matrix"]
+        assert m["admin"]["transfers"]["read"] is True
+        assert m["admin"]["transfers"]["create"] is False
+
+    def test_live_enforcement(self, client, test_store_id):
+        """Permission change via superadmin blocks admin immediately."""
+        sa_token = login_superadmin(client)
+        resp_get = client.get(
+            f"/api/v2/superadmin/stores/{test_store_id}/permissions",
+            headers=_headers(sa_token),
+        )
+        current = resp_get.get_json()["matrix"]["admin"]
+        for a in ["create", "read", "update", "delete"]:
+            current["transfers"][a] = False
+        client.put(
+            f"/api/v2/superadmin/stores/{test_store_id}/permissions",
+            json={"matrix": {"admin": current}},
+            headers=_headers(sa_token),
+        )
+        admin_token = login_admin(client, test_store_id)
+        resp = client.get(
+            f"/api/v2/transfers?store_ids={test_store_id}",
+            headers=_headers(admin_token),
+        )
+        assert resp.status_code == 403

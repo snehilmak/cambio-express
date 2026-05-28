@@ -188,38 +188,21 @@ class TestPermissionEnforcement:
     def test_store_override_replaces_global(self, store_id):
         """When a store has overrides for a role, those replace the
         global defaults entirely — not merged."""
-        from api.Modules.Auth.Services.login import permissions_for
-        from api.Core.Database import SessionLocal
-        from api.Modules.Auth.Models import StoreRoleOverride
-
-        with SessionLocal() as session:
-            # Clean up any existing overrides
-            session.query(StoreRoleOverride).filter_by(
-                store_id=store_id, role="employee",
-            ).delete()
-            # Add a single override — employee can ONLY read transfers
-            session.add(StoreRoleOverride(
-                store_id=store_id, role="employee",
-                resource="transfers", action="read",
-            ))
-            session.commit()
-
-            perms = permissions_for("employee", session, store_id)
-            granular = [p for p in perms if "." in p and not p.startswith("store.")]
-            assert granular == ["transfers.read"]
-
-            # Clean up
-            session.query(StoreRoleOverride).filter_by(
-                store_id=store_id, role="employee",
-            ).delete()
-            session.commit()
+        from api.Core.Permissions import (
+            set_store_permissions, permissions_for, reset_store_to_defaults,
+        )
+        set_store_permissions(
+            store_id, "employee",
+            {"transfers": {"read": True, "create": False, "update": False, "delete": False}},
+        )
+        perms = permissions_for("employee", store_id=store_id)
+        granular = [p for p in perms if "." in p and not p.startswith("store.")]
+        assert granular == ["transfers.read"]
+        reset_store_to_defaults(store_id, "employee")
 
     def test_no_override_uses_global(self, store_id):
         """When no overrides exist, falls back to global defaults."""
-        from api.Modules.Auth.Services.login import permissions_for
-        from api.Core.Database import SessionLocal
-
-        with SessionLocal() as session:
-            perms = permissions_for("employee", session, store_id)
-            assert "transfers.create" in perms
-            assert "transfers.read" in perms
+        from api.Core.Permissions import permissions_for
+        perms = permissions_for("employee", store_id=store_id)
+        assert "transfers.create" in perms
+        assert "transfers.read" in perms

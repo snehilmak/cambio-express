@@ -328,8 +328,24 @@ def clean_db():
             db.drop_all()
             db.create_all()
             seed_test_data()
+        try:
+            from api.Core.Permissions import (
+                _reset_enforcer, _get_enforcer, seed_defaults,
+            )
+            _reset_enforcer()
+            e = _get_enforcer()
+            e.clear_policy()
+            e.save_policy()
+            seed_defaults()
+        except Exception:
+            pass
         yield
         db.session.remove()
+        try:
+            from api.Core.Permissions import _reset_enforcer as _re
+            _re()
+        except Exception:
+            pass
 
 
 @pytest.fixture

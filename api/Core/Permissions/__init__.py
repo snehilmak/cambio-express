@@ -100,7 +100,10 @@ def _resolve_grants(role: str, store_id: int) -> set[tuple[str, str]]:
     dom = str(store_id)
     store_rules = e.get_filtered_policy(0, role, dom)
     if store_rules:
-        return {(r[2], r[3]) for r in store_rules}
+        return {
+            (r[2], r[3]) for r in store_rules
+            if r[2] != _OVERRIDE_SENTINEL
+        }
     global_rules = e.get_filtered_policy(0, role, "global")
     if global_rules:
         return {(r[2], r[3]) for r in global_rules}
@@ -153,14 +156,19 @@ def permissions_for(
 
 # ── Write API ──────────────────────────────────────────────
 
+_OVERRIDE_SENTINEL = "__override_active__"
+
+
 def set_store_permissions(
     store_id: int, role: str,
     matrix: dict[str, dict[str, bool]],
 ) -> None:
-    """Replace all per-store permissions for a role."""
+    """Replace all per-store permissions for a role.
+    A sentinel row marks that overrides exist even if all are off."""
     e = _get_enforcer()
     dom = str(store_id)
     e.remove_filtered_policy(0, role, dom)
+    has_any = False
     for resource, actions in matrix.items():
         if resource not in RBAC_RESOURCES:
             continue
@@ -169,6 +177,9 @@ def set_store_permissions(
                 continue
             if allowed:
                 e.add_policy(role, dom, resource, action)
+                has_any = True
+    if not has_any:
+        e.add_policy(role, dom, _OVERRIDE_SENTINEL, _OVERRIDE_SENTINEL)
     e.save_policy()
     reload_policy()
 
@@ -236,7 +247,10 @@ def get_permission_matrix(
         store_rules = e.get_filtered_policy(0, role, dom)
         if store_rules:
             has_overrides.append(role)
-            granted = {(r[2], r[3]) for r in store_rules}
+            granted = {
+                (r[2], r[3]) for r in store_rules
+                if r[2] != _OVERRIDE_SENTINEL
+            }
         else:
             global_rules = e.get_filtered_policy(0, role, "global")
             if global_rules:
