@@ -35,6 +35,7 @@ from api.Modules.Billing.Models import (
     Store,
 )
 from api.Modules.Billing.Services.config import stripe_is_configured
+from api.Core.Clock import utc_now
 
 
 logger = logging.getLogger(__name__)
@@ -165,7 +166,7 @@ def apply_pending_referral_credits(
     if not owner:
         return
 
-    now = datetime.utcnow()
+    now = utc_now()
     referee_txn_id = ""
     if referee_store.stripe_customer_id and stripe_is_configured():
         try:

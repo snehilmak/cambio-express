@@ -29,6 +29,7 @@ from api.Modules.DailyBook.Models import DailyReport
 from api.Modules.Monthly.Models import MonthlyFinancial
 from api.Modules.Tenancy.Models import Store, User
 from api.Modules.Transfers.Models import Transfer
+from api.Core.Clock import utc_now
 
 
 def _transfers_csv(db: Session, store_id: int, year: int) -> str:
@@ -231,7 +232,7 @@ def _readme(store: Store, year: int) -> str:
         f"==========================\n"
         f"Store:  {store.name}\n"
         f"Year:   {year}\n"
-        f"Generated: {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}\n"
+        f"Generated: {utc_now().strftime('%Y-%m-%d %H:%M UTC')}\n"
         f"\n"
         f"Files in this archive:\n"
         f"\n"

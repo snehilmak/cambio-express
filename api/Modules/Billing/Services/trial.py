@@ -12,6 +12,7 @@ across all those surfaces.
 from datetime import datetime, timedelta
 
 from api.Modules.Billing.Models import Store
+from api.Core.Clock import utc_now
 
 
 # Days before trial_ends_at at which we start nagging the operator.
@@ -43,7 +44,7 @@ def get_trial_status(store: Store | None) -> str:
         return "expired"
     if store.trial_ends_at is None:
         return "exempt"
-    now = datetime.utcnow()
+    now = utc_now()
     if store.grace_ends_at is not None and now >= store.grace_ends_at:
         return "expired"
     if now >= store.trial_ends_at:

@@ -15,6 +15,7 @@ from api.Modules.ReturnChecks.Models import (
 from api.Modules.ReturnChecks.Repositories import (
     find_payment, find_return_check,
 )
+from api.Core.Clock import utc_now
 
 
 class ReturnCheckNotFoundError(LookupError):
@@ -94,7 +95,7 @@ def _set_status(
         )
     row.status = target_status
     row.status_changed_on = date.today()
-    row.updated_at = datetime.utcnow()
+    row.updated_at = utc_now()
     db.flush()
     return row
 
@@ -132,7 +133,7 @@ def reopen(db: Session, store_id: int, rc_id: int) -> ReturnCheck:
         )
     row.status = "pending"
     row.status_changed_on = None
-    row.updated_at = datetime.utcnow()
+    row.updated_at = utc_now()
     db.flush()
     return row
 
@@ -226,11 +227,11 @@ def _maybe_auto_recover(
     if rc.status == "pending" and total >= full and full > 0:
         rc.status = "recovered"
         rc.status_changed_on = date.today()
-        rc.updated_at = datetime.utcnow()
+        rc.updated_at = utc_now()
     elif rc.status == "recovered" and total < full:
         rc.status = "pending"
         rc.status_changed_on = None
-        rc.updated_at = datetime.utcnow()
+        rc.updated_at = utc_now()
 
 
 def record_payment(

@@ -29,6 +29,7 @@ from api.Modules.Billing.Services.trial import (
 )
 from api.Modules.Notifications.Services.smtp import send_email
 from api.Modules.Notifications.Services.templates import render_email_template
+from api.Core.Clock import utc_now
 
 
 TRIAL_REMINDER_SUBJECT = "Your DineroBook trial ends in {days} days"
@@ -64,7 +65,7 @@ def stores_due_for_reminder(db: Session, now: datetime | None = None) -> list[An
     """
     from api.Modules.Tenancy.Models import Store
     if now is None:
-        now = datetime.utcnow()
+        now = utc_now()
     candidates = (
         db.query(Store)
           .filter(
@@ -135,7 +136,7 @@ def run(
     dedup stamp lands), but never closes the session.
     """
     if now is None:
-        now = datetime.utcnow()
+        now = utc_now()
     if base_url is None:
         base_url = os.environ.get("APP_BASE_URL", "https://dinerobook.com")
 

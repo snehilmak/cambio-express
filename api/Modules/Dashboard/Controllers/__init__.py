@@ -21,6 +21,7 @@ from sqlalchemy.orm import Session
 from api.Core.Database import get_db
 from api.Modules.Auth.Controllers import get_principal
 from typing import Any
+from api.Core.Clock import utc_now
 
 
 router = APIRouter()
@@ -313,7 +314,7 @@ def dashboard_peak_hours(
         )
     from api.Modules.Dashboard.Services import compute_peak_hours
     from datetime import timedelta
-    now = datetime.utcnow()
+    now = utc_now()
     start = now - timedelta(days=days)
     return compute_peak_hours(
         db, store_id=int(store_id), start=start, end=now,

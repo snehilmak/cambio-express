@@ -47,6 +47,7 @@ from api.Modules.TVDisplay.Requests import (
     TVPairingSummary,
 )
 from typing import Any
+from api.Core.Clock import utc_now
 
 
 router = APIRouter()
@@ -272,7 +273,7 @@ def save_settings_route(
     if theme not in _ALLOWED_THEMES:
         theme = "light"
     display.theme = theme
-    display.last_updated_at = datetime.utcnow()
+    display.last_updated_at = utc_now()
     db.commit()
     return Response(status_code=204)
 
@@ -338,7 +339,7 @@ def claim_pair_code_route(
           .filter(TVPendingPair.code == code)
           .one_or_none()
     )
-    now = datetime.utcnow()
+    now = utc_now()
     if (pending is None
             or pending.claimed_at is not None
             or pending.expires_at < now):
@@ -393,7 +394,7 @@ def revoke_pairing_route(
     if pairing is None:
         raise HTTPException(status_code=404, detail="Pairing not found")
     if pairing.revoked_at is None:
-        pairing.revoked_at = datetime.utcnow()
+        pairing.revoked_at = utc_now()
         db.commit()
     return Response(status_code=204)
 
@@ -436,7 +437,7 @@ def create_country_route(
         mt_companies=(payload.mt_companies or "").strip()[:500],
     )
     db.add(country)
-    display.last_updated_at = datetime.utcnow()
+    display.last_updated_at = utc_now()
     db.commit()
     db.refresh(country)
     return TVDisplayCountryCreateResponse(
@@ -480,6 +481,6 @@ def delete_country_route(
        .filter(TVDisplayPayoutBank.country_id == country.id)
        .delete(synchronize_session=False))
     db.delete(country)
-    display.last_updated_at = datetime.utcnow()
+    display.last_updated_at = utc_now()
     db.commit()
     return Response(status_code=204)

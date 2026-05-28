@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from api.Modules.DailyBook.Models import DailyLineItem
 from api.Modules.DailyBook.Services.reports import ensure_daily_report
+from api.Core.Clock import utc_now
 
 
 class LineItemValidationError(ValueError):
@@ -172,6 +173,6 @@ def recompute_line_items_total(
     ) or 0.0
     report = ensure_daily_report(db, store_id, report_date)
     setattr(report, daily_report_field, float(total))
-    setattr(report, "updated_at", datetime.utcnow())
+    setattr(report, "updated_at", utc_now())
     db.flush()
     return float(total)

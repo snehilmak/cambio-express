@@ -12,6 +12,7 @@ Migrated from `app.py`:
 from datetime import datetime
 
 from api.Modules.Billing.Models import Store
+from api.Core.Clock import utc_now
 
 
 # Roles considered "paid" for feature gating. Trial / inactive don't
@@ -57,5 +58,5 @@ def data_retention_days_left(store: Store | None) -> int | None:
     """
     if not store or not store.data_retention_until:
         return None
-    delta = store.data_retention_until - datetime.utcnow()
+    delta = store.data_retention_until - utc_now()
     return int(max(0, delta.days))

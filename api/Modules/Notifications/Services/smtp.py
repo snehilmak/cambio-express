@@ -33,6 +33,7 @@ from typing import Any
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
+from api.Core.Clock import utc_now
 
 
 logger = logging.getLogger(__name__)
@@ -84,7 +85,7 @@ def send_email(
     host = os.environ.get("SMTP_HOST")
     user = os.environ.get("SMTP_USER")
     pw = os.environ.get("SMTP_PASS")
-    now = datetime.utcnow()
+    now = utc_now()
     to_norm = (to_addr or "").strip().lower()
     to_domain = to_norm.split("@", 1)[1] if "@" in to_norm else ""
 
@@ -194,7 +195,7 @@ def health_check(db: Session) -> dict[str, Any]:
     suppressed_count = 0
     last_event_at = None
     try:
-        since = datetime.utcnow() - timedelta(days=7)
+        since = utc_now() - timedelta(days=7)
         rows = (
             db.query(EmailEvent.event_type, func.count(EmailEvent.id))
               .filter(EmailEvent.created_at >= since)

@@ -35,6 +35,7 @@ from api.Modules.Auth.Services.totp import (
     needs_totp,
 )
 from typing import Any
+from api.Core.Clock import utc_now
 
 
 # Permissions per role. Embedded as JWT claims so subsequent
@@ -429,7 +430,7 @@ def finish_totp_enrollment(
         )
     if not verify_totp_token(user, code):
         raise AuthenticationError("Invalid verification code")
-    user.totp_enrolled_at = datetime.utcnow()
+    user.totp_enrolled_at = utc_now()
     return generate_recovery_codes(db, user)
 
 

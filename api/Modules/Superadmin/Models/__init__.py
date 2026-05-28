@@ -9,6 +9,7 @@ from datetime import datetime
 from sqlalchemy import Column, DateTime, Integer, String, Text
 
 from api.Core.Database import Base
+from api.Core.Clock import utc_now
 
 
 class PlatformSetting(Base):
@@ -34,7 +35,7 @@ def set_setting(db, key: str, value: str) -> None:
     row = db.query(PlatformSetting).filter_by(key=key).first()
     if row:
         row.value = value
-        row.updated_at = datetime.utcnow()
+        row.updated_at = utc_now()
     else:
         db.add(PlatformSetting(key=key, value=value))
     db.commit()

@@ -46,6 +46,7 @@ from api.Modules.Owners.Services import (
     owner_store_ids,
 )
 from typing import Any
+from api.Core.Clock import utc_now
 
 
 router = APIRouter()
@@ -286,7 +287,7 @@ def owner_connect_codes_generate_route(
     c = OwnerConnectCode(
         owner_id=user.id,
         code=raw,
-        expires_at=datetime.utcnow() + timedelta(days=7),
+        expires_at=utc_now() + timedelta(days=7),
     )
     db.add(c); db.flush()
     db.commit()
@@ -323,7 +324,7 @@ def owner_connect_codes_revoke_route(
             detail="Already redeemed — use /owner/unlink/{store_id} to disconnect.",
         )
     if c.revoked_at is None:
-        c.revoked_at = datetime.utcnow()
+        c.revoked_at = utc_now()
     db.commit()
     return OwnerConnectCodeResponse(code=_adapt_code(c))
 

@@ -17,6 +17,7 @@ import pyotp
 from sqlalchemy.orm import Session
 
 from api.Modules.Auth.Models import RecoveryCode, User
+from api.Core.Clock import utc_now
 
 
 # Number of single-use recovery codes minted per (re-)enrollment.
@@ -120,6 +121,6 @@ def consume_recovery_code(
     if row is None:
         return False
     from datetime import datetime
-    setattr(row, "used_at", datetime.utcnow())
+    setattr(row, "used_at", utc_now())
     db.flush()
     return True

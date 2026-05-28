@@ -87,6 +87,7 @@ from api.Modules.Auth.Services.login import (
 )
 from api.Modules.Auth.Services.signup import SignupConflictError
 from typing import Any
+from api.Core.Clock import utc_now
 
 
 router = APIRouter()
@@ -374,10 +375,10 @@ def _record_login_event(db: Session, user_id: int, *, method: str = "") -> None:
     u = db.get(User, user_id)
     if u is None:
         return
-    u.last_login_at = datetime.utcnow()
+    u.last_login_at = utc_now()
     db.add(LoginEvent(
         user_id=u.id, role=u.role or "",
-        method=method, at=datetime.utcnow(),
+        method=method, at=utc_now(),
     ))
 
 
@@ -1278,7 +1279,7 @@ def send_password_reset_email(
                 ),
                 name=u.full_name or "",
                 reset_url=reset_url,
-                year=datetime.utcnow().year,
+                year=utc_now().year,
                 base_url=base_url,
             )
         except Exception:

@@ -56,6 +56,7 @@ from api.Modules.Customers.Services import (
     upsert,
 )
 from typing import Any
+from api.Core.Clock import utc_now
 
 
 router = APIRouter()
@@ -212,7 +213,7 @@ def export_csv_route(
             c.created_at.isoformat() if c.created_at else "",
             c.updated_at.isoformat() if c.updated_at else "",
         ])
-    today = datetime.utcnow().strftime("%Y-%m-%d")
+    today = utc_now().strftime("%Y-%m-%d")
     return Response(
         content=buf.getvalue(),
         media_type="text/csv",

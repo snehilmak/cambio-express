@@ -63,6 +63,7 @@ from api.Modules.Admin.Services import (
     update_team_member,
 )
 from typing import Any
+from api.Core.Clock import utc_now
 
 
 router = APIRouter()
@@ -369,7 +370,7 @@ def subscription_summary_route(
     trial_days_left = None
     if store.plan == "trial" and store.trial_ends_at is not None:
         from datetime import datetime
-        delta = store.trial_ends_at - datetime.utcnow()
+        delta = store.trial_ends_at - utc_now()
         trial_days_left = max(0, delta.days)
     # Check with Stripe if the subscription is scheduled for
     # cancellation (cancel at end of billing period). This is a
@@ -677,7 +678,7 @@ def export_admin_audit_log_csv_route(
             r.get("summary") or "",
             r.get("source") or "",
         ])
-    today = _datetime.utcnow().strftime("%Y-%m-%d")
+    today = utc_now().strftime("%Y-%m-%d")
     return Response(
         content=buf.getvalue(),
         media_type="text/csv",
@@ -1111,7 +1112,7 @@ def redeem_connect_code_route(
         raise HTTPException(status_code=422, detail="Code has been revoked")
     if occ.used_at is not None:
         raise HTTPException(status_code=422, detail="Code has already been redeemed")
-    if occ.expires_at and occ.expires_at < datetime.utcnow():
+    if occ.expires_at and occ.expires_at < utc_now():
         raise HTTPException(status_code=422, detail="Code has expired")
 
     existing = db.query(StoreOwnerLink).filter_by(
@@ -1123,7 +1124,7 @@ def redeem_connect_code_route(
     sub = claims.get("sub")
     link = StoreOwnerLink(owner_id=occ.owner_id, store_id=sid)
     db.add(link)
-    occ.used_at = datetime.utcnow()
+    occ.used_at = utc_now()
     occ.used_by_user_id = int(sub) if sub else None
     occ.used_by_store_id = sid
 

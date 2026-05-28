@@ -29,6 +29,7 @@ from api.Modules.Support.Requests import (
     TicketRow,
     UpdateTicketRequest,
 )
+from api.Core.Clock import utc_now
 
 router = APIRouter()
 
@@ -181,7 +182,7 @@ def update_ticket(
             raise HTTPException(422, f"Invalid status: {body.status}")
         ticket.status = body.status
         if body.status in ("resolved", "closed"):
-            ticket.closed_at = datetime.utcnow()
+            ticket.closed_at = utc_now()
         else:
             ticket.closed_at = None
     if body.priority is not None:
@@ -190,11 +191,11 @@ def update_ticket(
         ticket.priority = body.priority
     if body.admin_reply is not None:
         ticket.admin_reply = body.admin_reply.strip()[:5000]
-        ticket.replied_at = datetime.utcnow()
+        ticket.replied_at = utc_now()
         ticket.replied_by = (
             claims.get("name") or claims.get("username") or ""
         )
-    ticket.updated_at = datetime.utcnow()
+    ticket.updated_at = utc_now()
     db.commit()
     db.refresh(ticket)
     return TicketResponse(ticket=_to_row(ticket))

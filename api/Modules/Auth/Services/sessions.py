@@ -36,6 +36,7 @@ from typing import Optional
 from sqlalchemy.orm import Session
 
 from api.Modules.Auth.Models import RefreshToken
+from api.Core.Clock import utc_now
 
 
 # Sentinel used for legacy rows with ``session_id=NULL`` in the
@@ -88,7 +89,7 @@ def list_active_sessions(
     JWT doesn't carry the claim (older login paths) — every row
     falls back to ``is_current=False``.
     """
-    now = datetime.utcnow()
+    now = utc_now()
     rows = (
         db.query(RefreshToken)
           .filter(RefreshToken.user_id == user_id)
@@ -143,7 +144,7 @@ def revoke_session(
     Handles the legacy bucket: passing ``session_id=LEGACY_SESSION_ID``
     revokes every live refresh row with NULL ``session_id`` for
     the user (the singleton legacy chain)."""
-    now = datetime.utcnow()
+    now = utc_now()
     q = (
         db.query(RefreshToken)
           .filter(
@@ -178,7 +179,7 @@ def revoke_other_sessions(
     Returns the count of refresh rows revoked (sum across every
     revoked chain).
     """
-    now = datetime.utcnow()
+    now = utc_now()
     q = (
         db.query(RefreshToken)
           .filter(

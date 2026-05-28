@@ -40,6 +40,7 @@ from api.Modules.DailyBook.Services.reports import (
 from api.Modules.DailyBook.Services.transfers_summary import (
     summarize_transfers_for_day,
 )
+from api.Core.Clock import utc_now
 
 
 @dataclass
@@ -226,6 +227,6 @@ def replace_mt_breakdown(
     # money_transfer field.
     if rows:
         report.money_transfer = float(grand_total)
-        report.updated_at = datetime.utcnow()
+        report.updated_at = utc_now()
     db.flush()
     return float(grand_total)

@@ -9,6 +9,7 @@ from datetime import date
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 from typing import Any
+from api.Core.Clock import utc_now
 
 
 # Hard-coded plan price table. Used by MRR/ARR. When Stripe pricing
@@ -226,7 +227,7 @@ def time_to_convert(
           )
           .all()
     )
-    today = datetime.utcnow()
+    today = utc_now()
     rows: list[dict] = []
     for s in paid:
         if not s.created_at:
@@ -266,7 +267,7 @@ def trial_expiry_timing(
           )
           .all()
     )
-    today = datetime.utcnow()
+    today = utc_now()
     buckets = {
         "≤ 7 days into trial":         0,
         "8–14 days":                   0,
@@ -506,7 +507,7 @@ def password_resets(
         {u.id: u for u in db.query(User).filter(User.id.in_(user_ids)).all()}
         if user_ids else {}
     )
-    now = datetime.utcnow()
+    now = utc_now()
     rows: list[dict] = []
     used = expired = open_count = 0
     for t in tokens:

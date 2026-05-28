@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 
 from api.Modules.BankSync.Models import BankRule, BankTransaction
 from api.Modules.DailyBook.Models import DailyLineItem
+from api.Core.Clock import utc_now
 
 
 def categorize_transaction(
@@ -53,14 +54,14 @@ def categorize_transaction(
 
     if rule is not None:
         rule.match_count = (rule.match_count or 0) + 1
-        rule.last_matched_at = datetime.utcnow()
+        rule.last_matched_at = utc_now()
 
     if (
         post_to_daily and target_kind
         and is_daily_book_kind is not None
         and is_daily_book_kind(target_kind)
     ):
-        when = txn.posted_at or datetime.utcnow()
+        when = txn.posted_at or utc_now()
         line_date = report_date if report_date is not None else when.date()
         line = DailyLineItem(
             store_id=txn.store_id,

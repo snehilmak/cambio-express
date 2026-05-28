@@ -56,6 +56,7 @@ from api.Modules.BankSync.Services import (
 )
 from typing import Any
 import logging
+from api.Core.Clock import utc_now
 
 
 _log = logging.getLogger(__name__)
@@ -708,7 +709,7 @@ def disconnect_account_route(
         # Already disconnected; no-op + still 204.
         return None
     row.enabled = False
-    row.disconnected_at = datetime.utcnow()
+    row.disconnected_at = utc_now()
     _audit_bank_action(
         db, claims=claims, action="disconnect_bank",
         target_id=str(row.id),

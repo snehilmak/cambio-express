@@ -33,6 +33,7 @@ from sqlalchemy.orm import Session
 from api.Modules.Notifications.Services.smtp import send_email
 from api.Modules.Notifications.Services.templates import render_email_template
 from typing import Any
+from api.Core.Clock import utc_now
 
 
 _log = logging.getLogger(__name__)
@@ -187,7 +188,7 @@ def run(session: Session, report: Any, base_url: str | None = None) -> int:
                 net_negative=(net < 0),
                 view_url=view_url,
                 notifications_url=notifications_url,
-                year=datetime.utcnow().year,
+                year=utc_now().year,
                 base_url=base_url,
             )
             subject = LOCKED_DAY_SUBJECT.format(

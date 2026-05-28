@@ -26,6 +26,7 @@ from api.Modules.Customers.Repositories import (
     search_by_substring,
     sibling_store_ids,
 )
+from api.Core.Clock import utc_now
 
 
 # Threshold tuned in the original Flask implementation: catches
@@ -90,7 +91,7 @@ def upsert(
     if dob:           setattr(cust, "dob",           dob)
     if phone_country: setattr(cust, "phone_country", phone_country)
     if phone_number:  setattr(cust, "phone_number",  phone_number)
-    setattr(cust, "updated_at", datetime.utcnow())
+    setattr(cust, "updated_at", utc_now())
     db.flush()
     return cust
 

@@ -14,6 +14,7 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 
 from api.Modules.Tenancy.Models import User
+from api.Core.Clock import utc_now
 
 
 _REPLAY_WINDOW_SECONDS = 5 * 60
@@ -30,7 +31,7 @@ def verify_resend_signature(secret, svix_id, svix_timestamp, svix_signature,
         return False
     try:
         ts_int = int(svix_timestamp)
-        now_int = int(datetime.utcnow().timestamp())
+        now_int = int(utc_now().timestamp())
         if abs(now_int - ts_int) > _REPLAY_WINDOW_SECONDS:
             return False
     except ValueError:
@@ -66,7 +67,7 @@ def apply_resend_side_effects(db: Session, event_type, to_addr, bounce_type):
              .all())
     if not users:
         return
-    now = datetime.utcnow()
+    now = utc_now()
     for u in users:
         if event_type == "email.bounced" and bounce_type == "hard":
             u.email_bounced_at = now

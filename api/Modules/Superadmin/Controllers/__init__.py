@@ -42,6 +42,7 @@ from api.Modules.Superadmin.Requests import (
     SuperadminStoreUpdateRequest,
 )
 from typing import Any
+from api.Core.Clock import utc_now
 
 
 router = APIRouter()
@@ -300,10 +301,20 @@ def update_permissions_route(
     """Bulk-update the RBAC matrix. Body: {changes: [{role, resource, action, allowed}]}."""
     _require_superadmin(claims)
     from api.Modules.Auth.Models import RolePermission
-    from api.Modules.Auth.Services.login import RBAC_ACTIONS, RBAC_RESOURCES
+    from api.Modules.Auth.Services.login import (
+        RBAC_ACTIONS, RBAC_DEFAULTS, RBAC_RESOURCES,
+    )
     sa = resolve_superadmin_user(db, claims)
     changes = body.get("changes", [])
     valid_roles = {"admin", "employee", "owner"}
+
+    if not db.query(RolePermission).first():
+        for role, perms in RBAC_DEFAULTS.items():
+            for perm in perms:
+                res, act = perm.split(".", 1)
+                db.add(RolePermission(role=role, resource=res, action=act))
+        db.flush()
+
     added = 0
     removed = 0
     for ch in changes:
@@ -329,11 +340,10 @@ def update_permissions_route(
             db.delete(existing)
             removed += 1
     if added or removed:
-        from datetime import datetime as _dt
         from api.Modules.Auth.Models import RefreshToken
         from api.Modules.Tenancy.Models import User as _User
         affected_roles = {ch.get("role") for ch in changes if ch.get("role") in valid_roles}
-        now = _dt.utcnow()
+        now = utc_now()
         for r in affected_roles:
             db.query(RefreshToken).filter(
                 RefreshToken.user_id.in_(
@@ -594,7 +604,7 @@ def billing_overview_route(
     from api.Modules.Tenancy.Models import Store
     from api.Modules.Webhooks.Models import WebhookEvent
 
-    now = datetime.utcnow()
+    now = utc_now()
     stores = db.query(Store).all()
 
     expiring_soon: list[dict[str, Any]] = []
@@ -778,7 +788,7 @@ def store_drill_route(
 
     # Transfer stats
     from datetime import datetime
-    now = datetime.utcnow()
+    now = utc_now()
     stats_30d = (
         db.query(
             func.count(Transfer.id),
@@ -879,7 +889,7 @@ def system_health_route(
     env_info = {
         "python_version": platform.python_version(),
         "platform": platform.platform(),
-        "server_time": datetime.utcnow().isoformat(),
+        "server_time": utc_now().isoformat(),
         "database_url_set": bool(os.environ.get("DATABASE_URL")),
         "secret_key_set": bool(os.environ.get("SECRET_KEY") or os.environ.get("AUTH_JWT_SECRET")),
         "sentry_dsn_set": bool(os.environ.get("SENTRY_DSN")),
@@ -1128,7 +1138,7 @@ def extend_trial_route(
     days = int(body.get("days", 14))
     if days < 1 or days > 365:
         raise HTTPException(status_code=422, detail="Days must be 1–365")
-    base = s.trial_ends_at or datetime.utcnow()
+    base = s.trial_ends_at or utc_now()
     s.trial_ends_at = base + timedelta(days=days)
     if s.grace_ends_at:
         s.grace_ends_at = s.trial_ends_at + timedelta(days=7)
@@ -1188,7 +1198,7 @@ def bulk_action_route(
     for s in stores:
         if action == "extend_trial":
             days = int(body.get("days", 14))
-            base = s.trial_ends_at or datetime.utcnow()
+            base = s.trial_ends_at or utc_now()
             s.trial_ends_at = base + timedelta(days=days)
             if s.grace_ends_at:
                 s.grace_ends_at = s.trial_ends_at + timedelta(days=7)
@@ -1575,6 +1585,7 @@ def superadmin_store_permissions_route(
     """Permission matrix for a specific store. Superadmin can see
     and edit admin + employee roles."""
     _require_superadmin(claims)
+    from api.Modules.Tenancy.Models import Store
     store = db.get(Store, store_id)
     if not store:
         raise HTTPException(status_code=404, detail="Store not found")
@@ -1638,6 +1649,7 @@ def superadmin_update_store_permissions_route(
     """Update per-store permission overrides. Superadmin can edit
     admin + employee roles."""
     _require_superadmin(claims)
+    from api.Modules.Tenancy.Models import Store
     store = db.get(Store, store_id)
     if not store:
         raise HTTPException(status_code=404, detail="Store not found")
@@ -1696,6 +1708,7 @@ def superadmin_reset_store_permissions_route(
 ) -> dict:
     """Reset a role's per-store overrides to global defaults."""
     _require_superadmin(claims)
+    from api.Modules.Tenancy.Models import Store
     store = db.get(Store, store_id)
     if not store:
         raise HTTPException(status_code=404, detail="Store not found")

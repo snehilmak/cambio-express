@@ -26,6 +26,7 @@ from datetime import date, datetime
 from sqlalchemy.orm import Session
 
 from api.Modules.Monthly.Models import MonthlyFinancial
+from api.Core.Clock import utc_now
 
 
 # Fields the operator can write directly. Auto-derived fields
@@ -150,6 +151,6 @@ def update_monthly(
         setattr(row, "bank_charges_total", float(fields["bank_charges_total"]))
 
     setattr(row, "notes", notes or "")
-    setattr(row, "updated_at", datetime.utcnow())
+    setattr(row, "updated_at", utc_now())
     db.flush()
     return row
