@@ -51,3 +51,5 @@ redis==5.0.7
 # strict-mode behavior shifts between minor versions; bump
 # deliberately when expanding the ratchet to a tricky module.
 mypy==1.10.0
+casbin>=1.43.0
+casbin-sqlalchemy-adapter>=1.4.0

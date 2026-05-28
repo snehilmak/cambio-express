@@ -111,60 +111,10 @@ def seed_rbac_defaults(db: "Session") -> None:
 
 
 def permissions_for(role: str, db: "Session | None" = None, store_id: "int | None" = None) -> list[str]:
-    """The permission claim list for a given role.
-
-    Resolution order:
-    1. Per-store override (StoreRoleOverride) if store_id is given
-       and the store has ANY overrides for this role → use those
-       exclusively (full replacement, not merge)
-    2. Global defaults (RolePermission table)
-    3. Hardcoded RBAC_DEFAULTS fallback
-
-    Always includes the legacy coarse-grained permissions for backward
-    compatibility. Superadmin gets everything."""
-    legacy = list(_LEGACY_ROLE_PERMISSIONS.get(role, []))
-    if role == "superadmin":
-        all_granular = [f"{r}.{a}" for r in RBAC_RESOURCES for a in RBAC_ACTIONS]
-        return legacy + all_granular
-    granular: list[str] | None = None
-    if db is not None and store_id is not None:
-        try:
-            from api.Modules.Auth.Models import StoreRoleOverride
-            store_rows = (
-                db.query(StoreRoleOverride.resource, StoreRoleOverride.action)
-                .filter(StoreRoleOverride.store_id == store_id,
-                        StoreRoleOverride.role == role)
-                .all()
-            )
-            if store_rows:
-                granular = [f"{r}.{a}" for r, a in store_rows]
-        except Exception as exc:
-            import logging
-            logging.getLogger(__name__).warning(
-                "permissions_for: StoreRoleOverride query failed for "
-                "store_id=%s role=%s: %s", store_id, role, exc,
-            )
-    if granular is None and db is not None:
-        try:
-            from api.Modules.Auth.Models import RolePermission
-            rows = (
-                db.query(RolePermission.resource, RolePermission.action)
-                .filter(RolePermission.role == role)
-                .all()
-            )
-            if rows:
-                granular = [f"{r}.{a}" for r, a in rows]
-            elif db.query(RolePermission.id).first() is not None:
-                granular = []
-        except Exception as exc:
-            import logging
-            logging.getLogger(__name__).warning(
-                "permissions_for: RolePermission query failed for "
-                "role=%s: %s", role, exc,
-            )
-    if granular is None:
-        granular = list(RBAC_DEFAULTS.get(role, []))
-    return legacy + granular
+    """Permission claim list for a role. Delegates to Casbin.
+    The ``db`` param is accepted for backward compat but unused."""
+    from api.Core.Permissions import permissions_for as _casbin_perms
+    return _casbin_perms(role, store_id=store_id)
 
 
 @dataclass
