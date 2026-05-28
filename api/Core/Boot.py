@@ -24,6 +24,7 @@ import os
 from typing import Optional, cast
 
 from sqlalchemy.engine import Engine
+from sqlalchemy.orm import Session
 
 
 def warn_default_seed_passwords(
@@ -127,7 +128,9 @@ def init_db(logger: Optional[logging.Logger] = None) -> None:
             log.warning("Casbin seed/migration skipped: %s", exc)
 
 
-def _migrate_legacy_to_casbin(session, log) -> None:
+def _migrate_legacy_to_casbin(
+    session: Session, log: logging.Logger,
+) -> None:
     """One-time: copy RolePermission + StoreRoleOverride → casbin_rule."""
     from api.Core.Permissions import (
         _get_enforcer, RBAC_RESOURCES, RBAC_ACTIONS, reload_policy,
@@ -140,13 +143,13 @@ def _migrate_legacy_to_casbin(session, log) -> None:
     global_rows = session.query(RolePermission).all()
     if global_rows:
         e.remove_filtered_policy(1, "global")
-        for r in global_rows:
-            if r.resource in RBAC_RESOURCES and r.action in RBAC_ACTIONS:
-                e.add_policy(r.role, "global", r.resource, r.action)
+        for gr in global_rows:
+            if gr.resource in RBAC_RESOURCES and gr.action in RBAC_ACTIONS:
+                e.add_policy(gr.role, "global", gr.resource, gr.action)
     store_rows = session.query(StoreRoleOverride).all()
-    for r in store_rows:
-        if r.resource in RBAC_RESOURCES and r.action in RBAC_ACTIONS:
-            e.add_policy(r.role, str(r.store_id), r.resource, r.action)
+    for sr in store_rows:
+        if sr.resource in RBAC_RESOURCES and sr.action in RBAC_ACTIONS:
+            e.add_policy(sr.role, str(sr.store_id), sr.resource, sr.action)
     if global_rows or store_rows:
         e.save_policy()
         reload_policy()
