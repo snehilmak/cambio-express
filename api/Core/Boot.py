@@ -24,6 +24,7 @@ import os
 from typing import Optional, cast
 
 from sqlalchemy.engine import Engine
+from sqlalchemy.orm import Session
 
 
 def warn_default_seed_passwords(
@@ -118,3 +119,39 @@ def init_db(logger: Optional[logging.Logger] = None) -> None:
 
         from api.Modules.Auth.Services.login import seed_rbac_defaults
         seed_rbac_defaults(session)
+
+        try:
+            from api.Core.Permissions import seed_defaults as _seed_casbin
+            _seed_casbin()
+            _migrate_legacy_to_casbin(session, log)
+        except Exception as exc:
+            log.warning("Casbin seed/migration skipped: %s", exc)
+
+
+def _migrate_legacy_to_casbin(
+    session: Session, log: logging.Logger,
+) -> None:
+    """One-time: copy RolePermission + StoreRoleOverride → casbin_rule."""
+    from api.Core.Permissions import (
+        _get_enforcer, RBAC_RESOURCES, RBAC_ACTIONS, reload_policy,
+    )
+    e = _get_enforcer()
+    store_rules = [r for r in e.get_policy() if r[1] != "global"]
+    if store_rules:
+        return
+    from api.Modules.Auth.Models import RolePermission, StoreRoleOverride
+    global_rows = session.query(RolePermission).all()
+    if global_rows:
+        e.remove_filtered_policy(1, "global")
+        for gr in global_rows:
+            if gr.resource in RBAC_RESOURCES and gr.action in RBAC_ACTIONS:
+                e.add_policy(gr.role, "global", gr.resource, gr.action)
+    store_rows = session.query(StoreRoleOverride).all()
+    for sr in store_rows:
+        if sr.resource in RBAC_RESOURCES and sr.action in RBAC_ACTIONS:
+            e.add_policy(sr.role, str(sr.store_id), sr.resource, sr.action)
+    if global_rows or store_rows:
+        e.save_policy()
+        reload_policy()
+        log.info("Casbin: migrated %d global + %d store rules",
+                 len(global_rows), len(store_rows))
