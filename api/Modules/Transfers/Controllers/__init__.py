@@ -25,7 +25,7 @@ Layer rules:
 """
 from datetime import date, datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Query
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
 from sqlalchemy.orm import Session
 
 from api.Core.Database import get_db
@@ -207,8 +207,13 @@ def _enforce_business_hours_gate(db: Session, store_id: int) -> None:
         )
 
 
+from api.Core.RateLimit import limiter as _rate_limiter
+
+
 @router.post("", response_model=TransferResponse, status_code=201)
+@_rate_limiter.limit("30/minute")
 def create_route(
+    request: Request,
     body: CreateTransferRequest,
     db: Session = Depends(get_db),
     claims: dict[str, Any] = Depends(get_principal),
