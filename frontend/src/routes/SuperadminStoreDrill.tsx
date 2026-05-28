@@ -381,23 +381,17 @@ function StorePermissionsPanel({ storeId, storeName }: { storeId: number; storeN
   async function save() {
     if (!data || !draft) return;
     setBusy(true);
-    const changes: Array<{ role: string; resource: string; action: string; allowed: boolean }> = [];
+    const editableMatrix: Record<string, Record<string, Record<string, boolean>>> = {};
     for (const role of draft.editable_roles) {
-      for (const resource of draft.resources) {
-        for (const action of draft.actions) {
-          const was = data.matrix[role][resource][action];
-          const now = draft.matrix[role][resource][action];
-          if (was !== now) changes.push({ role, resource, action, allowed: now });
-        }
-      }
+      editableMatrix[role] = draft.matrix[role];
     }
     try {
       const result = await api<PermMatrix>(`/api/v2/superadmin/stores/${storeId}/permissions`, {
-        method: "PUT", json: { changes },
+        method: "PUT", json: { matrix: editableMatrix },
       });
       setDraft(structuredClone(result));
       qc.setQueryData(["superadmin", "store-permissions", storeId], result);
-      toast({ message: `${changes.length} permission(s) updated for ${storeName}.`, tone: "success" });
+      toast({ message: `Permissions updated for ${storeName}.`, tone: "success" });
     } catch (err) {
       toast({ message: err instanceof ApiError ? err.message : "Failed to save.", tone: "error" });
     } finally { setBusy(false); }

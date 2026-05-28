@@ -1013,28 +1013,72 @@ def update_store_permissions_route(
     from api.Modules.Auth.Models import StoreRoleOverride
     from api.Modules.Auth.Services.login import RBAC_ACTIONS, RBAC_RESOURCES
 
+    matrix = body.get("matrix", {})
     changes = body.get("changes", [])
-    for ch in changes:
-        target_role = ch.get("role", "")
-        resource = ch.get("resource", "")
-        action = ch.get("action", "")
-        allowed = ch.get("allowed", False)
-        if target_role not in editable_roles:
-            raise HTTPException(status_code=403, detail=f"Cannot edit {target_role} permissions")
-        if resource not in RBAC_RESOURCES or action not in RBAC_ACTIONS:
-            continue
-        existing = (
-            db.query(StoreRoleOverride)
-            .filter_by(store_id=sid, role=target_role, resource=resource, action=action)
-            .first()
-        )
-        if allowed and not existing:
-            db.add(StoreRoleOverride(
-                store_id=sid, role=target_role, resource=resource, action=action,
-            ))
-        elif not allowed and existing:
-            db.delete(existing)
-    if changes:
+    mutated = False
+    if matrix:
+        for role, resources in matrix.items():
+            if role not in editable_roles:
+                raise HTTPException(status_code=403, detail=f"Cannot edit {role} permissions")
+            db.query(StoreRoleOverride).filter_by(
+                store_id=sid, role=role,
+            ).delete()
+            for resource, actions in resources.items():
+                if resource not in RBAC_RESOURCES:
+                    continue
+                for action, allowed in actions.items():
+                    if action not in RBAC_ACTIONS:
+                        continue
+                    if allowed:
+                        db.add(StoreRoleOverride(
+                            store_id=sid, role=role,
+                            resource=resource, action=action,
+                        ))
+            mutated = True
+    elif changes:
+        affected_roles = {ch.get("role") for ch in changes if ch.get("role") in editable_roles}
+        for ar in affected_roles:
+            has_overrides = db.query(StoreRoleOverride).filter_by(
+                store_id=sid, role=ar,
+            ).first()
+            if not has_overrides:
+                from api.Modules.Auth.Services.login import permissions_for
+                current = permissions_for(ar, db=db, store_id=sid)
+                for perm in current:
+                    if "." not in perm:
+                        continue
+                    parts = perm.split(".", 1)
+                    if len(parts) != 2:
+                        continue
+                    res, act = parts
+                    if res not in RBAC_RESOURCES or act not in RBAC_ACTIONS:
+                        continue
+                    db.add(StoreRoleOverride(
+                        store_id=sid, role=ar, resource=res, action=act,
+                    ))
+                db.flush()
+        for ch in changes:
+            target_role = ch.get("role", "")
+            resource = ch.get("resource", "")
+            action = ch.get("action", "")
+            allowed = ch.get("allowed", False)
+            if target_role not in editable_roles:
+                raise HTTPException(status_code=403, detail=f"Cannot edit {target_role} permissions")
+            if resource not in RBAC_RESOURCES or action not in RBAC_ACTIONS:
+                continue
+            existing = (
+                db.query(StoreRoleOverride)
+                .filter_by(store_id=sid, role=target_role, resource=resource, action=action)
+                .first()
+            )
+            if allowed and not existing:
+                db.add(StoreRoleOverride(
+                    store_id=sid, role=target_role, resource=resource, action=action,
+                ))
+            elif not allowed and existing:
+                db.delete(existing)
+        mutated = True
+    if mutated or changes:
         _audit_admin_action(
             db, claims=claims, action="update_store_permissions",
             target_type="store_role_override",

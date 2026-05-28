@@ -84,29 +84,20 @@ export default function StorePermissions() {
     if (!data || !draft) return;
     setBusy(true);
     setSaveError(null);
-    const changes: Array<{ role: string; resource: string; action: string; allowed: boolean }> = [];
+    const editableMatrix: Record<string, Record<string, Record<string, boolean>>> = {};
     for (const role of draft.roles) {
       if (!draft.editable_roles.includes(role)) continue;
-      for (const resource of draft.resources) {
-        for (const action of draft.actions) {
-          const was = data.matrix[role][resource][action];
-          const now = draft.matrix[role][resource][action];
-          if (was !== now) {
-            changes.push({ role, resource, action, allowed: now });
-          }
-        }
-      }
+      editableMatrix[role] = draft.matrix[role];
     }
-    if (changes.length === 0) return;
     try {
       const result = await api<PermissionMatrix>("/api/v2/admin/store-permissions", {
         method: "PUT",
-        json: { changes },
+        json: { matrix: editableMatrix },
       });
       setDraft(structuredClone(result));
       qc.setQueryData(["store-permissions"], result);
       await refreshToken();
-      toast({ message: `${changes.length} permission${changes.length === 1 ? "" : "s"} updated for this store. Session refreshed.`, tone: "success" });
+      toast({ message: "Permissions updated for this store.", tone: "success" });
     } catch (err) {
       setSaveError(err instanceof ApiError ? err.message : "Could not save permissions.");
     } finally {
