@@ -1,9 +1,9 @@
-import { useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { api } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
 import { formatTimestamp } from "../lib/datetime";
+import { useUrlFilterState } from "../lib/useUrlFilterState";
 import {
   Breadcrumbs, Card, EmptyState, Input, Loading, PageHeader, PageShell,
   Pill, Table,
@@ -42,20 +42,10 @@ function useOwnerActivity(q: string, page: number) {
 }
 
 export default function OwnerActivity() {
-  const [search, setSearch] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [page, setPage] = useState(1);
-  const { data, isLoading, isError } = useOwnerActivity(debouncedSearch, page);
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  function handleSearch(val: string) {
-    setSearch(val);
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => {
-      setDebouncedSearch(val);
-      setPage(1);
-    }, 300);
-  }
+  const filters = useUrlFilterState({ q: "" });
+  const { data, isLoading, isError } = useOwnerActivity(filters.params.q, filters.page);
+  const page = filters.page;
+  const setPage = filters.setPage;
 
   return (
     <PageShell gap="1.25rem">
@@ -69,8 +59,8 @@ export default function OwnerActivity() {
         <Input
           style={{ width: "20rem" }}
           placeholder="Search by user, action, or summary…"
-          value={search}
-          onChange={(e) => handleSearch(e.target.value)}
+          value={filters.draft.q ?? filters.params.q}
+          onChange={(e) => filters.debounced("q", e.target.value)}
         />
       </div>
 
