@@ -97,18 +97,6 @@ RBAC_DEFAULTS: dict[str, list[str]] = {
 }
 
 
-def seed_rbac_defaults(db: "Session") -> None:
-    """Insert default RBAC rows if the table is empty. Called from
-    init_db() on boot — idempotent."""
-    from api.Modules.Auth.Models import RolePermission
-    if db.query(RolePermission).first() is not None:
-        return
-    for role, perms in RBAC_DEFAULTS.items():
-        for perm in perms:
-            resource, action = perm.split(".", 1)
-            db.add(RolePermission(role=role, resource=resource, action=action))
-    db.commit()
-
 
 def permissions_for(role: str, db: "Session | None" = None, store_id: "int | None" = None) -> list[str]:
     """Permission claim list for a role. Delegates to Casbin.
