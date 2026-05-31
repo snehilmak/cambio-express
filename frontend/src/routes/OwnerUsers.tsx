@@ -1,8 +1,8 @@
-import { useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { api } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
+import { useUrlFilterState } from "../lib/useUrlFilterState";
 import {
   Breadcrumbs, Card, EmptyState, Input, Loading, PageHeader, PageShell,
   Pill, Table,
@@ -39,21 +39,10 @@ function useOwnerUsers(storeId: number | null, q: string, page: number) {
 }
 
 export default function OwnerUsers() {
-  const [storeFilter] = useState<number | null>(null);
-  const [search, setSearch] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [page, setPage] = useState(1);
-  const { data, isLoading, isError } = useOwnerUsers(storeFilter, debouncedSearch, page);
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  function handleSearch(val: string) {
-    setSearch(val);
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => {
-      setDebouncedSearch(val);
-      setPage(1);
-    }, 300);
-  }
+  const filters = useUrlFilterState({ q: "" });
+  const { data, isLoading, isError } = useOwnerUsers(null, filters.params.q, filters.page);
+  const page = filters.page;
+  const setPage = filters.setPage;
 
   return (
     <PageShell gap="1.25rem">
@@ -70,8 +59,8 @@ export default function OwnerUsers() {
         <Input
           style={{ width: "16rem" }}
           placeholder="Search by name or username…"
-          value={search}
-          onChange={(e) => handleSearch(e.target.value)}
+          value={filters.draft.q ?? filters.params.q}
+          onChange={(e) => filters.debounced("q", e.target.value)}
         />
       </div>
 

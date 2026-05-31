@@ -18,6 +18,7 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
 from sqlalchemy.orm import Session
 
 from api.Core.Database import get_db
+from api.Core.Pagination import PaginationParams, paginate, pagination_dep
 from api.Modules.Auth.Controllers import get_principal
 from api.Modules.Auth.Models import User
 from api.Modules.Auth.Services.principal import require_permission
@@ -723,12 +724,12 @@ def owner_store_detail_route(
 def owner_users_route(
     store_id: int | None = Query(None, ge=1),
     q: str = Query("", max_length=100),
-    page: int = Query(1, ge=1),
+    pagination: PaginationParams = Depends(pagination_dep),
     db: Session = Depends(get_db),
     claims: dict[str, Any] = Depends(get_principal),
 ):
     """List users across all stores in the owner's umbrella.
-    Optional store_id filter narrows to one store. Paginated at 50."""
+    Optional store_id filter narrows to one store."""
     require_permission(claims, "users", "read")
     user = _require_owner_principal(db, claims)
     sids = owner_store_ids(db, user)
@@ -747,36 +748,20 @@ def owner_users_route(
         query = query.filter(
             User.username.ilike(like) | User.full_name.ilike(like)
         )
-    total = query.count()
-    per_page = 50
-    total_pages = max(1, -(-total // per_page))
-    rows = (
-        query.order_by(User.store_id, User.full_name)
-        .offset((page - 1) * per_page)
-        .limit(per_page)
-        .all()
-    )
+    query = query.order_by(User.store_id, User.full_name)
     store_names = {
         s.id: s.name
         for s in db.query(Store).filter(Store.id.in_(sids)).all()
     }
-    return {
-        "rows": [
-            {
-                "id": u.id,
-                "username": u.username,
-                "full_name": u.full_name or "",
-                "role": u.role or "",
-                "is_active": bool(getattr(u, "is_active", True)),
-                "store_id": u.store_id,
-                "store_name": store_names.get(u.store_id, ""),
-            }
-            for u in rows
-        ],
-        "total": total,
-        "page": page,
-        "total_pages": total_pages,
-    }
+    return paginate(query, pagination, adapter=lambda u: {
+        "id": u.id,
+        "username": u.username,
+        "full_name": u.full_name or "",
+        "role": u.role or "",
+        "is_active": bool(getattr(u, "is_active", True)),
+        "store_id": u.store_id,
+        "store_name": store_names.get(u.store_id, ""),
+    })
 
 
 # ── Owner store permissions ────────────────────────────────
@@ -921,7 +906,7 @@ def owner_reset_store_permissions_route(
 def owner_activity_route(
     store_id: int | None = Query(None, ge=1),
     q: str = Query("", max_length=100),
-    page: int = Query(1, ge=1),
+    pagination: PaginationParams = Depends(pagination_dep),
     db: Session = Depends(get_db),
     claims: dict[str, Any] = Depends(get_principal),
 ):
@@ -945,7 +930,7 @@ def owner_activity_route(
         for s in db.query(Store).filter(Store.id.in_(sids)).all()
     }
 
-    per_page = 50
+    per_page = pagination.per_page
     needle = q.strip()
 
     oal_q = db.query(OperatorAuditLog).filter(
@@ -999,15 +984,8 @@ def owner_activity_route(
         })
 
     merged.sort(key=lambda x: x["created_at"], reverse=True)
-    total = len(merged)
-    total_pages = max(1, -(-total // per_page))
-    start = (page - 1) * per_page
-    return {
-        "rows": merged[start:start + per_page],
-        "total": total,
-        "page": page,
-        "total_pages": total_pages,
-    }
+    from api.Core.Pagination import paginate_list
+    return paginate_list(merged, pagination)
 
 
 # ── Bulk permission push ───────────────────────────────────

@@ -1,11 +1,11 @@
-import { useEffect, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 
 import {
   useTransfers,
   type TransferRow,
 } from "../api/transfers";
 import { getCurrentIdentity } from "../lib/auth";
+import { useUrlFilterState } from "../lib/useUrlFilterState";
 import {
   Breadcrumbs,
   ButtonLink, Card, DateInput, Empty, Field, Input,
@@ -44,46 +44,22 @@ const STATUS_OPTIONS = [
 
 export default function Transfers() {
   const identity = getCurrentIdentity();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const filters = useUrlFilterState({
+    q: "",
+    date_from: "",
+    date_to: "",
+    status: "",
+  });
+  const { params, page, setParam, setPage, draft } = filters;
+  const q = params.q;
+  const dateFrom = params.date_from;
+  const dateTo = params.date_to;
+  const status = params.status;
 
-  // The form state lives in the URL — that way refresh + back
-  // restore the filters, and a shared link reproduces the view.
-  const q         = searchParams.get("q") ?? "";
-  const dateFrom  = searchParams.get("date_from") ?? "";
-  const dateTo    = searchParams.get("date_to") ?? "";
-  const status    = searchParams.get("status") ?? "";
-  const page      = Number(searchParams.get("page") ?? "1") || 1;
-
-  // Local mirror of `q` with debounce — prevents a query per
-  // keystroke. 300ms matches the legacy Jinja site's debounce
-  // (CLAUDE.md "Table search UX" invariant).
-  const [qDraft, setQDraft] = useState(q);
-  useEffect(() => {
-    if (qDraft === q) return;
-    const id = window.setTimeout(() => {
-      // 2-char minimum, also matches legacy.
-      const next = qDraft.length === 0 || qDraft.length >= 2 ? qDraft : q;
-      const params = new URLSearchParams(searchParams);
-      if (next) params.set("q", next);
-      else params.delete("q");
-      params.set("page", "1");
-      setSearchParams(params, { replace: true });
-    }, 300);
-    return () => window.clearTimeout(id);
-  }, [qDraft, q, searchParams, setSearchParams]);
-
-  // Reset local draft when URL changes from elsewhere (browser
-  // back, link arrival).
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- mirror URL search param into local debounced input when URL changes externally (browser back, link arrival)
-    setQDraft(q);
-  }, [q]);
-
-  // Pause polling while the user is mid-typing in the search box
-  // so we don't fire two queries in quick succession (one debounced
-  // from the typing, one from the timer). qDraft !== q means a
-  // pending debounce — re-enable as soon as the URL catches up.
-  const isTypingQuery = qDraft !== q;
+  // Pause polling while a debounced search is in flight so we don't
+  // fire two queries back-to-back (one when the URL updates, one
+  // from the next poll). draft.q !== undefined means a pending edit.
+  const isTypingQuery = draft.q !== undefined && draft.q !== q;
   const apiQuery = useTransfers({
     page, perPage: PAGE_SIZE,
     q: q.length >= 2 ? q : undefined,
@@ -94,17 +70,7 @@ export default function Transfers() {
   });
 
   function setFilter(key: string, value: string) {
-    const params = new URLSearchParams(searchParams);
-    if (value) params.set(key, value);
-    else params.delete(key);
-    params.set("page", "1");  // reset paging on filter change
-    setSearchParams(params, { replace: true });
-  }
-
-  function setPage(next: number) {
-    const params = new URLSearchParams(searchParams);
-    params.set("page", String(next));
-    setSearchParams(params);
+    setParam(key as keyof typeof params, value);
   }
 
   if (identity?.store_id == null) {
@@ -147,8 +113,8 @@ export default function Transfers() {
       />
 
       <FilterBar
-        q={qDraft}
-        onQChange={setQDraft}
+        q={draft.q ?? q}
+        onQChange={(v: string) => filters.debounced("q", v)}
         dateFrom={dateFrom}
         dateTo={dateTo}
         status={status}
