@@ -736,27 +736,22 @@ def _audit_admin_action(
     target_type: str, target_id: str, target_label: str,
     summary: str,
 ) -> None:
-    """Generic per-store operator-audit row.  CLAUDE.md invariant
-    #7 — every mutating admin endpoint records audit — applies to
-    the Admin module too, not just superadmin.  Callers that audit
-    a User specifically should use the thinner `_audit_user_action`
-    above so the call site reads at a glance.
+    """Per-store operator-audit row, deriving identity from JWT
+    claims. Delegates to ``api.Core.Audit.audit_operator`` — kept
+    here as a thin alias so existing call sites still read clearly
+    at a glance.
 
-    Use this for `Store` field edits, `StoreEmployee` roster CRUD,
-    and the add-on toggle — any mutation that touches per-store
-    operational state without going through the User path."""
-    from api.Modules.Audit.Services import record_operator_action
-    sid = int(claims.get("store_id") or 0)
-    record_operator_action(
-        db,
-        store_id=sid,
-        user_id=int(claims.get("sub") or 0) or None,
-        user_name=str(claims.get("username") or claims.get("full_name") or ""),
-        user_role=str(claims.get("role") or ""),
+    Use this for ``Store`` field edits, ``StoreEmployee`` roster
+    CRUD, and the add-on toggle — any mutation that touches
+    per-store operational state without going through the User
+    path."""
+    from api.Core.Audit import audit_operator
+    audit_operator(
+        db, claims,
+        action=action,
         target_type=target_type,
         target_id=target_id,
         target_label=target_label,
-        action=action,
         summary=summary,
     )
 
