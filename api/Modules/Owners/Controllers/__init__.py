@@ -246,18 +246,12 @@ def owner_connect_codes_list_route(
     revoked + expired). Newest first."""
     require_permission(claims, "settings", "read")
     user = _require_owner_principal(db, claims)
-    from api.Modules.Tenancy.Models import OwnerConnectCode, Store
-    rows = (
-        db.query(OwnerConnectCode)
-          .filter(OwnerConnectCode.owner_id == user.id)
-          .order_by(OwnerConnectCode.created_at.desc())
-          .all()
+    from api.Modules.Owners.Repositories import (
+        list_codes_for_owner, get_store_names_for_codes,
     )
+    rows = list_codes_for_owner(db, user.id)
     sids = [r.used_by_store_id for r in rows if r.used_by_store_id]
-    stores = {
-        s.id: s.name for s in
-        db.query(Store).filter(Store.id.in_(sids)).all()
-    } if sids else {}
+    stores = get_store_names_for_codes(db, sids)
     out = [
         _adapt_code(r, store_name=stores.get(r.used_by_store_id, ""))
         for r in rows
@@ -308,15 +302,8 @@ def owner_connect_codes_revoke_route(
     require_permission(claims, "settings", "update")
     from datetime import datetime
     user = _require_owner_principal(db, claims)
-    from api.Modules.Tenancy.Models import OwnerConnectCode
-    c = (
-        db.query(OwnerConnectCode)
-          .filter(
-              OwnerConnectCode.id == code_id,
-              OwnerConnectCode.owner_id == user.id,
-          )
-          .one_or_none()
-    )
+    from api.Modules.Owners.Repositories import find_owner_code
+    c = find_owner_code(db, code_id, user.id)
     if c is None:
         raise HTTPException(status_code=404, detail="Connect code not found")
     if c.used_at is not None:
@@ -479,15 +466,8 @@ def owner_unlink_store_route(
     require_permission(claims, "settings", "delete")
     _ = body  # request body is empty today, schema kept for future
     user = _require_owner_principal(db, claims)
-    from api.Modules.Tenancy.Models import StoreOwnerLink
-    link = (
-        db.query(StoreOwnerLink)
-          .filter(
-              StoreOwnerLink.owner_id == user.id,
-              StoreOwnerLink.store_id == store_id,
-          )
-          .one_or_none()
-    )
+    from api.Modules.Owners.Repositories import find_link
+    link = find_link(db, user.id, store_id)
     if link is None:
         raise HTTPException(status_code=404, detail="Store not in umbrella")
     db.delete(link)
@@ -740,19 +720,11 @@ def owner_users_route(
             raise HTTPException(status_code=403, detail="Store not in your umbrella")
         sids = [store_id]
 
-    from api.Modules.Tenancy.Models import Store
-    query = db.query(User).filter(User.store_id.in_(sids))
-    needle = q.strip()
-    if needle:
-        like = f"%{needle}%"
-        query = query.filter(
-            User.username.ilike(like) | User.full_name.ilike(like)
-        )
-    query = query.order_by(User.store_id, User.full_name)
-    store_names = {
-        s.id: s.name
-        for s in db.query(Store).filter(Store.id.in_(sids)).all()
-    }
+    from api.Modules.Owners.Repositories import (
+        users_in_stores_query, get_store_names_map,
+    )
+    query = users_in_stores_query(db, sids, search=q)
+    store_names = get_store_names_map(db, sids)
     return paginate(query, pagination, adapter=lambda u: {
         "id": u.id,
         "username": u.username,
@@ -923,12 +895,9 @@ def owner_activity_route(
         sids = [store_id]
 
     from api.Modules.Audit.Models import OperatorAuditLog, TransferAudit
-    from api.Modules.Tenancy.Models import Store
+    from api.Modules.Owners.Repositories import get_store_names_map
 
-    store_names = {
-        s.id: s.name
-        for s in db.query(Store).filter(Store.id.in_(sids)).all()
-    }
+    store_names = get_store_names_map(db, sids)
 
     per_page = pagination.per_page
     needle = q.strip()
