@@ -68,15 +68,12 @@ def _require_superadmin(claims: dict[str, Any]) -> None:
 
 def _audit_store(db: Session, user: User, action: str,
                  *, target_id: str = "", details: str = "") -> None:
-    """Thin wrapper that goes straight to the Service so we don't need
-    Flask's request context (the legacy `record_audit` reads
-    `current_user()` from Flask session, which isn't set inside a
-    FastAPI route through the dispatcher). Per CLAUDE.md invariant
-    #7: every superadmin mutation MUST call record_audit."""
-    record_superadmin_action(
-        db,
-        admin_id=user.id,
-        admin_name=user.full_name or user.username or "",
+    """Record a superadmin action with target_type='store'.
+    Delegates to ``api.Core.Audit.audit_superadmin``. Per CLAUDE.md
+    invariant #7: every superadmin mutation MUST call record_audit."""
+    from api.Core.Audit import audit_superadmin
+    audit_superadmin(
+        db, user,
         action=action,
         target_type="store",
         target_id=target_id,
