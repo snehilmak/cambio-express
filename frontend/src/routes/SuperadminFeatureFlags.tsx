@@ -13,6 +13,7 @@ import {
   type StoreOverrideRow,
 } from "../api/featureFlags";
 import { ApiError } from "../lib/api";
+import { useApiErrorToast } from "../lib/useApiErrorToast";
 import {
   Alert,
   Button,
@@ -113,6 +114,7 @@ function FlagRow({
   onRefresh: () => void;
 }) {
   const toast = useToast();
+  const toastApiError = useApiErrorToast();
   const [busy, setBusy] = useState(false);
 
   async function handleToggle() {
@@ -122,7 +124,7 @@ function FlagRow({
       onRefresh();
       toast({ message: `${flag.key} → ${!flag.enabled_by_default ? "enabled" : "disabled"}`, tone: "success" });
     } catch (err) {
-      toast({ message: err instanceof ApiError ? err.message : "Toggle failed", tone: "error" });
+      toastApiError(err, "Toggle failed");
     } finally {
       setBusy(false);
     }
@@ -136,7 +138,7 @@ function FlagRow({
       onRefresh();
       toast({ message: `${flag.key} deleted`, tone: "success" });
     } catch (err) {
-      toast({ message: err instanceof ApiError ? err.message : "Delete failed", tone: "error" });
+      toastApiError(err, "Delete failed");
     } finally {
       setBusy(false);
     }
@@ -184,6 +186,7 @@ function OverridesPanel({ flagKey }: { flagKey: string }) {
   const { data, isLoading } = useStoreOverrides(flagKey);
   const qc = useQueryClient();
   const toast = useToast();
+  const toastApiError = useApiErrorToast();
   const [addStoreId, setAddStoreId] = useState("");
 
   async function handleSet(storeId: number, enabled: boolean) {
@@ -192,7 +195,7 @@ function OverridesPanel({ flagKey }: { flagKey: string }) {
       void qc.invalidateQueries({ queryKey: ["feature-flag-overrides", flagKey] });
       toast({ message: `Store ${storeId} override → ${enabled ? "ON" : "OFF"}`, tone: "success" });
     } catch (err) {
-      toast({ message: err instanceof ApiError ? err.message : "Failed", tone: "error" });
+      toastApiError(err, "Failed");
     }
   }
 
@@ -202,7 +205,7 @@ function OverridesPanel({ flagKey }: { flagKey: string }) {
       void qc.invalidateQueries({ queryKey: ["feature-flag-overrides", flagKey] });
       toast({ message: `Override cleared for store ${storeId}`, tone: "success" });
     } catch (err) {
-      toast({ message: err instanceof ApiError ? err.message : "Failed", tone: "error" });
+      toastApiError(err, "Failed");
     }
   }
 

@@ -128,14 +128,8 @@ def _names_for(
     by ``entries`` — avoids N+1."""
     from api.Modules.Tenancy.Models import StoreEmployee
     ids = {e.store_employee_id for e in entries}
-    if not ids:
-        return {}
-    rows = (
-        db.query(StoreEmployee.id, StoreEmployee.name)
-          .filter(StoreEmployee.id.in_(ids))
-          .all()
-    )
-    return {sid: name for sid, name in rows}
+    from api.Modules.TimeClock.Repositories import get_employee_name_map
+    return get_employee_name_map(db, ids)
 
 
 # ── Employee-facing endpoints ───────────────────────────────
@@ -724,17 +718,8 @@ def admin_entry_history_route(
             status_code=404,
             detail="That time-clock entry does not belong to this store.",
         )
-    from api.Modules.Audit.Models import OperatorAuditLog
-    rows = (
-        db.query(OperatorAuditLog)
-          .filter(
-              OperatorAuditLog.store_id == store_id,
-              OperatorAuditLog.target_type == "time_clock_entry",
-              OperatorAuditLog.target_id == str(entry_id),
-          )
-          .order_by(OperatorAuditLog.id.desc())
-          .all()
-    )
+    from api.Modules.TimeClock.Repositories import list_entry_history
+    rows = list_entry_history(db, store_id, entry_id)
     return TimeClockHistoryResponse(rows=[
         TimeClockHistoryRow(
             id=r.id,
@@ -766,18 +751,8 @@ def _shift_to_row(shift: TimeClockShift, names: dict[int, str]) -> ShiftRow:
 def _shift_names_for(
     db: Session, shifts: list[TimeClockShift],
 ) -> dict[int, str]:
-    from api.Modules.Tenancy.Models import StoreEmployee
-    ids = {s.store_employee_id for s in shifts}
-    if not ids:
-        return {}
-    return {
-        emp_id: name
-        for (emp_id, name) in (
-            db.query(StoreEmployee.id, StoreEmployee.name)
-              .filter(StoreEmployee.id.in_(ids))
-              .all()
-        )
-    }
+    from api.Modules.TimeClock.Repositories import get_employee_name_map
+    return get_employee_name_map(db, {s.store_employee_id for s in shifts})
 
 
 @admin_router.get(
@@ -1135,17 +1110,9 @@ def admin_credentials_list_route(
     operator sees who's pending vs registered."""
     _require_admin_role(claims)
     store_id = resolve_store_scope(claims)
-    from api.Modules.Tenancy.Models import StoreEmployee
+    from api.Modules.TimeClock.Repositories import list_active_employees
     from api.Modules.TimeClock.Services.passkey import list_passkeys_for_store
-    employees = (
-        db.query(StoreEmployee)
-          .filter(
-              StoreEmployee.store_id == store_id,
-              StoreEmployee.is_active == True,  # noqa: E712
-          )
-          .order_by(StoreEmployee.name.asc())
-          .all()
-    )
+    employees = list_active_employees(db, store_id)
     passkeys_by_emp = {
         pk.store_employee_id: pk
         for pk in list_passkeys_for_store(db, store_id)

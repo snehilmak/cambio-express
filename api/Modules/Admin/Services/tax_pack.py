@@ -16,7 +16,6 @@ Service-layer only; the HTTP wrapper lives in
 """
 from __future__ import annotations
 
-import csv
 import io
 import zipfile
 from datetime import date, datetime
@@ -30,21 +29,20 @@ from api.Modules.Monthly.Models import MonthlyFinancial
 from api.Modules.Tenancy.Models import Store, User
 from api.Modules.Transfers.Models import Transfer
 from api.Core.Clock import utc_now
+from api.Core.Csv import build_csv
 
 
 def _transfers_csv(db: Session, store_id: int, year: int) -> str:
     """Full transfer ledger for the year. Includes Canceled /
     Rejected so the accountant has the audit trail; the Status
     column lets them filter in Excel."""
-    buf = io.StringIO()
-    w = csv.writer(buf)
-    w.writerow([
+    headers = [
         "Send Date", "Company", "Service Type", "Sender Name",
         "Sender Phone", "Recipient Name", "Country",
         "Send Amount", "Fee", "Federal Tax", "Total Collected",
         "Confirm Number", "Batch ID", "Status",
         "Employee", "Created By", "Internal Notes",
-    ])
+    ]
     rows = (
         db.query(Transfer)
           .filter(
@@ -60,7 +58,8 @@ def _transfers_csv(db: Session, store_id: int, year: int) -> str:
         {u.id: u for u in db.query(User).filter(User.id.in_(user_ids)).all()}
         if user_ids else {}
     )
-    for t in rows:
+
+    def _row(t: Transfer) -> list[object]:
         u = users.get(t.created_by) if t.created_by else None
         creator = (u.full_name or u.username) if u else ""
         phone = (
@@ -69,7 +68,7 @@ def _transfers_csv(db: Session, store_id: int, year: int) -> str:
         total = (
             (t.send_amount or 0) + (t.fee or 0) + (t.federal_tax or 0)
         )
-        w.writerow([
+        return [
             t.send_date.isoformat() if t.send_date else "",
             t.company or "",
             t.service_type or "",
@@ -87,8 +86,9 @@ def _transfers_csv(db: Session, store_id: int, year: int) -> str:
             t.employee_name or "",
             creator,
             t.internal_notes or "",
-        ])
-    return buf.getvalue()
+        ]
+
+    return build_csv(headers, (_row(t) for t in rows))
 
 
 def _monthly_pl_csv(db: Session, store_id: int, year: int) -> str:
@@ -111,14 +111,13 @@ def _monthly_pl_csv(db: Session, store_id: int, year: int) -> str:
                 "notes", "updated_at",
             )
         ]
-    buf = io.StringIO()
-    w = csv.writer(buf)
-    w.writerow(
+    headers = (
         ["Month"]
         + [c.replace("_", " ").title() for c in money_cols]
         + ["Net Income"]
     )
-    for m in range(1, 13):
+
+    def _row(m: int) -> list[object]:
         r = rows.get(m)
         if r:
             values = [getattr(r, c, 0.0) or 0.0 for c in money_cols]
@@ -126,12 +125,13 @@ def _monthly_pl_csv(db: Session, store_id: int, year: int) -> str:
         else:
             values = [0.0] * len(money_cols)
             net = 0.0
-        w.writerow(
+        return (
             [f"{year}-{m:02d}"]
             + [f"{v:.2f}" for v in values]
             + [f"{net:.2f}"]
         )
-    return buf.getvalue()
+
+    return build_csv(headers, (_row(m) for m in range(1, 13)))
 
 
 def _daily_summary_csv(db: Session, store_id: int, year: int) -> str:
@@ -148,23 +148,23 @@ def _daily_summary_csv(db: Session, store_id: int, year: int) -> str:
           .order_by(DailyReport.report_date)
           .all()
     )
-    buf = io.StringIO()
-    w = csv.writer(buf)
-    w.writerow([
+    headers = [
         "Date", "Total Receipts", "Total Disbursements",
         "Over/Short", "Locked",
-    ])
-    for r in rows:
+    ]
+
+    def _row(r: DailyReport) -> list[object]:
         receipts  = float(getattr(r, "total_receipts", 0.0) or 0.0)
         disbursed = float(getattr(r, "total_disbursements", 0.0) or 0.0)
         os_       = float(getattr(r, "over_short", 0.0) or 0.0)
         locked    = "yes" if getattr(r, "locked_at", None) else "no"
-        w.writerow([
+        return [
             r.report_date.isoformat(),
             f"{receipts:.2f}", f"{disbursed:.2f}", f"{os_:.2f}",
             locked,
-        ])
-    return buf.getvalue()
+        ]
+
+    return build_csv(headers, (_row(r) for r in rows))
 
 
 def _customers_csv(db: Session, store_id: int, year: int) -> str:
@@ -197,13 +197,13 @@ def _customers_csv(db: Session, store_id: int, year: int) -> str:
          db.query(Customer).filter(Customer.id.in_(cust_ids)).all()}
         if cust_ids else {}
     )
-    buf = io.StringIO()
-    w = csv.writer(buf)
-    w.writerow([
+    headers = [
         "Customer", "Phone", "Address", "Count",
         "Total Sent", "Total Fees",
-    ])
-    for cid, sender_name, count, sent, fees in rows:
+    ]
+
+    def _row(group: tuple) -> list[object]:
+        cid, sender_name, count, sent, fees = group
         if cid and cid in customers:
             c = customers[cid]
             name = c.full_name or sender_name or "(no name)"
@@ -216,11 +216,12 @@ def _customers_csv(db: Session, store_id: int, year: int) -> str:
             name = sender_name or "(walk-in)"
             phone = ""
             address = ""
-        w.writerow([
+        return [
             name, phone, address, int(count or 0),
             f"{float(sent or 0):.2f}", f"{float(fees or 0):.2f}",
-        ])
-    return buf.getvalue()
+        ]
+
+    return build_csv(headers, (_row(g) for g in rows))
 
 
 def _readme(store: Store, year: int) -> str:

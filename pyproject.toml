@@ -38,6 +38,7 @@ files = [
     # ── api/Core ─────────────────────────────────────────────
     "api/Core/Boot.py",
     "api/Core/Bootstrap.py",
+    "api/Core/Csv.py",
     "api/Core/Config/settings.py",
     "api/Core/Database/session.py",
     "api/Core/Jobs.py",
@@ -49,6 +50,9 @@ files = [
     # ── api/Modules/Admin ────────────────────────────────────
     "api/Modules/Admin/Repositories/store_info.py",
     "api/Modules/Admin/Repositories/team.py",
+    # ── api/Modules/TimeClock ────────────────────────────────
+    "api/Modules/TimeClock/Repositories/employees.py",
+    "api/Modules/TimeClock/Repositories/history.py",
     # ── api/Modules/Owners ───────────────────────────────────
     "api/Modules/Owners/Repositories/connect_codes.py",
     "api/Modules/Owners/Repositories/store_links.py",

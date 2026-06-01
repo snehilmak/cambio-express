@@ -12,6 +12,7 @@ import {
   PageHeader, PageShell, Pill, Section, SectionTitle, Table, tdStyle,
   Textarea, thStyle, useToast,
 } from "../components/ui";
+import { useApiErrorToast } from "../lib/useApiErrorToast";
 import styles from "./SuperadminStoreDrill.module.css";
 
 interface StoreInfo {
@@ -59,6 +60,7 @@ export default function SuperadminStoreDrill() {
   const storeId = params.id ? Number(params.id) : undefined;
   const { data, isLoading, isError, error, refetch } = useStoreDrill(storeId);
   const toast = useToast();
+  const toastApiError = useApiErrorToast();
   const [showEmail, setShowEmail] = useState(false);
   const [emailSubject, setEmailSubject] = useState("");
   const [emailBody, setEmailBody] = useState("");
@@ -104,7 +106,7 @@ export default function SuperadminStoreDrill() {
                       toast({ message: "Trial extended by 14 days.", tone: "success" });
                       void refetch();
                     } catch (e) {
-                      toast({ message: e instanceof ApiError ? e.message : "Failed", tone: "error" });
+                      toastApiError(e, "Failed");
                     } finally { setActionBusy(false); }
                   }}
                 >
@@ -120,7 +122,7 @@ export default function SuperadminStoreDrill() {
                       toast({ message: res.is_active ? "Store enabled." : "Store disabled.", tone: "success" });
                       void refetch();
                     } catch (e) {
-                      toast({ message: e instanceof ApiError ? e.message : "Failed", tone: "error" });
+                      toastApiError(e, "Failed");
                     } finally { setActionBusy(false); }
                   }}
                 >
@@ -353,6 +355,7 @@ const RESOURCE_LABELS: Record<string, string> = {
 function StorePermissionsPanel({ storeId, storeName }: { storeId: number; storeName: string }) {
   const qc = useQueryClient();
   const toast = useToast();
+  const toastApiError = useApiErrorToast();
   const { data, isLoading } = useQuery<PermMatrix>({
     queryKey: ["superadmin", "store-permissions", storeId],
     queryFn: () => api<PermMatrix>(`/api/v2/superadmin/stores/${storeId}/permissions`),
@@ -393,7 +396,7 @@ function StorePermissionsPanel({ storeId, storeName }: { storeId: number; storeN
       qc.setQueryData(["superadmin", "store-permissions", storeId], result);
       toast({ message: `Permissions updated for ${storeName}.`, tone: "success" });
     } catch (err) {
-      toast({ message: err instanceof ApiError ? err.message : "Failed to save.", tone: "error" });
+      toastApiError(err, "Failed to save.");
     } finally { setBusy(false); }
   }
 
@@ -407,7 +410,7 @@ function StorePermissionsPanel({ storeId, storeName }: { storeId: number; storeN
       qc.setQueryData(["superadmin", "store-permissions", storeId], result);
       toast({ message: `${role} permissions reset to global defaults.`, tone: "success" });
     } catch (err) {
-      toast({ message: err instanceof ApiError ? err.message : "Failed to reset.", tone: "error" });
+      toastApiError(err, "Failed to reset.");
     } finally { setBusy(false); }
   }
 
