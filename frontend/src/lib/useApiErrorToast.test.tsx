@@ -20,7 +20,7 @@ describe("useApiErrorToast", () => {
     const { result } = renderHook(() => useApiErrorToast(), { wrapper: Wrapper });
     expect(() => {
       act(() => {
-        result.current(new ApiError("API said no", 422), "fallback");
+        result.current(new ApiError(422, "API said no", null), "fallback");
       });
     }).not.toThrow();
   });
@@ -51,7 +51,7 @@ describe("useApiErrorToast", () => {
       const toastApiError = useApiErrorToast();
       return (
         <button
-          onClick={() => toastApiError(new ApiError("API failure detail", 422), "fallback")}
+          onClick={() => toastApiError(new ApiError(422, "API failure detail", null), "fallback")}
         >
           go
         </button>
