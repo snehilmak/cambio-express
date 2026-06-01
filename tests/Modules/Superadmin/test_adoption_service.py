@@ -71,11 +71,17 @@ def test_bank_sync_adoption_groups_by_plan():
         db.session.query(StripeBankAccount).delete()
         db.session.query(Store).delete()
         db.session.commit()
+        # Stamp created_at inside the test window so the d_to
+        # filter doesn't drop these rows when the system clock
+        # is past 2026-05-31.
+        ts = datetime(2026, 5, 15)
         s_basic_conn = _add_store(db.session, slug="bsa-basic-c",
-                                   plan="basic")
+                                   plan="basic", created_at=ts)
         _add_account(db.session, s_basic_conn.id)
-        _add_store(db.session, slug="bsa-basic-nc", plan="basic")
-        _add_store(db.session, slug="bsa-pro-nc", plan="pro")
+        _add_store(db.session, slug="bsa-basic-nc", plan="basic",
+                   created_at=ts)
+        _add_store(db.session, slug="bsa-pro-nc", plan="pro",
+                   created_at=ts)
         rows, totals = bank_sync_adoption(
             db.session, date(2026, 5, 1), date(2026, 5, 31),
         )
@@ -115,12 +121,13 @@ def test_tv_display_adoption_filters_by_addons():
     with db_session():
         db.session.query(Store).delete()
         db.session.commit()
+        ts = datetime(2026, 5, 15)
         _add_store(db.session, slug="tvda-on", plan="basic",
-                   addons="tv_display,referrals")
+                   addons="tv_display,referrals", created_at=ts)
         _add_store(db.session, slug="tvda-off", plan="basic",
-                   addons="referrals")
+                   addons="referrals", created_at=ts)
         _add_store(db.session, slug="tvda-blank", plan="basic",
-                   addons="")
+                   addons="", created_at=ts)
         rows, totals = tv_display_adoption(
             db.session, date(2026, 5, 1), date(2026, 5, 31),
         )
@@ -136,10 +143,11 @@ def test_tv_display_adoption_sorted_by_name():
     with db_session():
         db.session.query(Store).delete()
         db.session.commit()
+        ts = datetime(2026, 5, 15)
         _add_store(db.session, slug="tvda-z", plan="basic",
-                   addons="tv_display")
+                   addons="tv_display", created_at=ts)
         _add_store(db.session, slug="tvda-a", plan="basic",
-                   addons="tv_display")
+                   addons="tv_display", created_at=ts)
         rows, _ = tv_display_adoption(
             db.session, date(2026, 5, 1), date(2026, 5, 31),
         )

@@ -646,17 +646,12 @@ def email_log_route(
     _require_superadmin(claims)
     from api.Modules.Webhooks.Models import EmailEvent
     from api.Modules.Tenancy.Models import User
+    from api.Modules.Superadmin.Repositories import email_events_query
 
-    query = db.query(EmailEvent)
-    if q:
-        needle = f"%{q}%"
-        query = query.filter(EmailEvent.to_addr.ilike(needle))
-    if event_type:
-        query = query.filter(EmailEvent.event_type == event_type)
+    query = email_events_query(db, search=q, event_type=event_type)
     total = query.count()
     events = (
-        query.order_by(EmailEvent.created_at.desc())
-        .offset((page - 1) * per_page)
+        query.offset((page - 1) * per_page)
         .limit(per_page)
         .all()
     )
@@ -715,12 +710,8 @@ def store_drill_route(
         raise HTTPException(status_code=404, detail="Store not found")
 
     # Team
-    users = (
-        db.query(User)
-        .filter(User.store_id == store_id)
-        .order_by(User.created_at)
-        .all()
-    )
+    from api.Modules.Superadmin.Repositories import list_users_in_store
+    users = list_users_in_store(db, store_id)
     team = [
         {"id": u.id, "username": u.username, "full_name": u.full_name or "",
          "role": u.role or "", "email": u.email or "",
@@ -817,8 +808,9 @@ def system_health_route(
     from api.Modules.Transfers.Models import Transfer
 
     # DB stats
-    total_users = db.query(User).count()
-    total_stores = db.query(Store).count()
+    from api.Modules.Superadmin.Repositories import count_all_stores, count_all_users
+    total_users = count_all_users(db)
+    total_stores = count_all_stores(db)
     total_transfers = db.query(Transfer).count()
     db_ok = True
     db_error = ""
@@ -896,7 +888,8 @@ def list_stores_route(
 ) -> SuperadminStoreListResponse:
     _require_superadmin(claims)
     from api.Modules.Tenancy.Models import Store
-    stores = db.query(Store).order_by(Store.created_at.desc()).all()
+    from api.Modules.Superadmin.Repositories import list_all_stores_newest_first
+    stores = list_all_stores_newest_first(db)
     rows = [
         SuperadminStoreRow(
             store_id=s.id,
@@ -966,7 +959,8 @@ def create_store_route(
             status_code=422,
             detail={"field": "slug", "message": "Slug cannot be empty."},
         )
-    if db.query(Store).filter(Store.slug == slug).one_or_none():
+    from api.Modules.Superadmin.Repositories import get_store_by_slug
+    if get_store_by_slug(db, slug):
         raise HTTPException(
             status_code=409,
             detail={
@@ -1162,7 +1156,8 @@ def bulk_action_route(
     if action not in ("extend_trial", "enable", "disable"):
         raise HTTPException(status_code=422, detail=f"Invalid action: {action}")
 
-    stores = db.query(Store).filter(Store.id.in_(store_ids)).all()
+    from api.Modules.Superadmin.Repositories import list_stores_by_ids
+    stores = list_stores_by_ids(db, store_ids)
     if not stores:
         raise HTTPException(status_code=404, detail="No stores found")
 
@@ -1214,11 +1209,8 @@ def email_store_route(
     message = body.get("message", "").strip()
     if not subject or not message:
         raise HTTPException(status_code=422, detail="Subject and message are required")
-    admins = (
-        db.query(User)
-        .filter(User.store_id == store_id, User.role == "admin", User.is_active == True)
-        .all()
-    )
+    from api.Modules.Superadmin.Repositories import list_active_admins_for_store
+    admins = list_active_admins_for_store(db, store_id)
     recipients = [u for u in admins if u.email]
     if not recipients:
         raise HTTPException(status_code=422, detail="No admin with an email address found for this store")
@@ -1247,14 +1239,11 @@ def list_audit_route(
     `/superadmin/reports/audit-log` covers the same data; this
     endpoint feeds the SPA equivalent."""
     _require_superadmin(claims)
-    from api.Modules.Audit.Models import SuperadminAuditLog
-    q = db.query(SuperadminAuditLog)
-    if action:
-        q = q.filter(SuperadminAuditLog.action.ilike(f"%{action}%"))
+    from api.Modules.Superadmin.Repositories import superadmin_audit_query
+    q = superadmin_audit_query(db, action=action)
     total = q.count()
     rows = (
-        q.order_by(SuperadminAuditLog.created_at.desc())
-         .offset((page - 1) * per_page)
+        q.offset((page - 1) * per_page)
          .limit(per_page)
          .all()
     )
@@ -1352,12 +1341,8 @@ def list_discounts_route(
     This endpoint only renders + toggles; it never makes Stripe
     API calls."""
     _require_superadmin(claims)
-    from api.Modules.Billing.Models import DiscountCode
-    rows = (
-        db.query(DiscountCode)
-          .order_by(DiscountCode.created_at.desc())
-          .all()
-    )
+    from api.Modules.Superadmin.Repositories import list_discount_codes
+    rows = list_discount_codes(db)
     return DiscountCodeListResponse(
         rows=[_adapt_discount(d) for d in rows], total=len(rows),
     )
@@ -1378,10 +1363,8 @@ def toggle_discount_route(
     invoices keep their references) but new Checkout sessions
     that try to apply them are rejected by `is_redeemable`."""
     user = resolve_superadmin_user(db, claims)
-    from api.Modules.Billing.Models import DiscountCode
-    d = db.query(DiscountCode).filter(
-        DiscountCode.id == discount_id,
-    ).one_or_none()
+    from api.Modules.Superadmin.Repositories import get_discount_code
+    d = get_discount_code(db, discount_id)
     if d is None:
         raise HTTPException(status_code=404, detail="Discount code not found")
     d.is_active = body.is_active
