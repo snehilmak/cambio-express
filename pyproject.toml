@@ -54,6 +54,12 @@ files = [
     "api/Modules/Owners/Repositories/store_links.py",
     "api/Modules/Owners/Repositories/stores.py",
     "api/Modules/Owners/Repositories/users.py",
+    # ── api/Modules/Superadmin ───────────────────────────────
+    "api/Modules/Superadmin/Repositories/audit.py",
+    "api/Modules/Superadmin/Repositories/discounts.py",
+    "api/Modules/Superadmin/Repositories/stores.py",
+    "api/Modules/Superadmin/Repositories/users.py",
+    "api/Modules/Superadmin/Repositories/webhooks.py",
     "api/Modules/Admin/Repositories/users.py",
     "api/Modules/Admin/Requests/addons.py",
     "api/Modules/Admin/Requests/audit_log.py",
