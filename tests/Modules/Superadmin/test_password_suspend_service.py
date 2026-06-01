@@ -140,13 +140,14 @@ def test_suspended_stores_includes_inactive_flag():
     with db_session():
         db.session.query(Store).delete()
         db.session.commit()
+        ts = datetime(2026, 5, 15)
         _add_store(db.session, slug="ss-active", plan="basic",
-                   is_active=True)
+                   is_active=True, created_at=ts)
         _add_store(db.session, slug="ss-suspended", plan="basic",
-                   is_active=False)
+                   is_active=False, created_at=ts)
         _add_store(db.session, slug="ss-inactive-plan",
                    plan="inactive",
-                   is_active=True)
+                   is_active=True, created_at=ts)
         rows, totals = suspended_stores(
             db.session, date(2026, 5, 1), date(2026, 5, 31),
         )
@@ -165,7 +166,8 @@ def test_suspended_stores_reason_combines_flags():
         db.session.commit()
         _add_store(db.session, slug="ss-both",
                    plan="inactive",
-                   is_active=False)
+                   is_active=False,
+                   created_at=datetime(2026, 5, 15))
         rows, _ = suspended_stores(
             db.session, date(2026, 5, 1), date(2026, 5, 31),
         )
