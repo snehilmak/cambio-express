@@ -71,6 +71,10 @@ def _model_path() -> str:
 
 
 def _get_enforcer() -> casbin.Enforcer:
+    """Lazy-init the module-level enforcer singleton. If the prior
+    init failed (or the singleton was reset), try again — letting a
+    transient DB hiccup poison the process forever was an outage
+    waiting to happen."""
     global _enforcer
     if _enforcer is not None:
         return _enforcer
@@ -117,12 +121,27 @@ def check_permission(
     role: str, store_id: int | None,
     resource: str, action: str,
 ) -> bool:
-    """Live permission check. Superadmin always passes."""
+    """Live permission check. Superadmin always passes.
+
+    If Casbin throws, we fall back to ``RBAC_DEFAULTS`` so a
+    permission-system fault doesn't lock everyone out. The
+    Auth/Services/principal layer additionally checks the JWT
+    perms claim, so the user's view doesn't get more open than
+    what was baked into their token at login time."""
     if role == "superadmin":
         return True
     if store_id is None:
         return f"{resource}.{action}" in RBAC_DEFAULTS.get(role, [])
-    return (resource, action) in _resolve_grants(role, store_id)
+    try:
+        return (resource, action) in _resolve_grants(role, store_id)
+    except Exception as exc:
+        _log.warning(
+            "check_permission: Casbin lookup failed for role=%s "
+            "store_id=%s resource=%s action=%s — falling back to "
+            "RBAC_DEFAULTS. Error: %s",
+            role, store_id, resource, action, exc,
+        )
+        return f"{resource}.{action}" in RBAC_DEFAULTS.get(role, [])
 
 
 def require_permission(
@@ -144,14 +163,28 @@ def permissions_for(
     role: str, store_id: int | None = None, **_kw: Any,
 ) -> list[str]:
     """Full permission list for a role. Used for JWT claims.
-    Accepts **kwargs for backward compat (old callers pass db=)."""
+    Accepts **kwargs for backward compat (old callers pass db=).
+
+    If Casbin throws (DB connection issue, missing table, etc.)
+    we fall back to ``RBAC_DEFAULTS`` so login never 500s on a
+    permissions-system fault. The login path then issues a JWT
+    with the hardcoded defaults; the user can still operate and
+    ops can fix Casbin without an outage."""
     legacy = list(LEGACY_ROLE_PERMISSIONS.get(role, []))
     if role == "superadmin":
         return legacy + [f"{r}.{a}" for r in RBAC_RESOURCES for a in RBAC_ACTIONS]
     if store_id is None:
         return legacy + list(RBAC_DEFAULTS.get(role, []))
-    grants = _resolve_grants(role, store_id)
-    return legacy + [f"{r}.{a}" for r, a in grants]
+    try:
+        grants = _resolve_grants(role, store_id)
+        return legacy + [f"{r}.{a}" for r, a in grants]
+    except Exception as exc:
+        _log.warning(
+            "permissions_for: Casbin lookup failed for role=%s "
+            "store_id=%s — falling back to RBAC_DEFAULTS. Error: %s",
+            role, store_id, exc,
+        )
+        return legacy + list(RBAC_DEFAULTS.get(role, []))
 
 
 # ── Write API ──────────────────────────────────────────────
