@@ -29,7 +29,11 @@ one **Superadmin**.
     `--border`). The navy/gold/cream palette it originally shipped
     is retired but its dark-mode block is still in use.
 - Stripe for billing (Checkout Sessions + Billing Portal + webhooks).
-- pytest + pytest-flask.
+- Casbin (`pycasbin` + `casbin-sqlalchemy-adapter`) for RBAC.
+  Replaced custom `RolePermission` / `StoreRoleOverride` tables in
+  PR #761; legacy tables dropped in PR #763. Live enforcement
+  (no JWT staleness) — see `api/Core/Permissions/`.
+- pytest for the Python suite; Vitest + Testing Library for the SPA.
 
 ## Design system — READ BEFORE TOUCHING ANY UI
 **Source of truth: [`docs/design-system/`](docs/design-system/).** Any
@@ -216,7 +220,8 @@ the 422-trap field list).
   `frontend/src/api/monthly.ts` count as "Monthly files" too.
 - `api/Modules/Auth/INVARIANTS.md` — login, 2FA, recovery codes,
   passkeys. The `_TOTP_REQUIRED_ROLES` single role gate, the
-  `_ROLE_PERMISSIONS` matrix (privilege escalation surface), the
+  Casbin-backed permissions matrix (privilege escalation
+  surface — `RBAC_DEFAULTS` + the `casbin_rule` table), the
   opaque-error-message rule (anti-enumeration), the pending vs
   access token purpose separation, the passkey-register
   TOTP-first rule for superadmin, the forward invariant for a
@@ -607,6 +612,7 @@ router in `api/main.py`.
 | `Reports` | Per-store + platform reports, CSV exports (registry-driven) |
 | `ReturnChecks` | Returned-check tracking + payments |
 | `Superadmin` | `/superadmin/*` controls, anomalies, BI reports |
+| `Support` | In-app support tickets (admin → superadmin) |
 | `Tenancy` | `Store`, `User`, `StoreEmployee`, `StoreOwnerLink`, `OwnerConnectCode` |
 | `TimeClock` | Employee shift clock-in / clock-out + admin payroll history |
 | `Transfers` | Transfer CRUD + cancellation flow |
@@ -617,13 +623,19 @@ Cross-cutting (under `api/Core/`):
 
 | Module | Owns |
 |---|---|
+| `Audit` | `audit_operator`, `audit_superadmin`, `@audit_action` decorator — claims-aware wrappers around the recorder Services |
 | `Boot` | `init_db()`, `warn_default_seed_passwords()` — called from `api/main.py` lifespan |
 | `Bootstrap` | Alembic upgrade, index safety-net, legacy backfills |
-| `Database` | SQLAlchemy engine + `SessionLocal` + `get_db` FastAPI dep |
-| `Observability` | structlog config, Sentry init, `RequestIDMiddleware` |
-| `RateLimit` | slowapi singleton + decorator |
-| `Jobs` | RQ-backed ``enqueue(fn, *args)`` with sync fallback |
+| `Clock` | `utc_now()` — canonical UTC timestamp (single point to flip when migrating to tz-aware) |
 | `Config` | Pydantic-settings env loader |
+| `Csv` | `build_csv(headers, rows)` — string-based CSV construction helper |
+| `Database` | SQLAlchemy engine + `SessionLocal` + `get_db` FastAPI dep |
+| `Jobs` | RQ-backed ``enqueue(fn, *args)`` with sync fallback |
+| `Observability` | structlog config, Sentry init, `RequestIDMiddleware`, `SecurityHeadersMiddleware` (CSP + frame options) |
+| `Pagination` | `PaginationParams` + `paginate()` + `paginate_list()` — shared list-endpoint envelope |
+| `PasswordHash` | bcrypt wrappers used by signup + change-password |
+| `Permissions` | Casbin-backed RBAC — `check_permission`, `require_permission`, `permissions_for`, `set_store_permissions`, etc. |
+| `RateLimit` | slowapi singleton + decorator |
 
 Top-level files:
 
@@ -738,17 +750,27 @@ Known traps:
 
 ## What NOT to do
 - ❌ Inline-style hex colors that duplicate `app.css`.
-- ❌ Drop columns or tables from a running DB.
-- ❌ Skip `record_audit()` on a superadmin mutation.
+- ❌ Drop columns or tables from a running DB without a backfill
+  step (rename in one revision, copy data, drop in a follow-up).
+- ❌ Skip audit logging on a superadmin / admin mutation — use
+  `audit_superadmin(db, user, ...)` or `audit_operator(db, claims, ...)`
+  from `api.Core.Audit`.
 - ❌ Remove `allow_promotion_codes=True` from Stripe checkout.
 - ❌ Use `Model.query.get(id)` — use `db.session.get(Model, id)`.
 - ❌ Add a new `Store.plan` value without updating `get_trial_status`
   and the trial context processor.
-- ❌ Add a per-store data model without adding it to
-  `_STORE_OWNED_MODELS` (the retention-purge list).
-- ❌ Commit without `pytest tests/` passing.
+- ❌ Add a per-store data model without adding it to the
+  retention-purge list in `api/Modules/Billing/Services/retention.py`.
+- ❌ Add inline SQL in a Controller when a Repository helper exists
+  (or could exist) — Owners, Superadmin, Admin, Transfers, Auth,
+  TimeClock all have `Repositories/` packages.
+- ❌ Commit without `pytest tests/` passing AND `python -m mypy` clean.
 - ❌ Leak the raw password-reset token to the DB or logs on success —
   only log on SMTP-fallback and only the URL.
+- ❌ Inline `db.query(...)` queries inside `Casbin` permission checks —
+  use the `api.Core.Permissions` API (`check_permission`,
+  `permissions_for`, `set_store_permissions`, etc.) so the Casbin
+  enforcer singleton stays the only direct caller.
 
 ## Deferred work
 See `BACKLOG.md`. Items under **Before going live** are gates for public

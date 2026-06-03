@@ -59,7 +59,6 @@ from api.Modules.Auth.Services.principal import (
     resolve_superadmin_user,
 )
 from api.Modules.Auth.Services.profile import (
-    TIMEZONE_CHOICES as PROFILE_TIMEZONE_CHOICES,
     ProfileValidationError,
     get_profile_payload,
     update_profile,
@@ -102,7 +101,6 @@ __all__ = [
     "MIN_PASSWORD_LENGTH",
     "OwnerSignupResult",
     "PASSKEY_RP_NAME",
-    "PROFILE_TIMEZONE_CHOICES",
     "ProfileValidationError",
     "RECOVERY_CODES_PER_USER",
     "SignupConflictError",

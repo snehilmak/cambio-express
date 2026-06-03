@@ -51,23 +51,46 @@ columns; we treat the rest of the stack as untrusted input.
 
 ## The role / permissions matrix
 
-The single source of truth is `_ROLE_PERMISSIONS` in
-`api/Modules/Auth/Services/login.py`. Pinning the matrix
-matters because accidentally extending an employee role's
-permission set is a silent privilege escalation:
+Permissions live in **Casbin** (migrated from custom tables in
+PR #761; legacy tables dropped in PR #763). The single source
+of truth has two layers:
 
-```python
-"superadmin": ["platform.admin", "store.admin", "store.employee", "owner.read"]
-"owner":      ["owner.read", "owner.admin"]
-"admin":      ["store.admin", "store.employee"]
-"employee":   ["store.employee"]
-```
+1. **`api/Core/Permissions/__init__.py`** holds the constants —
+   `RBAC_RESOURCES`, `RBAC_ACTIONS`, `RBAC_DEFAULTS` (per-role
+   defaults seeded into Casbin on first boot), and
+   `LEGACY_ROLE_PERMISSIONS` (coarse-grained legacy claims
+   still emitted in JWTs for backward compat):
+
+   ```python
+   "superadmin": ["platform.admin", "store.admin", "store.employee", "owner.read"]
+   "owner":      ["owner.read", "owner.admin"]
+   "admin":      ["store.admin", "store.employee"]
+   "employee":   ["store.employee"]
+   ```
+
+2. **`casbin_rule` table** holds the live, editable policy
+   rows — `(role, domain, resource, action)`. The domain is
+   ``"global"`` for default rules and ``str(store_id)`` for
+   per-store overrides. Superadmin / admin / owner edit these
+   via the per-store-permissions UI; live enforcement reads them
+   on every request (no JWT-staleness anymore).
+
+Resolution order in `_resolve_grants(role, store_id)`:
+1. Per-store rules (domain matches) → use exclusively
+2. Global rules (domain = "global") → fallback
+3. `RBAC_DEFAULTS` hardcoded → boot-time/Casbin-down fallback
+
+**Defensive fallback (PR #768):** if Casbin throws (DB hiccup,
+adapter fault) both `permissions_for` and `check_permission`
+catch the exception and return `RBAC_DEFAULTS` for the role.
+Login never 500s on a permissions-system fault.
 
 Unknown roles get `[]` — defensive against future role tiers
 that aren't in the matrix yet.
 
-**Changing this matrix is a security-sensitive change.** Open
-a PR that's explicit about what's moving and why.
+**Changing the defaults or adding new resources/actions is a
+security-sensitive change.** Open a PR that's explicit about
+what's moving and why.
 
 
 ## The 2FA gate — `needs_totp` is THE single role check
@@ -335,11 +358,14 @@ tests and Stripe webhook retries both burn rate budget.
 
 ## What's safe to change
 
-- Adding a new permission to an existing role in
-  `_ROLE_PERMISSIONS` (after a security review).
+- Adding a new permission to an existing role's defaults in
+  `RBAC_DEFAULTS` (after a security review) — note that the
+  change only affects new stores / users who haven't customized
+  their override matrix; existing per-store overrides keep
+  their explicit grant set.
 - Adding new account-management endpoints behind
-  `get_principal` (e.g. update full_name) — `_ROLE_PERMISSIONS`
-  handles authorization.
+  `get_principal` (e.g. update full_name) — `require_permission`
+  (Casbin-backed) handles authorization.
 - Changing the recovery-code formatting / display.
 - Adding a passkey-LOGIN flow — see "Forward invariant" above
   for the rules it must follow.
