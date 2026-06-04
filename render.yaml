@@ -248,6 +248,9 @@ services:
 
 databases:
   - name: dinerobook-db
-    plan: free          # upgrade to starter ($7/mo) for production
+    # Render's free Postgres plan expires after 90 days and the DB is
+    # deleted with no recovery path. Production must stay on starter or
+    # above. Do NOT downgrade this back to `free`.
+    plan: starter
     databaseName: dinerobook
     user: dinerobook
