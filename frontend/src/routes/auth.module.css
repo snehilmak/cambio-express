@@ -1,0 +1,321 @@
+/* Shared chrome for the centered-card auth pages: ForgotPassword,
+   ResetPassword, Signup, SignupOwner. Each route was carrying a
+   duplicate AUTH_CSS / SIGNUP_CSS / OWNER_CSS / RESET_CSS block
+   inline; this module is the single source.
+
+   Login.tsx (split-screen brand pane), LoginStore.tsx (per-store
+   sign-in), and TwoFactor.tsx (TOTP flow) have their own shells
+   and don't import this. */
+
+.nav {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: rgba(11, 13, 18, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  padding: 0 40px;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--db-gray-2);
+}
+
+.navBrand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+}
+
+.navBrandMark {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  box-shadow: 0 0 12px rgba(63, 255, 0, 0.40);
+  display: block;
+}
+
+.navBrandName {
+  font-family: var(--db-font-display);
+  color: var(--db-gray-9);
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.navLink {
+  color: var(--db-gray-7);
+  font-size: 13px;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.navLink:hover { color: var(--db-gray-9); }
+
+.page {
+  min-height: calc(100vh - 60px);
+  min-height: calc(100dvh - 60px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
+  position: relative;
+  overflow: hidden;
+  background: var(--db-bg);
+  color: var(--db-gray-9);
+  font-family: var(--db-font-body);
+  -webkit-font-smoothing: antialiased;
+}
+
+.glow {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 50% 40% at 50% 30%, var(--db-neon-glow-15), transparent 70%);
+  pointer-events: none;
+}
+
+.grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(var(--db-gray-2) 1px, transparent 1px),
+    linear-gradient(90deg, var(--db-gray-2) 1px, transparent 1px);
+  background-size: 48px 48px;
+  -webkit-mask-image: radial-gradient(ellipse at 50% 40%, black 20%, transparent 60%);
+  mask-image: radial-gradient(ellipse at 50% 40%, black 20%, transparent 60%);
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.card {
+  position: relative;
+  background: var(--db-bg-elevated);
+  border: 1px solid var(--db-gray-3);
+  border-radius: 16px;
+  padding: 36px 40px;
+  width: 100%;
+  max-width: 460px;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5);
+}
+
+.statusPill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px;
+  border: 1px solid var(--db-gray-2);
+  border-radius: 999px;
+  background: var(--db-bg-input);
+  margin-bottom: 20px;
+}
+
+.statusPillError {
+  border-color: var(--db-tone-error-border, rgba(255, 77, 109, 0.3));
+  background: var(--db-tone-error-bg, rgba(255, 77, 109, 0.06));
+}
+
+.statusPillError .pillDot {
+  background: var(--db-tone-error-fg, var(--db-negative));
+  box-shadow: 0 0 8px rgba(255, 77, 109, 0.5);
+}
+
+.statusPillError .pillLabel { color: var(--db-tone-error-fg, var(--db-negative)); }
+
+/* Variant: dot-less neon-glow pill used by SignupOwner. */
+.badgePill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border: 1px solid rgba(63, 255, 0, 0.3);
+  border-radius: 999px;
+  background: var(--db-neon-glow-8);
+  font-family: var(--db-font-mono);
+  font-size: 10px;
+  color: var(--db-neon);
+  letter-spacing: 1.5px;
+  margin-bottom: 20px;
+  text-transform: uppercase;
+  font-weight: 500;
+}
+
+.pillDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--db-neon);
+  box-shadow: 0 0 8px var(--db-neon);
+}
+
+.pillLabel {
+  font-family: var(--db-font-mono);
+  font-size: 10px;
+  color: var(--db-neon);
+  letter-spacing: 1.5px;
+}
+
+.cardTitle {
+  font-family: var(--db-font-display);
+  font-size: 30px;
+  color: var(--db-gray-9);
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  margin-bottom: 6px;
+}
+
+.cardSub {
+  font-size: 13.5px;
+  color: var(--db-gray-7);
+  margin-bottom: 24px;
+  line-height: 1.6;
+}
+
+.subMono {
+  font-family: var(--db-font-mono);
+  color: var(--db-gray-9);
+  font-size: 13px;
+}
+
+.field { margin-bottom: 18px; }
+
+.label {
+  display: block;
+  font-family: var(--db-font-mono);
+  font-size: 10.5px;
+  font-weight: 500;
+  color: var(--db-gray-6);
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+
+.input {
+  width: 100%;
+  padding: 12px 14px;
+  background: var(--db-bg-input);
+  border: 1px solid var(--db-gray-3);
+  border-radius: 10px;
+  font-size: 14px;
+  color: var(--db-gray-9);
+  font-family: var(--db-font-body);
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.input:focus {
+  border-color: var(--db-neon);
+  box-shadow: 0 0 0 3px var(--db-neon-glow-15);
+}
+
+.input::placeholder { color: var(--db-gray-5); }
+
+.submitBtn {
+  width: 100%;
+  background: var(--db-neon);
+  color: var(--db-neon-ink);
+  border: none;
+  padding: 14px;
+  border-radius: 10px;
+  font-size: 14.5px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: var(--db-font-body);
+  letter-spacing: -0.01em;
+  margin-top: 10px;
+  box-shadow: 0 0 0 1px var(--db-neon), 0 0 28px var(--db-neon-glow-40);
+  transition: background 0.12s;
+}
+
+.submitBtn:hover:not(:disabled) { background: var(--db-neon-bright); }
+.submitBtn:disabled { opacity: 0.6; cursor: not-allowed; }
+.submitBtn.isBusy:disabled { cursor: wait; }
+
+.submitLink {
+  display: block;
+  text-align: center;
+  text-decoration: none;
+  box-sizing: border-box;
+}
+
+.errorMsg {
+  background: rgba(255, 77, 109, 0.08);
+  color: var(--db-negative);
+  border: 1px solid rgba(255, 77, 109, 0.3);
+  border-radius: 10px;
+  padding: 11px 14px;
+  font-size: 13px;
+  margin-bottom: 18px;
+  font-family: var(--db-font-body);
+}
+
+.fieldError {
+  font-size: 12px;
+  color: var(--db-negative);
+  margin-top: 5px;
+}
+
+.inputError { border-color: var(--db-negative); }
+
+.optional {
+  color: var(--db-gray-5);
+  font-weight: 400;
+  font-size: 10px;
+  margin-left: 4px;
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+.referralBanner {
+  background: var(--db-neon-glow-8);
+  color: var(--db-neon);
+  border: 1px solid rgba(63, 255, 0, 0.3);
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 13px;
+  margin-bottom: 18px;
+  font-family: var(--db-font-body);
+}
+
+.referralBanner strong { color: var(--db-neon-bright); }
+
+.loginPrompt {
+  text-align: center;
+  margin-top: 16px;
+  font-size: 13px;
+  color: var(--db-gray-7);
+}
+
+.loginPrompt a {
+  color: var(--db-neon);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.backLink {
+  display: block;
+  text-align: center;
+  margin-top: 20px;
+  font-size: 13px;
+  color: var(--db-gray-7);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.backLink:hover { color: var(--db-neon); }
+
+@media (max-width: 600px) {
+  .nav { padding: 0 16px; height: 56px; }
+  .navBrandName { font-size: 16px; }
+  .navLink { font-size: 12px; }
+  .page {
+    padding: 24px 14px;
+    min-height: calc(100vh - 56px);
+    min-height: calc(100dvh - 56px);
+  }
+  .card { padding: 28px 24px; border-radius: 14px; }
+  .cardTitle { font-size: 24px; }
+  .input { font-size: 16px; padding: 13px 14px; }
+  .submitBtn { padding: 14px; font-size: 15px; }
+}
