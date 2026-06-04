@@ -1,0 +1,198 @@
+/* Split-screen chrome for the auth-with-brand-pane routes: Login,
+   TwoFactor (Verify / Recover / Enroll). Centered-card routes
+   (Signup, SignupOwner, ForgotPassword, ResetPassword) use
+   AuthChrome + auth.module.css instead.
+
+   The right pane is intentionally lean — it's a slot for kit
+   primitives (<Field>, <Input>, <Button>, <Alert>, <Pill>). Only
+   the auth-specific heading/sub typography is defined here. */
+
+.shell {
+  display: flex;
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: var(--db-bg);
+  color: var(--db-gray-9);
+  font-family: var(--db-font-body);
+  overscroll-behavior-y: none;
+  -webkit-font-smoothing: antialiased;
+}
+
+.leftPane {
+  flex: 1;
+  min-width: 360px;
+  background: var(--db-bg);
+  border-right: 1px solid var(--db-gray-2);
+  padding: 40px 48px;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Login's brand pane wants the iso-illustration sized against
+   480px; TwoFactor's just centers the logo block. */
+.leftPaneWide {
+  width: 50%;
+  min-width: 480px;
+  flex: none;
+  padding: 40px 56px;
+}
+
+.leftPaneCenter {
+  align-items: center;
+  justify-content: center;
+}
+
+.bgGrid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(var(--db-gray-2) 1px, transparent 1px),
+    linear-gradient(90deg, var(--db-gray-2) 1px, transparent 1px);
+  background-size: 48px 48px;
+  -webkit-mask-image: radial-gradient(ellipse at 60% 40%, black 20%, transparent 70%);
+  mask-image: radial-gradient(ellipse at 60% 40%, black 20%, transparent 70%);
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.bgGlow {
+  position: absolute;
+  top: 30%;
+  right: -10%;
+  width: 420px;
+  height: 420px;
+  background: radial-gradient(circle, var(--db-neon-glow-25), transparent 60%);
+  pointer-events: none;
+}
+
+.rightPane {
+  flex: 1;
+  background: var(--db-bg);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 40px 32px;
+}
+
+.rightPaneFixed {
+  flex: none;
+  width: 520px;
+  align-items: stretch;
+  padding: 48px;
+  overflow-y: auto;
+  max-height: 100vh;
+  max-height: 100dvh;
+}
+
+.card {
+  width: 100%;
+  max-width: 400px;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.heading {
+  font-family: var(--db-font-display);
+  font-size: 30px;
+  font-weight: 600;
+  color: var(--db-gray-9);
+  letter-spacing: -0.025em;
+  margin: 0;
+}
+
+.sub {
+  font-size: 14px;
+  color: var(--db-gray-7);
+  margin: -0.5rem 0 0;
+  line-height: 1.55;
+}
+
+.formActions {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.centerRow {
+  text-align: center;
+  font-size: 13px;
+  color: var(--db-gray-7);
+}
+
+.centerRow a {
+  color: var(--db-neon);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.centerRow a:hover {
+  color: var(--db-neon-bright);
+}
+
+.footer {
+  margin-top: 24px;
+  text-align: center;
+}
+
+.footerRow {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.footerItem {
+  font-size: 11.5px;
+  color: var(--db-gray-6);
+}
+
+.copyright {
+  font-size: 11px;
+  color: var(--db-gray-5);
+}
+
+.copyright a {
+  color: var(--db-gray-6);
+  text-decoration: none;
+}
+
+@media (max-width: 900px) {
+  .shell {
+    flex-direction: column;
+  }
+  .leftPane {
+    flex: none;
+    min-width: 0;
+    padding: 28px 24px 24px;
+    padding-top: max(28px, env(safe-area-inset-top));
+    border-right: none;
+    border-bottom: 1px solid var(--db-gray-2);
+  }
+  .leftPaneWide {
+    width: 100%;
+  }
+  .rightPane {
+    width: 100%;
+    padding: 28px 24px;
+    padding-bottom: max(28px, env(safe-area-inset-bottom));
+    flex: 0 0 auto;
+  }
+  .rightPaneFixed {
+    max-height: none;
+  }
+  .heading { font-size: 24px; }
+}
+
+@media (max-width: 480px) {
+  .leftPane { padding: 22px 20px 16px; }
+  .rightPane { padding: 22px 20px 24px; }
+  .card { max-width: 100%; }
+  .heading { font-size: 22px; }
+}
