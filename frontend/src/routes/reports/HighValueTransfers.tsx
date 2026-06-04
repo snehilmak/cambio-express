@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useLocation, useSearchParams } from "react-router-dom";
 
-import { ReportDrilldown, fmtMoney } from "../../components/ReportDrilldown";
+import { ReportDrilldown } from "../../components/ReportDrilldown";
+import { fmtMoney2 } from "../../lib/formatters";
 import { fontSize } from "../../components/ui";
 import { fmtDateCompact } from "../../lib/formatters";
 
@@ -61,11 +62,11 @@ export default function HighValueTransfers() {
           { label: `Above $${Number(threshold || 1000).toLocaleString()}`, tone: "primary",
             value: t => Number(t.count ?? 0).toLocaleString() },
           { label: "Total Volume", tone: "neon",
-            value: t => fmtMoney(Number(t.amount ?? 0)) },
+            value: t => fmtMoney2(Number(t.amount ?? 0)) },
           { label: "Total Fees", tone: "muted",
-            value: t => fmtMoney(Number(t.fees ?? 0)) },
+            value: t => fmtMoney2(Number(t.fees ?? 0)) },
           { label: "Federal Tax", tone: "muted",
-            value: t => fmtMoney(Number(t.tax ?? 0)) },
+            value: t => fmtMoney2(Number(t.tax ?? 0)) },
         ]}
         columns={[
           { label: "Date",        field: r => fmtDateCompact(r.send_date as string) },
@@ -73,9 +74,9 @@ export default function HighValueTransfers() {
           { label: "Recipient",   field: "recipient_name" },
           { label: "Country",     field: "country" },
           { label: "Company",     field: "company" },
-          { label: "Send Amount", field: r => fmtMoney(Number(r.amount)), align: "right", mono: true },
-          { label: "Fee",         field: r => fmtMoney(Number(r.fee)),    align: "right", mono: true },
-          { label: "Federal Tax", field: r => fmtMoney(Number(r.tax)),    align: "right", mono: true },
+          { label: "Send Amount", field: r => fmtMoney2(Number(r.amount)), align: "right", mono: true },
+          { label: "Fee",         field: r => fmtMoney2(Number(r.fee)),    align: "right", mono: true },
+          { label: "Federal Tax", field: r => fmtMoney2(Number(r.tax)),    align: "right", mono: true },
           { label: "Confirm #",   field: "confirm", mono: true },
         ]}
       />

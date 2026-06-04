@@ -1,6 +1,7 @@
 import { useLocation } from "react-router-dom";
 
-import { ReportDrilldown, fmtMoney } from "../../components/ReportDrilldown";
+import { ReportDrilldown } from "../../components/ReportDrilldown";
+import { fmtMoney2 } from "../../lib/formatters";
 import { fmtDateCompact } from "../../lib/formatters";
 
 export default function CancelledTransfers() {
@@ -21,7 +22,7 @@ export default function CancelledTransfers() {
         { label: "Rejected",     tone: "muted",
           value: t => Number(t.rejected ?? 0).toLocaleString() },
         { label: "Total Amount", tone: "muted",
-          value: t => fmtMoney(Number(t.amount ?? 0)) },
+          value: t => fmtMoney2(Number(t.amount ?? 0)) },
       ]}
       columns={[
         { label: "Date",        field: r => fmtDateCompact(r.send_date as string) },
@@ -30,7 +31,7 @@ export default function CancelledTransfers() {
         { label: "Country",     field: "country" },
         { label: "Company",     field: "company" },
         { label: "Status",      field: "status" },
-        { label: "Send Amount", field: r => fmtMoney(Number(r.amount)), align: "right", mono: true },
+        { label: "Send Amount", field: r => fmtMoney2(Number(r.amount)), align: "right", mono: true },
         { label: "Notes",       field: "status_notes" },
         { label: "Confirm #",   field: "confirm", mono: true },
       ]}

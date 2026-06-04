@@ -1,6 +1,7 @@
 import { useLocation } from "react-router-dom";
 
-import { ReportDrilldown, fmtMoney } from "../../components/ReportDrilldown";
+import { ReportDrilldown } from "../../components/ReportDrilldown";
+import { fmtMoney2 } from "../../lib/formatters";
 
 export default function AchVolume() {
   const isOwner = useLocation().pathname.startsWith("/owner/");
@@ -14,15 +15,15 @@ export default function AchVolume() {
       csvUrl={`/api/v2/reports/ach-volume.csv`}
       kpis={[
         { label: "Total ACH",   tone: "primary",
-          value: t => fmtMoney(Number(t.amount ?? 0)) },
+          value: t => fmtMoney2(Number(t.amount ?? 0)) },
         { label: "Batch Count", tone: "neon",
           value: t => Number(t.count ?? 0).toLocaleString() },
       ]}
       columns={[
         { label: "Company",     field: "company" },
         { label: "Batch Count", field: r => Number(r.count).toLocaleString(),  align: "right", mono: true },
-        { label: "Total ACH",   field: r => fmtMoney(Number(r.amount)),        align: "right", mono: true },
-        { label: "Avg / Batch", field: r => fmtMoney(Number(r.avg)),           align: "right", mono: true },
+        { label: "Total ACH",   field: r => fmtMoney2(Number(r.amount)),        align: "right", mono: true },
+        { label: "Avg / Batch", field: r => fmtMoney2(Number(r.avg)),           align: "right", mono: true },
       ]}
     />
   );

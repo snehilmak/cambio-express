@@ -93,7 +93,3 @@ export {
   type ToastTone,
 } from "./Toast";
 /* eslint-enable react-refresh/only-export-components */
-export { Badge, type BadgeTone } from "./Badge";
-export { Progress } from "./Progress";
-export { Separator } from "./Separator";
-export { Avatar } from "./Avatar";

@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import { api, ApiError } from "./../lib/api";
 import { getCurrentIdentity } from "./../lib/auth";
+import { passkeysSupported } from "./../lib/webauthn";
 import type { components } from "./openapi";
 
 export interface ChangePasswordBody {
@@ -473,11 +474,6 @@ export async function deletePasskey(id: number): Promise<void> {
 interface PasskeyRegisterBeginResponse {
   options_json:   string;
   register_token: string;
-}
-
-export function passkeysSupported(): boolean {
-  return typeof window !== "undefined"
-    && typeof window.PublicKeyCredential === "function";
 }
 
 // WebAuthn ships its options as base64url-encoded byte fields

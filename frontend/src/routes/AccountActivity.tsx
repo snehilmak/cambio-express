@@ -6,9 +6,9 @@ import { formatTimestamp } from "../lib/datetime";
 import {
   Breadcrumbs,
   Button, Card, Field, PageHeader, PageShell,
-  Pager, Pill, Select, space, Table, TableStates, tdStyle, thStyle,
-  type PillTone,
+  Pager, Select, space, Table, TableStates, tdStyle, thStyle,
 } from "../components/ui";
+import { AuditActionBadge } from "../components/AuditActionBadge";
 import styles from "./AccountActivity.module.css";
 
 // /app/account/activity — cross-store per-user audit feed.
@@ -162,7 +162,7 @@ function ActivityTable({
               {r.store_name || "—"}
             </td>
             <td style={tdStyle}>
-              <ActionBadge action={r.action} />
+              <AuditActionBadge action={r.action} />
             </td>
             <td style={tdStyle}>
               <span className={styles.targetType}>
@@ -181,25 +181,5 @@ function ActivityTable({
 }
 
 
-function ActionBadge({ action }: { action: string }) {
-  // Maps the raw audit-action string onto a shared Pill tone so
-  // the badge palette stays in lock-step with Alert / ErrorState /
-  // every other tone-driven surface in the SPA.  Pre-Phase-2 this
-  // file hand-rolled its own rgba palette; now it inherits the
-  // shared `--db-tone-*` tokens for free.
-  const toneByAction: Record<string, PillTone> = {
-    create:         "success",
-    created:        "success",
-    update:         "info",
-    updated:        "info",
-    delete:         "negative",
-    deleted:        "negative",
-    lock:           "warning",
-    unlock:         "warning",
-    status_changed: "warning",
-  };
-  const tone: PillTone = toneByAction[action] ?? "neutral";
-  return <Pill tone={tone}>{action}</Pill>;
-}
 
 

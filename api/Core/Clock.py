@@ -22,3 +22,28 @@ from datetime import datetime
 def utc_now() -> datetime:
     """Return the current UTC time as a naive datetime."""
     return datetime.utcnow()
+
+
+# Canonical IANA timezone list — the dropdown options for both the
+# personal-profile and store-settings forms. Single source so the
+# two pickers can never drift.
+TIMEZONE_CHOICES: tuple[str, ...] = (
+    "America/New_York",
+    "America/Chicago",
+    "America/Denver",
+    "America/Phoenix",
+    "America/Los_Angeles",
+    "America/Anchorage",
+    "Pacific/Honolulu",
+    "America/Mexico_City",
+    "America/Bogota",
+    "America/Lima",
+    "America/Santiago",
+    "America/Buenos_Aires",
+    "America/Sao_Paulo",
+    "Europe/London",
+    "Europe/Madrid",
+    "Asia/Manila",
+    "Asia/Karachi",
+    "UTC",
+)

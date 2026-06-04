@@ -16,12 +16,6 @@
 const STORAGE_KEY = "dinerobook.nav_recency.v1";
 const MAX_TRACKED  = 40;
 
-export interface RecencyEntry {
-  path: string;
-  count: number;
-  lastAt: number;
-}
-
 type RecencyMap = Record<string, { count: number; lastAt: number }>;
 
 function load(): RecencyMap {
@@ -57,23 +51,6 @@ export function recordVisit(path: string): void {
   };
   evictIfFull(map);
   save(map);
-}
-
-/** Return the top ``limit`` entries sorted by visit count, with
- *  most-recent breaking ties.  Drops any entry whose path is not
- *  in ``eligiblePaths`` — that's the role filter applied at the
- *  call site so a demoted user doesn't see admin routes in their
- *  strip. */
-export function topVisited(
-  eligiblePaths: ReadonlySet<string>,
-  limit: number,
-): RecencyEntry[] {
-  const map = load();
-  return Object.entries(map)
-    .filter(([path]) => eligiblePaths.has(path))
-    .map(([path, e]) => ({ path, count: e.count, lastAt: e.lastAt }))
-    .sort((a, b) => b.count - a.count || b.lastAt - a.lastAt)
-    .slice(0, limit);
 }
 
 /** Wipe every recorded visit.  Called from sign-out so a shared

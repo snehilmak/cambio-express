@@ -9,6 +9,7 @@ from typing import Any, Optional
 
 from sqlalchemy.orm import Session
 
+from api.Core.Clock import TIMEZONE_CHOICES as _CANONICAL_TIMEZONES
 from api.Modules.Auth.Models import User
 
 
@@ -19,29 +20,8 @@ _PHONE_DIGITS_RE = re.compile(r"^\+?\d{7,20}$")
 _PHONE_STRIP_RE  = re.compile(r"[\s\-\(\)]")
 
 
-# Curated timezone list — same set as app.PROFILE_TIMEZONES.
-# Kept in sync with the legacy module so the dropdown shows the
-# same options on either flow.
-TIMEZONE_CHOICES: list[str] = [
-    "America/New_York",
-    "America/Chicago",
-    "America/Denver",
-    "America/Phoenix",
-    "America/Los_Angeles",
-    "America/Anchorage",
-    "Pacific/Honolulu",
-    "America/Mexico_City",
-    "America/Bogota",
-    "America/Lima",
-    "America/Santiago",
-    "America/Buenos_Aires",
-    "America/Sao_Paulo",
-    "Europe/London",
-    "Europe/Madrid",
-    "Asia/Manila",
-    "Asia/Karachi",
-    "UTC",
-]
+# Profile dropdown options (list form for the API payload).
+TIMEZONE_CHOICES: list[str] = list(_CANONICAL_TIMEZONES)
 
 
 class ProfileValidationError(Exception):

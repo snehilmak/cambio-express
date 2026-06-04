@@ -5,7 +5,6 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   changePassword,
   deletePasskey,
-  passkeysSupported,
   registerPasskey,
   updateProfile,
   updateStoreInfo,
@@ -19,6 +18,7 @@ import { redeemConnectCode } from "../api/owner";
 import { ApiError } from "../lib/api";
 import { formatTimestamp } from "../lib/datetime";
 import { getCurrentIdentity } from "../lib/auth";
+import { passkeysSupported } from "../lib/webauthn";
 import {
   GeolocationDeniedError,
   GeolocationUnavailableError,

@@ -47,12 +47,6 @@ export function fmtDateTime(iso: string | null | undefined): string {
   } catch { return iso; }
 }
 
-/** ISO date to YYYY-MM-DD slice — for mono-spaced table cells. */
-export function fmtIsoDate(iso: string | null | undefined): string {
-  if (!iso) return "—";
-  return iso.slice(0, 10);
-}
-
 /** Compact date: "05/26/26" (MM/DD/YY) — for dense report tables. */
 export function fmtDateCompact(iso: string | null | undefined): string {
   if (!iso) return "";

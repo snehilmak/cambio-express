@@ -11,14 +11,3 @@ export function hasPermission(resource: string, action: string): boolean {
   if (identity.role === "superadmin") return true;
   return identity.permissions.includes(`${resource}.${action}`);
 }
-
-/**
- * React hook version — same logic, reads from identity cache.
- * Use in components for conditional rendering:
- *
- *   const canCreate = useHasPermission("transfers", "create");
- *   {canCreate && <Button>+ New transfer</Button>}
- */
-export function useHasPermission(resource: string, action: string): boolean {
-  return hasPermission(resource, action);
-}
