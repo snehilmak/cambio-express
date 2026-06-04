@@ -1,6 +1,7 @@
 import { useLocation } from "react-router-dom";
 
-import { ReportDrilldown, fmtMoney } from "../../components/ReportDrilldown";
+import { ReportDrilldown } from "../../components/ReportDrilldown";
+import { fmtMoney2 } from "../../lib/formatters";
 
 export default function PeriodPL() {
   const isOwner = useLocation().pathname.startsWith("/owner/");
@@ -14,15 +15,15 @@ export default function PeriodPL() {
       csvUrl={`/api/v2/reports/period-pl.csv`}
       kpis={[
         { label: "Revenue",   tone: "primary",
-          value: t => fmtMoney(Number(t.revenue ?? 0)) },
+          value: t => fmtMoney2(Number(t.revenue ?? 0)) },
         { label: "Expenses",  tone: "muted",
-          value: t => fmtMoney(Number(t.expenses ?? 0)) },
+          value: t => fmtMoney2(Number(t.expenses ?? 0)) },
         { label: "Net Income", tone: "neon",
-          value: t => fmtMoney(Number(t.net_income ?? 0)) },
+          value: t => fmtMoney2(Number(t.net_income ?? 0)) },
       ]}
       columns={[
         { label: "Line",   field: "label" },
-        { label: "Amount", field: r => fmtMoney(Number(r.amount ?? 0)), align: "right", mono: true },
+        { label: "Amount", field: r => fmtMoney2(Number(r.amount ?? 0)), align: "right", mono: true },
         { label: "Note",   field: r => (r.note as string) || "" },
       ]}
     />

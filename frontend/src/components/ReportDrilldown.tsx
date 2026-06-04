@@ -255,8 +255,3 @@ function fmtDate(iso: string): string {
   });
 }
 
-// Helper for the per-report TSX wrappers in routes/reports/*. Lives
-// Re-exported from lib/formatters so drilldown wrappers keep their
-// single import path.
-// eslint-disable-next-line react-refresh/only-export-components -- adjacent helper used by every drilldown wrapper
-export { fmtMoney2 as fmtMoney } from "../lib/formatters";

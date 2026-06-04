@@ -11,9 +11,9 @@ import { getCurrentIdentity } from "../lib/auth";
 import {
   Breadcrumbs,
   Button, Card, Empty, Field, PageHeader, PageShell,
-  Pager, Pill, Select, space, Table, TableStates, tdStyle, thStyle,
-  type PillTone,
+  Pager, Select, space, Table, TableStates, tdStyle, thStyle,
 } from "../components/ui";
+import { AuditActionBadge } from "../components/AuditActionBadge";
 import styles from "./AdminAuditLog.module.css";
 
 // /app/admin/audit-log — merged operator + transfer audit feed
@@ -204,7 +204,7 @@ function AuditTable({
               )}
             </td>
             <td style={tdStyle}>
-              <ActionBadge action={r.action} />
+              <AuditActionBadge action={r.action} />
             </td>
             <td style={tdStyle}>
               <span className={styles.targetType}>
@@ -223,22 +223,3 @@ function AuditTable({
 }
 
 
-function ActionBadge({ action }: { action: string }) {
-  // Maps audit-action verb → shared Pill tone.  Pre-Phase-2 this
-  // file hand-rolled the same rgba palette AccountActivity did;
-  // both surfaces now inherit the `--db-tone-*` tokens via the
-  // kit primitive — drift-proof going forward.
-  const toneByAction: Record<string, PillTone> = {
-    create:         "success",
-    created:        "success",
-    update:         "info",
-    updated:        "info",
-    delete:         "negative",
-    deleted:        "negative",
-    lock:           "warning",
-    unlock:         "warning",
-    status_changed: "warning",
-  };
-  const tone: PillTone = toneByAction[action] ?? "neutral";
-  return <Pill tone={tone}>{action}</Pill>;
-}

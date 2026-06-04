@@ -35,7 +35,7 @@ const _DATE_ONLY_FMT = (timezone?: string) =>
 /** Resolve the active timezone. Empty / undefined values fall
  *  through to the next layer. ``undefined`` return means
  *  "use the browser default" (Intl skips ``timeZone`` then). */
-export function resolveTimezone(
+function resolveTimezone(
   userTimezone?: string | null,
   storeTimezone?: string | null,
 ): string | undefined {

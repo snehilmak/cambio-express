@@ -6,6 +6,7 @@ slug/plan/billing/retention server-managed.
 """
 from sqlalchemy.orm import Session
 
+from api.Core.Clock import TIMEZONE_CHOICES as _CANONICAL_TIMEZONES
 from api.Modules.Admin.Models import Store
 from typing import Any
 
@@ -54,30 +55,10 @@ EDITABLE_STORE_FIELDS: tuple[str, ...] = (
 )
 
 
-# Whitelist of timezone strings the settings dropdown can write.
-# Mirrors ``Auth.Services.profile.TIMEZONE_CHOICES`` so the admin
-# tab and personal profile offer the same picker.
-ALLOWED_TIMEZONES: tuple[str, ...] = (
-    "",  # explicit clear
-    "America/New_York",
-    "America/Chicago",
-    "America/Denver",
-    "America/Phoenix",
-    "America/Los_Angeles",
-    "America/Anchorage",
-    "Pacific/Honolulu",
-    "America/Mexico_City",
-    "America/Bogota",
-    "America/Lima",
-    "America/Santiago",
-    "America/Buenos_Aires",
-    "America/Sao_Paulo",
-    "Europe/London",
-    "Europe/Madrid",
-    "Asia/Manila",
-    "Asia/Karachi",
-    "UTC",
-)
+# Allowed timezone writes from the settings dropdown — canonical
+# list plus "" (explicit clear → fall back through user → store →
+# browser per the render chain).
+ALLOWED_TIMEZONES: tuple[str, ...] = ("",) + _CANONICAL_TIMEZONES
 
 
 def update_store_info(

@@ -1,6 +1,7 @@
 import { useLocation } from "react-router-dom";
 
-import { ReportDrilldown, fmtMoney } from "../../components/ReportDrilldown";
+import { ReportDrilldown } from "../../components/ReportDrilldown";
+import { fmtMoney2 } from "../../lib/formatters";
 
 export default function EmployeeActivity() {
   const isOwner = useLocation().pathname.startsWith("/owner/");
@@ -16,14 +17,14 @@ export default function EmployeeActivity() {
         { label: "Transfers Logged", tone: "primary",
           value: t => Number(t.count ?? 0).toLocaleString() },
         { label: "Total Sent",       tone: "neon",
-          value: t => fmtMoney(Number(t.sent ?? 0)) },
+          value: t => fmtMoney2(Number(t.sent ?? 0)) },
         { label: "Employees Active", tone: "muted",
           value: t => Number(t.employees ?? 0).toLocaleString() },
       ]}
       columns={[
         { label: "Employee",   field: "employee" },
         { label: "Transfers",  field: r => Number(r.count ?? 0).toLocaleString(), align: "right", mono: true },
-        { label: "Total Sent", field: r => fmtMoney(Number(r.sent ?? 0)),         align: "right", mono: true },
+        { label: "Total Sent", field: r => fmtMoney2(Number(r.sent ?? 0)),         align: "right", mono: true },
         { label: "First Logged", field: r => (r.first_logged as string) || "—" },
         { label: "Last Logged",  field: r => (r.last_logged as string) || "—"  },
       ]}
