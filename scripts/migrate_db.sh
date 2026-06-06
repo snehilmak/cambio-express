@@ -1,4 +1,12 @@
 #!/usr/bin/env bash
+# ⚠️  DEPRECATED — ONE-TIME CUTOVER, ALREADY COMPLETED. DO NOT RUN.
+# The `cambio-db` source database was decommissioned (see CLAUDE.md
+# "Production deploy target"); there is no longer a source to copy
+# from. Kept in-tree only as a record of how the dinerobook-db
+# cutover was performed. If you need a fresh data migration, write a
+# new script against the current databases — do not point this one
+# at production.
+#
 # Copy the contents of cambio-db (old) into dinerobook-db (new).
 #
 # This is the production cutover. Conservative by design:
