@@ -1,15 +1,15 @@
 """Shared slowapi Limiter for FastAPI.
 
-The Flask side uses ``app.limiter`` (created in ``app.py``); the
-FastAPI side uses this module-level singleton so controllers can
-import it without depending on the ``api.main.create_app()``
-lifecycle. Storage backend + enable-flag match the Flask twin —
-both read the same env vars (``RATELIMIT_STORAGE_URI``,
-``RATELIMIT_ENABLED``), so a single Redis URL in prod gives the
-two apps a shared bucket.
+A module-level singleton so controllers can import it without
+depending on the ``api.main.create_app()`` lifecycle. (Flask had a
+twin limiter before PR #550 removed Flask; this is now the sole
+limiter.) Storage backend + enable-flag come from the
+``RATELIMIT_STORAGE_URI`` / ``RATELIMIT_ENABLED`` env vars — point
+``RATELIMIT_STORAGE_URI`` at Redis in prod so the bucket holds
+across gunicorn workers.
 
-Tuning lives in the per-route decorators (auth controllers); this
-module only constructs the limiter.
+Tuning lives in the per-route decorators (auth + webhook
+controllers); this module only constructs the limiter.
 """
 from __future__ import annotations
 
