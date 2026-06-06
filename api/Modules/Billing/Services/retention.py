@@ -49,9 +49,10 @@ STORE_OWNED_MODELS: list[str] = [
     "DailyLineItem", "MoneyTransferSummary", "ReturnCheck",
     "MonthlyFinancial", "BankRule", "BankTransaction",
     "StripeBankAccount", "StoreOwnerLink",
-    # TimeClockEntry + StoreEmployeePasskey must purge before
-    # StoreEmployee (both FK to it).
+    # TimeClockEntry + TimeClockShift + StoreEmployeePasskey must
+    # purge before StoreEmployee (all FK to it).
     "TimeClockEntry",
+    "TimeClockShift",
     "StoreEmployeePasskey",
     "StoreEmployee", "Customer",
     "ReferralCode", "ReferralRedemption",
@@ -92,7 +93,7 @@ def _store_owned_models() -> list[tuple[type, str]]:
         StoreEmployee, StoreOwnerLink, User,
     )
     from api.Modules.TimeClock.Models import (
-        StoreEmployeePasskey, TimeClockEntry,
+        StoreEmployeePasskey, TimeClockEntry, TimeClockShift,
     )
     from api.Modules.Transfers.Models import Transfer
     from api.Modules.Support.Models import SupportTicket
@@ -118,10 +119,11 @@ def _store_owned_models() -> list[tuple[type, str]]:
         (BankTransaction, "store_id"),
         (StripeBankAccount, "store_id"),
         (StoreOwnerLink, "store_id"),
-        # TimeClockEntry + StoreEmployeePasskey FK to
-        # StoreEmployee, so both purge before the roster table
+        # TimeClockEntry + TimeClockShift + StoreEmployeePasskey FK
+        # to StoreEmployee, so all purge before the roster table
         # empties.
         (TimeClockEntry, "store_id"),
+        (TimeClockShift, "store_id"),
         (StoreEmployeePasskey, "store_id"),
         (StoreEmployee, "store_id"),
         (Customer, "store_id"),
@@ -152,10 +154,29 @@ def _expired_stores(db: Session, now: datetime) -> list[Any]:
 
 
 def _purge_user_scoped_rows(db: Session, store_id: int) -> None:
-    """Wipe Passkey rows + null EmailEvent.user_id for users in
-    this store before the User rows themselves are deleted by
-    the generic loop."""
-    from api.Modules.Auth.Models import Passkey
+    """Wipe every row that FKs to a doomed User before the User rows
+    themselves are deleted by the generic loop.
+
+    On Postgres (prod) a User delete raises a FK violation if any
+    child row still references it; the whole store's purge
+    transaction then rolls back and the cron retries forever, so the
+    store never gets purged. SQLite (dev/tests) is FK-permissive and
+    hides this — see tests/Modules/Billing/test_retention_purge.py
+    which asserts the full child-table sweep so it can't regress.
+
+    Two strategies:
+      * hard-delete the auth/session rows (RecoveryCode,
+        PasswordResetToken, RefreshToken, Passkey, LoginEvent) and
+        the push subscriptions — they're worthless once the user is
+        gone and their FKs are NOT NULL, so nulling isn't an option;
+      * null the nullable EmailEvent.user_id so the delivery history
+        survives for post-purge forensics without blocking the
+        delete.
+    """
+    from api.Modules.Announcements.Models import PushSubscription
+    from api.Modules.Auth.Models import (
+        LoginEvent, Passkey, PasswordResetToken, RecoveryCode, RefreshToken,
+    )
     from api.Modules.Tenancy.Models import User
     from api.Modules.Webhooks.Models import EmailEvent
     user_ids = [
@@ -164,11 +185,22 @@ def _purge_user_scoped_rows(db: Session, store_id: int) -> None:
     ]
     if not user_ids:
         return
-    (
-        db.query(Passkey)
-          .filter(Passkey.user_id.in_(user_ids))
-          .delete(synchronize_session=False)
-    )
+    # NOT-NULL FK children — delete outright. RefreshToken carries a
+    # self-FK (rotated_to_id → refresh_token.id) but every link in a
+    # rotation chain belongs to the same user, so a single bulk
+    # delete covers both ends in one statement (Postgres NO ACTION
+    # checks at statement end).
+    for model in (
+        RecoveryCode, PasswordResetToken, RefreshToken, Passkey,
+        LoginEvent, PushSubscription,
+    ):
+        # getattr keeps the loop generic without tripping mypy's
+        # "type[Base] has no attribute user_id" on the union type.
+        (
+            db.query(model)
+              .filter(getattr(model, "user_id").in_(user_ids))
+              .delete(synchronize_session=False)
+        )
     # EmailEvent.user_id is a nullable FK; null it so the event
     # history (useful for post-purge forensics) doesn't block the
     # User delete.
