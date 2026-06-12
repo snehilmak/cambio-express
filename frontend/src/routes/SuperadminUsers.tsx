@@ -6,6 +6,7 @@ import {
   forcePasswordReset,
   impersonateUser,
   resetUser2FA,
+  revokeUserSessions,
   toggleUserActive,
   useSuperadminStores,
   useSuperadminUsers,
@@ -53,7 +54,7 @@ export default function SuperadminUsers() {
   const [error, setError] = useState<string | null>(null);
   const [tempPw, setTempPw] = useState<{ userId: number; password: string } | null>(null);
   const [confirmAction, setConfirmAction] = useState<{
-    userId: number; username: string; action: "toggle" | "reset2fa" | "resetpw" | "impersonate";
+    userId: number; username: string; action: "toggle" | "reset2fa" | "resetpw" | "impersonate" | "revokesessions";
   } | null>(null);
   const [roleChange, setRoleChange] = useState<{
     userId: number; username: string; currentRole: string;
@@ -103,6 +104,15 @@ export default function SuperadminUsers() {
         });
         window.location.assign("/app/dashboard");
         return;
+      } else if (action === "revokesessions") {
+        const res = await revokeUserSessions(userId);
+        toast({
+          message: res.revoked_count > 0
+            ? `Revoked ${res.revoked_count} active session${res.revoked_count === 1 ? "" : "s"}.`
+            : "No active sessions to revoke.",
+          tone: "success",
+        });
+        refresh();
       }
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Action failed.");
@@ -117,6 +127,7 @@ export default function SuperadminUsers() {
     reset2fa: `Clear 2FA enrollment for "${confirmAction?.username}"? They'll need to re-enroll at next login.`,
     resetpw: `Reset password for "${confirmAction?.username}"? A temporary password will be generated.`,
     impersonate: `Sign in as "${confirmAction?.username}"? You'll leave this page and see the app from their perspective. This is audit-logged.`,
+    revokesessions: `Revoke every active session for "${confirmAction?.username}"? They'll be bounced to the login page on their next API call. Use for compromised credentials, departing staff, or any "lock them out now" incident.`,
   };
 
   return (
@@ -225,13 +236,20 @@ export default function SuperadminUsers() {
           confirmAction?.action === "toggle" ? "Toggle user"
           : confirmAction?.action === "reset2fa" ? "Reset 2FA"
           : confirmAction?.action === "resetpw" ? "Reset password"
+          : confirmAction?.action === "revokesessions" ? "Revoke sessions"
           : "Impersonate user"
         }
         message={confirmMessages[confirmAction?.action ?? "toggle"] ?? ""}
         confirmLabel={
-          confirmAction?.action === "impersonate" ? "Sign in as user" : "Confirm"
+          confirmAction?.action === "impersonate" ? "Sign in as user"
+          : confirmAction?.action === "revokesessions" ? "Revoke sessions"
+          : "Confirm"
         }
-        confirmTone={confirmAction?.action === "impersonate" ? "danger" : "primary"}
+        confirmTone={
+          confirmAction?.action === "impersonate" ? "danger"
+          : confirmAction?.action === "revokesessions" ? "danger"
+          : "primary"
+        }
         busy={busyId != null}
         onConfirm={() => { void doAction(); }}
         onCancel={() => setConfirmAction(null)}
@@ -288,7 +306,7 @@ function UserRow({
 }: {
   user: SuperadminUserRow;
   busyId: number | null;
-  onAction: (action: "toggle" | "reset2fa" | "resetpw" | "impersonate") => void;
+  onAction: (action: "toggle" | "reset2fa" | "resetpw" | "impersonate" | "revokesessions") => void;
   onChangeRole: () => void;
 }) {
   const isSuperadmin = u.role === "superadmin";
@@ -355,6 +373,11 @@ function UserRow({
               {
                 label: "Impersonate",
                 onClick: () => onAction("impersonate"),
+                disabled: busyId === u.id,
+              },
+              {
+                label: "Revoke sessions",
+                onClick: () => onAction("revokesessions"),
                 disabled: busyId === u.id,
               },
             ]}

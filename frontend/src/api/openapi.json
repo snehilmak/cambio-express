@@ -804,6 +804,20 @@
         "title": "BankAccountListResponse",
         "type": "object"
       },
+      "BankAccountNicknameRequest": {
+        "additionalProperties": false,
+        "description": "Body for `PUT /api/v2/bank/accounts/{id}/nickname`.\n\nEmpty string clears the nickname (label falls back to\ndisplay_name \u2192 institution_name + last4).  Server trims +\ntruncates to 60 chars to match the legacy column width.",
+        "properties": {
+          "nickname": {
+            "default": "",
+            "maxLength": 60,
+            "title": "Nickname",
+            "type": "string"
+          }
+        },
+        "title": "BankAccountNicknameRequest",
+        "type": "object"
+      },
       "BankAccountRow": {
         "additionalProperties": false,
         "description": "One connected bank account. Fields mirror what the\n/bank/transactions sidebar + the /bank/connect page render.",
@@ -887,6 +901,86 @@
           "id"
         ],
         "title": "BankAccountRow",
+        "type": "object"
+      },
+      "BankConnectCompleteRequest": {
+        "additionalProperties": false,
+        "description": "`POST /api/v2/bank/connect/complete` body \u2014 the SPA hands\nback the FC session id after Stripe.js resolves so the\nserver can fetch + persist the linked accounts.",
+        "properties": {
+          "sessionId": {
+            "title": "Sessionid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sessionId"
+        ],
+        "title": "BankConnectCompleteRequest",
+        "type": "object"
+      },
+      "BankConnectCompleteResponse": {
+        "additionalProperties": false,
+        "description": "Result of persisting an FC session's accounts.",
+        "properties": {
+          "accounts_added": {
+            "title": "Accounts Added",
+            "type": "integer"
+          },
+          "accounts_total": {
+            "title": "Accounts Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "accounts_added",
+          "accounts_total"
+        ],
+        "title": "BankConnectCompleteResponse",
+        "type": "object"
+      },
+      "BankConnectResponse": {
+        "additionalProperties": false,
+        "description": "`POST /api/v2/bank/connect` envelope \u2014 minted FC session.\n\nThe SPA hands `clientSecret` to `stripe.collectFinancialConnectionsAccounts()`,\nthen POSTs `sessionId` back to `/connect/complete` to trigger\nserver-side persistence.  `publishableKey` lets the SPA\ninitialise Stripe.js without round-tripping for the env var.",
+        "properties": {
+          "clientSecret": {
+            "title": "Clientsecret",
+            "type": "string"
+          },
+          "publishableKey": {
+            "title": "Publishablekey",
+            "type": "string"
+          },
+          "sessionId": {
+            "title": "Sessionid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "clientSecret",
+          "sessionId",
+          "publishableKey"
+        ],
+        "title": "BankConnectResponse",
+        "type": "object"
+      },
+      "BankRefreshResponse": {
+        "additionalProperties": false,
+        "description": "Result of a manual balance refresh.",
+        "properties": {
+          "accounts_refreshed": {
+            "title": "Accounts Refreshed",
+            "type": "integer"
+          },
+          "error": {
+            "default": "",
+            "title": "Error",
+            "type": "string"
+          }
+        },
+        "required": [
+          "accounts_refreshed"
+        ],
+        "title": "BankRefreshResponse",
         "type": "object"
       },
       "BankRuleListResponse": {
@@ -1133,6 +1227,31 @@
           "target_kind"
         ],
         "title": "BankRuleWriteRequest",
+        "type": "object"
+      },
+      "BankSyncTransactionsResponse": {
+        "additionalProperties": false,
+        "description": "Result of a manual transaction sync.",
+        "properties": {
+          "error": {
+            "default": "",
+            "title": "Error",
+            "type": "string"
+          },
+          "new_rows": {
+            "title": "New Rows",
+            "type": "integer"
+          },
+          "total_seen": {
+            "title": "Total Seen",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "new_rows",
+          "total_seen"
+        ],
+        "title": "BankSyncTransactionsResponse",
         "type": "object"
       },
       "BankTransactionListResponse": {
@@ -1864,6 +1983,36 @@
           "country"
         ],
         "title": "CountryRow",
+        "type": "object"
+      },
+      "CreateTicketRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "body": {
+            "maxLength": 5000,
+            "minLength": 1,
+            "title": "Body",
+            "type": "string"
+          },
+          "category": {
+            "maxLength": 30,
+            "minLength": 1,
+            "title": "Category",
+            "type": "string"
+          },
+          "subject": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Subject",
+            "type": "string"
+          }
+        },
+        "required": [
+          "category",
+          "subject",
+          "body"
+        ],
+        "title": "CreateTicketRequest",
         "type": "object"
       },
       "CreateTransferRequest": {
@@ -2870,6 +3019,7 @@
             "type": "number"
           },
           "at_time": {
+            "default": "",
             "title": "At Time",
             "type": "string"
           },
@@ -2885,7 +3035,6 @@
         },
         "required": [
           "kind",
-          "at_time",
           "amount"
         ],
         "title": "LineItemCreateRequest",
@@ -2953,6 +3102,47 @@
           "amount"
         ],
         "title": "LineItemRow",
+        "type": "object"
+      },
+      "LineItemUpdateRequest": {
+        "additionalProperties": false,
+        "description": "PATCH body for /daily/{store}/line-items/{item_id}.  All\nfields optional \u2014 only the ones the SPA included get\nwritten.  `kind` is NOT mutable post-creation (would change\nwhich DailyReport field the row rolls up into, breaking the\nderivation in surprising ways).",
+        "properties": {
+          "amount": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amount"
+          },
+          "at_time": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "At Time"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "title": "LineItemUpdateRequest",
         "type": "object"
       },
       "LoginCrossStoreRequest": {
@@ -3059,6 +3249,17 @@
             },
             "title": "Permissions",
             "type": "array"
+          },
+          "refresh_jti": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Refresh Jti"
           },
           "requires_totp": {
             "default": false,
@@ -3962,6 +4163,11 @@
             "title": "Daily Summary Applies",
             "type": "boolean"
           },
+          "high_variance_applies": {
+            "default": false,
+            "title": "High Variance Applies",
+            "type": "boolean"
+          },
           "locked_day_digest_applies": {
             "title": "Locked Day Digest Applies",
             "type": "boolean"
@@ -3982,12 +4188,32 @@
             "title": "Notify Daily Summary Push",
             "type": "boolean"
           },
+          "notify_high_variance": {
+            "default": false,
+            "title": "Notify High Variance",
+            "type": "boolean"
+          },
+          "notify_high_variance_push": {
+            "default": false,
+            "title": "Notify High Variance Push",
+            "type": "boolean"
+          },
           "notify_locked_day_digest": {
             "title": "Notify Locked Day Digest",
             "type": "boolean"
           },
           "notify_locked_day_digest_push": {
             "title": "Notify Locked Day Digest Push",
+            "type": "boolean"
+          },
+          "notify_store_offline": {
+            "default": false,
+            "title": "Notify Store Offline",
+            "type": "boolean"
+          },
+          "notify_store_offline_push": {
+            "default": false,
+            "title": "Notify Store Offline Push",
             "type": "boolean"
           },
           "notify_trial_reminders": {
@@ -4001,6 +4227,11 @@
           "role": {
             "title": "Role",
             "type": "string"
+          },
+          "store_offline_applies": {
+            "default": false,
+            "title": "Store Offline Applies",
+            "type": "boolean"
           },
           "trial_toggle_applies": {
             "title": "Trial Toggle Applies",
@@ -4072,6 +4303,28 @@
             ],
             "title": "Notify Daily Summary Push"
           },
+          "notify_high_variance": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notify High Variance"
+          },
+          "notify_high_variance_push": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notify High Variance Push"
+          },
           "notify_locked_day_digest": {
             "anyOf": [
               {
@@ -4093,6 +4346,28 @@
               }
             ],
             "title": "Notify Locked Day Digest Push"
+          },
+          "notify_store_offline": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notify Store Offline"
+          },
+          "notify_store_offline_push": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notify Store Offline Push"
           },
           "notify_trial_reminders": {
             "anyOf": [
@@ -4137,11 +4412,8 @@
             "type": "string"
           },
           "role": {
+            "const": "employee",
             "default": "employee",
-            "enum": [
-              "admin",
-              "employee"
-            ],
             "title": "Role",
             "type": "string"
           },
@@ -6446,6 +6718,17 @@
       "StoreInfoResponse": {
         "additionalProperties": false,
         "properties": {
+          "referral_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Referral Code"
+          },
           "store": {
             "$ref": "#/components/schemas/StoreInfoRow"
           }
@@ -6463,6 +6746,16 @@
           "address": {
             "default": "",
             "title": "Address",
+            "type": "string"
+          },
+          "business_address": {
+            "default": "",
+            "title": "Business Address",
+            "type": "string"
+          },
+          "ein": {
+            "default": "",
+            "title": "Ein",
             "type": "string"
           },
           "email": {
@@ -6488,6 +6781,11 @@
             "default": true,
             "title": "Is Active",
             "type": "boolean"
+          },
+          "legal_name": {
+            "default": "",
+            "title": "Legal Name",
+            "type": "string"
           },
           "name": {
             "title": "Name",
@@ -8027,6 +8325,171 @@
         "title": "TeamMemberUpdateRequest",
         "type": "object"
       },
+      "TicketListResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "tickets": {
+            "items": {
+              "$ref": "#/components/schemas/TicketRow"
+            },
+            "title": "Tickets",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "tickets",
+          "total"
+        ],
+        "title": "TicketListResponse",
+        "type": "object"
+      },
+      "TicketResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "ticket": {
+            "$ref": "#/components/schemas/TicketRow"
+          }
+        },
+        "required": [
+          "ticket"
+        ],
+        "title": "TicketResponse",
+        "type": "object"
+      },
+      "TicketRow": {
+        "additionalProperties": false,
+        "properties": {
+          "admin_reply": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Admin Reply"
+          },
+          "body": {
+            "title": "Body",
+            "type": "string"
+          },
+          "category": {
+            "title": "Category",
+            "type": "string"
+          },
+          "closed_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Closed At"
+          },
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "priority": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Priority"
+          },
+          "replied_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Replied At"
+          },
+          "replied_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Replied By"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "store_id": {
+            "title": "Store Id",
+            "type": "integer"
+          },
+          "store_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Store Name"
+          },
+          "subject": {
+            "title": "Subject",
+            "type": "string"
+          },
+          "submitted_by": {
+            "title": "Submitted By",
+            "type": "string"
+          },
+          "updated_at": {
+            "title": "Updated At",
+            "type": "string"
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "store_id",
+          "user_id",
+          "submitted_by",
+          "category",
+          "priority",
+          "subject",
+          "body",
+          "status",
+          "admin_reply",
+          "replied_at",
+          "replied_by",
+          "created_at",
+          "updated_at",
+          "closed_at"
+        ],
+        "title": "TicketRow",
+        "type": "object"
+      },
       "TimeClockCredentialList": {
         "additionalProperties": false,
         "properties": {
@@ -8719,6 +9182,46 @@
         "title": "TransfersSummaryResponse",
         "type": "object"
       },
+      "UpdateTicketRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "admin_reply": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Admin Reply"
+          },
+          "priority": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Priority"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          }
+        },
+        "title": "UpdateTicketRequest",
+        "type": "object"
+      },
       "ValidationError": {
         "properties": {
           "ctx": {
@@ -9284,6 +9787,86 @@
         ]
       }
     },
+    "/admin/redeem-connect-code": {
+      "post": {
+        "description": "Store admin redeems an owner connect code to link this store\nto the owner's umbrella. Creates StoreOwnerLink + marks code used.",
+        "operationId": "redeem_connect_code_route_admin_redeem_connect_code_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Body",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Redeem Connect Code Route Admin Redeem Connect Code Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Redeem Connect Code Route",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
     "/admin/referrals": {
       "get": {
         "description": "Self-service referral payload for the principal's store.\nLazily mints a ReferralCode if missing (per CLAUDE.md\ninvariant #12 \u2014 paid plans only; trial \u2192 409). Powers\n/app/account/referrals.",
@@ -9484,6 +10067,232 @@
           }
         },
         "summary": "Update Store Info Route",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/store-permissions": {
+      "get": {
+        "description": "Get the effective permission matrix for this store.\nShows per-store overrides if any, else global defaults.",
+        "operationId": "get_store_permissions_route_admin_store_permissions_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Store Permissions Route Admin Store Permissions Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Store Permissions Route",
+        "tags": [
+          "admin"
+        ]
+      },
+      "put": {
+        "description": "Update per-store permission overrides. Only editable roles\nallowed (admin can only edit employee, owner can edit admin+employee).",
+        "operationId": "update_store_permissions_route_admin_store_permissions_put",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Body",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Update Store Permissions Route Admin Store Permissions Put",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Store Permissions Route",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/store-permissions/reset": {
+      "post": {
+        "description": "Reset a role's permissions to global defaults (delete all overrides).",
+        "operationId": "reset_store_permissions_route_admin_store_permissions_reset_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Body",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Reset Store Permissions Route Admin Store Permissions Reset Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Reset Store Permissions Route",
         "tags": [
           "admin"
         ]
@@ -9762,7 +10571,7 @@
         ]
       },
       "post": {
-        "description": "Create a new active StoreEmployee row. Admin role\nrequired.",
+        "description": "Create a new active StoreEmployee row.",
         "operationId": "create_team_member_route_admin_team_post",
         "parameters": [
           {
@@ -11879,6 +12688,70 @@
         ]
       }
     },
+    "/auth/account/export": {
+      "get": {
+        "description": "Download a JSON dump of the authed user's personal data.\n\nIncludes profile fields, notification preferences, session\nhistory, audit log entries the user generated, and an\ninventory of authenticators (passkey names, not secrets).\nDoes NOT include other users' data or store-wide records the\nuser just happened to view.",
+        "operationId": "export_my_data_route_auth_account_export_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Export My Data Route",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
     "/auth/activity": {
       "get": {
         "description": "Cross-store activity feed for the current user. Returns\nevery `OperatorAuditLog` + `TransferAudit` row authored by\n`claims[\"sub\"]`, paginated 50/page newest-first. Available\nto every authed role (employee / admin / owner / superadmin)\n\u2014 a cashier sees their own transfers; an admin sees their\ntransfers + admin actions; an owner who's worked behind the\ncounter at multiple stores sees rows from every store with\n`store_name` attached for disambiguation.",
@@ -13329,7 +14202,7 @@
     },
     "/auth/refresh": {
       "post": {
-        "description": "Rotate the refresh token + mint a fresh access JWT.\n\nThe SPA's ``api()`` helper hits this when a regular API call\n401s \u2014 silent recovery from an expired access cookie.\nSuccessful refresh sets new ``db_access_token`` + new\n``db_refresh_token`` cookies (rotation: the old refresh row\nis revoked and chained to the new one via ``rotated_to_id``).\n\nFailures clear both cookies and return 401:\n  * No refresh cookie \u2192 not logged in\n  * Unknown jti \u2192 forged or row-deleted (rare)\n  * Already revoked \u2192 replay (legitimate user rotated past it)\n  * Expired \u2192 past the 14-day TTL",
+        "description": "Validate the refresh token + mint a fresh access JWT.\n\nAccepts the refresh JTI from two sources (first match wins):\n  1. ``db_refresh_token`` httpOnly cookie (normal browser path)\n  2. ``refresh_token`` in a JSON request body (PWA fallback \u2014\n     Chrome standalone windows clear httpOnly cookies between\n     sessions, so the SPA stores the JTI in localStorage as\n     backup and sends it in the body)\n\nFailures clear both cookies and return 401.",
         "operationId": "refresh_route_auth_refresh_post",
         "parameters": [
           {
@@ -13821,6 +14694,369 @@
         ]
       }
     },
+    "/bank/accounts/{account_id}/nickname": {
+      "put": {
+        "description": "Set (or clear, with empty string) the nickname on a\nconnected bank account.  Falls back through display_name \u2192\ninstitution_name + last4 when blank \u2014 the read-side label\nhelper handles it.\n\nAdmin-role + same-store gated; cross-tenant ids opaque 404.",
+        "operationId": "set_account_nickname_route_bank_accounts__account_id__nickname_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "account_id",
+            "required": true,
+            "schema": {
+              "minimum": 1,
+              "title": "Account Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BankAccountNicknameRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BankAccountRow"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Set Account Nickname Route",
+        "tags": [
+          "bank"
+        ]
+      }
+    },
+    "/bank/connect": {
+      "post": {
+        "description": "Mint a Stripe Financial Connections session.\n\nReturns the client_secret the SPA hands to\n`stripe.collectFinancialConnectionsAccounts()`.  After Stripe.js\nresolves, the SPA POSTs `sessionId` to `/connect/complete` so\nthe server can fetch + persist the linked accounts.\n\nEnforces the per-store account cap before minting \u2014 a session\nthat would push the store over `MAX_BANK_ACCOUNTS_PER_STORE`\nreturns 409 with a clear message.",
+        "operationId": "connect_route_bank_connect_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BankConnectResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Connect Route",
+        "tags": [
+          "bank"
+        ]
+      }
+    },
+    "/bank/connect/complete": {
+      "post": {
+        "description": "Persist the FC accounts the user just authorised.\n\nCalled from the SPA after `stripe.collectFinancialConnectionsAccounts()`\nresolves.  Fetches the FC session by id, iterates its accounts,\nupserts each via `upsert_fc_account()`.  Idempotent \u2014 re-running\nwith the same session id is safe (the upsert dedupes on\n`stripe_account_id`).",
+        "operationId": "connect_complete_route_bank_connect_complete_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BankConnectCompleteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BankConnectCompleteResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Connect Complete Route",
+        "tags": [
+          "bank"
+        ]
+      }
+    },
+    "/bank/disconnect/{account_id}": {
+      "post": {
+        "description": "Soft-disconnect a connected bank account.  Sets\n`disconnected_at` + flips `enabled` off; historical\ntransactions are preserved + still appear in /bank-transactions\nwith the account label.",
+        "operationId": "disconnect_account_route_bank_disconnect__account_id__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "account_id",
+            "required": true,
+            "schema": {
+              "minimum": 1,
+              "title": "Account Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Disconnect Account Route",
+        "tags": [
+          "bank"
+        ]
+      }
+    },
+    "/bank/refresh": {
+      "post": {
+        "description": "Trigger a manual balance refresh across every connected FC\naccount on the principal's store.\n\nReturns the count of accounts the refresh touched + any\ntransient error message from Stripe.  Doesn't 502 on Stripe\nhiccups \u2014 those are surfaced in `error` so the SPA can show\na soft warning without blocking the user.",
+        "operationId": "refresh_balances_route_bank_refresh_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BankRefreshResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Refresh Balances Route",
+        "tags": [
+          "bank"
+        ]
+      }
+    },
     "/bank/rules": {
       "get": {
         "description": "Operator-managed BankRule list. Order matches the auto-\ncategorize sync's evaluation order (priority asc, id tie-break)\nso the rules-manager UI shows what would actually fire first.",
@@ -14201,6 +15437,72 @@
           }
         },
         "summary": "Toggle Rule Route",
+        "tags": [
+          "bank"
+        ]
+      }
+    },
+    "/bank/sync-transactions": {
+      "post": {
+        "description": "Trigger a manual transaction sync across every connected FC\naccount on the principal's store.\n\nDefaults to the rolling 7-day lookback baked into\n`sync_bank_transactions()` (Stripe FC reports transactions\nretroactively; strict `max(posted_at)` filtering would skip\nlate-arriving rows).",
+        "operationId": "sync_transactions_route_bank_sync_transactions_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BankSyncTransactionsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Sync Transactions Route",
         "tags": [
           "bank"
         ]
@@ -15158,6 +16460,38 @@
               "title": "Q",
               "type": "string"
             }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
           }
         ],
         "responses": {
@@ -15201,6 +16535,38 @@
               "description": "Caller's current store.",
               "title": "Store Id",
               "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
             }
           }
         ],
@@ -15265,6 +16631,38 @@
               "description": "Caller's current store. Lookup is scoped to the owner umbrella that contains this store. Customers in unrelated stores 404.",
               "title": "Store Id",
               "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
             }
           }
         ],
@@ -15334,6 +16732,38 @@
               "minimum": 1,
               "title": "Limit",
               "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
             }
           }
         ],
@@ -15528,6 +16958,100 @@
         "tags": [
           "daily"
         ]
+      },
+      "patch": {
+        "description": "Patch one line item in place.  Same scope + lock + return-\ncheck-link rules as create / delete:\n  - Cross-store edits return 403.\n  - Locked daily reports return 403 with \"unlock first\".\n  - Rows linked to a ReturnCheck return 409 (\"edit it from\n    Books \u2192 Return Checks\").\n\nThe DailyReport's roll-up total is recomputed after a\nsuccessful patch so the parent field stays accurate.  Every\npatch writes an operator-audit row.",
+        "operationId": "line_items_update_route_daily__store_id__line_items__item_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "store_id",
+            "required": true,
+            "schema": {
+              "minimum": 1,
+              "title": "Store Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "item_id",
+            "required": true,
+            "schema": {
+              "minimum": 1,
+              "title": "Item Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LineItemUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LineItemRow"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Line Items Update Route",
+        "tags": [
+          "daily"
+        ]
       }
     },
     "/daily/{store_id}/period": {
@@ -15560,6 +17084,38 @@
             "schema": {
               "title": "To",
               "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
             }
           }
         ],
@@ -15612,6 +17168,38 @@
             "schema": {
               "title": "Report Date",
               "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
             }
           }
         ],
@@ -17066,6 +18654,30 @@
         ]
       }
     },
+    "/maintenance-status": {
+      "get": {
+        "description": "Public (no auth) \u2014 returns maintenance mode state so the\nSPA can show a banner without a separate superadmin call.",
+        "operationId": "maintenance_status_maintenance_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Maintenance Status Maintenance Status Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Maintenance Status",
+        "tags": [
+          "meta"
+        ]
+      }
+    },
     "/monthly/months": {
       "get": {
         "operationId": "months_route_monthly_months_get",
@@ -17314,6 +18926,125 @@
         ]
       }
     },
+    "/owner/activity": {
+      "get": {
+        "description": "Activity stream across all stores in the owner's umbrella.\nMerges OperatorAuditLog + TransferAudit, newest first. Paginated.",
+        "operationId": "owner_activity_route_owner_activity_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "store_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Store Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "default": "",
+              "maxLength": 100,
+              "title": "Q",
+              "type": "string"
+            }
+          },
+          {
+            "description": "1-based page number",
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "description": "1-based page number",
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Rows per page (1 to 200)",
+            "in": "query",
+            "name": "per_page",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "description": "Rows per page (1 to 200)",
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Per Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Owner Activity Route",
+        "tags": [
+          "owner"
+        ]
+      }
+    },
     "/owner/bulk-add-user": {
       "post": {
         "description": "Create the same login at every store in ``body.store_ids``\nthat's actually in the owner's umbrella. Per-store outcomes\n(created / skipped / rejected) come back in the response so\nthe SPA can show a result table; we don't 4xx the whole\nrequest just because one store collided.",
@@ -17385,6 +19116,86 @@
           }
         },
         "summary": "Owner Bulk Add User Route",
+        "tags": [
+          "owner"
+        ]
+      }
+    },
+    "/owner/bulk-permissions": {
+      "post": {
+        "description": "Push permission overrides to multiple stores at once.\nOnly employee role is editable by owners.",
+        "operationId": "owner_bulk_permissions_route_owner_bulk_permissions_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Body",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Owner Bulk Permissions Route Owner Bulk Permissions Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Owner Bulk Permissions Route",
         "tags": [
           "owner"
         ]
@@ -18083,6 +19894,262 @@
         ]
       }
     },
+    "/owner/store/{store_id}/permissions": {
+      "get": {
+        "description": "Get the permission matrix for a specific store in the owner's\numbrella. Shows per-store overrides if any, else global defaults.",
+        "operationId": "owner_store_permissions_route_owner_store__store_id__permissions_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "store_id",
+            "required": true,
+            "schema": {
+              "minimum": 1,
+              "title": "Store Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Owner Store Permissions Route Owner Store  Store Id  Permissions Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Owner Store Permissions Route",
+        "tags": [
+          "owner"
+        ]
+      },
+      "put": {
+        "description": "Update per-store permission overrides for a store in the owner's\numbrella. Owner can edit employee roles.",
+        "operationId": "owner_update_store_permissions_route_owner_store__store_id__permissions_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "store_id",
+            "required": true,
+            "schema": {
+              "minimum": 1,
+              "title": "Store Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Body",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Owner Update Store Permissions Route Owner Store  Store Id  Permissions Put",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Owner Update Store Permissions Route",
+        "tags": [
+          "owner"
+        ]
+      }
+    },
+    "/owner/store/{store_id}/permissions/reset": {
+      "post": {
+        "description": "Reset a role's permissions to global defaults for a store\nin the owner's umbrella.",
+        "operationId": "owner_reset_store_permissions_route_owner_store__store_id__permissions_reset_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "store_id",
+            "required": true,
+            "schema": {
+              "minimum": 1,
+              "title": "Store Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Body",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Owner Reset Store Permissions Route Owner Store  Store Id  Permissions Reset Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Owner Reset Store Permissions Route",
+        "tags": [
+          "owner"
+        ]
+      }
+    },
     "/owner/unlink/{store_id}": {
       "post": {
         "description": "Disconnect a store from the owner umbrella. Removes the\nStoreOwnerLink row; the store keeps all its data (transfers,\nP&L, etc.) but the owner can no longer see it.",
@@ -18156,6 +20223,125 @@
           }
         },
         "summary": "Owner Unlink Store Route",
+        "tags": [
+          "owner"
+        ]
+      }
+    },
+    "/owner/users": {
+      "get": {
+        "description": "List users across all stores in the owner's umbrella.\nOptional store_id filter narrows to one store.",
+        "operationId": "owner_users_route_owner_users_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "store_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Store Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "default": "",
+              "maxLength": 100,
+              "title": "Q",
+              "type": "string"
+            }
+          },
+          {
+            "description": "1-based page number",
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "description": "1-based page number",
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Rows per page (1 to 200)",
+            "in": "query",
+            "name": "per_page",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "description": "Rows per page (1 to 200)",
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Per Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Owner Users Route",
         "tags": [
           "owner"
         ]
@@ -18277,6 +20463,38 @@
               "title": "Store Ids",
               "type": "string"
             }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
           }
         ],
         "responses": {
@@ -18354,6 +20572,38 @@
               "description": "Comma-separated store IDs, e.g. `1,2`. Single-tenant deployments will pass just one. Multi-store owners pass every store under their umbrella.",
               "title": "Store Ids",
               "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
             }
           }
         ],
@@ -18433,6 +20683,38 @@
               "title": "Store Ids",
               "type": "string"
             }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
           }
         ],
         "responses": {
@@ -18511,6 +20793,38 @@
               "title": "Store Ids",
               "type": "string"
             }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
           }
         ],
         "responses": {
@@ -18588,6 +20902,38 @@
               "description": "Comma-separated store IDs, e.g. `1,2`. Single-tenant deployments will pass just one. Multi-store owners pass every store under their umbrella.",
               "title": "Store Ids",
               "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
             }
           }
         ],
@@ -18669,6 +21015,38 @@
               "title": "Store Ids",
               "type": "string"
             }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
           }
         ],
         "responses": {
@@ -18746,6 +21124,38 @@
               "description": "Comma-separated store IDs, e.g. `1,2`. Single-tenant deployments will pass just one. Multi-store owners pass every store under their umbrella.",
               "title": "Store Ids",
               "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
             }
           }
         ],
@@ -18827,6 +21237,38 @@
               "title": "Store Ids",
               "type": "string"
             }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
           }
         ],
         "responses": {
@@ -18904,6 +21346,38 @@
               "description": "Comma-separated store IDs, e.g. `1,2`. Single-tenant deployments will pass just one. Multi-store owners pass every store under their umbrella.",
               "title": "Store Ids",
               "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
             }
           }
         ],
@@ -18983,6 +21457,38 @@
               "title": "Store Ids",
               "type": "string"
             }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
           }
         ],
         "responses": {
@@ -19060,6 +21566,38 @@
               "description": "Comma-separated store IDs, e.g. `1,2`. Single-tenant deployments will pass just one. Multi-store owners pass every store under their umbrella.",
               "title": "Store Ids",
               "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
             }
           }
         ],
@@ -19150,6 +21688,38 @@
               "title": "Store Ids",
               "type": "string"
             }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
           }
         ],
         "responses": {
@@ -19227,6 +21797,38 @@
               "description": "Comma-separated store IDs, e.g. `1,2`. Single-tenant deployments will pass just one. Multi-store owners pass every store under their umbrella.",
               "title": "Store Ids",
               "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
             }
           }
         ],
@@ -19338,6 +21940,38 @@
               "title": "Store Ids",
               "type": "string"
             }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
           }
         ],
         "responses": {
@@ -19415,6 +22049,38 @@
               "description": "Comma-separated store IDs, e.g. `1,2`. Single-tenant deployments will pass just one. Multi-store owners pass every store under their umbrella.",
               "title": "Store Ids",
               "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
             }
           }
         ],
@@ -19494,6 +22160,38 @@
               "title": "Store Ids",
               "type": "string"
             }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
           }
         ],
         "responses": {
@@ -19571,6 +22269,38 @@
               "description": "Comma-separated store IDs, e.g. `1,2`. Single-tenant deployments will pass just one. Multi-store owners pass every store under their umbrella.",
               "title": "Store Ids",
               "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
             }
           }
         ],
@@ -19652,6 +22382,38 @@
               "title": "Store Ids",
               "type": "string"
             }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
           }
         ],
         "responses": {
@@ -19731,6 +22493,38 @@
               "description": "Comma-separated store IDs, e.g. `1,2`. Single-tenant deployments will pass just one. Multi-store owners pass every store under their umbrella.",
               "title": "Store Ids",
               "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
             }
           }
         ],
@@ -19837,6 +22631,38 @@
               "title": "Store Ids",
               "type": "string"
             }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
           }
         ],
         "responses": {
@@ -19928,6 +22754,38 @@
               "description": "Comma-separated store IDs, e.g. `1,2`. Single-tenant deployments will pass just one. Multi-store owners pass every store under their umbrella.",
               "title": "Store Ids",
               "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
             }
           }
         ],
@@ -21065,6 +23923,222 @@
         ]
       }
     },
+    "/superadmin/billing-overview": {
+      "get": {
+        "description": "Billing health: trials expiring, grace, retention queue,\nrecent cancellations, webhook events.",
+        "operationId": "billing_overview_route_superadmin_billing_overview_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Billing Overview Route Superadmin Billing Overview Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Billing Overview Route",
+        "tags": [
+          "superadmin"
+        ]
+      }
+    },
+    "/superadmin/bulk-action": {
+      "post": {
+        "description": "Bulk action on multiple stores. Actions: extend_trial,\nenable, disable.",
+        "operationId": "bulk_action_route_superadmin_bulk_action_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Body",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Bulk Action Route Superadmin Bulk Action Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Bulk Action Route",
+        "tags": [
+          "superadmin"
+        ]
+      }
+    },
+    "/superadmin/dashboard": {
+      "get": {
+        "description": "Platform-wide KPIs, signup trends, plan breakdown, transfer\nvolume, and recent activity for the superadmin dashboard.",
+        "operationId": "dashboard_route_superadmin_dashboard_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Dashboard Route Superadmin Dashboard Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Dashboard Route",
+        "tags": [
+          "superadmin"
+        ]
+      }
+    },
     "/superadmin/discounts": {
       "get": {
         "description": "List every minted promo code (newest first). Read-only by\ndesign \u2014 Stripe coupon mint + new-code generation stays on the\nlegacy site for now (those need careful Stripe error handling).\nThis endpoint only renders + toggles; it never makes Stripe\nAPI calls.",
@@ -21211,6 +24285,497 @@
           }
         },
         "summary": "Toggle Discount Route",
+        "tags": [
+          "superadmin"
+        ]
+      }
+    },
+    "/superadmin/email-log": {
+      "get": {
+        "description": "Paginated email event log with search + type filter.",
+        "operationId": "email_log_route_superadmin_email_log_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          },
+          {
+            "in": "query",
+            "name": "event_type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Event Type"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "per_page",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Per Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Email Log Route Superadmin Email Log Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Email Log Route",
+        "tags": [
+          "superadmin"
+        ]
+      }
+    },
+    "/superadmin/impersonate/{user_id}": {
+      "post": {
+        "description": "Mint a short-lived JWT for impersonating another user.\nAudit-logged, 1-hour TTL, carries impersonated_by claim.",
+        "operationId": "impersonate_route_superadmin_impersonate__user_id__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "minimum": 1,
+              "title": "User Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Impersonate Route Superadmin Impersonate  User Id  Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Impersonate Route",
+        "tags": [
+          "superadmin"
+        ]
+      }
+    },
+    "/superadmin/maintenance": {
+      "get": {
+        "operationId": "get_maintenance_route_superadmin_maintenance_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Maintenance Route Superadmin Maintenance Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Maintenance Route",
+        "tags": [
+          "superadmin"
+        ]
+      },
+      "post": {
+        "operationId": "set_maintenance_route_superadmin_maintenance_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Body",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Set Maintenance Route Superadmin Maintenance Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Set Maintenance Route",
+        "tags": [
+          "superadmin"
+        ]
+      }
+    },
+    "/superadmin/permissions": {
+      "get": {
+        "description": "Return the full RBAC matrix for the editor.",
+        "operationId": "get_permissions_route_superadmin_permissions_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Permissions Route Superadmin Permissions Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Permissions Route",
+        "tags": [
+          "superadmin"
+        ]
+      },
+      "put": {
+        "description": "Bulk-update the RBAC matrix. Body: {matrix: {role: {resource: {action: bool}}}}\nor legacy {changes: [{role, resource, action, allowed}]}.",
+        "operationId": "update_permissions_route_superadmin_permissions_put",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Body",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Update Permissions Route Superadmin Permissions Put",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Permissions Route",
         "tags": [
           "superadmin"
         ]
@@ -21486,6 +25051,74 @@
           }
         },
         "summary": "Csv Export",
+        "tags": [
+          "superadmin"
+        ]
+      }
+    },
+    "/superadmin/retention-dry-run": {
+      "get": {
+        "description": "Preview what `purge_expired_stores` would delete on its\nnext run. Read-only, no audit (no mutation).\n\nUse cases:\n  * \"did the retention timer get re-stamped by a Stripe retry?\"\n    verification\n  * sanity check before re-enabling the daily purge cron after\n    a deploy\n  * answering \"if I run the cron now, how many stores die\"",
+        "operationId": "retention_dry_run_route_superadmin_retention_dry_run_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Retention Dry Run Route Superadmin Retention Dry Run Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Retention Dry Run Route",
         "tags": [
           "superadmin"
         ]
@@ -21787,6 +25420,1699 @@
         "summary": "Update Store Route",
         "tags": [
           "superadmin"
+        ]
+      }
+    },
+    "/superadmin/stores/{store_id}/clear-retention": {
+      "post": {
+        "description": "Cancel a store's retention timer so the purge cron will\nleave it alone \u2014 does NOT reactivate the Stripe subscription\n(that goes through Checkout). Use when:\n  * a stuck `customer.subscription.deleted` retry stamped a\n    fresh window on a near-expired store\n  * the operator asks for an extension while they decide\n    whether to reactivate\n  * forensic / support-investigation hold",
+        "operationId": "clear_retention_route_superadmin_stores__store_id__clear_retention_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "store_id",
+            "required": true,
+            "schema": {
+              "minimum": 1,
+              "title": "Store Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Clear Retention Route Superadmin Stores  Store Id  Clear Retention Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Clear Retention Route",
+        "tags": [
+          "superadmin"
+        ]
+      }
+    },
+    "/superadmin/stores/{store_id}/drill": {
+      "get": {
+        "description": "Read-only deep view of a store's data for support.",
+        "operationId": "store_drill_route_superadmin_stores__store_id__drill_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "store_id",
+            "required": true,
+            "schema": {
+              "minimum": 1,
+              "title": "Store Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Store Drill Route Superadmin Stores  Store Id  Drill Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Store Drill Route",
+        "tags": [
+          "superadmin"
+        ]
+      }
+    },
+    "/superadmin/stores/{store_id}/email": {
+      "post": {
+        "description": "Send an email to a store's admin(s).",
+        "operationId": "email_store_route_superadmin_stores__store_id__email_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "store_id",
+            "required": true,
+            "schema": {
+              "minimum": 1,
+              "title": "Store Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "default": {},
+                "title": "Body",
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Email Store Route Superadmin Stores  Store Id  Email Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Email Store Route",
+        "tags": [
+          "superadmin"
+        ]
+      }
+    },
+    "/superadmin/stores/{store_id}/extend-trial": {
+      "post": {
+        "description": "Extend a store's trial by N days (default 14).",
+        "operationId": "extend_trial_route_superadmin_stores__store_id__extend_trial_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "store_id",
+            "required": true,
+            "schema": {
+              "minimum": 1,
+              "title": "Store Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "default": {},
+                "title": "Body",
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Extend Trial Route Superadmin Stores  Store Id  Extend Trial Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Extend Trial Route",
+        "tags": [
+          "superadmin"
+        ]
+      }
+    },
+    "/superadmin/stores/{store_id}/permissions": {
+      "get": {
+        "description": "Permission matrix for a specific store. Superadmin can see\nand edit admin + employee roles.",
+        "operationId": "superadmin_store_permissions_route_superadmin_stores__store_id__permissions_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "store_id",
+            "required": true,
+            "schema": {
+              "minimum": 1,
+              "title": "Store Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Superadmin Store Permissions Route Superadmin Stores  Store Id  Permissions Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Superadmin Store Permissions Route",
+        "tags": [
+          "superadmin"
+        ]
+      },
+      "put": {
+        "description": "Update per-store permission overrides. Superadmin can edit\nadmin + employee roles.",
+        "operationId": "superadmin_update_store_permissions_route_superadmin_stores__store_id__permissions_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "store_id",
+            "required": true,
+            "schema": {
+              "minimum": 1,
+              "title": "Store Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Body",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Superadmin Update Store Permissions Route Superadmin Stores  Store Id  Permissions Put",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Superadmin Update Store Permissions Route",
+        "tags": [
+          "superadmin"
+        ]
+      }
+    },
+    "/superadmin/stores/{store_id}/permissions/reset": {
+      "post": {
+        "description": "Reset a role's per-store overrides to global defaults.",
+        "operationId": "superadmin_reset_store_permissions_route_superadmin_stores__store_id__permissions_reset_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "store_id",
+            "required": true,
+            "schema": {
+              "minimum": 1,
+              "title": "Store Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Body",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Superadmin Reset Store Permissions Route Superadmin Stores  Store Id  Permissions Reset Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Superadmin Reset Store Permissions Route",
+        "tags": [
+          "superadmin"
+        ]
+      }
+    },
+    "/superadmin/stores/{store_id}/toggle-active": {
+      "post": {
+        "description": "Enable / disable a store.",
+        "operationId": "toggle_store_active_route_superadmin_stores__store_id__toggle_active_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "store_id",
+            "required": true,
+            "schema": {
+              "minimum": 1,
+              "title": "Store Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Toggle Store Active Route Superadmin Stores  Store Id  Toggle Active Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Toggle Store Active Route",
+        "tags": [
+          "superadmin"
+        ]
+      }
+    },
+    "/superadmin/system-health": {
+      "get": {
+        "description": "Platform health dashboard \u2014 DB, Stripe, SMTP, queue status.",
+        "operationId": "system_health_route_superadmin_system_health_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response System Health Route Superadmin System Health Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "System Health Route",
+        "tags": [
+          "superadmin"
+        ]
+      }
+    },
+    "/superadmin/users": {
+      "get": {
+        "description": "List all users across all stores with search + filters.",
+        "operationId": "list_users_route_superadmin_users_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          },
+          {
+            "in": "query",
+            "name": "role",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Role"
+            }
+          },
+          {
+            "in": "query",
+            "name": "store_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Store Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "per_page",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Per Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Users Route Superadmin Users Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Users Route",
+        "tags": [
+          "superadmin"
+        ]
+      }
+    },
+    "/superadmin/users/{user_id}/change-role": {
+      "post": {
+        "description": "Change a user's role. Valid roles: admin, employee, owner.",
+        "operationId": "change_user_role_route_superadmin_users__user_id__change_role_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "minimum": 1,
+              "title": "User Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "default": {},
+                "title": "Body",
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Change User Role Route Superadmin Users  User Id  Change Role Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Change User Role Route",
+        "tags": [
+          "superadmin"
+        ]
+      }
+    },
+    "/superadmin/users/{user_id}/force-password-reset": {
+      "post": {
+        "description": "Reset a user's password to a random temporary one and return it.",
+        "operationId": "force_password_reset_route_superadmin_users__user_id__force_password_reset_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "minimum": 1,
+              "title": "User Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Force Password Reset Route Superadmin Users  User Id  Force Password Reset Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Force Password Reset Route",
+        "tags": [
+          "superadmin"
+        ]
+      }
+    },
+    "/superadmin/users/{user_id}/reset-2fa": {
+      "post": {
+        "description": "Force-clear a user's TOTP enrollment so they can re-enroll.",
+        "operationId": "reset_2fa_route_superadmin_users__user_id__reset_2fa_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "minimum": 1,
+              "title": "User Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Reset 2Fa Route Superadmin Users  User Id  Reset 2Fa Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Reset 2Fa Route",
+        "tags": [
+          "superadmin"
+        ]
+      }
+    },
+    "/superadmin/users/{user_id}/revoke-sessions": {
+      "post": {
+        "description": "Revoke every active refresh token for a user \u2014 they're\nbounced to /login on next API call. Use when: credentials are\nreported compromised, an employee leaves mid-shift, or a stuck\nsession needs nuking.\n\nSessions for the targeted user only \u2014 does NOT touch the\nsuperadmin's own sessions. Bouncing every store-admin is the\nrole-wide revoke path on `PUT /superadmin/permissions`, which\nalready exists.",
+        "operationId": "revoke_user_sessions_route_superadmin_users__user_id__revoke_sessions_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "minimum": 1,
+              "title": "User Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Revoke User Sessions Route Superadmin Users  User Id  Revoke Sessions Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Revoke User Sessions Route",
+        "tags": [
+          "superadmin"
+        ]
+      }
+    },
+    "/superadmin/users/{user_id}/toggle-active": {
+      "post": {
+        "description": "Enable / disable a user account.",
+        "operationId": "toggle_user_active_route_superadmin_users__user_id__toggle_active_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "minimum": 1,
+              "title": "User Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Toggle User Active Route Superadmin Users  User Id  Toggle Active Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Toggle User Active Route",
+        "tags": [
+          "superadmin"
+        ]
+      }
+    },
+    "/tickets": {
+      "get": {
+        "description": "List tickets submitted by users in the caller's store.\nSuperadmin sees all tickets (same as /all) since they have no store.",
+        "operationId": "list_my_tickets_tickets_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TicketListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List My Tickets",
+        "tags": [
+          "support"
+        ]
+      },
+      "post": {
+        "description": "Submit a new support ticket.",
+        "operationId": "create_ticket_tickets_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTicketRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TicketResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Ticket",
+        "tags": [
+          "support"
+        ]
+      }
+    },
+    "/tickets/all": {
+      "get": {
+        "description": "Superadmin: list every ticket across all stores.",
+        "operationId": "list_all_tickets_tickets_all_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "category",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Category"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TicketListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List All Tickets",
+        "tags": [
+          "support"
+        ]
+      }
+    },
+    "/tickets/{ticket_id}": {
+      "get": {
+        "description": "View a single ticket. Scoped: user sees own store's\ntickets; superadmin sees any.",
+        "operationId": "get_ticket_tickets__ticket_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "ticket_id",
+            "required": true,
+            "schema": {
+              "minimum": 1,
+              "title": "Ticket Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TicketResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Ticket",
+        "tags": [
+          "support"
+        ]
+      },
+      "put": {
+        "description": "Update a ticket's status, priority, or admin reply.\nAdmin role required (store admin for own store, superadmin\nfor any).",
+        "operationId": "update_ticket_tickets__ticket_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "ticket_id",
+            "required": true,
+            "schema": {
+              "minimum": 1,
+              "title": "Ticket Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateTicketRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TicketResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Ticket",
+        "tags": [
+          "support"
         ]
       }
     },
@@ -22398,6 +27724,38 @@
               "title": "Per Page",
               "type": "integer"
             }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
           }
         ],
         "responses": {
@@ -22659,6 +28017,38 @@
               "title": "Store Ids",
               "type": "string"
             }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
           }
         ],
         "responses": {
@@ -22797,6 +28187,38 @@
               "description": "Caller's store scope, comma-separated. Cross-tenant lookups 404.",
               "title": "Store Ids",
               "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
             }
           }
         ],

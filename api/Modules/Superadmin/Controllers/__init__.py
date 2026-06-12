@@ -509,6 +509,49 @@ def force_password_reset_route(
     return {"ok": True, "temp_password": temp_pw}
 
 
+@router.post("/users/{user_id}/revoke-sessions")
+def revoke_user_sessions_route(
+    user_id: int = Path(..., ge=1),
+    db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
+) -> dict[str, Any]:
+    """Revoke every active refresh token for a user — they're
+    bounced to /login on next API call. Use when: credentials are
+    reported compromised, an employee leaves mid-shift, or a stuck
+    session needs nuking.
+
+    Sessions for the targeted user only — does NOT touch the
+    superadmin's own sessions. Bouncing every store-admin is the
+    role-wide revoke path on `PUT /superadmin/permissions`, which
+    already exists.
+    """
+    _require_superadmin(claims)
+    from api.Modules.Auth.Models import RefreshToken
+    user = db.get(User, user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    if user.role == "superadmin":
+        raise HTTPException(
+            status_code=403,
+            detail="Cannot revoke superadmin sessions via API",
+        )
+    now = utc_now()
+    revoked = (
+        db.query(RefreshToken)
+          .filter(RefreshToken.user_id == user_id)
+          .filter(RefreshToken.revoked_at.is_(None))
+          .update({"revoked_at": now}, synchronize_session=False)
+    )
+    sa = resolve_superadmin_user(db, claims)
+    _audit_store(
+        db, sa, "revoke_user_sessions",
+        target_id=str(user.id),
+        details=f"User {user.username} ({int(revoked)} tokens revoked)",
+    )
+    db.commit()
+    return {"ok": True, "revoked_count": int(revoked)}
+
+
 # ── Impersonation ──────────────────────────────────────────
 
 
@@ -1135,6 +1178,64 @@ def toggle_store_active_route(
     _audit_store(db, sa, act, target_id=str(s.id),
                  details=f"{s.name} ({s.slug})")
     return {"ok": True, "is_active": s.is_active}
+
+
+@router.get("/retention-dry-run")
+def retention_dry_run_route(
+    db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
+) -> dict[str, Any]:
+    """Preview what `purge_expired_stores` would delete on its
+    next run. Read-only, no audit (no mutation).
+
+    Use cases:
+      * "did the retention timer get re-stamped by a Stripe retry?"
+        verification
+      * sanity check before re-enabling the daily purge cron after
+        a deploy
+      * answering "if I run the cron now, how many stores die"
+    """
+    _require_superadmin(claims)
+    from api.Modules.Billing.Services import retention_purge_dry_run
+    return retention_purge_dry_run(db)
+
+
+@router.post("/stores/{store_id}/clear-retention")
+def clear_retention_route(
+    store_id: int = Path(..., ge=1),
+    db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
+) -> dict[str, Any]:
+    """Cancel a store's retention timer so the purge cron will
+    leave it alone — does NOT reactivate the Stripe subscription
+    (that goes through Checkout). Use when:
+      * a stuck `customer.subscription.deleted` retry stamped a
+        fresh window on a near-expired store
+      * the operator asks for an extension while they decide
+        whether to reactivate
+      * forensic / support-investigation hold
+    """
+    _require_superadmin(claims)
+    from api.Modules.Billing.Services import clear_cancellation_state
+    from api.Modules.Tenancy.Models import Store
+    s = db.get(Store, store_id)
+    if s is None:
+        raise HTTPException(status_code=404, detail="Store not found")
+    if s.data_retention_until is None and s.canceled_at is None:
+        return {"ok": True, "already_clear": True}
+    sa = resolve_superadmin_user(db, claims)
+    prior = (
+        s.data_retention_until.isoformat()
+        if s.data_retention_until else "(none)"
+    )
+    clear_cancellation_state(s)
+    _audit_store(
+        db, sa, "clear_retention",
+        target_id=str(s.id),
+        details=f"prior retention_until={prior}",
+    )
+    db.commit()
+    return {"ok": True}
 
 
 @router.post("/bulk-action")

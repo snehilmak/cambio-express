@@ -1,10 +1,17 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
-import { api } from "../lib/api";
+import {
+  clearStoreRetention,
+  retentionDryRun,
+  type RetentionDryRunResponse,
+} from "../api/superadmin";
+import { api, ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
 import {
-  Breadcrumbs, Card, EmptyState, ErrorState, KpiCard, KpiGrid,
-  Loading, PageHeader, PageShell, Pill, Section,
+  Alert, Breadcrumbs, Button, Card, ConfirmDialog, EmptyState,
+  ErrorState, KpiCard, KpiGrid, Loading, PageHeader, PageShell, Pill,
+  Section, useToast,
 } from "../components/ui";
 import styles from "./SuperadminBilling.module.css";
 
@@ -40,6 +47,53 @@ function useBillingOverview() {
 
 export default function SuperadminBilling() {
   const { data, isLoading, isError, error, refetch } = useBillingOverview();
+  const toast = useToast();
+  const [dryRun, setDryRun] = useState<RetentionDryRunResponse | null>(null);
+  const [dryRunBusy, setDryRunBusy] = useState(false);
+  const [dryRunError, setDryRunError] = useState<string | null>(null);
+  const [clearTarget, setClearTarget] = useState<{
+    storeId: number; name: string;
+  } | null>(null);
+  const [clearBusy, setClearBusy] = useState(false);
+
+  async function runDryRun() {
+    setDryRunBusy(true);
+    setDryRunError(null);
+    try {
+      const res = await retentionDryRun();
+      setDryRun(res);
+    } catch (err) {
+      setDryRunError(
+        err instanceof ApiError ? err.message : "Dry-run failed.",
+      );
+    } finally {
+      setDryRunBusy(false);
+    }
+  }
+
+  async function doClearRetention() {
+    if (clearTarget == null) return;
+    setClearBusy(true);
+    try {
+      await clearStoreRetention(clearTarget.storeId);
+      toast({
+        message: `Retention timer cleared for ${clearTarget.name}.`,
+        tone: "success",
+      });
+      setClearTarget(null);
+      void refetch();
+      // Re-run the dry-run if one is showing so the table reflects the
+      // change.
+      if (dryRun) await runDryRun();
+    } catch (err) {
+      toast({
+        message: err instanceof ApiError ? err.message : "Failed.",
+        tone: "error",
+      });
+    } finally {
+      setClearBusy(false);
+    }
+  }
 
   return (
     <PageShell gap="1.25rem">
@@ -141,6 +195,15 @@ export default function SuperadminBilling() {
                         <div className={styles.storeMeta}>{s.slug}</div>
                       </div>
                       <div className={styles.badge}>
+                        <Button
+                          size="sm"
+                          tone="secondary"
+                          onClick={() => setClearTarget({
+                            storeId: s.store_id, name: s.name,
+                          })}
+                        >
+                          Pause clock
+                        </Button>
                         <Pill tone="negative">
                           {s.days_left} days left
                         </Pill>
@@ -188,8 +251,87 @@ export default function SuperadminBilling() {
               </Card>
             </Section>
           )}
+
+          <Section title="Retention purge — dry run">
+            <Card>
+              <p className={styles.dryRunIntro}>
+                Preview what <code>purge_expired_stores</code> would delete on
+                its next run. Read-only — clicking does not commit any change.
+              </p>
+              <div className={styles.dryRunActions}>
+                <Button
+                  size="sm"
+                  onClick={() => { void runDryRun(); }}
+                  disabled={dryRunBusy}
+                >
+                  {dryRunBusy ? "Running…" : (dryRun ? "Refresh preview" : "Preview impact")}
+                </Button>
+                {dryRun && (
+                  <span className={styles.dryRunSummary}>
+                    <strong>{dryRun.store_count}</strong> store
+                    {dryRun.store_count === 1 ? "" : "s"} would be deleted
+                    {" ("}
+                    <strong>{dryRun.total_child_rows.toLocaleString()}</strong>
+                    {" "}
+                    child row{dryRun.total_child_rows === 1 ? "" : "s"}
+                    {")"}
+                  </span>
+                )}
+              </div>
+              {dryRunError && (
+                <Alert tone="error">{dryRunError}</Alert>
+              )}
+              {dryRun && dryRun.stores.length > 0 && (
+                <div className={styles.dryRunList}>
+                  {dryRun.stores.map((s) => (
+                    <div key={s.store_id} className={styles.storeRow}>
+                      <div>
+                        <div className={styles.storeName}>{s.name}</div>
+                        <div className={styles.storeMeta}>
+                          {s.slug} · {s.row_count.toLocaleString()} rows
+                          {" "}({Object.entries(s.row_counts)
+                            .filter(([, n]) => n > 0)
+                            .map(([k, n]) => `${k}: ${n}`)
+                            .join(", ")})
+                        </div>
+                      </div>
+                      <div className={styles.badge}>
+                        <Button
+                          size="sm"
+                          tone="secondary"
+                          onClick={() => setClearTarget({
+                            storeId: s.store_id, name: s.name,
+                          })}
+                        >
+                          Pause clock
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {dryRun && dryRun.stores.length === 0 && (
+                <EmptyState title="Nothing would be deleted right now." />
+              )}
+            </Card>
+          </Section>
         </>
       )}
+
+      <ConfirmDialog
+        open={clearTarget != null}
+        title="Pause retention clock"
+        message={
+          clearTarget
+            ? `Clear the retention timer for "${clearTarget.name}"? The purge cron will leave it alone. This does NOT reactivate the Stripe subscription.`
+            : ""
+        }
+        confirmLabel="Pause clock"
+        confirmTone="primary"
+        busy={clearBusy}
+        onConfirm={() => { void doClearRetention(); }}
+        onCancel={() => setClearTarget(null)}
+      />
     </PageShell>
   );
 }

@@ -101,6 +101,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/redeem-connect-code": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Redeem Connect Code Route
+         * @description Store admin redeems an owner connect code to link this store
+         *     to the owner's umbrella. Creates StoreOwnerLink + marks code used.
+         */
+        post: operations["redeem_connect_code_route_admin_redeem_connect_code_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/referrals": {
         parameters: {
             query?: never;
@@ -142,6 +163,52 @@ export interface paths {
          */
         put: operations["update_store_info_route_admin_store_info_put"];
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/store-permissions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Store Permissions Route
+         * @description Get the effective permission matrix for this store.
+         *     Shows per-store overrides if any, else global defaults.
+         */
+        get: operations["get_store_permissions_route_admin_store_permissions_get"];
+        /**
+         * Update Store Permissions Route
+         * @description Update per-store permission overrides. Only editable roles
+         *     allowed (admin can only edit employee, owner can edit admin+employee).
+         */
+        put: operations["update_store_permissions_route_admin_store_permissions_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/store-permissions/reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reset Store Permissions Route
+         * @description Reset a role's permissions to global defaults (delete all overrides).
+         */
+        post: operations["reset_store_permissions_route_admin_store_permissions_reset_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -244,8 +311,7 @@ export interface paths {
         put?: never;
         /**
          * Create Team Member Route
-         * @description Create a new active StoreEmployee row. Admin role
-         *     required.
+         * @description Create a new active StoreEmployee row.
          */
         post: operations["create_team_member_route_admin_team_post"];
         delete?: never;
@@ -713,6 +779,32 @@ export interface paths {
         put?: never;
         /** Toggle Route */
         post: operations["toggle_route_announcements__ann_id__toggle_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/account/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export My Data Route
+         * @description Download a JSON dump of the authed user's personal data.
+         *
+         *     Includes profile fields, notification preferences, session
+         *     history, audit log entries the user generated, and an
+         *     inventory of authenticators (passkey names, not secrets).
+         *     Does NOT include other users' data or store-wide records the
+         *     user just happened to view.
+         */
+        get: operations["export_my_data_route_auth_account_export_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1242,19 +1334,16 @@ export interface paths {
         put?: never;
         /**
          * Refresh Route
-         * @description Rotate the refresh token + mint a fresh access JWT.
+         * @description Validate the refresh token + mint a fresh access JWT.
          *
-         *     The SPA's ``api()`` helper hits this when a regular API call
-         *     401s — silent recovery from an expired access cookie.
-         *     Successful refresh sets new ``db_access_token`` + new
-         *     ``db_refresh_token`` cookies (rotation: the old refresh row
-         *     is revoked and chained to the new one via ``rotated_to_id``).
+         *     Accepts the refresh JTI from two sources (first match wins):
+         *       1. ``db_refresh_token`` httpOnly cookie (normal browser path)
+         *       2. ``refresh_token`` in a JSON request body (PWA fallback —
+         *          Chrome standalone windows clear httpOnly cookies between
+         *          sessions, so the SPA stores the JTI in localStorage as
+         *          backup and sends it in the body)
          *
-         *     Failures clear both cookies and return 401:
-         *       * No refresh cookie → not logged in
-         *       * Unknown jti → forged or row-deleted (rare)
-         *       * Already revoked → replay (legitimate user rotated past it)
-         *       * Expired → past the 14-day TTL
+         *     Failures clear both cookies and return 401.
          */
         post: operations["refresh_route_auth_refresh_post"];
         delete?: never;
@@ -1482,6 +1571,135 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/bank/accounts/{account_id}/nickname": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set Account Nickname Route
+         * @description Set (or clear, with empty string) the nickname on a
+         *     connected bank account.  Falls back through display_name →
+         *     institution_name + last4 when blank — the read-side label
+         *     helper handles it.
+         *
+         *     Admin-role + same-store gated; cross-tenant ids opaque 404.
+         */
+        put: operations["set_account_nickname_route_bank_accounts__account_id__nickname_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/bank/connect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Connect Route
+         * @description Mint a Stripe Financial Connections session.
+         *
+         *     Returns the client_secret the SPA hands to
+         *     `stripe.collectFinancialConnectionsAccounts()`.  After Stripe.js
+         *     resolves, the SPA POSTs `sessionId` to `/connect/complete` so
+         *     the server can fetch + persist the linked accounts.
+         *
+         *     Enforces the per-store account cap before minting — a session
+         *     that would push the store over `MAX_BANK_ACCOUNTS_PER_STORE`
+         *     returns 409 with a clear message.
+         */
+        post: operations["connect_route_bank_connect_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/bank/connect/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Connect Complete Route
+         * @description Persist the FC accounts the user just authorised.
+         *
+         *     Called from the SPA after `stripe.collectFinancialConnectionsAccounts()`
+         *     resolves.  Fetches the FC session by id, iterates its accounts,
+         *     upserts each via `upsert_fc_account()`.  Idempotent — re-running
+         *     with the same session id is safe (the upsert dedupes on
+         *     `stripe_account_id`).
+         */
+        post: operations["connect_complete_route_bank_connect_complete_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/bank/disconnect/{account_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Disconnect Account Route
+         * @description Soft-disconnect a connected bank account.  Sets
+         *     `disconnected_at` + flips `enabled` off; historical
+         *     transactions are preserved + still appear in /bank-transactions
+         *     with the account label.
+         */
+        post: operations["disconnect_account_route_bank_disconnect__account_id__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/bank/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Refresh Balances Route
+         * @description Trigger a manual balance refresh across every connected FC
+         *     account on the principal's store.
+         *
+         *     Returns the count of accounts the refresh touched + any
+         *     transient error message from Stripe.  Doesn't 502 on Stripe
+         *     hiccups — those are surfaced in `error` so the SPA can show
+         *     a soft warning without blocking the user.
+         */
+        post: operations["refresh_balances_route_bank_refresh_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/bank/rules": {
         parameters: {
             query?: never;
@@ -1534,6 +1752,32 @@ export interface paths {
         put?: never;
         /** Toggle Rule Route */
         post: operations["toggle_rule_route_bank_rules__rule_id__toggle_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/bank/sync-transactions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sync Transactions Route
+         * @description Trigger a manual transaction sync across every connected FC
+         *     account on the principal's store.
+         *
+         *     Defaults to the rolling 7-day lookback baked into
+         *     `sync_bank_transactions()` (Stripe FC reports transactions
+         *     retroactively; strict `max(posted_at)` filtering would skip
+         *     late-arriving rows).
+         */
+        post: operations["sync_transactions_route_bank_sync_transactions_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1904,7 +2148,20 @@ export interface paths {
         delete: operations["line_items_delete_route_daily__store_id__line_items__item_id__delete"];
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Line Items Update Route
+         * @description Patch one line item in place.  Same scope + lock + return-
+         *     check-link rules as create / delete:
+         *       - Cross-store edits return 403.
+         *       - Locked daily reports return 403 with "unlock first".
+         *       - Rows linked to a ReturnCheck return 409 ("edit it from
+         *         Books → Return Checks").
+         *
+         *     The DailyReport's roll-up total is recomputed after a
+         *     successful patch so the parent field stays accurate.  Every
+         *     patch writes an operator-audit row.
+         */
+        patch: operations["line_items_update_route_daily__store_id__line_items__item_id__patch"];
         trace?: never;
     };
     "/daily/{store_id}/period": {
@@ -2289,6 +2546,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/maintenance-status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Maintenance Status
+         * @description Public (no auth) — returns maintenance mode state so the
+         *     SPA can show a banner without a separate superadmin call.
+         */
+        get: operations["maintenance_status_maintenance_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/monthly/months": {
         parameters: {
             query?: never;
@@ -2336,6 +2614,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/owner/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Owner Activity Route
+         * @description Activity stream across all stores in the owner's umbrella.
+         *     Merges OperatorAuditLog + TransferAudit, newest first. Paginated.
+         */
+        get: operations["owner_activity_route_owner_activity_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/owner/bulk-add-user": {
         parameters: {
             query?: never;
@@ -2354,6 +2653,27 @@ export interface paths {
          *     request just because one store collided.
          */
         post: operations["owner_bulk_add_user_route_owner_bulk_add_user_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/owner/bulk-permissions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Owner Bulk Permissions Route
+         * @description Push permission overrides to multiple stores at once.
+         *     Only employee role is editable by owners.
+         */
+        post: operations["owner_bulk_permissions_route_owner_bulk_permissions_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2555,6 +2875,53 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/owner/store/{store_id}/permissions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Owner Store Permissions Route
+         * @description Get the permission matrix for a specific store in the owner's
+         *     umbrella. Shows per-store overrides if any, else global defaults.
+         */
+        get: operations["owner_store_permissions_route_owner_store__store_id__permissions_get"];
+        /**
+         * Owner Update Store Permissions Route
+         * @description Update per-store permission overrides for a store in the owner's
+         *     umbrella. Owner can edit employee roles.
+         */
+        put: operations["owner_update_store_permissions_route_owner_store__store_id__permissions_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/owner/store/{store_id}/permissions/reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Owner Reset Store Permissions Route
+         * @description Reset a role's permissions to global defaults for a store
+         *     in the owner's umbrella.
+         */
+        post: operations["owner_reset_store_permissions_route_owner_store__store_id__permissions_reset_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/owner/unlink/{store_id}": {
         parameters: {
             query?: never;
@@ -2571,6 +2938,27 @@ export interface paths {
          *     P&L, etc.) but the owner can no longer see it.
          */
         post: operations["owner_unlink_store_route_owner_unlink__store_id__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/owner/users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Owner Users Route
+         * @description List users across all stores in the owner's umbrella.
+         *     Optional store_id filter narrows to one store.
+         */
+        get: operations["owner_users_route_owner_users_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -3158,6 +3546,69 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/superadmin/billing-overview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Billing Overview Route
+         * @description Billing health: trials expiring, grace, retention queue,
+         *     recent cancellations, webhook events.
+         */
+        get: operations["billing_overview_route_superadmin_billing_overview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/superadmin/bulk-action": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Bulk Action Route
+         * @description Bulk action on multiple stores. Actions: extend_trial,
+         *     enable, disable.
+         */
+        post: operations["bulk_action_route_superadmin_bulk_action_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/superadmin/dashboard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Dashboard Route
+         * @description Platform-wide KPIs, signup trends, plan breakdown, transfer
+         *     volume, and recent activity for the superadmin dashboard.
+         */
+        get: operations["dashboard_route_superadmin_dashboard_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/superadmin/discounts": {
         parameters: {
             query?: never;
@@ -3199,6 +3650,90 @@ export interface paths {
          *     that try to apply them are rejected by `is_redeemable`.
          */
         post: operations["toggle_discount_route_superadmin_discounts__discount_id__toggle_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/superadmin/email-log": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Email Log Route
+         * @description Paginated email event log with search + type filter.
+         */
+        get: operations["email_log_route_superadmin_email_log_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/superadmin/impersonate/{user_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Impersonate Route
+         * @description Mint a short-lived JWT for impersonating another user.
+         *     Audit-logged, 1-hour TTL, carries impersonated_by claim.
+         */
+        post: operations["impersonate_route_superadmin_impersonate__user_id__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/superadmin/maintenance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Maintenance Route */
+        get: operations["get_maintenance_route_superadmin_maintenance_get"];
+        put?: never;
+        /** Set Maintenance Route */
+        post: operations["set_maintenance_route_superadmin_maintenance_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/superadmin/permissions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Permissions Route
+         * @description Return the full RBAC matrix for the editor.
+         */
+        get: operations["get_permissions_route_superadmin_permissions_get"];
+        /**
+         * Update Permissions Route
+         * @description Bulk-update the RBAC matrix. Body: {matrix: {role: {resource: {action: bool}}}}
+         *     or legacy {changes: [{role, resource, action, allowed}]}.
+         */
+        put: operations["update_permissions_route_superadmin_permissions_put"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -3281,6 +3816,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/superadmin/retention-dry-run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Retention Dry Run Route
+         * @description Preview what `purge_expired_stores` would delete on its
+         *     next run. Read-only, no audit (no mutation).
+         *
+         *     Use cases:
+         *       * "did the retention timer get re-stamped by a Stripe retry?"
+         *         verification
+         *       * sanity check before re-enabling the daily purge cron after
+         *         a deploy
+         *       * answering "if I run the cron now, how many stores die"
+         */
+        get: operations["retention_dry_run_route_superadmin_retention_dry_run_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/superadmin/stores": {
         parameters: {
             query?: never;
@@ -3352,6 +3915,379 @@ export interface paths {
          *     timer reset, etc.).
          */
         patch: operations["update_store_route_superadmin_stores__store_id__patch"];
+        trace?: never;
+    };
+    "/superadmin/stores/{store_id}/clear-retention": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Clear Retention Route
+         * @description Cancel a store's retention timer so the purge cron will
+         *     leave it alone — does NOT reactivate the Stripe subscription
+         *     (that goes through Checkout). Use when:
+         *       * a stuck `customer.subscription.deleted` retry stamped a
+         *         fresh window on a near-expired store
+         *       * the operator asks for an extension while they decide
+         *         whether to reactivate
+         *       * forensic / support-investigation hold
+         */
+        post: operations["clear_retention_route_superadmin_stores__store_id__clear_retention_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/superadmin/stores/{store_id}/drill": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Store Drill Route
+         * @description Read-only deep view of a store's data for support.
+         */
+        get: operations["store_drill_route_superadmin_stores__store_id__drill_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/superadmin/stores/{store_id}/email": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Email Store Route
+         * @description Send an email to a store's admin(s).
+         */
+        post: operations["email_store_route_superadmin_stores__store_id__email_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/superadmin/stores/{store_id}/extend-trial": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Extend Trial Route
+         * @description Extend a store's trial by N days (default 14).
+         */
+        post: operations["extend_trial_route_superadmin_stores__store_id__extend_trial_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/superadmin/stores/{store_id}/permissions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Superadmin Store Permissions Route
+         * @description Permission matrix for a specific store. Superadmin can see
+         *     and edit admin + employee roles.
+         */
+        get: operations["superadmin_store_permissions_route_superadmin_stores__store_id__permissions_get"];
+        /**
+         * Superadmin Update Store Permissions Route
+         * @description Update per-store permission overrides. Superadmin can edit
+         *     admin + employee roles.
+         */
+        put: operations["superadmin_update_store_permissions_route_superadmin_stores__store_id__permissions_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/superadmin/stores/{store_id}/permissions/reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Superadmin Reset Store Permissions Route
+         * @description Reset a role's per-store overrides to global defaults.
+         */
+        post: operations["superadmin_reset_store_permissions_route_superadmin_stores__store_id__permissions_reset_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/superadmin/stores/{store_id}/toggle-active": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Toggle Store Active Route
+         * @description Enable / disable a store.
+         */
+        post: operations["toggle_store_active_route_superadmin_stores__store_id__toggle_active_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/superadmin/system-health": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * System Health Route
+         * @description Platform health dashboard — DB, Stripe, SMTP, queue status.
+         */
+        get: operations["system_health_route_superadmin_system_health_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/superadmin/users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Users Route
+         * @description List all users across all stores with search + filters.
+         */
+        get: operations["list_users_route_superadmin_users_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/superadmin/users/{user_id}/change-role": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Change User Role Route
+         * @description Change a user's role. Valid roles: admin, employee, owner.
+         */
+        post: operations["change_user_role_route_superadmin_users__user_id__change_role_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/superadmin/users/{user_id}/force-password-reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Force Password Reset Route
+         * @description Reset a user's password to a random temporary one and return it.
+         */
+        post: operations["force_password_reset_route_superadmin_users__user_id__force_password_reset_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/superadmin/users/{user_id}/reset-2fa": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reset 2Fa Route
+         * @description Force-clear a user's TOTP enrollment so they can re-enroll.
+         */
+        post: operations["reset_2fa_route_superadmin_users__user_id__reset_2fa_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/superadmin/users/{user_id}/revoke-sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Revoke User Sessions Route
+         * @description Revoke every active refresh token for a user — they're
+         *     bounced to /login on next API call. Use when: credentials are
+         *     reported compromised, an employee leaves mid-shift, or a stuck
+         *     session needs nuking.
+         *
+         *     Sessions for the targeted user only — does NOT touch the
+         *     superadmin's own sessions. Bouncing every store-admin is the
+         *     role-wide revoke path on `PUT /superadmin/permissions`, which
+         *     already exists.
+         */
+        post: operations["revoke_user_sessions_route_superadmin_users__user_id__revoke_sessions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/superadmin/users/{user_id}/toggle-active": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Toggle User Active Route
+         * @description Enable / disable a user account.
+         */
+        post: operations["toggle_user_active_route_superadmin_users__user_id__toggle_active_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tickets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List My Tickets
+         * @description List tickets submitted by users in the caller's store.
+         *     Superadmin sees all tickets (same as /all) since they have no store.
+         */
+        get: operations["list_my_tickets_tickets_get"];
+        put?: never;
+        /**
+         * Create Ticket
+         * @description Submit a new support ticket.
+         */
+        post: operations["create_ticket_tickets_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tickets/all": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List All Tickets
+         * @description Superadmin: list every ticket across all stores.
+         */
+        get: operations["list_all_tickets_tickets_all_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tickets/{ticket_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Ticket
+         * @description View a single ticket. Scoped: user sees own store's
+         *     tickets; superadmin sees any.
+         */
+        get: operations["get_ticket_tickets__ticket_id__get"];
+        /**
+         * Update Ticket
+         * @description Update a ticket's status, priority, or admin reply.
+         *     Admin role required (store admin for own store, superadmin
+         *     for any).
+         */
+        put: operations["update_ticket_tickets__ticket_id__put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/timeclock/break/start": {
@@ -4215,6 +5151,21 @@ export interface components {
             total: number;
         };
         /**
+         * BankAccountNicknameRequest
+         * @description Body for `PUT /api/v2/bank/accounts/{id}/nickname`.
+         *
+         *     Empty string clears the nickname (label falls back to
+         *     display_name → institution_name + last4).  Server trims +
+         *     truncates to 60 chars to match the legacy column width.
+         */
+        BankAccountNicknameRequest: {
+            /**
+             * Nickname
+             * @default
+             */
+            nickname: string;
+        };
+        /**
          * BankAccountRow
          * @description One connected bank account. Fields mirror what the
          *     /bank/transactions sidebar + the /bank/connect page render.
@@ -4292,6 +5243,56 @@ export interface components {
              * @default
              */
             subcategory: string;
+        };
+        /**
+         * BankConnectCompleteRequest
+         * @description `POST /api/v2/bank/connect/complete` body — the SPA hands
+         *     back the FC session id after Stripe.js resolves so the
+         *     server can fetch + persist the linked accounts.
+         */
+        BankConnectCompleteRequest: {
+            /** Sessionid */
+            sessionId: string;
+        };
+        /**
+         * BankConnectCompleteResponse
+         * @description Result of persisting an FC session's accounts.
+         */
+        BankConnectCompleteResponse: {
+            /** Accounts Added */
+            accounts_added: number;
+            /** Accounts Total */
+            accounts_total: number;
+        };
+        /**
+         * BankConnectResponse
+         * @description `POST /api/v2/bank/connect` envelope — minted FC session.
+         *
+         *     The SPA hands `clientSecret` to `stripe.collectFinancialConnectionsAccounts()`,
+         *     then POSTs `sessionId` back to `/connect/complete` to trigger
+         *     server-side persistence.  `publishableKey` lets the SPA
+         *     initialise Stripe.js without round-tripping for the env var.
+         */
+        BankConnectResponse: {
+            /** Clientsecret */
+            clientSecret: string;
+            /** Publishablekey */
+            publishableKey: string;
+            /** Sessionid */
+            sessionId: string;
+        };
+        /**
+         * BankRefreshResponse
+         * @description Result of a manual balance refresh.
+         */
+        BankRefreshResponse: {
+            /** Accounts Refreshed */
+            accounts_refreshed: number;
+            /**
+             * Error
+             * @default
+             */
+            error: string;
         };
         /**
          * BankRuleListResponse
@@ -4439,6 +5440,21 @@ export interface components {
             sign_filter: string;
             /** Target Kind */
             target_kind: string;
+        };
+        /**
+         * BankSyncTransactionsResponse
+         * @description Result of a manual transaction sync.
+         */
+        BankSyncTransactionsResponse: {
+            /**
+             * Error
+             * @default
+             */
+            error: string;
+            /** New Rows */
+            new_rows: number;
+            /** Total Seen */
+            total_seen: number;
         };
         /**
          * BankTransactionListResponse
@@ -4883,6 +5899,15 @@ export interface components {
              * @description Sum of federal_tax in USD.
              */
             tax: number;
+        };
+        /** CreateTicketRequest */
+        CreateTicketRequest: {
+            /** Body */
+            body: string;
+            /** Category */
+            category: string;
+            /** Subject */
+            subject: string;
         };
         /**
          * CreateTransferRequest
@@ -5447,7 +6472,10 @@ export interface components {
         LineItemCreateRequest: {
             /** Amount */
             amount: number;
-            /** At Time */
+            /**
+             * At Time
+             * @default
+             */
             at_time: string;
             /** Kind */
             kind: string;
@@ -5488,6 +6516,22 @@ export interface components {
             note: string;
             /** Return Check Id */
             return_check_id?: number | null;
+        };
+        /**
+         * LineItemUpdateRequest
+         * @description PATCH body for /daily/{store}/line-items/{item_id}.  All
+         *     fields optional — only the ones the SPA included get
+         *     written.  `kind` is NOT mutable post-creation (would change
+         *     which DailyReport field the row rolls up into, breaking the
+         *     derivation in surprising ways).
+         */
+        LineItemUpdateRequest: {
+            /** Amount */
+            amount?: number | null;
+            /** At Time */
+            at_time?: string | null;
+            /** Note */
+            note?: string | null;
         };
         /**
          * LoginCrossStoreRequest
@@ -5565,6 +6609,8 @@ export interface components {
              * @default []
              */
             permissions: string[];
+            /** Refresh Jti */
+            refresh_jti?: string | null;
             /**
              * Requires Totp
              * @default false
@@ -6064,6 +7110,11 @@ export interface components {
         NotificationsResponse: {
             /** Daily Summary Applies */
             daily_summary_applies: boolean;
+            /**
+             * High Variance Applies
+             * @default false
+             */
+            high_variance_applies: boolean;
             /** Locked Day Digest Applies */
             locked_day_digest_applies: boolean;
             /** Notify Announcement Email */
@@ -6074,16 +7125,41 @@ export interface components {
             notify_daily_summary: boolean;
             /** Notify Daily Summary Push */
             notify_daily_summary_push: boolean;
+            /**
+             * Notify High Variance
+             * @default false
+             */
+            notify_high_variance: boolean;
+            /**
+             * Notify High Variance Push
+             * @default false
+             */
+            notify_high_variance_push: boolean;
             /** Notify Locked Day Digest */
             notify_locked_day_digest: boolean;
             /** Notify Locked Day Digest Push */
             notify_locked_day_digest_push: boolean;
+            /**
+             * Notify Store Offline
+             * @default false
+             */
+            notify_store_offline: boolean;
+            /**
+             * Notify Store Offline Push
+             * @default false
+             */
+            notify_store_offline_push: boolean;
             /** Notify Trial Reminders */
             notify_trial_reminders: boolean;
             /** Notify Trial Reminders Push */
             notify_trial_reminders_push: boolean;
             /** Role */
             role: string;
+            /**
+             * Store Offline Applies
+             * @default false
+             */
+            store_offline_applies: boolean;
             /** Trial Toggle Applies */
             trial_toggle_applies: boolean;
         };
@@ -6101,10 +7177,18 @@ export interface components {
             notify_daily_summary?: boolean | null;
             /** Notify Daily Summary Push */
             notify_daily_summary_push?: boolean | null;
+            /** Notify High Variance */
+            notify_high_variance?: boolean | null;
+            /** Notify High Variance Push */
+            notify_high_variance_push?: boolean | null;
             /** Notify Locked Day Digest */
             notify_locked_day_digest?: boolean | null;
             /** Notify Locked Day Digest Push */
             notify_locked_day_digest_push?: boolean | null;
+            /** Notify Store Offline */
+            notify_store_offline?: boolean | null;
+            /** Notify Store Offline Push */
+            notify_store_offline_push?: boolean | null;
             /** Notify Trial Reminders */
             notify_trial_reminders?: boolean | null;
             /** Notify Trial Reminders Push */
@@ -6129,9 +7213,9 @@ export interface components {
             /**
              * Role
              * @default employee
-             * @enum {string}
+             * @constant
              */
-            role: "admin" | "employee";
+            role: "employee";
             /** Store Ids */
             store_ids: number[];
             /** Username */
@@ -7258,6 +8342,8 @@ export interface components {
         };
         /** StoreInfoResponse */
         StoreInfoResponse: {
+            /** Referral Code */
+            referral_code?: string | null;
             store: components["schemas"]["StoreInfoRow"];
         };
         /**
@@ -7276,6 +8362,16 @@ export interface components {
              * @default
              */
             address: string;
+            /**
+             * Business Address
+             * @default
+             */
+            business_address: string;
+            /**
+             * Ein
+             * @default
+             */
+            ein: string;
             /**
              * Email
              * @default
@@ -7298,6 +8394,11 @@ export interface components {
              * @default true
              */
             is_active: boolean;
+            /**
+             * Legal Name
+             * @default
+             */
+            legal_name: string;
             /** Name */
             name: string;
             /**
@@ -7989,6 +9090,52 @@ export interface components {
             /** Name */
             name?: string | null;
         };
+        /** TicketListResponse */
+        TicketListResponse: {
+            /** Tickets */
+            tickets: components["schemas"]["TicketRow"][];
+            /** Total */
+            total: number;
+        };
+        /** TicketResponse */
+        TicketResponse: {
+            ticket: components["schemas"]["TicketRow"];
+        };
+        /** TicketRow */
+        TicketRow: {
+            /** Admin Reply */
+            admin_reply: string | null;
+            /** Body */
+            body: string;
+            /** Category */
+            category: string;
+            /** Closed At */
+            closed_at: string | null;
+            /** Created At */
+            created_at: string;
+            /** Id */
+            id: number;
+            /** Priority */
+            priority: string | null;
+            /** Replied At */
+            replied_at: string | null;
+            /** Replied By */
+            replied_by: string | null;
+            /** Status */
+            status: string;
+            /** Store Id */
+            store_id: number;
+            /** Store Name */
+            store_name?: string | null;
+            /** Subject */
+            subject: string;
+            /** Submitted By */
+            submitted_by: string;
+            /** Updated At */
+            updated_at: string;
+            /** User Id */
+            user_id: number;
+        };
         /** TimeClockCredentialList */
         TimeClockCredentialList: {
             /** Rows */
@@ -8380,6 +9527,15 @@ export interface components {
             /** Grand Total */
             grand_total: number;
         };
+        /** UpdateTicketRequest */
+        UpdateTicketRequest: {
+            /** Admin Reply */
+            admin_reply?: string | null;
+            /** Priority */
+            priority?: string | null;
+            /** Status */
+            status?: string | null;
+        };
         /** ValidationError */
         ValidationError: {
             /** Context */
@@ -8666,6 +9822,47 @@ export interface operations {
             };
         };
     };
+    redeem_connect_code_route_admin_redeem_connect_code_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_admin_referrals_route_admin_referrals_get: {
         parameters: {
             query?: never;
@@ -8756,6 +9953,123 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StoreInfoResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_store_permissions_route_admin_store_permissions_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_store_permissions_route_admin_store_permissions_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reset_store_permissions_route_admin_store_permissions_reset_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             /** @description Validation Error */
@@ -9865,6 +11179,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AnnouncementResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_my_data_route_auth_account_export_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -11003,6 +12350,181 @@ export interface operations {
             };
         };
     };
+    set_account_nickname_route_bank_accounts__account_id__nickname_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                account_id: number;
+            };
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BankAccountNicknameRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BankAccountRow"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    connect_route_bank_connect_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BankConnectResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    connect_complete_route_bank_connect_complete_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BankConnectCompleteRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BankConnectCompleteResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    disconnect_account_route_bank_disconnect__account_id__post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                account_id: number;
+            };
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    refresh_balances_route_bank_refresh_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BankRefreshResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_rules_route_bank_rules_get: {
         parameters: {
             query?: {
@@ -11173,6 +12695,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BankRuleResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    sync_transactions_route_bank_sync_transactions_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BankSyncTransactionsResponse"];
                 };
             };
             /** @description Validation Error */
@@ -11597,9 +13152,13 @@ export interface operations {
                 /** @description Search text. <2 chars returns an empty envelope. */
                 q?: string;
             };
-            header?: never;
+            header?: {
+                authorization?: string | null;
+            };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -11629,9 +13188,13 @@ export interface operations {
                 /** @description Caller's current store. */
                 store_id: number;
             };
-            header?: never;
+            header?: {
+                authorization?: string | null;
+            };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody: {
             content: {
@@ -11665,11 +13228,15 @@ export interface operations {
                 /** @description Caller's current store. Lookup is scoped to the owner umbrella that contains this store. Customers in unrelated stores 404. */
                 store_id: number;
             };
-            header?: never;
+            header?: {
+                authorization?: string | null;
+            };
             path: {
                 customer_id: number;
             };
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -11701,11 +13268,15 @@ export interface operations {
                 /** @description Cap on the number of distinct recipients returned. */
                 limit?: number;
             };
-            header?: never;
+            header?: {
+                authorization?: string | null;
+            };
             path: {
                 customer_id: number;
             };
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -11802,17 +13373,61 @@ export interface operations {
             };
         };
     };
+    line_items_update_route_daily__store_id__line_items__item_id__patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                store_id: number;
+                item_id: number;
+            };
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LineItemUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LineItemRow"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     period_route_daily__store_id__period_get: {
         parameters: {
             query: {
                 from: string;
                 to: string;
             };
-            header?: never;
+            header?: {
+                authorization?: string | null;
+            };
             path: {
                 store_id: number;
             };
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -11839,12 +13454,16 @@ export interface operations {
     daily_route_daily__store_id___report_date__get: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                authorization?: string | null;
+            };
             path: {
                 store_id: number;
                 report_date: string;
             };
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -12512,6 +14131,28 @@ export interface operations {
             };
         };
     };
+    maintenance_status_maintenance_status_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
     months_route_monthly_months_get: {
         parameters: {
             query?: never;
@@ -12621,6 +14262,46 @@ export interface operations {
             };
         };
     };
+    owner_activity_route_owner_activity_get: {
+        parameters: {
+            query?: {
+                store_id?: number | null;
+                q?: string;
+                /** @description 1-based page number */
+                page?: number;
+                /** @description Rows per page (1 to 200) */
+                per_page?: number;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     owner_bulk_add_user_route_owner_bulk_add_user_post: {
         parameters: {
             query?: never;
@@ -12645,6 +14326,47 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OwnerBulkAddUserResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    owner_bulk_permissions_route_owner_bulk_permissions_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             /** @description Validation Error */
@@ -12974,6 +14696,129 @@ export interface operations {
             };
         };
     };
+    owner_store_permissions_route_owner_store__store_id__permissions_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                store_id: number;
+            };
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    owner_update_store_permissions_route_owner_store__store_id__permissions_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                store_id: number;
+            };
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    owner_reset_store_permissions_route_owner_store__store_id__permissions_reset_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                store_id: number;
+            };
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     owner_unlink_store_route_owner_unlink__store_id__post: {
         parameters: {
             query?: never;
@@ -12999,6 +14844,46 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    owner_users_route_owner_users_get: {
+        parameters: {
+            query?: {
+                store_id?: number | null;
+                q?: string;
+                /** @description 1-based page number */
+                page?: number;
+                /** @description Rows per page (1 to 200) */
+                per_page?: number;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
             };
             /** @description Validation Error */
             422: {
@@ -13054,9 +14939,13 @@ export interface operations {
                 /** @description Comma-separated store IDs, e.g. `1,2`. Single-tenant deployments will pass just one. Multi-store owners pass every store under their umbrella. */
                 store_ids: string;
             };
-            header?: never;
+            header?: {
+                authorization?: string | null;
+            };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -13090,9 +14979,13 @@ export interface operations {
                 /** @description Comma-separated store IDs, e.g. `1,2`. Single-tenant deployments will pass just one. Multi-store owners pass every store under their umbrella. */
                 store_ids: string;
             };
-            header?: never;
+            header?: {
+                authorization?: string | null;
+            };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -13126,9 +15019,13 @@ export interface operations {
                 /** @description Comma-separated store IDs, e.g. `1,2`. Single-tenant deployments will pass just one. Multi-store owners pass every store under their umbrella. */
                 store_ids: string;
             };
-            header?: never;
+            header?: {
+                authorization?: string | null;
+            };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -13162,9 +15059,13 @@ export interface operations {
                 /** @description Comma-separated store IDs, e.g. `1,2`. Single-tenant deployments will pass just one. Multi-store owners pass every store under their umbrella. */
                 store_ids: string;
             };
-            header?: never;
+            header?: {
+                authorization?: string | null;
+            };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -13198,9 +15099,13 @@ export interface operations {
                 /** @description Comma-separated store IDs, e.g. `1,2`. Single-tenant deployments will pass just one. Multi-store owners pass every store under their umbrella. */
                 store_ids: string;
             };
-            header?: never;
+            header?: {
+                authorization?: string | null;
+            };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -13234,9 +15139,13 @@ export interface operations {
                 /** @description Comma-separated store IDs, e.g. `1,2`. Single-tenant deployments will pass just one. Multi-store owners pass every store under their umbrella. */
                 store_ids: string;
             };
-            header?: never;
+            header?: {
+                authorization?: string | null;
+            };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -13270,9 +15179,13 @@ export interface operations {
                 /** @description Comma-separated store IDs, e.g. `1,2`. Single-tenant deployments will pass just one. Multi-store owners pass every store under their umbrella. */
                 store_ids: string;
             };
-            header?: never;
+            header?: {
+                authorization?: string | null;
+            };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -13306,9 +15219,13 @@ export interface operations {
                 /** @description Comma-separated store IDs, e.g. `1,2`. Single-tenant deployments will pass just one. Multi-store owners pass every store under their umbrella. */
                 store_ids: string;
             };
-            header?: never;
+            header?: {
+                authorization?: string | null;
+            };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -13342,9 +15259,13 @@ export interface operations {
                 /** @description Comma-separated store IDs, e.g. `1,2`. Single-tenant deployments will pass just one. Multi-store owners pass every store under their umbrella. */
                 store_ids: string;
             };
-            header?: never;
+            header?: {
+                authorization?: string | null;
+            };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -13378,9 +15299,13 @@ export interface operations {
                 /** @description Comma-separated store IDs, e.g. `1,2`. Single-tenant deployments will pass just one. Multi-store owners pass every store under their umbrella. */
                 store_ids: string;
             };
-            header?: never;
+            header?: {
+                authorization?: string | null;
+            };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -13414,9 +15339,13 @@ export interface operations {
                 /** @description Comma-separated store IDs, e.g. `1,2`. Single-tenant deployments will pass just one. Multi-store owners pass every store under their umbrella. */
                 store_ids: string;
             };
-            header?: never;
+            header?: {
+                authorization?: string | null;
+            };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -13451,9 +15380,13 @@ export interface operations {
                 /** @description Comma-separated store IDs, e.g. `1,2`. Single-tenant deployments will pass just one. Multi-store owners pass every store under their umbrella. */
                 store_ids: string;
             };
-            header?: never;
+            header?: {
+                authorization?: string | null;
+            };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -13487,9 +15420,13 @@ export interface operations {
                 /** @description Comma-separated store IDs, e.g. `1,2`. Single-tenant deployments will pass just one. Multi-store owners pass every store under their umbrella. */
                 store_ids: string;
             };
-            header?: never;
+            header?: {
+                authorization?: string | null;
+            };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -13525,9 +15462,13 @@ export interface operations {
                 /** @description Comma-separated store IDs, e.g. `1,2`. Single-tenant deployments will pass just one. Multi-store owners pass every store under their umbrella. */
                 store_ids: string;
             };
-            header?: never;
+            header?: {
+                authorization?: string | null;
+            };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -13561,9 +15502,13 @@ export interface operations {
                 /** @description Comma-separated store IDs, e.g. `1,2`. Single-tenant deployments will pass just one. Multi-store owners pass every store under their umbrella. */
                 store_ids: string;
             };
-            header?: never;
+            header?: {
+                authorization?: string | null;
+            };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -13597,9 +15542,13 @@ export interface operations {
                 /** @description Comma-separated store IDs, e.g. `1,2`. Single-tenant deployments will pass just one. Multi-store owners pass every store under their umbrella. */
                 store_ids: string;
             };
-            header?: never;
+            header?: {
+                authorization?: string | null;
+            };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -13633,9 +15582,13 @@ export interface operations {
                 /** @description Comma-separated store IDs, e.g. `1,2`. Single-tenant deployments will pass just one. Multi-store owners pass every store under their umbrella. */
                 store_ids: string;
             };
-            header?: never;
+            header?: {
+                authorization?: string | null;
+            };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -13669,9 +15622,13 @@ export interface operations {
                 /** @description Comma-separated store IDs, e.g. `1,2`. Single-tenant deployments will pass just one. Multi-store owners pass every store under their umbrella. */
                 store_ids: string;
             };
-            header?: never;
+            header?: {
+                authorization?: string | null;
+            };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -13705,9 +15662,13 @@ export interface operations {
                 /** @description Comma-separated store IDs, e.g. `1,2`. Single-tenant deployments will pass just one. Multi-store owners pass every store under their umbrella. */
                 store_ids: string;
             };
-            header?: never;
+            header?: {
+                authorization?: string | null;
+            };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -13744,9 +15705,13 @@ export interface operations {
                 /** @description Comma-separated store IDs, e.g. `1,2`. Single-tenant deployments will pass just one. Multi-store owners pass every store under their umbrella. */
                 store_ids: string;
             };
-            header?: never;
+            header?: {
+                authorization?: string | null;
+            };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -13781,9 +15746,13 @@ export interface operations {
                 /** @description Comma-separated store IDs, e.g. `1,2`. Single-tenant deployments will pass just one. Multi-store owners pass every store under their umbrella. */
                 store_ids: string;
             };
-            header?: never;
+            header?: {
+                authorization?: string | null;
+            };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -14282,6 +16251,117 @@ export interface operations {
             };
         };
     };
+    billing_overview_route_superadmin_billing_overview_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    bulk_action_route_superadmin_bulk_action_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    dashboard_route_superadmin_dashboard_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_discounts_route_superadmin_discounts_get: {
         parameters: {
             query?: never;
@@ -14341,6 +16421,235 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DiscountCodeResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    email_log_route_superadmin_email_log_get: {
+        parameters: {
+            query?: {
+                q?: string | null;
+                event_type?: string | null;
+                page?: number;
+                per_page?: number;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    impersonate_route_superadmin_impersonate__user_id__post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                user_id: number;
+            };
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_maintenance_route_superadmin_maintenance_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_maintenance_route_superadmin_maintenance_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_permissions_route_superadmin_permissions_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_permissions_route_superadmin_permissions_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             /** @description Validation Error */
@@ -14450,6 +16759,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    retention_dry_run_route_superadmin_retention_dry_run_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             /** @description Validation Error */
@@ -14594,6 +16938,775 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SuperadminStoreDetailResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clear_retention_route_superadmin_stores__store_id__clear_retention_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                store_id: number;
+            };
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    store_drill_route_superadmin_stores__store_id__drill_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                store_id: number;
+            };
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    email_store_route_superadmin_stores__store_id__email_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                store_id: number;
+            };
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    extend_trial_route_superadmin_stores__store_id__extend_trial_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                store_id: number;
+            };
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    superadmin_store_permissions_route_superadmin_stores__store_id__permissions_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                store_id: number;
+            };
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    superadmin_update_store_permissions_route_superadmin_stores__store_id__permissions_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                store_id: number;
+            };
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    superadmin_reset_store_permissions_route_superadmin_stores__store_id__permissions_reset_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                store_id: number;
+            };
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    toggle_store_active_route_superadmin_stores__store_id__toggle_active_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                store_id: number;
+            };
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    system_health_route_superadmin_system_health_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_users_route_superadmin_users_get: {
+        parameters: {
+            query?: {
+                q?: string | null;
+                role?: string | null;
+                store_id?: number | null;
+                page?: number;
+                per_page?: number;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    change_user_role_route_superadmin_users__user_id__change_role_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                user_id: number;
+            };
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    force_password_reset_route_superadmin_users__user_id__force_password_reset_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                user_id: number;
+            };
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reset_2fa_route_superadmin_users__user_id__reset_2fa_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                user_id: number;
+            };
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revoke_user_sessions_route_superadmin_users__user_id__revoke_sessions_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                user_id: number;
+            };
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    toggle_user_active_route_superadmin_users__user_id__toggle_active_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                user_id: number;
+            };
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_my_tickets_tickets_get: {
+        parameters: {
+            query?: {
+                status?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TicketListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_ticket_tickets_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateTicketRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TicketResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_all_tickets_tickets_all_get: {
+        parameters: {
+            query?: {
+                status?: string | null;
+                category?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TicketListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_ticket_tickets__ticket_id__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                ticket_id: number;
+            };
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TicketResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_ticket_tickets__ticket_id__put: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                ticket_id: number;
+            };
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateTicketRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TicketResponse"];
                 };
             };
             /** @description Validation Error */
@@ -14847,9 +17960,13 @@ export interface operations {
                 page?: number;
                 per_page?: number;
             };
-            header?: never;
+            header?: {
+                authorization?: string | null;
+            };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -14949,11 +18066,15 @@ export interface operations {
                 /** @description Caller's store scope, comma-separated. Cross-tenant lookups return 404 (never 403 — keeps tenancy boundaries opaque). */
                 store_ids: string;
             };
-            header?: never;
+            header?: {
+                authorization?: string | null;
+            };
             path: {
                 transfer_id: number;
             };
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -15055,11 +18176,15 @@ export interface operations {
                 /** @description Caller's store scope, comma-separated. Cross-tenant lookups 404. */
                 store_ids: string;
             };
-            header?: never;
+            header?: {
+                authorization?: string | null;
+            };
             path: {
                 transfer_id: number;
             };
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {

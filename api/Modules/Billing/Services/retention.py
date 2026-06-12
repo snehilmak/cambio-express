@@ -314,6 +314,84 @@ def _purge_store_owned_rows(db: Session, store_id: int) -> None:
         pass
 
 
+def retention_purge_dry_run(db: Session) -> dict[str, Any]:
+    """Preview what ``purge_expired_stores`` would delete on its next
+    run. Read-only — no mutations, no commit.
+
+    Walks the same `_expired_stores` filter the real purge uses, then
+    for each doomed store counts rows in every model the cascade
+    would touch (the user-scoped pre-walk targets + the
+    ``STORE_OWNED_MODELS`` registry). The TV display chain isn't
+    enumerated row-by-row — that walk is best characterised by the
+    ``TVDisplay`` row count, which is sufficient for "is anything
+    here?" preview purposes.
+
+    Useful as a sanity check before re-enabling the daily purge cron
+    after a retention-clock fix, and as a "would-die-today" report
+    the superadmin can pull any time.
+    """
+    from api.Modules.Announcements.Models import PushSubscription
+    from api.Modules.Auth.Models import (
+        LoginEvent, Passkey, PasswordResetToken, RecoveryCode, RefreshToken,
+    )
+    from api.Modules.Tenancy.Models import User
+    now = utc_now()
+    expired = _expired_stores(db, now)
+    stores_report: list[dict[str, Any]] = []
+    total_child_rows = 0
+
+    for s in expired:
+        row_counts: dict[str, int] = {}
+
+        # User-scoped child tables (cleared by _purge_user_scoped_rows
+        # before the User row itself is deleted).
+        user_ids = [
+            uid for (uid,) in
+            db.query(User.id).filter_by(store_id=s.id).all()
+        ]
+        if user_ids:
+            for user_model in (
+                RecoveryCode, PasswordResetToken, RefreshToken, Passkey,
+                LoginEvent, PushSubscription,
+            ):
+                user_n = (
+                    db.query(user_model)
+                      .filter(getattr(user_model, "user_id").in_(user_ids))
+                      .count()
+                )
+                if user_n > 0:
+                    row_counts[user_model.__name__] = user_n
+
+        # Generic store-keyed registry.
+        for store_model, fk in _store_owned_models():
+            store_n = (
+                db.query(store_model)
+                  .filter_by(**{fk: s.id})
+                  .count()
+            )
+            if store_n > 0:
+                row_counts[store_model.__name__] = store_n
+
+        store_total = sum(row_counts.values())
+        total_child_rows += store_total
+        stores_report.append({
+            "store_id":             s.id,
+            "name":                 s.name or "",
+            "slug":                 s.slug or "",
+            "canceled_at":          s.canceled_at.isoformat() if s.canceled_at else "",
+            "data_retention_until": s.data_retention_until.isoformat() if s.data_retention_until else "",
+            "row_count":            store_total,
+            "row_counts":           row_counts,
+        })
+
+    return {
+        "now":              now.isoformat(),
+        "store_count":      len(expired),
+        "total_child_rows": total_child_rows,
+        "stores":           stores_report,
+    }
+
+
 def purge_expired_stores(db: Session) -> int:
     """Hard-delete inactive stores whose retention window has
     elapsed. Returns the count purged.
