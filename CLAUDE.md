@@ -3,6 +3,10 @@
 > This file is read automatically by Claude Code at the start of every
 > session. Keep it short, accurate, and update it whenever an invariant
 > changes. The goal is **no quiet regressions** on the rules below.
+>
+> **New account / picking up in-flight work?** Read
+> [`HANDOFF.md`](HANDOFF.md) too — it holds the current roadmap, known
+> unfixed bugs, and pre-launch ops gates that don't live anywhere else.
 
 ## What this is
 A multi-tenant bookkeeping SaaS for money-service businesses (MSBs —
