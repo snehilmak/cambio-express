@@ -14,11 +14,10 @@ Severity scale:
   "medium" — something has changed; worth asking the operator about
   "low"    — informational; user-facing copy: "FYI"
 
-The detector is intentionally narrow today — quiet stores and big
-over/short variances. New rules go here as `_anomaly_*` helpers
-called from `compute_platform_anomalies` in priority order.
+New rules go here as `_anomaly_*` helpers called from
+`compute_platform_anomalies` in priority order.
 """
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -35,6 +34,20 @@ ANOMALY_QUIET_MIN_PRIOR_TRANSFERS  = 5    # ignore tiny stores so we don't yell 
 ANOMALY_OVERSHORT_LOOKBACK_DAYS    = 7
 ANOMALY_OVERSHORT_MEDIUM_THRESHOLD = 100.0   # |over_short| >= this = medium
 ANOMALY_OVERSHORT_HIGH_THRESHOLD   = 200.0   # |over_short| >= this = high
+
+# ── Cancellation-spike rule ────────────────────────────────
+# When the platform sees an unusual burst of paid-store
+# cancellations in a short window we surface every store in
+# the burst so the operator can reach out individually.
+ANOMALY_CANCELLATION_LOOKBACK_HOURS = 24
+ANOMALY_CANCELLATION_SPIKE_THRESHOLD = 3
+
+# ── Password-reset-spike rule ──────────────────────────────
+# Per-user: more than N reset requests in the lookback window
+# is either credential stuffing or a confused operator clicking
+# repeatedly — either way it surfaces.
+ANOMALY_PASSWORD_RESET_LOOKBACK_HOURS = 24
+ANOMALY_PASSWORD_RESET_PER_USER_THRESHOLD = 5
 
 # Cap the result list so the overview card stays scannable.
 _MAX_ANOMALIES_RETURNED = 25
@@ -153,6 +166,112 @@ def big_over_short_anomalies(db: Session, today: date) -> list[dict]:
     return out
 
 
+def cancellation_spike_anomalies(
+    db: Session, now: datetime,
+) -> list[dict]:
+    """Stores cancelled in the last ``ANOMALY_CANCELLATION_LOOKBACK_HOURS``
+    window — surfaced together when the platform count crosses the
+    spike threshold.
+
+    Three cancellations in a single day is unusual for a small SaaS
+    and warrants a personal reach-out per store. Below threshold
+    this rule is silent (single cancellations are normal noise).
+    Returns one anomaly row per store in the burst so each name
+    shows up in the operator's feed.
+    """
+    cutoff = now - timedelta(hours=ANOMALY_CANCELLATION_LOOKBACK_HOURS)
+    recent = (
+        db.query(Store)
+          .filter(Store.canceled_at.isnot(None))
+          .filter(Store.canceled_at >= cutoff)
+          .order_by(Store.canceled_at.desc())
+          .limit(50)
+          .all()
+    )
+    total = len(recent)
+    if total < ANOMALY_CANCELLATION_SPIKE_THRESHOLD:
+        return []
+    out: list[dict] = []
+    for s in recent:
+        when = s.canceled_at.strftime("%b %d %H:%M UTC")
+        out.append({
+            "kind":        "cancellation_spike",
+            "severity":    "high",
+            "store":       s,
+            "description": (
+                f"Cancelled {when} — platform saw {total} "
+                f"cancellations in the last "
+                f"{ANOMALY_CANCELLATION_LOOKBACK_HOURS}h."
+            ),
+            "href":        _store_href(s),
+        })
+    return out
+
+
+def password_reset_spike_anomalies(
+    db: Session, now: datetime,
+) -> list[dict]:
+    """Users with an unusually large number of password-reset
+    requests in the lookback window.
+
+    Could be credential stuffing, an account-takeover attempt, a
+    failing-email-deliverability issue, or a confused operator. The
+    superadmin should see the username so they can investigate.
+    Returns one anomaly row per affected user, attached to that
+    user's store so the standard impersonation / drill links work.
+    """
+    from api.Modules.Auth.Models import PasswordResetToken
+    from api.Modules.Tenancy.Models import User
+
+    cutoff = now - timedelta(hours=ANOMALY_PASSWORD_RESET_LOOKBACK_HOURS)
+    rows = (
+        db.query(
+            PasswordResetToken.user_id,
+            func.count(PasswordResetToken.id),
+        )
+        .filter(PasswordResetToken.created_at >= cutoff)
+        .group_by(PasswordResetToken.user_id)
+        .having(
+            func.count(PasswordResetToken.id)
+            >= ANOMALY_PASSWORD_RESET_PER_USER_THRESHOLD
+        )
+        .all()
+    )
+    if not rows:
+        return []
+    user_ids = [r[0] for r in rows]
+    users = {
+        u.id: u for u in
+        db.query(User).filter(User.id.in_(user_ids)).all()
+    }
+    store_ids = [u.store_id for u in users.values() if u.store_id]
+    stores = (
+        {
+            s.id: s for s in
+            db.query(Store).filter(Store.id.in_(store_ids)).all()
+        }
+        if store_ids else {}
+    )
+    out: list[dict] = []
+    for uid, count in rows:
+        user = users.get(uid)
+        if user is None:
+            continue
+        store = stores.get(user.store_id) if user.store_id else None
+        out.append({
+            "kind":        "password_reset_spike",
+            "severity":    "medium",
+            "store":       store,
+            "description": (
+                f"User {user.username} requested {count} password "
+                f"resets in the last "
+                f"{ANOMALY_PASSWORD_RESET_LOOKBACK_HOURS}h."
+            ),
+            "href":        _store_href(store),
+        })
+    return out
+
+
 def compute_platform_anomalies(db: Session) -> list[dict]:
     """Aggregate every anomaly rule into a single ranked list.
 
@@ -163,9 +282,12 @@ def compute_platform_anomalies(db: Session) -> list[dict]:
     itself.
     """
     today = date.today()
+    now = datetime.utcnow()
     anomalies: list[dict] = []
+    anomalies.extend(cancellation_spike_anomalies(db, now))
     anomalies.extend(big_over_short_anomalies(db, today))
     anomalies.extend(quiet_store_anomalies(db, today))
+    anomalies.extend(password_reset_spike_anomalies(db, now))
     severity_rank = {"high": 0, "medium": 1, "low": 2}
     anomalies.sort(key=lambda a: severity_rank.get(a["severity"], 99))
     return anomalies[:_MAX_ANOMALIES_RETURNED]

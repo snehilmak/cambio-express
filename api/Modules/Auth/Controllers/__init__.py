@@ -449,6 +449,7 @@ def store_by_slug_route(
 
 
 @router.post("/login-cross-store", response_model=LoginResponse)
+@_rate_limiter.limit("10/minute;50/hour")
 def login_cross_store_route(
     request: Request,
     body: LoginCrossStoreRequest,
@@ -476,6 +477,7 @@ def login_cross_store_route(
 
 
 @router.post("/login/totp", response_model=LoginResponse)
+@_rate_limiter.limit("10/minute;50/hour")
 def login_totp_route(
     request: Request,
     body: TotpLoginRequest,
@@ -499,6 +501,7 @@ def login_totp_route(
 
 
 @router.post("/login/recovery", response_model=LoginResponse)
+@_rate_limiter.limit("10/minute;50/hour")
 def login_recovery_route(
     request: Request,
     body: RecoveryLoginRequest,

@@ -343,6 +343,13 @@ export async function forcePasswordReset(userId: number) {
   );
 }
 
+export async function revokeUserSessions(userId: number) {
+  return api<{ ok: boolean; revoked_count: number }>(
+    `/api/v2/superadmin/users/${userId}/revoke-sessions`,
+    { method: "POST" },
+  );
+}
+
 export async function impersonateUser(userId: number) {
   return api<{
     token: string;
@@ -357,6 +364,37 @@ export async function extendTrial(storeId: number, days: number = 14) {
   return api<{ ok: boolean; trial_ends_at: string }>(
     `/api/v2/superadmin/stores/${storeId}/extend-trial`,
     { method: "POST", json: { days } },
+  );
+}
+
+export interface RetentionDryRunStoreRow {
+  store_id: number;
+  name: string;
+  slug: string;
+  canceled_at: string;
+  data_retention_until: string;
+  row_count: number;
+  row_counts: Record<string, number>;
+}
+
+export interface RetentionDryRunResponse {
+  now: string;
+  store_count: number;
+  total_child_rows: number;
+  stores: RetentionDryRunStoreRow[];
+}
+
+export async function retentionDryRun() {
+  return api<RetentionDryRunResponse>(
+    `/api/v2/superadmin/retention-dry-run`,
+    { method: "GET" },
+  );
+}
+
+export async function clearStoreRetention(storeId: number) {
+  return api<{ ok: boolean; already_clear?: boolean }>(
+    `/api/v2/superadmin/stores/${storeId}/clear-retention`,
+    { method: "POST" },
   );
 }
 

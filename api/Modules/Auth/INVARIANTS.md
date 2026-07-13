@@ -238,9 +238,12 @@ codes, the email-based reset is deliberately disabled (see
 "Password reset" below). Recovery is the Render shell command:
 
 ```bash
-flask reset-superadmin                 # password only
-flask reset-superadmin --reset-2fa     # password + wipe TOTP
+python -m scripts.reset_superadmin                 # password only
+python -m scripts.reset_superadmin --reset-2fa     # password + wipe TOTP
 ```
+
+(The legacy `flask reset-superadmin` CLI was removed with Flask in
+PR #550 — `scripts/reset_superadmin.py` is the standalone replacement.)
 
 The `--reset-2fa` flag clears `totp_secret` + `totp_enrolled_at`
 so the next login goes through enrollment again.
@@ -340,8 +343,8 @@ because the rpId silently switched.
   consumption).
 - **Superadmin is deliberately excluded.** An attacker who
   compromises the superadmin mailbox would bypass 2FA via the
-  email reset. Recovery goes through `flask reset-superadmin`
-  on the Render shell instead.
+  email reset. Recovery goes through
+  `python -m scripts.reset_superadmin` on the Render shell instead.
 
 
 ## Rate limiting

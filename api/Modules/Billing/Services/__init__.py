@@ -42,6 +42,7 @@ from api.Modules.Billing.Services.retention import (
     STORE_FK_OVERRIDES,
     STORE_OWNED_MODELS,
     purge_expired_stores,
+    retention_purge_dry_run,
 )
 from api.Modules.Billing.Services.store_state import (
     data_retention_days_left,
@@ -89,6 +90,7 @@ __all__ = [
     "new_referral_code",
     "purge_expired_stores",
     "resolve_price_ids",
+    "retention_purge_dry_run",
     "store_addon_keys",
     "store_feature_enabled",
     "store_has_addon",

@@ -1,13 +1,19 @@
 """Superadmin — Services."""
 from api.Modules.Superadmin.Services.anomalies import (
+    ANOMALY_CANCELLATION_LOOKBACK_HOURS,
+    ANOMALY_CANCELLATION_SPIKE_THRESHOLD,
     ANOMALY_OVERSHORT_HIGH_THRESHOLD,
     ANOMALY_OVERSHORT_LOOKBACK_DAYS,
     ANOMALY_OVERSHORT_MEDIUM_THRESHOLD,
+    ANOMALY_PASSWORD_RESET_LOOKBACK_HOURS,
+    ANOMALY_PASSWORD_RESET_PER_USER_THRESHOLD,
     ANOMALY_QUIET_LOOKBACK_ACTIVE_DAYS,
     ANOMALY_QUIET_LOOKBACK_QUIET_DAYS,
     ANOMALY_QUIET_MIN_PRIOR_TRANSFERS,
     big_over_short_anomalies,
+    cancellation_spike_anomalies,
     compute_platform_anomalies,
+    password_reset_spike_anomalies,
     quiet_store_anomalies,
 )
 from api.Modules.Superadmin.Services.dashboard import (
@@ -39,9 +45,13 @@ from api.Modules.Superadmin.Services.reports import (
 )
 
 __all__ = [
+    "ANOMALY_CANCELLATION_LOOKBACK_HOURS",
+    "ANOMALY_CANCELLATION_SPIKE_THRESHOLD",
     "ANOMALY_OVERSHORT_HIGH_THRESHOLD",
     "ANOMALY_OVERSHORT_LOOKBACK_DAYS",
     "ANOMALY_OVERSHORT_MEDIUM_THRESHOLD",
+    "ANOMALY_PASSWORD_RESET_LOOKBACK_HOURS",
+    "ANOMALY_PASSWORD_RESET_PER_USER_THRESHOLD",
     "ANOMALY_QUIET_LOOKBACK_ACTIVE_DAYS",
     "ANOMALY_QUIET_LOOKBACK_QUIET_DAYS",
     "ANOMALY_QUIET_MIN_PRIOR_TRANSFERS",
@@ -49,6 +59,7 @@ __all__ = [
     "active_stores_by_plan",
     "bank_sync_adoption",
     "big_over_short_anomalies",
+    "cancellation_spike_anomalies",
     "churn_cohort",
     "compute_mrr",
     "compute_platform_anomalies",
@@ -59,6 +70,7 @@ __all__ = [
     "mrr_arr",
     "owner_adoption",
     "passkey_adoption",
+    "password_reset_spike_anomalies",
     "password_resets",
     "payouts",
     "quiet_store_anomalies",

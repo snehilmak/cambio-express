@@ -40,5 +40,35 @@
 }
 
 .badge {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  justify-content: flex-end;
   text-align: right;
+}
+
+.dryRunIntro {
+  margin: 0 0 0.75rem;
+  font-size: 0.85rem;
+  color: var(--db-text-muted, #888);
+}
+
+.dryRunActions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.dryRunSummary {
+  font-size: 0.85rem;
+  color: var(--db-text, inherit);
+}
+
+.dryRunList {
+  margin-top: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
 }

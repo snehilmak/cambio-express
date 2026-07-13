@@ -10,11 +10,18 @@ unattended sweeps. If something in `CLAUDE.md` contradicts this file,
 
 1. **DB API.** Use `db.session.get(Model, id)`. Never `Model.query.get(id)`.
 2. **No column drops.** Never delete a column or table from a running
-   DB. Adding a column means appending to `_ADDED_COLUMNS` at the bottom
-   of `app.py` (idempotent on every boot).
-3. **Per-store models go in `_STORE_OWNED_MODELS`.** If you add a new
-   `db.Model` that has a `store_id` foreign key, it MUST be added to
-   `_STORE_OWNED_MODELS` so retention purge cascades correctly.
+   DB. Schema changes are Alembic revisions
+   (`alembic revision --autogenerate -m "..."`) — `_ADDED_COLUMNS`
+   and `app.py` no longer exist (Flask + the boot-time column patcher
+   were removed in PR #550).
+3. **Per-store models go in `STORE_OWNED_MODELS`.** If you add a new
+   model that has a `store_id` foreign key, it MUST be added to
+   `STORE_OWNED_MODELS` in
+   `api/Modules/Billing/Services/retention.py` (both the name list
+   and the `_store_owned_models()` resolver) so retention purge
+   cascades correctly. Anything that FKs to a per-store row but
+   isn't itself store-keyed (e.g. user-scoped auth rows) goes in the
+   explicit pre-walk in `_purge_user_scoped_rows`.
 4. **Superadmin mutations call `record_audit()`.** Any route under
    `/superadmin/*` that mutates state must record an audit entry.
 5. **Stripe checkout keeps `allow_promotion_codes=True`.** Discount

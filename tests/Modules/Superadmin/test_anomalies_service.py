@@ -296,8 +296,208 @@ def test_compute_ranks_high_before_medium():
         assert severities.index("high") < severities.index("medium")
 
 
-# ── legacy Flask wrapper ───────────────────────────────────
+# ── cancellation-spike rule ────────────────────────────────
 
 
+def _set_canceled(store, when):
+    """Stamp a cancellation timestamp on `store`. Mirrors what
+    the Stripe webhook handler does, but skips the audit + plan
+    flip so tests stay tight on the anomaly rule."""
+    store.canceled_at = when
 
 
+def test_cancellation_spike_silent_below_threshold():
+    """One or two cancellations in 24h is normal noise — the rule
+    must stay silent below ANOMALY_CANCELLATION_SPIKE_THRESHOLD."""
+    from datetime import datetime
+    from tests._app import db
+    from api.Modules.Superadmin.Services import (
+        ANOMALY_CANCELLATION_SPIKE_THRESHOLD,
+        cancellation_spike_anomalies,
+    )
+    with db_session():
+        # Wipe any prior cancels so the test is hermetic.
+        db.session.query(Store).filter(
+            Store.canceled_at.isnot(None),
+        ).update({"canceled_at": None}, synchronize_session=False)
+        db.session.commit()
+        now = datetime.utcnow()
+        # ONE less than the threshold.
+        for i in range(ANOMALY_CANCELLATION_SPIKE_THRESHOLD - 1):
+            s = _add_store(db.session, slug=f"sub-{i}")
+            _set_canceled(s, now - timedelta(hours=2))
+        db.session.commit()
+        assert cancellation_spike_anomalies(db.session, now) == []
+
+
+def test_cancellation_spike_returns_row_per_store_at_threshold():
+    """At-or-above threshold → one anomaly row per cancelled
+    store, all marked high severity."""
+    from datetime import datetime
+    from tests._app import db
+    from api.Modules.Superadmin.Services import (
+        ANOMALY_CANCELLATION_SPIKE_THRESHOLD,
+        cancellation_spike_anomalies,
+    )
+    with db_session():
+        db.session.query(Store).filter(
+            Store.canceled_at.isnot(None),
+        ).update({"canceled_at": None}, synchronize_session=False)
+        db.session.commit()
+        now = datetime.utcnow()
+        slugs = [
+            f"burst-{i}"
+            for i in range(ANOMALY_CANCELLATION_SPIKE_THRESHOLD)
+        ]
+        for slug in slugs:
+            s = _add_store(db.session, slug=slug)
+            _set_canceled(s, now - timedelta(hours=3))
+        db.session.commit()
+        rows = cancellation_spike_anomalies(db.session, now)
+        assert len(rows) == ANOMALY_CANCELLATION_SPIKE_THRESHOLD
+        assert all(r["kind"] == "cancellation_spike" for r in rows)
+        assert all(r["severity"] == "high" for r in rows)
+        result_slugs = {r["store"].slug for r in rows}
+        assert result_slugs == set(slugs)
+
+
+def test_cancellation_spike_ignores_old_cancels():
+    """A cancellation from 48h ago is outside the 24h window —
+    must NOT count toward the spike threshold."""
+    from datetime import datetime
+    from tests._app import db
+    from api.Modules.Superadmin.Services import (
+        ANOMALY_CANCELLATION_LOOKBACK_HOURS,
+        ANOMALY_CANCELLATION_SPIKE_THRESHOLD,
+        cancellation_spike_anomalies,
+    )
+    with db_session():
+        db.session.query(Store).filter(
+            Store.canceled_at.isnot(None),
+        ).update({"canceled_at": None}, synchronize_session=False)
+        db.session.commit()
+        now = datetime.utcnow()
+        # Stale cancels — beyond the lookback window.
+        for i in range(ANOMALY_CANCELLATION_SPIKE_THRESHOLD + 2):
+            s = _add_store(db.session, slug=f"old-{i}")
+            _set_canceled(
+                s,
+                now - timedelta(
+                    hours=ANOMALY_CANCELLATION_LOOKBACK_HOURS + 2,
+                ),
+            )
+        db.session.commit()
+        assert cancellation_spike_anomalies(db.session, now) == []
+
+
+# ── password-reset-spike rule ──────────────────────────────
+
+
+def _make_user_with_resets(db, *, store_id, username, count, since):
+    """Create a User + N PasswordResetToken rows stamped `since`."""
+    from api.Modules.Auth.Models import PasswordResetToken
+    from api.Modules.Tenancy.Models import User
+    u = User(
+        username=username, password_hash="x", role="admin",
+        full_name="x", email=username, store_id=store_id,
+    )
+    db.add(u)
+    db.flush()
+    for i in range(count):
+        db.add(PasswordResetToken(
+            user_id=u.id,
+            token_hash=f"hash-{username}-{i}",
+            expires_at=since + timedelta(hours=1),
+            created_at=since,
+        ))
+    return u
+
+
+def test_password_reset_spike_silent_below_threshold():
+    """Less than the per-user threshold → silent."""
+    from datetime import datetime
+    from tests._app import db
+    from api.Modules.Auth.Models import PasswordResetToken
+    from api.Modules.Superadmin.Services import (
+        ANOMALY_PASSWORD_RESET_PER_USER_THRESHOLD,
+        password_reset_spike_anomalies,
+    )
+    with db_session():
+        db.session.query(PasswordResetToken).delete()
+        db.session.commit()
+        s = _add_store(db.session, slug="prs-low")
+        now = datetime.utcnow()
+        _make_user_with_resets(
+            db.session, store_id=s.id, username="quiet@test.com",
+            count=ANOMALY_PASSWORD_RESET_PER_USER_THRESHOLD - 1,
+            since=now - timedelta(hours=1),
+        )
+        db.session.commit()
+        assert password_reset_spike_anomalies(db.session, now) == []
+
+
+def test_password_reset_spike_returns_row_per_burst_user():
+    """At-or-above threshold for a user → one medium-severity
+    anomaly row attached to that user's store."""
+    from datetime import datetime
+    from tests._app import db
+    from api.Modules.Auth.Models import PasswordResetToken
+    from api.Modules.Superadmin.Services import (
+        ANOMALY_PASSWORD_RESET_PER_USER_THRESHOLD,
+        password_reset_spike_anomalies,
+    )
+    with db_session():
+        db.session.query(PasswordResetToken).delete()
+        db.session.commit()
+        s = _add_store(db.session, slug="prs-burst")
+        now = datetime.utcnow()
+        target = _make_user_with_resets(
+            db.session, store_id=s.id, username="suspect@test.com",
+            count=ANOMALY_PASSWORD_RESET_PER_USER_THRESHOLD,
+            since=now - timedelta(hours=1),
+        )
+        # An unrelated user well under threshold — must not
+        # produce a row.
+        _make_user_with_resets(
+            db.session, store_id=s.id, username="normal@test.com",
+            count=1, since=now - timedelta(hours=1),
+        )
+        db.session.commit()
+        rows = password_reset_spike_anomalies(db.session, now)
+        assert len(rows) == 1
+        row = rows[0]
+        assert row["kind"] == "password_reset_spike"
+        assert row["severity"] == "medium"
+        assert row["store"].id == s.id
+        assert "suspect@test.com" in row["description"]
+        # The under-threshold user's email is NOT in any row.
+        assert all("normal@test.com" not in r["description"] for r in rows)
+        # Sanity: the burst user is the target we made.
+        assert target.id is not None
+
+
+def test_password_reset_spike_ignores_old_tokens():
+    """Tokens stamped > lookback window ago don't count, even if
+    the user has many of them."""
+    from datetime import datetime
+    from tests._app import db
+    from api.Modules.Auth.Models import PasswordResetToken
+    from api.Modules.Superadmin.Services import (
+        ANOMALY_PASSWORD_RESET_LOOKBACK_HOURS,
+        ANOMALY_PASSWORD_RESET_PER_USER_THRESHOLD,
+        password_reset_spike_anomalies,
+    )
+    with db_session():
+        db.session.query(PasswordResetToken).delete()
+        db.session.commit()
+        s = _add_store(db.session, slug="prs-stale")
+        now = datetime.utcnow()
+        _make_user_with_resets(
+            db.session, store_id=s.id, username="stale@test.com",
+            count=ANOMALY_PASSWORD_RESET_PER_USER_THRESHOLD + 5,
+            since=now - timedelta(
+                hours=ANOMALY_PASSWORD_RESET_LOOKBACK_HOURS + 2,
+            ),
+        )
+        db.session.commit()
+        assert password_reset_spike_anomalies(db.session, now) == []

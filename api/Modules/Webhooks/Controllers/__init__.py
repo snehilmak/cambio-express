@@ -27,12 +27,20 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 from api.Core.Database import get_db
+from api.Core.RateLimit import limiter as _rate_limiter
 
 
 router = APIRouter()
 
 
+# Signature verification (Stripe-Signature / Svix) is the real auth
+# defense here, but without a flood ceiling an attacker can spray
+# invalid-signature requests, each of which still writes a
+# WebhookEvent / EmailEvent row and burns a DB connection. 120/min
+# per IP (BACKLOG D6) sits well above Stripe's + Resend's real
+# delivery + retry cadence so legitimate traffic never trips it.
 @router.post("/resend")
+@_rate_limiter.limit("120/minute")
 async def resend_webhook(request: Request, db: Session = Depends(get_db)):
     """Resend delivery-event receiver — svix-signature verified.
 
@@ -100,6 +108,7 @@ async def resend_webhook(request: Request, db: Session = Depends(get_db)):
 
 
 @router.post("/stripe")
+@_rate_limiter.limit("120/minute")
 async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
     """Stripe webhook receiver — signature verified.
 

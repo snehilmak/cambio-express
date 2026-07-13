@@ -336,9 +336,10 @@ a monthly P&L edit needs the monthly ones.
     "Check your email" regardless of whether the account exists.
     **Superadmin is deliberately excluded** from the email flow — an
     attacker who compromises the superadmin mailbox would bypass 2FA.
-    Superadmin recovery goes through `flask reset-superadmin` on the
-    Render shell (optionally `--reset-2fa` to also wipe TOTP if the
-    recovery codes are lost).
+    Superadmin recovery goes through `python -m scripts.reset_superadmin`
+    on the Render shell (optionally `--reset-2fa` to also wipe TOTP if
+    the recovery codes are lost). The legacy `flask reset-superadmin`
+    CLI is gone — Flask was removed in PR #550.
 11. **`db.session.get(Model, id)`** — never `Model.query.get(id)` (legacy
     SQLAlchemy 2.0 API, emits deprecation warnings).
 12. **Referrals** — `ReferralCode` is one-per-store, minted lazily by
@@ -361,14 +362,19 @@ a monthly P&L edit needs the monthly ones.
       promotes `pending_auth_user_id` → real `user_id`. **Never set
       `session["user_id"]` directly from the password-login path for
       a role that `_needs_totp` returns True for.**
-    - **Passkey carve-out:** `/login/passkey/finish` sets
-      `session["user_id"]` directly *after* successfully verifying a
-      WebAuthn assertion, even when `_needs_totp(user)` is True. A
-      passkey is phishing-resistant MFA by construction (device-bound,
-      user-presence-proven, RP-ID-bound) — stacking TOTP on top adds
-      friction without adding security. The invariant is: full-auth
-      promotion requires either a TOTP factor OR a verified passkey
-      assertion; no other code path may set `user_id` directly.
+    - **Passkey carve-out (FORWARD INVARIANT — not yet implemented).**
+      Passkey *registration* exists today, but a passkey-*login* flow
+      does NOT — see `api/Modules/Auth/INVARIANTS.md` for the
+      authoritative status. When it lands, `/login/passkey/finish`
+      may set `session["user_id"]` directly *after* successfully
+      verifying a WebAuthn assertion, even when `_needs_totp(user)` is
+      True: a passkey is phishing-resistant MFA by construction
+      (device-bound, user-presence-proven, RP-ID-bound), so stacking
+      TOTP on top adds friction without adding security. The rule the
+      future flow must honor: full-auth promotion requires either a
+      TOTP factor OR a verified passkey assertion; no other code path
+      may set `user_id` directly. Until that flow ships, the ONLY
+      direct-promotion path is `_finalize_2fa_login`.
     - Recovery codes: 10 per user, sha256-hashed, single-use
       (`RecoveryCode.used_at`). Shown in plaintext exactly once on the
       post-enrollment recovery-codes page.

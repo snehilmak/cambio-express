@@ -282,8 +282,8 @@ export const HELP_REGISTRY: readonly HelpEntry[] = [
       + "and enter the email on your account. You'll get a one-"
       + "time link valid for an hour. Superadmin accounts can't "
       + "reset by email — that's a deliberate security choice; "
-      + "use the Render CLI <code>flask reset-superadmin</code> "
-      + "instead.</p>",
+      + "run <code>python -m scripts.reset_superadmin</code> on the "
+      + "Render shell instead.</p>",
   },
   {
     title: "What's the dashboard?",

@@ -29,8 +29,20 @@ def test_store_owned_models_includes_core_per_store_tables():
         "ReferralCode", "ReferralRedemption",
         "TVDisplay", "User",
         "StoreEmployee", "StoreOwnerLink",
+        # TimeClockShift FKs to StoreEmployee — if it's missing here
+        # the StoreEmployee delete raises a FK violation on Postgres.
+        "TimeClockEntry", "TimeClockShift",
     }
     assert expected_min.issubset(set(STORE_OWNED_MODELS))
+
+
+def test_time_clock_shift_purges_before_store_employee():
+    """TimeClockShift must appear before StoreEmployee in the purge
+    order — it carries a NOT-NULL FK to store_employee.id, so on
+    Postgres deleting the roster row first would violate it."""
+    from api.Modules.Billing.Services import STORE_OWNED_MODELS
+    order = STORE_OWNED_MODELS
+    assert order.index("TimeClockShift") < order.index("StoreEmployee")
 
 
 def test_fk_overrides_match_referral_models():
@@ -146,6 +158,83 @@ def test_purge_skips_active_paid_stores():
         # Doesn't count this store — plan is "basic" not "inactive".
         assert result == 0
         assert db.session.query(Store).filter_by(id=sid).first() is not None
+
+
+def test_purge_sweeps_user_scoped_child_tables():
+    """Regression for the Postgres FK-violation cluster: every table
+    that carries a NOT-NULL FK to ``user.id`` must be wiped before
+    the User row is deleted, or the purge transaction aborts on
+    Postgres and the store is never purged.
+
+    SQLite (the test DB) is FK-permissive so it wouldn't raise — so
+    we assert the stronger property the fix guarantees: after the
+    purge, none of those child rows survive as orphans."""
+    from datetime import date, time
+    from tests._app import db
+    from api.Modules.Billing.Services import purge_expired_stores
+    from api.Modules.Announcements.Models import PushSubscription
+    from api.Modules.Auth.Models import (
+        LoginEvent, Passkey, PasswordResetToken, RecoveryCode, RefreshToken,
+    )
+    from api.Modules.Tenancy.Models import StoreEmployee
+    from api.Modules.TimeClock.Models import TimeClockShift
+
+    with db_session():
+        s = Store(
+            name="FK-Cluster", slug="fk-cluster",
+            plan="inactive", email="fk-cluster@test.com",
+            data_retention_until=datetime.utcnow() - timedelta(days=1),
+        )
+        db.session.add(s); db.session.flush()
+        u = User(
+            username="fk-admin@test.com", password_hash="x", role="admin",
+            full_name="x", email="fk-admin@test.com", store_id=s.id,
+        )
+        db.session.add(u); db.session.flush()
+        emp = StoreEmployee(store_id=s.id, name="Cashier")
+        db.session.add(emp); db.session.flush()
+
+        # One row in every NOT-NULL user-scoped child table.
+        db.session.add(RecoveryCode(user_id=u.id, code_hash="h"))
+        db.session.add(PasswordResetToken(
+            user_id=u.id, token_hash="t",
+            expires_at=datetime.utcnow() + timedelta(hours=1),
+        ))
+        db.session.add(RefreshToken(
+            jti="j", user_id=u.id,
+            expires_at=datetime.utcnow() + timedelta(days=14),
+        ))
+        db.session.add(Passkey(
+            user_id=u.id, credential_id=b"cred", public_key=b"key",
+        ))
+        db.session.add(LoginEvent(user_id=u.id))
+        db.session.add(PushSubscription(
+            user_id=u.id, endpoint="https://push/x", p256dh="p", auth="a",
+        ))
+        # TimeClockShift FKs to StoreEmployee, not User — same class of
+        # FK-block on the StoreEmployee delete.
+        db.session.add(TimeClockShift(
+            store_id=s.id, store_employee_id=emp.id,
+            shift_date=date.today(), start_time=time(9, 0),
+            end_time=time(17, 0),
+        ))
+        db.session.commit()
+        uid, sid = u.id, s.id
+
+        assert purge_expired_stores(db.session) == 1
+        assert db.session.query(Store).filter_by(id=sid).first() is None
+        # None of the child rows may survive as orphans.
+        for model in (
+            RecoveryCode, PasswordResetToken, RefreshToken, Passkey,
+            LoginEvent, PushSubscription,
+        ):
+            assert (
+                db.session.query(model).filter_by(user_id=uid).count() == 0
+            ), f"{model.__name__} not swept on purge"
+        assert (
+            db.session.query(TimeClockShift).filter_by(store_id=sid).count()
+            == 0
+        )
 
 
 # ── legacy Flask wrapper + CLI ─────────────────────────────

@@ -76,18 +76,43 @@ def test_apply_cancellation_respects_custom_retention():
     assert delta == timedelta(days=90)
 
 
-def test_apply_cancellation_idempotent_re_stamps_timestamps():
-    """Re-applying overwrites canceled_at + data_retention_until
-    with fresh timestamps. Important for flapping subscriptions
-    so a stale (already-elapsed) retention timer can't survive."""
+def test_apply_cancellation_does_not_restamp_on_redelivery():
+    """A duplicate `customer.subscription.deleted` (Stripe retries
+    aggressively) must NOT push the retention clock forward — the
+    180-day window counts from the FIRST cancellation. Otherwise a
+    store cancelled 170 days ago gets a fresh window on every retry
+    and the purge never catches it."""
     from api.Modules.Billing.Services import apply_subscription_cancelled
     s = _store()
     apply_subscription_cancelled(s)
-    first_ts = s.canceled_at
-    # Re-apply
+    first_canceled = s.canceled_at
+    first_retention = s.data_retention_until
+    # Simulate a duplicate webhook delivery.
     apply_subscription_cancelled(s)
-    # New timestamp is at-or-after the old one
-    assert s.canceled_at >= first_ts
+    assert s.canceled_at == first_canceled
+    assert s.data_retention_until == first_retention
+    # Terminal state fields stay correct.
+    assert s.plan == "inactive"
+    assert s.stripe_subscription_id == ""
+
+
+def test_re_cancel_after_resubscribe_stamps_fresh_window():
+    """A returning customer clears the clock (clear_cancellation_
+    state sets data_retention_until=None); a later re-cancel must
+    then stamp a fresh window rather than no-op."""
+    from api.Modules.Billing.Services import (
+        apply_subscription_cancelled, clear_cancellation_state,
+    )
+    s = _store()
+    apply_subscription_cancelled(s)
+    # Customer comes back.
+    s.plan = "basic"
+    clear_cancellation_state(s)
+    assert s.data_retention_until is None
+    # ...then cancels again — fresh window stamped.
+    apply_subscription_cancelled(s)
+    assert s.data_retention_until is not None
+    assert s.data_retention_until - s.canceled_at == timedelta(days=180)
 
 
 # ── clear_cancellation_state ────────────────────────────────

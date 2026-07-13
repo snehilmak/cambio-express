@@ -54,18 +54,26 @@ def apply_subscription_cancelled(
 
     Caller commits.
 
-    Idempotent: re-applying overwrites canceled_at + data_retention_
-    until with fresh timestamps. The legacy webhook handler
-    deliberately re-stamped on every delivery so a flapping
-    subscription can't end up with a stale (already-elapsed)
-    retention timer.
+    Idempotent — and the retention clock counts from the FIRST
+    cancellation. Stripe retries `customer.subscription.deleted`
+    aggressively (any non-2xx, plus periodic redelivery), so a naive
+    re-stamp would push `data_retention_until` forward on every
+    duplicate: a store cancelled 170 days ago would get a fresh
+    180-day window each time Stripe re-sends, and the purge cron
+    would never catch it. We therefore only stamp `canceled_at` +
+    `data_retention_until` while the clock isn't already running
+    (`data_retention_until is None`). A returning customer runs
+    `clear_cancellation_state()` which resets it to None, so a later
+    re-cancel stamps a fresh window correctly. The terminal plan /
+    billing fields are always re-applied (harmless when repeated).
     """
-    now = utc_now()
     store.plan = "inactive"
     store.billing_cycle = ""
     store.stripe_subscription_id = ""
-    store.canceled_at = now
-    store.data_retention_until = now + timedelta(days=retention_days)
+    if store.data_retention_until is None:
+        now = utc_now()
+        store.canceled_at = now
+        store.data_retention_until = now + timedelta(days=retention_days)
 
 
 def clear_cancellation_state(store: Store) -> None:
