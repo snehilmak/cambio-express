@@ -67,3 +67,73 @@
   font-size: 0.8rem;
   margin-left: 0.5rem;
 }
+
+/* Targeting picker */
+.targetModes {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.5rem;
+}
+
+.targetMode {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.storePicker {
+  border: 1px solid var(--db-border, #2a2a2a);
+  border-radius: 0.5rem;
+  padding: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.storeList {
+  max-height: 12rem;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.storeOption {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.3rem 0.4rem;
+  border-radius: 0.35rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.storeOption:hover {
+  background: var(--db-surface-2, rgba(255, 255, 255, 0.04));
+}
+
+.pickerMeta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.8rem;
+  color: var(--db-text-muted, #a3a3a3);
+}
+
+.linkBtn {
+  background: none;
+  border: none;
+  color: var(--db-accent, #3fff00);
+  font-size: 0.8rem;
+  cursor: pointer;
+  padding: 0;
+}
+
+.audienceNames {
+  font-size: 0.75rem;
+  color: var(--db-text-muted, #a3a3a3);
+  margin-top: 0.2rem;
+}

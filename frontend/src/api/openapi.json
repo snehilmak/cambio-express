@@ -652,6 +652,14 @@
             "description": "ISO-8601 UTC datetime when the banner should go live. Empty = start immediately.",
             "title": "Start At Iso",
             "type": "string"
+          },
+          "target_store_ids": {
+            "description": "Store IDs to scope this announcement to. Empty (the default) = global \u2014 every store sees it and every opted-in user is emailed. A non-empty list restricts both the banner and the broadcast to those stores.",
+            "items": {
+              "type": "integer"
+            },
+            "title": "Target Store Ids",
+            "type": "array"
           }
         },
         "required": [
@@ -749,6 +757,20 @@
           "starts_at": {
             "title": "Starts At",
             "type": "string"
+          },
+          "target_store_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Target Store Ids",
+            "type": "array"
+          },
+          "target_store_names": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Target Store Names",
+            "type": "array"
           }
         },
         "required": [
@@ -762,7 +784,9 @@
           "created_at",
           "created_by",
           "broadcast_requested",
-          "broadcast_sent_at"
+          "broadcast_sent_at",
+          "target_store_ids",
+          "target_store_names"
         ],
         "title": "AnnouncementRow",
         "type": "object"
@@ -7542,6 +7566,54 @@
           "admin_password"
         ],
         "title": "SuperadminStoreCreateRequest",
+        "type": "object"
+      },
+      "SuperadminStoreCreditRequest": {
+        "additionalProperties": false,
+        "description": "POST body for /superadmin/stores/{id}/credit.\n\nIssues a goodwill credit to the store's Stripe customer balance.\n`amount_cents` is the POSITIVE size of the credit in cents; the\nService negates it for Stripe (negative balance transaction =\ncredit). The upper bound mirrors ``credits.MAX_CREDIT_CENTS``\n($5,000) \u2014 a single make-good credit is a manual one-off, not a\nbulk operation, so the fat-finger guardrail lives here too (and\nis re-checked in the Service as the source of truth).\n\n`reason` is optional operator context; it flows into both the\nStripe transaction description (visible in the Stripe dashboard)\nand the audit log details.",
+        "properties": {
+          "amount_cents": {
+            "maximum": 500000.0,
+            "minimum": 1.0,
+            "title": "Amount Cents",
+            "type": "integer"
+          },
+          "reason": {
+            "default": "",
+            "maxLength": 200,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "amount_cents"
+        ],
+        "title": "SuperadminStoreCreditRequest",
+        "type": "object"
+      },
+      "SuperadminStoreCreditResponse": {
+        "additionalProperties": false,
+        "description": "Result of a successful credit. `stripe_txn_id` is the balance\ntransaction id (empty only if Stripe returned no id \u2014 the credit\nstill posted). The SPA shows a success toast keyed off `ok`.",
+        "properties": {
+          "amount_cents": {
+            "title": "Amount Cents",
+            "type": "integer"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "stripe_txn_id": {
+            "title": "Stripe Txn Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ok",
+          "amount_cents",
+          "stripe_txn_id"
+        ],
+        "title": "SuperadminStoreCreditResponse",
         "type": "object"
       },
       "SuperadminStoreDetailResponse": {
@@ -25496,6 +25568,92 @@
           }
         },
         "summary": "Clear Retention Route",
+        "tags": [
+          "superadmin"
+        ]
+      }
+    },
+    "/superadmin/stores/{store_id}/credit": {
+      "post": {
+        "description": "Issue a goodwill credit to a store's Stripe customer balance.\n\nThe credit lands on the Stripe customer balance and Stripe applies\nit to the store's next invoice automatically. Use for make-goods:\ndowntime compensation, a billing dispute, or a promised discount\nthat never made it onto an invoice.\n\nSame Stripe primitive as the referral-credit path\n(``create_balance_transaction`` with a negative amount) but this is\nan interactive action, so failures surface instead of being\nswallowed:\n  422 \u2014 amount outside the guardrail range (1..500000 cents).\n  409 \u2014 store has no Stripe customer (put it on a plan first).\n  503 \u2014 Stripe isn't configured (operator must set STRIPE_SECRET_KEY).\n  502 \u2014 Stripe returned an error.\n\nPer CLAUDE.md invariant #7 the credit records an audit row; the\nStripe call happens first, then the audit + commit are atomic on\nour side (a post-credit commit failure leaves the credit posted\nbut that's inherent to any external side-effect \u2014 the exception\nsurfaces it).",
+        "operationId": "credit_store_route_superadmin_stores__store_id__credit_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "store_id",
+            "required": true,
+            "schema": {
+              "minimum": 1,
+              "title": "Store Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SuperadminStoreCreditRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuperadminStoreCreditResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Credit Store Route",
         "tags": [
           "superadmin"
         ]

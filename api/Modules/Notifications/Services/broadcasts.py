@@ -56,7 +56,9 @@ def derive_broadcast_subject(message: str | None) -> str:
     return first_line[:_BROADCAST_SUBJECT_MAX] or _GENERIC_BROADCAST_SUBJECT
 
 
-def eligible_recipients(db: Session) -> list[Any]:
+def eligible_recipients(
+    db: Session, *, store_ids: list[int] | None = None,
+) -> list[Any]:
     """Active users who should receive announcement broadcasts.
 
     Filters:
@@ -67,10 +69,16 @@ def eligible_recipients(db: Session) -> list[Any]:
         hard-bounced so we don't keep hitting Resend's spam
         score.
 
+    `store_ids` restricts delivery to users in those stores — used
+    when the announcement is *targeted*. ``None`` (the default) means
+    the announcement is global and every opted-in user is eligible.
+    An empty list would match no users; callers pass ``None`` for
+    "everyone", never ``[]``.
+
     Read-only — no DB writes.
     """
     from api.Modules.Tenancy.Models import User
-    return (
+    q = (
         db.query(User)
           .filter(
               User.is_active == True,  # noqa: E712 — SQLAlchemy boolean
@@ -78,8 +86,10 @@ def eligible_recipients(db: Session) -> list[Any]:
               User.notify_announcement_email == True,  # noqa: E712
               User.email_bounced_at.is_(None),
           )
-          .all()
     )
+    if store_ids is not None:
+        q = q.filter(User.store_id.in_(store_ids))
+    return q.all()
 
 
 def run(
@@ -111,7 +121,18 @@ def run(
         return 0  # already sent — idempotent
 
     subject = derive_broadcast_subject(ann.message)
-    recipients = eligible_recipients(session)
+    # Targeted announcements only email users in the target stores;
+    # a global announcement (no targeting rows) reaches everyone.
+    from api.Modules.Announcements.Models import AnnouncementStore
+    target_ids = [
+        sid for (sid,) in
+        session.query(AnnouncementStore.store_id)
+               .filter(AnnouncementStore.announcement_id == ann.id)
+               .all()
+    ]
+    recipients = eligible_recipients(
+        session, store_ids=target_ids or None,
+    )
     now = utc_now()
     notifications_url = f"{base_url}/account/notifications"
     plain_body = BROADCAST_PLAIN_BODY.format(

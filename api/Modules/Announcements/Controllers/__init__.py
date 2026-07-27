@@ -77,7 +77,36 @@ def _is_visible(a) -> bool:
     return True
 
 
-def _adapt(a) -> AnnouncementRow:
+def _targets_for(
+    db: Session, ann_ids: list[int],
+) -> dict[int, list[tuple[int, str]]]:
+    """Map announcement_id → [(store_id, store_name), …] for the
+    given announcements, in one query. Announcements with no rows
+    are simply absent from the dict (callers treat missing as
+    global / no targets)."""
+    if not ann_ids:
+        return {}
+    from api.Modules.Announcements.Models import AnnouncementStore
+    from api.Modules.Tenancy.Models import Store
+    rows = (
+        db.query(
+            AnnouncementStore.announcement_id,
+            Store.id,
+            Store.name,
+        )
+        .join(Store, Store.id == AnnouncementStore.store_id)
+        .filter(AnnouncementStore.announcement_id.in_(ann_ids))
+        .order_by(Store.name)
+        .all()
+    )
+    out: dict[int, list[tuple[int, str]]] = {}
+    for ann_id, store_id, store_name in rows:
+        out.setdefault(ann_id, []).append((store_id, store_name or ""))
+    return out
+
+
+def _adapt(a, targets: list[tuple[int, str]] | None = None) -> AnnouncementRow:
+    targets = targets or []
     return AnnouncementRow(
         id=a.id,
         message=a.message or "",
@@ -90,6 +119,8 @@ def _adapt(a) -> AnnouncementRow:
         created_by=a.created_by,
         broadcast_requested=bool(a.broadcast_requested),
         broadcast_sent_at=_iso(getattr(a, "broadcast_sent_at", None)),
+        target_store_ids=[sid for sid, _ in targets],
+        target_store_names=[name for _, name in targets],
     )
 
 
@@ -113,7 +144,12 @@ def active_route(
     # 401 before we get here if the token were missing).
     if claims.get("sub") is None:
         raise HTTPException(status_code=401, detail="Missing principal.")
-    rows = active_announcements(db)
+    # Scope banners to the viewer's store: a targeted announcement is
+    # only visible to its target stores. `store_id` is None for a
+    # superadmin (no store) — they see global banners only.
+    raw_store_id = claims.get("store_id")
+    store_id = int(raw_store_id) if raw_store_id is not None else None
+    rows = active_announcements(db, store_id)
     return ActiveAnnouncementsResponse(
         rows=[
             ActiveAnnouncementRow(
@@ -139,8 +175,9 @@ def list_route(
           .order_by(Announcement.created_at.desc())
           .all()
     )
+    targets = _targets_for(db, [a.id for a in rows])
     return AnnouncementListResponse(
-        rows=[_adapt(a) for a in rows], total=len(rows),
+        rows=[_adapt(a, targets.get(a.id)) for a in rows], total=len(rows),
     )
 
 
@@ -195,13 +232,20 @@ def create_route(
         broadcast_requested=body.broadcast,
     )
     db.add(a); db.flush()
+    # Persist targeting rows. An empty list = global (no rows). Any
+    # id that doesn't resolve to a real Store is a 422 rather than a
+    # silent drop — a targeted announcement that silently reaches
+    # fewer stores than the operator picked is a worse failure than
+    # a clear error.
+    targets = _persist_targets(db, a.id, body.target_store_ids)
     scheduled = starts_at > now
     _audit(
         db, user, "create_announcement",
         target_type="announcement", target_id=str(a.id),
         details=(
             f"level={body.level}, broadcast={body.broadcast}, "
-            f"scheduled={scheduled}"
+            f"scheduled={scheduled}, "
+            f"targets={len(targets) or 'all'}"
         ),
     )
     db.commit()
@@ -216,7 +260,37 @@ def create_route(
             broadcast_announcement,
         )
         enqueue(broadcast_announcement, a.id)
-    return AnnouncementResponse(announcement=_adapt(a))
+    return AnnouncementResponse(announcement=_adapt(a, targets))
+
+
+def _persist_targets(
+    db: Session, ann_id: int, store_ids: list[int],
+) -> list[tuple[int, str]]:
+    """Insert one ``AnnouncementStore`` row per target store and
+    return the resolved (store_id, store_name) pairs (for the
+    response). An empty ``store_ids`` inserts nothing = global.
+
+    Raises 422 if any requested id doesn't resolve to a real Store
+    so a typo can't silently narrow the audience."""
+    from api.Modules.Announcements.Models import AnnouncementStore
+    from api.Modules.Tenancy.Models import Store
+    wanted = list(dict.fromkeys(int(s) for s in store_ids))  # de-dupe, keep order
+    if not wanted:
+        return []
+    found = {
+        sid: name for sid, name in
+        db.query(Store.id, Store.name).filter(Store.id.in_(wanted)).all()
+    }
+    missing = [s for s in wanted if s not in found]
+    if missing:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Unknown store id(s): {missing}",
+        )
+    for sid in wanted:
+        db.add(AnnouncementStore(announcement_id=ann_id, store_id=sid))
+    db.flush()
+    return [(sid, found[sid] or "") for sid in wanted]
 
 
 def _parse_starts_at(raw: str, *, fallback: datetime) -> datetime:
@@ -267,7 +341,9 @@ def toggle_route(
         details=f"is_active={body.is_active}",
     )
     db.commit()
-    return AnnouncementResponse(announcement=_adapt(a))
+    return AnnouncementResponse(
+        announcement=_adapt(a, _targets_for(db, [a.id]).get(a.id)),
+    )
 
 
 @router.delete("/{ann_id}", status_code=204)
@@ -285,6 +361,15 @@ def delete_route(
         db, user, "delete_announcement",
         target_type="announcement", target_id=str(a.id),
         details=(a.message or "")[:80],
+    )
+    # Clear targeting rows first — on Postgres the FK
+    # (announcement_store.announcement_id → announcement.id) would
+    # otherwise reject the parent delete.
+    from api.Modules.Announcements.Models import AnnouncementStore
+    (
+        db.query(AnnouncementStore)
+          .filter(AnnouncementStore.announcement_id == a.id)
+          .delete(synchronize_session=False)
     )
     db.delete(a)
     db.commit()

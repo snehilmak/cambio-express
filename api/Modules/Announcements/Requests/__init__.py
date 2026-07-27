@@ -19,6 +19,13 @@ class AnnouncementRow(BaseModel):
     created_by: int | None
     broadcast_requested: bool
     broadcast_sent_at: str
+    # Targeting. Empty `target_store_ids` = global (every store sees
+    # it); a non-empty list scopes the banner + broadcast to those
+    # stores only. `target_store_names` is the parallel display list
+    # (same order) so the SPA can show "Acme, Bodega #2" without a
+    # second fetch.
+    target_store_ids: list[int]
+    target_store_names: list[str]
 
 
 class AnnouncementListResponse(BaseModel):
@@ -50,6 +57,15 @@ class AnnouncementCreateRequest(BaseModel):
         description=(
             "ISO-8601 UTC datetime when the banner should go live. "
             "Empty = start immediately."
+        ),
+    )
+    target_store_ids: list[int] = Field(
+        default_factory=list,
+        description=(
+            "Store IDs to scope this announcement to. Empty (the "
+            "default) = global — every store sees it and every "
+            "opted-in user is emailed. A non-empty list restricts "
+            "both the banner and the broadcast to those stores."
         ),
     )
 

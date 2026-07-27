@@ -35,6 +35,8 @@ from api.Modules.Superadmin.Requests import (
     SuperadminReportListResponse,
     SuperadminReportRow,
     SuperadminStoreCreateRequest,
+    SuperadminStoreCreditRequest,
+    SuperadminStoreCreditResponse,
     SuperadminStoreDetailResponse,
     SuperadminStoreDetailRow,
     SuperadminStoreListResponse,
@@ -1286,6 +1288,99 @@ def bulk_action_route(
                  target_id=",".join(str(s.id) for s in stores),
                  details=f"{len(stores)} stores")
     return {"ok": True, "count": len(stores), "results": results}
+
+
+# ── Store account credit (Stripe balance) ──────────────────
+
+
+@router.post(
+    "/stores/{store_id}/credit",
+    response_model=SuperadminStoreCreditResponse,
+)
+def credit_store_route(
+    body: SuperadminStoreCreditRequest,
+    store_id: int = Path(..., ge=1),
+    db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
+) -> SuperadminStoreCreditResponse:
+    """Issue a goodwill credit to a store's Stripe customer balance.
+
+    The credit lands on the Stripe customer balance and Stripe applies
+    it to the store's next invoice automatically. Use for make-goods:
+    downtime compensation, a billing dispute, or a promised discount
+    that never made it onto an invoice.
+
+    Same Stripe primitive as the referral-credit path
+    (``create_balance_transaction`` with a negative amount) but this is
+    an interactive action, so failures surface instead of being
+    swallowed:
+      422 — amount outside the guardrail range (1..500000 cents).
+      409 — store has no Stripe customer (put it on a plan first).
+      503 — Stripe isn't configured (operator must set STRIPE_SECRET_KEY).
+      502 — Stripe returned an error.
+
+    Per CLAUDE.md invariant #7 the credit records an audit row; the
+    Stripe call happens first, then the audit + commit are atomic on
+    our side (a post-credit commit failure leaves the credit posted
+    but that's inherent to any external side-effect — the exception
+    surfaces it)."""
+    _require_superadmin(claims)
+    from api.Modules.Billing.Services import (
+        InvalidCreditAmountError,
+        NoBillingCustomerError,
+        StripeServiceError,
+        issue_store_credit,
+    )
+    from api.Modules.Billing.Services.config import StripeNotConfiguredError
+    from api.Modules.Tenancy.Models import Store
+    s = db.get(Store, store_id)
+    if s is None:
+        raise HTTPException(status_code=404, detail="Store not found")
+    sa = resolve_superadmin_user(db, claims)
+    try:
+        txn_id = issue_store_credit(
+            db, s, body.amount_cents,
+            reason=body.reason,
+            superadmin_username=sa.username or "",
+        )
+    except InvalidCreditAmountError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    except StripeNotConfiguredError:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Billing isn't configured on this server yet. "
+                "An administrator needs to set STRIPE_SECRET_KEY before "
+                "credits can be issued."
+            ),
+        )
+    except NoBillingCustomerError:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "This store has no Stripe billing account. "
+                "Put it on a paid plan before issuing a credit."
+            ),
+        )
+    except StripeServiceError:
+        raise HTTPException(
+            status_code=502,
+            detail="Stripe rejected the credit. Please try again.",
+        )
+    dollars = body.amount_cents / 100
+    _audit_store(
+        db, sa, "credit_store",
+        target_id=str(s.id),
+        details=(
+            f"${dollars:,.2f} credit "
+            f"(txn={txn_id or 'n/a'})"
+            + (f" — {body.reason[:80]}" if body.reason.strip() else "")
+        ),
+    )
+    db.commit()
+    return SuperadminStoreCreditResponse(
+        ok=True, amount_cents=body.amount_cents, stripe_txn_id=txn_id,
+    )
 
 
 # ── Store communication ─────────────────────────────────────

@@ -3944,6 +3944,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/superadmin/stores/{store_id}/credit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Credit Store Route
+         * @description Issue a goodwill credit to a store's Stripe customer balance.
+         *
+         *     The credit lands on the Stripe customer balance and Stripe applies
+         *     it to the store's next invoice automatically. Use for make-goods:
+         *     downtime compensation, a billing dispute, or a promised discount
+         *     that never made it onto an invoice.
+         *
+         *     Same Stripe primitive as the referral-credit path
+         *     (``create_balance_transaction`` with a negative amount) but this is
+         *     an interactive action, so failures surface instead of being
+         *     swallowed:
+         *       422 — amount outside the guardrail range (1..500000 cents).
+         *       409 — store has no Stripe customer (put it on a plan first).
+         *       503 — Stripe isn't configured (operator must set STRIPE_SECRET_KEY).
+         *       502 — Stripe returned an error.
+         *
+         *     Per CLAUDE.md invariant #7 the credit records an audit row; the
+         *     Stripe call happens first, then the audit + commit are atomic on
+         *     our side (a post-credit commit failure leaves the credit posted
+         *     but that's inherent to any external side-effect — the exception
+         *     surfaces it).
+         */
+        post: operations["credit_store_route_superadmin_stores__store_id__credit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/superadmin/stores/{store_id}/drill": {
         parameters: {
             query?: never;
@@ -5086,6 +5126,11 @@ export interface components {
              * @default
              */
             start_at_iso: string;
+            /**
+             * Target Store Ids
+             * @description Store IDs to scope this announcement to. Empty (the default) = global — every store sees it and every opted-in user is emailed. A non-empty list restricts both the banner and the broadcast to those stores.
+             */
+            target_store_ids?: number[];
         };
         /** AnnouncementListResponse */
         AnnouncementListResponse: {
@@ -5127,6 +5172,10 @@ export interface components {
             message: string;
             /** Starts At */
             starts_at: string;
+            /** Target Store Ids */
+            target_store_ids: number[];
+            /** Target Store Names */
+            target_store_names: string[];
         };
         /**
          * AnnouncementToggleRequest
@@ -8729,6 +8778,45 @@ export interface components {
             plan: string;
             /** Slug */
             slug: string;
+        };
+        /**
+         * SuperadminStoreCreditRequest
+         * @description POST body for /superadmin/stores/{id}/credit.
+         *
+         *     Issues a goodwill credit to the store's Stripe customer balance.
+         *     `amount_cents` is the POSITIVE size of the credit in cents; the
+         *     Service negates it for Stripe (negative balance transaction =
+         *     credit). The upper bound mirrors ``credits.MAX_CREDIT_CENTS``
+         *     ($5,000) — a single make-good credit is a manual one-off, not a
+         *     bulk operation, so the fat-finger guardrail lives here too (and
+         *     is re-checked in the Service as the source of truth).
+         *
+         *     `reason` is optional operator context; it flows into both the
+         *     Stripe transaction description (visible in the Stripe dashboard)
+         *     and the audit log details.
+         */
+        SuperadminStoreCreditRequest: {
+            /** Amount Cents */
+            amount_cents: number;
+            /**
+             * Reason
+             * @default
+             */
+            reason: string;
+        };
+        /**
+         * SuperadminStoreCreditResponse
+         * @description Result of a successful credit. `stripe_txn_id` is the balance
+         *     transaction id (empty only if Stripe returned no id — the credit
+         *     still posted). The SPA shows a success toast keyed off `ok`.
+         */
+        SuperadminStoreCreditResponse: {
+            /** Amount Cents */
+            amount_cents: number;
+            /** Ok */
+            ok: boolean;
+            /** Stripe Txn Id */
+            stripe_txn_id: string;
         };
         /** SuperadminStoreDetailResponse */
         SuperadminStoreDetailResponse: {
@@ -16975,6 +17063,45 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    credit_store_route_superadmin_stores__store_id__credit_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                store_id: number;
+            };
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SuperadminStoreCreditRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SuperadminStoreCreditResponse"];
                 };
             };
             /** @description Validation Error */

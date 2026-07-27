@@ -105,8 +105,41 @@ class SuperadminStoreUpdateRequest(BaseModel):
     federal_tax_rate: float | None = Field(None, ge=0.0, le=1.0)
 
 
+class SuperadminStoreCreditRequest(BaseModel):
+    """POST body for /superadmin/stores/{id}/credit.
+
+    Issues a goodwill credit to the store's Stripe customer balance.
+    `amount_cents` is the POSITIVE size of the credit in cents; the
+    Service negates it for Stripe (negative balance transaction =
+    credit). The upper bound mirrors ``credits.MAX_CREDIT_CENTS``
+    ($5,000) — a single make-good credit is a manual one-off, not a
+    bulk operation, so the fat-finger guardrail lives here too (and
+    is re-checked in the Service as the source of truth).
+
+    `reason` is optional operator context; it flows into both the
+    Stripe transaction description (visible in the Stripe dashboard)
+    and the audit log details."""
+    model_config = ConfigDict(extra="forbid")
+
+    amount_cents: int = Field(..., ge=1, le=500_000)
+    reason:       str = Field("", max_length=200)
+
+
+class SuperadminStoreCreditResponse(BaseModel):
+    """Result of a successful credit. `stripe_txn_id` is the balance
+    transaction id (empty only if Stripe returned no id — the credit
+    still posted). The SPA shows a success toast keyed off `ok`."""
+    model_config = ConfigDict(extra="forbid")
+
+    ok:            bool
+    amount_cents:  int
+    stripe_txn_id: str
+
+
 __all__ = [
     "SuperadminStoreCreateRequest",
+    "SuperadminStoreCreditRequest",
+    "SuperadminStoreCreditResponse",
     "SuperadminStoreDetailResponse",
     "SuperadminStoreDetailRow",
     "SuperadminStoreUpdateRequest",
