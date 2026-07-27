@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ApiError } from "../lib/api";
 import { fmtMoney2 } from "../lib/formatters";
-import { emailStore, extendTrial, toggleStoreActive } from "../api/superadmin";
+import { creditStore, emailStore, extendTrial, toggleStoreActive } from "../api/superadmin";
 import { getCurrentIdentity } from "../lib/auth";
 import {
   Alert, Breadcrumbs, Button, ButtonLink, Card, Checkbox, EmptyState,
@@ -67,6 +67,11 @@ export default function SuperadminStoreDrill() {
   const [emailBusy, setEmailBusy] = useState(false);
   const [emailError, setEmailError] = useState<string | null>(null);
   const [actionBusy, setActionBusy] = useState(false);
+  const [showCredit, setShowCredit] = useState(false);
+  const [creditAmount, setCreditAmount] = useState("");
+  const [creditReason, setCreditReason] = useState("");
+  const [creditBusy, setCreditBusy] = useState(false);
+  const [creditError, setCreditError] = useState<string | null>(null);
 
   return (
     <PageShell gap="1.25rem">
@@ -95,6 +100,12 @@ export default function SuperadminStoreDrill() {
                   onClick={() => setShowEmail(true)}
                 >
                   Email admin
+                </Button>
+                <Button
+                  tone="secondary" size="sm"
+                  onClick={() => { setShowCredit(true); setCreditError(null); }}
+                >
+                  Credit account
                 </Button>
                 <Button
                   tone="secondary" size="sm"
@@ -317,6 +328,79 @@ export default function SuperadminStoreDrill() {
             </Button>
             <Button type="submit" busy={emailBusy} disabled={emailBusy}>
               {emailBusy ? "Sending…" : "Send email"}
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal
+        open={showCredit}
+        title={`Credit ${data?.store.name ?? "store"}`}
+        onClose={() => { setShowCredit(false); setCreditError(null); }}
+      >
+        <form
+          onSubmit={async (e) => {
+            e.preventDefault();
+            if (!storeId) return;
+            // Dollars → cents. Round to the nearest cent so a
+            // "12.5" input becomes 1250, not 1249.9999.
+            const cents = Math.round(Number(creditAmount) * 100);
+            if (!Number.isFinite(cents) || cents <= 0) {
+              setCreditError("Enter an amount greater than $0.");
+              return;
+            }
+            setCreditBusy(true);
+            setCreditError(null);
+            try {
+              const res = await creditStore(storeId, cents, creditReason.trim());
+              toast({
+                message: `Credited ${fmtMoney2(res.amount_cents / 100)} to ${data?.store.name ?? "store"}.`,
+                tone: "success",
+              });
+              setShowCredit(false);
+              setCreditAmount("");
+              setCreditReason("");
+            } catch (err) {
+              setCreditError(err instanceof ApiError ? err.message : "Could not issue credit.");
+            } finally {
+              setCreditBusy(false);
+            }
+          }}
+          style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}
+        >
+          <p style={{ fontSize: "0.85rem", color: "var(--db-text-muted)", margin: 0 }}>
+            Adds a credit to this store's Stripe balance. Stripe applies
+            it to their next invoice automatically. The store must be on
+            a paid plan (have a Stripe customer).
+          </p>
+          <Field label="Amount (USD)">
+            <Input
+              type="number" inputMode="decimal"
+              min="0.01" max="5000" step="0.01"
+              value={creditAmount}
+              onChange={(e) => setCreditAmount(e.target.value)}
+              placeholder="50.00"
+              required
+            />
+          </Field>
+          <Field label="Reason (optional)">
+            <Input
+              type="text" value={creditReason}
+              onChange={(e) => setCreditReason(e.target.value)}
+              placeholder="Downtime make-good, billing dispute…"
+              maxLength={200}
+            />
+          </Field>
+          {creditError && <Alert tone="error">{creditError}</Alert>}
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
+            <Button
+              tone="secondary" type="button"
+              onClick={() => { setShowCredit(false); setCreditError(null); }}
+            >
+              Cancel
+            </Button>
+            <Button type="submit" busy={creditBusy} disabled={creditBusy}>
+              {creditBusy ? "Issuing…" : "Issue credit"}
             </Button>
           </div>
         </form>

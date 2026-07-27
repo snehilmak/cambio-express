@@ -204,3 +204,52 @@ def test_recipients_includes_all_roles():
         assert admin in result
         assert owner in result
         assert employee in result
+
+
+# ── targeting (PR B) ───────────────────────────────────────
+
+
+def test_recipients_restricted_to_target_stores():
+    """A targeted announcement only emails users in the target
+    stores; users in other stores are excluded even when opted in."""
+    from tests._app import db
+    from api.Modules.Notifications.Services import (
+        broadcast_eligible_recipients,
+    )
+    with db_session():
+        db.session.query(User).delete()
+        db.session.commit()
+        in_store = _add_user(
+            db.session, store_id=1,
+            username="in@test.com", email="in@test.com",
+        )
+        out_store = _add_user(
+            db.session, store_id=2,
+            username="out@test.com", email="out@test.com",
+        )
+        result = broadcast_eligible_recipients(db.session, store_ids=[1])
+        assert in_store in result
+        assert out_store not in result
+
+
+def test_recipients_none_store_ids_reaches_everyone():
+    """store_ids=None (a global announcement) keeps the old
+    behaviour — every opted-in user regardless of store."""
+    from tests._app import db
+    from api.Modules.Notifications.Services import (
+        broadcast_eligible_recipients,
+    )
+    with db_session():
+        db.session.query(User).delete()
+        db.session.commit()
+        u1 = _add_user(
+            db.session, store_id=1,
+            username="g1@test.com", email="g1@test.com",
+        )
+        u2 = _add_user(
+            db.session, store_id=2,
+            username="g2@test.com", email="g2@test.com",
+        )
+        result = broadcast_eligible_recipients(db.session, store_ids=None)
+        assert u1 in result
+        assert u2 in result

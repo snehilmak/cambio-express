@@ -20,6 +20,12 @@ from api.Modules.Billing.Services.config import (
     stripe_mode,
     stripe_publishable_key,
 )
+from api.Modules.Billing.Services.credits import (
+    InvalidCreditAmountError,
+    MAX_CREDIT_CENTS,
+    MIN_CREDIT_CENTS,
+    issue_store_credit,
+)
 from api.Modules.Billing.Services.customer import ensure_stripe_customer
 from api.Modules.Billing.Services.feature_flags import (
     store_feature_enabled,
@@ -65,8 +71,11 @@ __all__ = [
     "BillingError",
     "DEFAULT_RETENTION_DAYS",
     "EXPIRING_SOON_THRESHOLD_DAYS",
+    "InvalidCreditAmountError",
     "InvalidPlanError",
     "InvalidWebhookSignatureError",
+    "MAX_CREDIT_CENTS",
+    "MIN_CREDIT_CENTS",
     "NoBillingCustomerError",
     "REFERRAL_REFEREE_CENTS",
     "REFERRAL_SELF_CENTS",
@@ -86,6 +95,7 @@ __all__ = [
     "find_store_by_subscription_id",
     "get_trial_status",
     "handle_stripe_event",
+    "issue_store_credit",
     "lookup_referral_code",
     "new_referral_code",
     "purge_expired_stores",

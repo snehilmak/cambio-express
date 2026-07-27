@@ -58,6 +58,7 @@ STORE_OWNED_MODELS: list[str] = [
     "ReferralCode", "ReferralRedemption",
     "TVDisplay",
     "SupportTicket",
+    "AnnouncementStore",
     "User",
 ]
 
@@ -98,6 +99,7 @@ def _store_owned_models() -> list[tuple[type, str]]:
     from api.Modules.Transfers.Models import Transfer
     from api.Modules.Support.Models import SupportTicket
     from api.Modules.TVDisplay.Models import TVDisplay
+    from api.Modules.Announcements.Models import AnnouncementStore
 
     return [
         # TransferAudit must purge before Transfer (FK to transfer.id),
@@ -135,6 +137,10 @@ def _store_owned_models() -> list[tuple[type, str]]:
         # parent row itself.
         (TVDisplay, "store_id"),
         (SupportTicket, "store_id"),
+        # Announcement targeting rows — drop the store's targeting
+        # links (the Announcement rows themselves are global, not
+        # store-owned, so they survive).
+        (AnnouncementStore, "store_id"),
         (User, "store_id"),
     ]
 

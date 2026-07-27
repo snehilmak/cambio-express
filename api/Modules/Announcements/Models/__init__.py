@@ -44,6 +44,34 @@ class Announcement(Base):
     broadcast_sent_at    = Column(DateTime, nullable=True)
 
 
+class AnnouncementStore(Base):
+    """Targets an ``Announcement`` at one specific ``Store``.
+
+    The presence of ANY row for an announcement makes it *targeted*:
+    only stores with a matching row see the banner (and only their
+    users receive the broadcast email). The ABSENCE of any row means
+    the announcement is *global* — visible to every store, which is
+    the back-compat default for every announcement created before
+    targeting shipped.
+
+    One row per (announcement, store) pair. Deleting an announcement
+    must delete its rows here first (FK ``announcement_id`` →
+    ``announcement.id``); purging a store deletes its rows here via
+    the retention registry (FK ``store_id`` → ``store.id``,
+    invariant #4).
+    """
+
+    __tablename__ = "announcement_store"
+    id              = Column(Integer, primary_key=True)
+    announcement_id = Column(
+        Integer, ForeignKey("announcement.id"), nullable=False,
+    )
+    store_id        = Column(Integer, ForeignKey("store.id"), nullable=False)
+    __table_args__ = (
+        UniqueConstraint("announcement_id", "store_id"),
+    )
+
+
 class PushSubscription(Base):
     """Web Push endpoint for a user — one row per browser/device they
     opted in on. Deleted on unsubscribe or when the endpoint starts
@@ -60,4 +88,4 @@ class PushSubscription(Base):
     __table_args__ = (UniqueConstraint("user_id", "endpoint"),)
 
 
-__all__ = ["Announcement", "PushSubscription"]
+__all__ = ["Announcement", "AnnouncementStore", "PushSubscription"]

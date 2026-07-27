@@ -9,6 +9,8 @@ from api.Modules.Superadmin.Requests.discounts import (
 )
 from api.Modules.Superadmin.Requests.stores import (
     SuperadminStoreCreateRequest,
+    SuperadminStoreCreditRequest,
+    SuperadminStoreCreditResponse,
     SuperadminStoreDetailResponse,
     SuperadminStoreDetailRow,
     SuperadminStoreUpdateRequest,
@@ -143,6 +145,8 @@ __all__ = [
     "SuperadminReportListResponse",
     "SuperadminReportRow",
     "SuperadminStoreCreateRequest",
+    "SuperadminStoreCreditRequest",
+    "SuperadminStoreCreditResponse",
     "SuperadminStoreDetailResponse",
     "SuperadminStoreDetailRow",
     "SuperadminStoreListResponse",

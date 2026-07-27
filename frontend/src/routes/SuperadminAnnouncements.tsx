@@ -15,6 +15,7 @@ import {
   Input, PageHeader, PageShell, Pill, SectionTitle, Select, Table,
   TableStates, Textarea, tdStyle, thStyle, type PillTone,
 } from "../components/ui";
+import { useSuperadminStores } from "../api/superadmin";
 import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
 import styles from "./SuperadminAnnouncements.module.css";
@@ -97,12 +98,26 @@ function CreateForm({ onCreated }: { onCreated: () => void }) {
   // local string ("2026-05-15T14:00") so we convert to ISO+UTC
   // at submit.
   const [scheduleLocal, setScheduleLocal] = useState("");
+  // Targeting: "all" = global (no target rows), "specific" = the
+  // selected store ids. Kept as a Set for O(1) toggle.
+  const [targetMode, setTargetMode] = useState<"all" | "specific">("all");
+  const [targetIds, setTargetIds] = useState<Set<number>>(new Set());
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
-    setErr(null); setBusy(true);
+    setErr(null);
+    // A "specific" targeting with no store picked is almost certainly
+    // a mistake — block it rather than silently posting a global
+    // banner or one nobody can see.
+    const target_store_ids =
+      targetMode === "specific" ? Array.from(targetIds) : [];
+    if (targetMode === "specific" && target_store_ids.length === 0) {
+      setErr("Pick at least one store, or switch to All stores.");
+      return;
+    }
+    setBusy(true);
     try {
       await createAnnouncement({
         message: message.trim(),
@@ -115,9 +130,11 @@ function CreateForm({ onCreated }: { onCreated: () => void }) {
         start_at_iso: scheduleLocal
           ? new Date(scheduleLocal).toISOString()
           : "",
+        target_store_ids,
       });
       setMessage(""); setExpiresDays("0"); setBroadcast(false);
       setScheduleLocal("");
+      setTargetMode("all"); setTargetIds(new Set());
       onCreated();
     } catch (e) {
       setErr(e instanceof ApiError ? e.message : "Could not post.");
@@ -181,6 +198,27 @@ function CreateForm({ onCreated }: { onCreated: () => void }) {
             </label>
           </Field>
         </div>
+        <Field label="Audience">
+          <div className={styles.targetModes}>
+            <label className={styles.targetMode}>
+              <input
+                type="radio" name="targetMode" checked={targetMode === "all"}
+                onChange={() => setTargetMode("all")}
+              />
+              <span>All stores</span>
+            </label>
+            <label className={styles.targetMode}>
+              <input
+                type="radio" name="targetMode" checked={targetMode === "specific"}
+                onChange={() => setTargetMode("specific")}
+              />
+              <span>Specific stores</span>
+            </label>
+          </div>
+          {targetMode === "specific" && (
+            <StorePicker selected={targetIds} onChange={setTargetIds} />
+          )}
+        </Field>
         {err && <Alert tone="error">{err}</Alert>}
         <div className={styles.submitRow}>
           <Button
@@ -197,6 +235,75 @@ function CreateForm({ onCreated }: { onCreated: () => void }) {
   );
 }
 
+function StorePicker({
+  selected, onChange,
+}: {
+  selected: Set<number>;
+  onChange: (next: Set<number>) => void;
+}) {
+  const { data, isLoading, isError } = useSuperadminStores();
+  const [filter, setFilter] = useState("");
+
+  const stores = data?.rows ?? [];
+  const needle = filter.trim().toLowerCase();
+  const shown = needle
+    ? stores.filter(
+        (s) =>
+          s.name.toLowerCase().includes(needle) ||
+          s.slug.toLowerCase().includes(needle),
+      )
+    : stores;
+
+  function toggle(id: number) {
+    const next = new Set(selected);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    onChange(next);
+  }
+
+  if (isLoading) return <p className={styles.helpText}>Loading stores…</p>;
+  if (isError) return <Alert tone="error">Could not load stores.</Alert>;
+
+  return (
+    <div className={styles.storePicker}>
+      <Input
+        type="search"
+        placeholder="Filter stores…"
+        value={filter}
+        onChange={(e) => setFilter(e.target.value)}
+      />
+      <div className={styles.storeList}>
+        {shown.length === 0 ? (
+          <span className={styles.helpText}>No stores match.</span>
+        ) : (
+          shown.map((s) => (
+            <label key={s.store_id} className={styles.storeOption}>
+              <input
+                type="checkbox"
+                checked={selected.has(s.store_id)}
+                onChange={() => toggle(s.store_id)}
+              />
+              <span>{s.name}</span>
+              <Pill tone="neutral">{s.plan}</Pill>
+            </label>
+          ))
+        )}
+      </div>
+      <div className={styles.pickerMeta}>
+        <span>{selected.size} selected</span>
+        {selected.size > 0 && (
+          <button
+            type="button" className={styles.linkBtn}
+            onClick={() => onChange(new Set())}
+          >
+            Clear
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function AnnouncementsTable({
   rows, onChanged,
 }: {
@@ -208,7 +315,7 @@ function AnnouncementsTable({
       <thead>
         <tr>
           {[
-            "Message", "Level", "Status", "Posted", "Expires",
+            "Message", "Level", "Status", "Audience", "Posted", "Expires",
             "Broadcast", "Actions",
           ].map((h, i) => (
             <th key={i} style={thStyle}>{h}</th>
@@ -276,6 +383,9 @@ function Row({ row, onChanged }: { row: AnnouncementRow; onChanged: () => void }
         )}
       </td>
       <td style={{ ...tdStyle, verticalAlign: "top" }}>
+        <AudienceCell row={row} />
+      </td>
+      <td style={{ ...tdStyle, verticalAlign: "top" }}>
         <span className={styles.dateCell}>
           {row.created_at.slice(0, 10)}
         </span>
@@ -341,6 +451,28 @@ function formatScheduleHint(iso: string): string {
   });
 }
 
+
+// Audience cell: "All stores" for a global announcement (no
+// targeting rows) or an "N stores" pill listing the target store
+// names underneath. Targeting was added in PR B — pre-targeting
+// rows come back with an empty list and render as global.
+function AudienceCell({ row }: { row: AnnouncementRow }) {
+  const names = row.target_store_names ?? [];
+  if (names.length === 0) {
+    return <Pill tone="neutral">All stores</Pill>;
+  }
+  return (
+    <div>
+      <Pill tone="info">
+        {names.length} {names.length === 1 ? "store" : "stores"}
+      </Pill>
+      <div className={styles.audienceNames}>
+        {names.slice(0, 3).join(", ")}
+        {names.length > 3 ? ` +${names.length - 3} more` : ""}
+      </div>
+    </div>
+  );
+}
 
 // Broadcast-state pill: shows whether "Also email all users" was
 // ticked at create time and whether the fan-out has fired yet.

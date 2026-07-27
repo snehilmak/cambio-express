@@ -405,6 +405,25 @@ export async function toggleStoreActive(storeId: number) {
   );
 }
 
+export interface StoreCreditResult {
+  ok: boolean;
+  amount_cents: number;
+  stripe_txn_id: string;
+}
+
+// Issue a goodwill credit to a store's Stripe customer balance.
+// `amountCents` is the POSITIVE credit size in cents (the backend
+// negates it for Stripe). Surfaces 409 (no Stripe customer), 422
+// (bad amount), 502/503 (Stripe error / not configured) as ApiError.
+export async function creditStore(
+  storeId: number, amountCents: number, reason: string,
+) {
+  return api<StoreCreditResult>(
+    `/api/v2/superadmin/stores/${storeId}/credit`,
+    { method: "POST", json: { amount_cents: amountCents, reason } },
+  );
+}
+
 export async function emailStore(storeId: number, subject: string, message: string) {
   return api<{ ok: boolean; sent_to: string[]; total: number }>(
     `/api/v2/superadmin/stores/${storeId}/email`,
