@@ -7,7 +7,7 @@
 > current: when a "Next up" item ships, move it to "Shipped" with its PR
 > number.
 
-_Last updated: 2026-07-13 (pre-beta, targeting end-of-month beta launch)._
+_Last updated: 2026-07-28 (pre-beta, targeting end-of-month beta launch)._
 
 ---
 
@@ -40,6 +40,28 @@ doubt, write it here rather than leaving it in chat.
 
 ## 1. Shipped (on `main`)
 
+- **PR #777 — Superadmin controls Phase 2 ("PR B")** (merged 2026-07-28).
+  Additive; one schema migration (`announcement_store`):
+  - `POST /api/v2/superadmin/stores/{id}/credit` — issue a Stripe
+    customer-balance credit (goodwill / make-good) from the panel. Same
+    primitive as the referral path (invariant #12), but interactive, so
+    Stripe failures surface instead of being swallowed (422/409/503/502).
+    A single credit is capped at $5,000 (`credits.MAX_CREDIT_CENTS`).
+  - **Announcement targeting** — new `announcement_store` join table
+    scopes a banner to a subset of stores. **Absence of any row = global**
+    (back-compat default). Targeting gates BOTH the on-screen banner
+    (`active_announcements(db, store_id)`) and the email fan-out
+    (`eligible_recipients(db, store_ids=…)`). Registered in the retention
+    purge registry (invariant #4).
+  - SPA: Store-Drill "Credit account" modal + announcement All/Specific
+    store-picker + Audience column.
+- **PR #778 — Superadmin audit-commit fix ("PR D")** (merged 2026-07-28).
+  Closes the §3 bug. Every superadmin mutation now records its audit row
+  through a new `_audit_and_commit()` helper (audit + commit together),
+  so the ordering can't drift back to the buggy form. 11 routes were
+  fixed (the 10 in §3 plus `email_store`, which audited with no commit).
+  Regression tests assert each audit row survives the request lifecycle
+  (invariant #7).
 - **PR #774 — Pre-beta hardening** (merged 2026-07-13). Four fixes:
   1. Retention purge FK-ordering crash on Postgres — `purge_expired_stores()`
      now sweeps `RecoveryCode`, `PasswordResetToken`, `RefreshToken`,
@@ -79,15 +101,10 @@ doubt, write it here rather than leaving it in chat.
 > If you want durable references, open fresh GitHub issues (see the
 > checklist at the bottom).
 
-**PR B — Superadmin controls Phase 2** (do after PR A / #775, which is done):
-- **Stripe account credit** — issue a balance credit to a store from the
-  superadmin panel (touches billing / Stripe `create_balance_transaction`;
-  review the referral-credit path in `api/Modules/Billing` for the
-  existing pattern, invariant #12).
-- **Announcement targeting** — scope a broadcast announcement to a subset
-  of stores instead of all (extends the `Announcements` module).
+> ✅ **PR B (#777) and PR D (#778) have shipped** — see §1. PR C is the
+> only remaining roadmap item.
 
-**PR C — Superadmin controls Phase 3** (do after PR B):
+**PR C — Superadmin controls Phase 3** (next up):
 - **Store freeze** — a superadmin write-gate that suspends a store's
   activity (distinct from trial-expired and from retention-pause; decide
   interaction with `get_trial_status` and `_TRIAL_EXEMPT`).
@@ -95,37 +112,36 @@ doubt, write it here rather than leaving it in chat.
   webhook event from the superadmin panel for recovery/debugging
   (touches `api/Modules/Webhooks`).
 
-**PR D — Fix the superadmin audit-commit bug** (see §3; can be done any
-time, but should land before beta for compliance).
-
 _These descriptions are from planning conversation, not a written spec.
-Confirm scope before implementing — the first step of each PR should be
-to re-derive the exact requirements._
+Confirm scope before implementing — the first step of PR C should be to
+re-derive the exact requirements._
 
 ---
 
-## 3. Known bug — NOT yet fixed (flagged in PR #775)
+## 3. ~~Known bug~~ — ✅ FIXED in PR #778 ("PR D")
 
-**~10 superadmin mutation routes write an audit row but never commit it.**
-The row is `db.add()`-ed, the route returns, then `get_db()`'s
-`finally: db.close()` rolls it back. This silently violates **invariant
-#7** ("every superadmin mutation calls `record_audit`"). For an MSB
-bookkeeping product this is a **compliance gap** (missing superadmin
-audit trail), so treat it as a pre-beta gate.
+**Resolved 2026-07-28.** ~10 superadmin mutation routes wrote an audit
+row but never committed it (`db.add()`-ed after the route's own
+`db.commit()`, or with no commit at all), so `get_db()`'s
+`finally: db.close()` rolled it back — the mutation landed but the
+audit trail didn't, silently violating **invariant #7**.
 
-Affected routes (verify each before fixing):
-`change_user_role`, `toggle_user_active`, `reset_2fa`,
+The fix (PR #778) extracted an `_audit_and_commit()` helper in
+`api/Modules/Superadmin/Controllers/__init__.py` (records the audit row
+**and** commits in one call) and routed every superadmin mutation
+through it. 11 routes were affected — the 10 originally flagged
+(`change_user_role`, `toggle_user_active`, `reset_2fa`,
 `force_password_reset`, `extend_trial`, `toggle_store_active`,
-`bulk_action`, `set_maintenance`, `impersonate_user`, `update_permissions`.
+`bulk_action`, `set_maintenance`, `impersonate_user`,
+`update_permissions`) plus `email_store`, which audited with no commit
+at all. Regression coverage:
+`tests/Modules/Superadmin/test_superadmin_audit_commit.py` asserts the
+audit row is durably persisted (read in a fresh session after the
+request lifecycle closes) for every previously-buggy route.
 
-Suggested fix (this is "PR D"):
-1. Swap the order at every site — `_audit_store(...)` **then** `db.commit()`.
-2. Add test coverage asserting the audit row survives the request
-   (the new-endpoint tests in
-   `tests/Modules/Superadmin/test_superadmin_pre_beta_controls.py` show
-   the pattern).
-3. Optionally extract an `_audit_and_commit()` helper so the two can't
-   drift apart again.
+**Guard against regression:** any new superadmin mutation MUST end with
+`_audit_and_commit(...)` — never a bare `db.commit()` followed by a
+separate `_audit_store(...)`.
 
 ---
 
@@ -147,7 +163,23 @@ a PR, but all block a real beta with paying customers. Verify each on the
       Confirm backups/retention before real tenant data lands.
 - [ ] **Playwright E2E runs with `continue-on-error`** → never blocks a
       PR. Decide whether to make it blocking before beta.
+      _Reviewed 2026-07-28: this is a deliberate, documented choice — the
+      `continue-on-error: true` on the two Playwright steps in
+      `.github/workflows/ci.yml` has an inline plan to drop it "when smoke
+      is reliably passing for a week." The unit suite is the ground-truth
+      gate. **Decision only — no code change recommended yet**; flipping
+      it now risks gating every PR on flaky Chromium installs. Owner to
+      decide when to make it blocking._
 - [ ] **Hidden receipt endpoint still live** → review/remove before beta.
+      _Reviewed 2026-07-28: the only receipt route is
+      `GET /api/v2/transfers/{id}/receipt`, which is **authed**
+      (`require_permission(claims, "transfers", "read")`) and
+      **tenant-scoped** (cross-tenant lookups 404) — not an unauthenticated
+      leak. The receipt **UI** is intentionally hidden (`App.tsx` +
+      `Settings.tsx` comments: "ledger-only product… backend stays so
+      re-enabling is a one-line revert"). **Decision only** — removing the
+      backend would undo that documented intent and make re-enabling
+      multi-file. Recommend **keep as-is**; owner to confirm._
 
 ---
 
@@ -188,14 +220,20 @@ When you switch to the new Claude subscription:
 
 ## 7. Suggested first actions for the new account
 
-- [ ] Open GitHub issues for PR B, PR C, and PR D so there are durable,
-      correctly-numbered references (avoids the §2 numbering confusion).
-- [ ] Confirm the exact scope of PR B with the owner, then implement.
-- [ ] Knock out PR D (audit-commit fix) — small, mechanical, compliance-
-      relevant.
-- [ ] Walk the §4 ops checklist with the owner (these need Render/Stripe
-      dashboard access, not code).
+- [x] ~~Confirm the exact scope of PR B with the owner, then implement.~~
+      **Done — shipped as PR #777.**
+- [x] ~~Knock out PR D (audit-commit fix).~~ **Done — shipped as PR #778.**
+- [x] ~~Review the code-only §4 items.~~ **Done — the receipt endpoint and
+      Playwright `continue-on-error` are both deliberate, documented
+      decisions (see §4 annotations); no unilateral code change made.**
+- [ ] **Next: PR C** (store freeze + webhook replay) — re-derive scope,
+      confirm design, implement.
+- [ ] Walk the remaining §4 ops checklist with the owner (SMTP, cron
+      services, Stripe live keys, DB backups — Render/Stripe dashboard
+      access, not code).
 - [ ] Fill in §5 from the owner's UI/workflow punch list.
+- [ ] _(Optional)_ Open a durable GitHub issue for PR C. PR B/D no longer
+      need issues — the merged PRs (#777/#778) are the durable references.
 
 ---
 
