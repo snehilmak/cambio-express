@@ -83,6 +83,27 @@ def _audit_store(db: Session, user: User, action: str,
     )
 
 
+def _audit_and_commit(db: Session, user: User, action: str,
+                      *, target_id: str = "", details: str = "") -> None:
+    """Record a superadmin audit row and commit it in one call.
+
+    The audit recorder only ``db.add()``s the row — it never
+    flushes or commits (see ``api.Modules.Audit.Services.recorder``).
+    So an audit row added *after* the route's own ``db.commit()``,
+    or added with no commit at all, is silently rolled back by
+    ``get_db()``'s ``finally: db.close()`` — the mutation lands but
+    the audit trail doesn't, violating CLAUDE.md invariant #7.
+
+    Every superadmin mutation MUST end with this helper (audit +
+    commit together) instead of a bare ``db.commit()`` followed by a
+    separate ``_audit_store(...)`` — co-locating the two makes it
+    impossible for the ordering to drift back to the buggy form.
+    Callers must have already applied their state changes to the
+    session; this commits the audit row alongside them atomically."""
+    _audit_store(db, user, action, target_id=target_id, details=details)
+    db.commit()
+
+
 def _iso(dt) -> str:
     return dt.isoformat() if dt else ""
 
@@ -242,7 +263,10 @@ def set_maintenance_route(
     message = body.get("message", "")
     set_setting(db, "maintenance_mode", "true" if enabled else "false")
     set_setting(db, "maintenance_message", str(message)[:500])
-    _audit_store(
+    # `set_setting` already committed the settings; the audit row is
+    # added afterward so it needs its own commit or `db.close()`
+    # rolls it back (invariant #7).
+    _audit_and_commit(
         db, sa,
         "maintenance_mode_toggle",
         target_id="platform",
@@ -329,8 +353,11 @@ def update_permissions_route(
                 RefreshToken.revoked_at.is_(None),
                 RefreshToken.expires_at > now,
             ).update({"revoked_at": now}, synchronize_session="fetch")
-        db.commit()
-    _audit_store(
+    # Audit + commit together so the session-revocations and the
+    # audit row land in one transaction. The bare `db.commit()` used
+    # to sit *before* the audit (and only inside the `if`), so the
+    # audit row was rolled back by `db.close()` (invariant #7).
+    _audit_and_commit(
         db, sa,
         "update_permissions",
         target_id="role_permission",
@@ -420,8 +447,7 @@ def change_user_role_route(
     sa = resolve_superadmin_user(db, claims)
     old_role = user.role
     user.role = new_role
-    db.commit()
-    _audit_store(
+    _audit_and_commit(
         db, sa,
         "change_user_role",
         target_id=str(user.id),
@@ -446,8 +472,7 @@ def toggle_user_active_route(
         raise HTTPException(status_code=403, detail="Cannot disable superadmin")
     sa = resolve_superadmin_user(db, claims)
     user.is_active = not user.is_active
-    db.commit()
-    _audit_store(
+    _audit_and_commit(
         db, sa,
         "disable_user" if not user.is_active else "enable_user",
         target_id=str(user.id),
@@ -473,8 +498,7 @@ def reset_2fa_route(
     sa = resolve_superadmin_user(db, claims)
     user.totp_secret = None
     user.totp_enrolled_at = None
-    db.commit()
-    _audit_store(
+    _audit_and_commit(
         db, sa,
         "reset_2fa",
         target_id=str(user.id),
@@ -501,8 +525,7 @@ def force_password_reset_route(
     sa = resolve_superadmin_user(db, claims)
     temp_pw = secrets.token_urlsafe(12)
     user.set_password(temp_pw)
-    db.commit()
-    _audit_store(
+    _audit_and_commit(
         db, sa,
         "force_password_reset",
         target_id=str(user.id),
@@ -545,12 +568,11 @@ def revoke_user_sessions_route(
           .update({"revoked_at": now}, synchronize_session=False)
     )
     sa = resolve_superadmin_user(db, claims)
-    _audit_store(
+    _audit_and_commit(
         db, sa, "revoke_user_sessions",
         target_id=str(user.id),
         details=f"User {user.username} ({int(revoked)} tokens revoked)",
     )
-    db.commit()
     return {"ok": True, "revoked_count": int(revoked)}
 
 
@@ -584,7 +606,7 @@ def impersonate_route(
         username=user.username,
     )
     token = issue_access_token(issuer, ttl_seconds=3600)
-    _audit_store(
+    _audit_and_commit(
         db, sa,
         "impersonate_user",
         target_id=str(user.id),
@@ -1031,12 +1053,11 @@ def create_store_route(
     )
     a.set_password(body.admin_password)
     db.add(a)
-    _audit_store(
+    _audit_and_commit(
         db, user, "create_store",
         target_id=str(s.id),
         details=s.slug,
     )
-    db.commit()
     return SuperadminStoreDetailResponse(store=_adapt_detail(s))
 
 
@@ -1155,9 +1176,8 @@ def extend_trial_route(
         s.grace_ends_at = s.trial_ends_at + timedelta(days=7)
     if s.plan == "inactive":
         s.plan = "trial"
-    db.commit()
-    _audit_store(db, sa, "extend_trial", target_id=str(s.id),
-                 details=f"+{days} days → {s.trial_ends_at.isoformat()[:10]}")
+    _audit_and_commit(db, sa, "extend_trial", target_id=str(s.id),
+                      details=f"+{days} days → {s.trial_ends_at.isoformat()[:10]}")
     return {"ok": True, "trial_ends_at": s.trial_ends_at.isoformat()}
 
 
@@ -1175,10 +1195,9 @@ def toggle_store_active_route(
     if s is None:
         raise HTTPException(status_code=404, detail="Store not found")
     s.is_active = not s.is_active
-    db.commit()
     act = "enable_store" if s.is_active else "disable_store"
-    _audit_store(db, sa, act, target_id=str(s.id),
-                 details=f"{s.name} ({s.slug})")
+    _audit_and_commit(db, sa, act, target_id=str(s.id),
+                      details=f"{s.name} ({s.slug})")
     return {"ok": True, "is_active": s.is_active}
 
 
@@ -1231,12 +1250,11 @@ def clear_retention_route(
         if s.data_retention_until else "(none)"
     )
     clear_cancellation_state(s)
-    _audit_store(
+    _audit_and_commit(
         db, sa, "clear_retention",
         target_id=str(s.id),
         details=f"prior retention_until={prior}",
     )
-    db.commit()
     return {"ok": True}
 
 
@@ -1283,10 +1301,9 @@ def bulk_action_route(
             s.is_active = False
             results.append({"store_id": s.id, "name": s.name, "is_active": False})
 
-    db.commit()
-    _audit_store(db, sa, f"bulk_{action}",
-                 target_id=",".join(str(s.id) for s in stores),
-                 details=f"{len(stores)} stores")
+    _audit_and_commit(db, sa, f"bulk_{action}",
+                      target_id=",".join(str(s.id) for s in stores),
+                      details=f"{len(stores)} stores")
     return {"ok": True, "count": len(stores), "results": results}
 
 
@@ -1368,7 +1385,7 @@ def credit_store_route(
             detail="Stripe rejected the credit. Please try again.",
         )
     dollars = body.amount_cents / 100
-    _audit_store(
+    _audit_and_commit(
         db, sa, "credit_store",
         target_id=str(s.id),
         details=(
@@ -1377,7 +1394,6 @@ def credit_store_route(
             + (f" — {body.reason[:80]}" if body.reason.strip() else "")
         ),
     )
-    db.commit()
     return SuperadminStoreCreditResponse(
         ok=True, amount_cents=body.amount_cents, stripe_txn_id=txn_id,
     )
@@ -1415,8 +1431,8 @@ def email_store_route(
         ok = send_email(db, u.email, subject, message)
         if ok:
             sent_to.append(u.email)
-    _audit_store(db, sa, "email_store", target_id=str(store_id),
-                 details=f"Subject: {subject[:60]} → {len(sent_to)} recipient(s)")
+    _audit_and_commit(db, sa, "email_store", target_id=str(store_id),
+                      details=f"Subject: {subject[:60]} → {len(sent_to)} recipient(s)")
     return {"ok": True, "sent_to": sent_to, "total": len(sent_to)}
 
 
