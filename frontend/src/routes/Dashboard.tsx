@@ -8,7 +8,6 @@ import {
 } from "../api/dashboard";
 import { useStoreInfo } from "../api/account";
 import {
-  Breadcrumbs,
   ButtonLink,
   Card,
   ErrorState,
@@ -26,7 +25,6 @@ import {
   tokens,
 } from "../components/ui";
 import { getCurrentIdentity } from "../lib/auth";
-import { PeakHoursHeatmap } from "../components/PeakHoursHeatmap";
 import { getOpenStatus } from "../lib/datetime";
 import { fmtNumber, fmtShortDate } from "../lib/formatters";
 
@@ -72,12 +70,10 @@ export default function Dashboard() {
       ? "Platform Dashboard"
       : identity?.role === "employee"
         ? "My Dashboard"
-        : "Admin Dashboard";
+        : "Dashboard";
 
   return (
     <PageShell>
-
-      <Breadcrumbs crumbs={[{ label: "Dashboard" }]} />
 
       <PageHeader
         title={title}
@@ -135,7 +131,6 @@ function AdminPanel({ d }: { d: AdminDashboard }) {
   const monthName = monthShort(d.today);
   return (
     <>
-      <PeakHoursHeatmap days={30} />
       <KpiGrid>
         <KpiCard label="Total Transfers" value={d.kpis.total_transfers.toLocaleString()} sub="All time" />
         <KpiCard

@@ -109,31 +109,3 @@ export function useDashboardSummary() {
       api<DashboardSummary>("/api/v2/dashboard/summary"),
   });
 }
-
-
-// ── Peak-hour heatmap ──────────────────────────────────────
-
-export interface PeakHoursResponse {
-  from_date:       string;
-  to_date:         string;
-  timezone:        string;
-  total_transfers: number;
-  max_count:       number;
-  grid:            number[][];   // [Mon..Sun][0..23]
-  busiest: {
-    day_of_week: number | null;
-    hour:        number | null;
-    count:       number;
-  };
-}
-
-export function usePeakHours(days = 30, enabled = true) {
-  return useQuery<PeakHoursResponse>({
-    queryKey: ["dashboard", "peak-hours", days],
-    queryFn: () =>
-      api<PeakHoursResponse>(
-        `/api/v2/dashboard/peak-hours?days=${days}`,
-      ),
-    enabled,
-  });
-}
