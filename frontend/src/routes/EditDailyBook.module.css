@@ -396,15 +396,6 @@
   font-weight: 500;
 }
 
-.dateBadge {
-  font-family: var(--db-font-mono, "JetBrains Mono", monospace);
-  color: var(--db-text-muted, #a3a3a3);
-}
-
-.dateBadgeSep {
-  opacity: 0.7;
-}
-
 .scrollX {
   overflow-x: auto;
 }

@@ -7,6 +7,13 @@
   align-items: flex-end;
 }
 
+.lateRuleRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.85rem;
+  align-items: flex-end;
+}
+
 .summaryRow {
   display: flex;
   align-items: baseline;

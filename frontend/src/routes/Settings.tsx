@@ -21,11 +21,6 @@ import { timezoneFromAddress } from "../lib/timezoneFromAddress";
 import { getCurrentIdentity } from "../lib/auth";
 import { passkeysSupported } from "../lib/webauthn";
 import {
-  GeolocationDeniedError,
-  GeolocationUnavailableError,
-  getCurrentCoordinates,
-} from "../lib/geolocation";
-import {
   Breadcrumbs,
   Alert, Button, ButtonLink, Card, Checkbox, ConfirmDialog, ErrorState, Field,
   Input, Loading, PageHeader, PageShell, SectionTitle, Select, space, Switch,
@@ -584,17 +579,6 @@ function StoreInfoCard() {
   const [timezone, setTimezone] = useState("");
   const [hours, setHours] = useState<StoreHourEntry[]>(() => defaultHours());
   const [enforceHours, setEnforceHours] = useState(false);
-  const [requirePasskey, setRequirePasskey] = useState(false);
-  const [requireGeofence, setRequireGeofence] = useState(false);
-  // Lat / lng are stored as strings so the input round-trips an
-  // empty "" cleanly (number-state would coerce "" → 0 and pin
-  // the geofence to the equator).  Validated on submit.
-  const [geoLat,     setGeoLat]     = useState("");
-  const [geoLng,     setGeoLng]     = useState("");
-  const [geoRadiusM, setGeoRadiusM] = useState("100");
-  const [geoBusy,    setGeoBusy]    = useState(false);
-  const [geoErr,     setGeoErr]     = useState<string | null>(null);
-  const [lateThreshold, setLateThreshold] = useState("5");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const toast = useToast();
@@ -623,20 +607,6 @@ function StoreInfoCard() {
         : defaultHours(),
     );
     setEnforceHours(Boolean(data.store.enforce_business_hours));
-    setRequirePasskey(Boolean(data.store.timeclock_require_passkey));
-    setRequireGeofence(Boolean(data.store.timeclock_require_geofence));
-    setGeoLat(
-      data.store.timeclock_geofence_lat == null
-        ? "" : String(data.store.timeclock_geofence_lat),
-    );
-    setGeoLng(
-      data.store.timeclock_geofence_lng == null
-        ? "" : String(data.store.timeclock_geofence_lng),
-    );
-    setGeoRadiusM(String(data.store.timeclock_geofence_radius_m ?? 100));
-    setLateThreshold(
-      String(data.store.timeclock_late_minutes_threshold ?? 5),
-    );
   }, [data]);
 
   const canEdit =
@@ -649,27 +619,6 @@ function StoreInfoCard() {
     setErr(null);
     setBusy(true);
     try {
-      // Geofence inputs are strings — turn them into numbers (or
-      // null) at the boundary so the API contract holds.  Empty
-      // lat / lng round-trips as null so the operator can clear
-      // the pin without disabling the toggle separately.
-      const latNum = geoLat.trim() === "" ? null : Number(geoLat);
-      const lngNum = geoLng.trim() === "" ? null : Number(geoLng);
-      const radiusNum = Math.max(10, Math.round(Number(geoRadiusM) || 100));
-      if (requireGeofence && (latNum == null || lngNum == null)) {
-        throw new ApiError(
-          400,
-          "Pin a location before turning on the geofence — use "
-          + "'Use my current location' or enter lat/lng manually.",
-          null,
-        );
-      }
-      if (latNum != null && (latNum < -90 || latNum > 90)) {
-        throw new ApiError(400, "Latitude must be between -90 and 90.", null);
-      }
-      if (lngNum != null && (lngNum < -180 || lngNum > 180)) {
-        throw new ApiError(400, "Longitude must be between -180 and 180.", null);
-      }
       await updateStoreInfo({
         name, email, phone, address,
         legal_name: legalName,
@@ -682,14 +631,6 @@ function StoreInfoCard() {
         timezone,
         store_hours: hours,
         enforce_business_hours:     enforceHours,
-        timeclock_require_passkey:  requirePasskey,
-        timeclock_require_geofence: requireGeofence,
-        timeclock_geofence_lat:     latNum,
-        timeclock_geofence_lng:     lngNum,
-        timeclock_geofence_radius_m: radiusNum,
-        timeclock_late_minutes_threshold: Math.max(
-          0, Math.min(240, Math.round(Number(lateThreshold) || 5)),
-        ),
       });
       await queryClient.invalidateQueries({
         queryKey: ["admin", "store-info"],
@@ -906,52 +847,6 @@ function StoreInfoCard() {
         </div>
       </Card>
 
-      <Card>
-        <SectionTitle>Time-clock policy</SectionTitle>
-        <p className={styles.helpText}>
-          Anti-buddy-punching gates for clock-in / clock-out and
-          the lateness threshold used by the payroll view.
-        </p>
-        <div className={styles.enforceRow}>
-          <Switch
-            checked={requirePasskey}
-            disabled={!canEdit}
-            onChange={setRequirePasskey}
-          >
-            Block time-clock punches without a passkey
-            <span className={styles.enforceHint}>
-              {" "}— every clock-in / clock-out demands a fresh
-              Windows Hello / Touch ID / Face ID prompt. Enroll
-              each cashier's device from
-              {" "}<code>/app/admin/timeclock/credentials</code>
-              {" "}before flipping this on.
-            </span>
-          </Switch>
-        </div>
-        <GeofenceSettingsSection
-          canEdit={canEdit}
-          requireGeofence={requireGeofence}
-          onChangeRequireGeofence={setRequireGeofence}
-          geoLat={geoLat}     onChangeGeoLat={setGeoLat}
-          geoLng={geoLng}     onChangeGeoLng={setGeoLng}
-          geoRadiusM={geoRadiusM}
-          onChangeGeoRadiusM={setGeoRadiusM}
-          geoBusy={geoBusy} setGeoBusy={setGeoBusy}
-          geoErr={geoErr}   setGeoErr={setGeoErr}
-        />
-        <Field
-          label="Lateness threshold (store-local minutes)"
-          hint="The payroll page flags an entry as 'Late' only when clock-in exceeds the planned shift's start by this many minutes. 0–240. Default 5."
-        >
-          <Input
-            type="number" step="1" min="0" max="240"
-            value={lateThreshold}
-            onChange={(e) => setLateThreshold(e.target.value)}
-            disabled={!canEdit}
-          />
-        </Field>
-      </Card>
-
       {err && <Alert tone="error">{err}</Alert>}
 
       {canEdit && (
@@ -962,119 +857,6 @@ function StoreInfoCard() {
         </div>
       )}
     </form>
-  );
-}
-
-// Geofence settings — pinned lat/lng + radius + the gate toggle.
-// Lives under the time-clock section of the store form because
-// "block punches outside the store's location" reads as a sibling
-// of the existing passkey gate.  Lat/lng are kept as strings up
-// here so the inputs can clear cleanly; StoreInfoCard.onSubmit
-// coerces + validates them at the boundary.
-function GeofenceSettingsSection({
-  canEdit,
-  requireGeofence, onChangeRequireGeofence,
-  geoLat,     onChangeGeoLat,
-  geoLng,     onChangeGeoLng,
-  geoRadiusM, onChangeGeoRadiusM,
-  geoBusy, setGeoBusy,
-  geoErr,  setGeoErr,
-}: {
-  canEdit: boolean;
-  requireGeofence: boolean;
-  onChangeRequireGeofence: (v: boolean) => void;
-  geoLat: string;     onChangeGeoLat: (v: string) => void;
-  geoLng: string;     onChangeGeoLng: (v: string) => void;
-  geoRadiusM: string; onChangeGeoRadiusM: (v: string) => void;
-  geoBusy: boolean;   setGeoBusy: (v: boolean) => void;
-  geoErr:  string | null;
-  setGeoErr: (v: string | null) => void;
-}) {
-  async function readMyLocation() {
-    setGeoErr(null);
-    setGeoBusy(true);
-    try {
-      // 10s timeout matches the punch-flow read so admins
-      // calibrate against the same accuracy budget cashiers hit.
-      const coords = await getCurrentCoordinates();
-      onChangeGeoLat(coords.lat.toFixed(6));
-      onChangeGeoLng(coords.lng.toFixed(6));
-    } catch (err) {
-      if (err instanceof GeolocationDeniedError
-          || err instanceof GeolocationUnavailableError) {
-        setGeoErr(err.message);
-      } else if (err instanceof Error) {
-        setGeoErr(err.message);
-      } else {
-        setGeoErr("Could not read the current location.");
-      }
-    } finally {
-      setGeoBusy(false);
-    }
-  }
-
-  return (
-    <>
-      <div className={styles.enforceRow}>
-        <Switch
-          checked={requireGeofence}
-          disabled={!canEdit}
-          onChange={onChangeRequireGeofence}
-        >
-          Block time-clock punches outside the store's location
-          <span className={styles.enforceHint}>
-            {" "}— anti-buddy-punching: pin a lat/lng + radius below,
-            then every clock-in / clock-out checks the cashier's
-            browser GPS against the pin. Refused when outside the
-            radius or when GPS permission is denied.
-          </span>
-        </Switch>
-      </div>
-      <div className={styles.geofenceGrid}>
-        <Field label="Latitude" hint="-90 to 90">
-          <Input
-            type="number" step="0.000001" min="-90" max="90"
-            value={geoLat}
-            onChange={(e) => onChangeGeoLat(e.target.value)}
-            disabled={!canEdit}
-          />
-        </Field>
-        <Field label="Longitude" hint="-180 to 180">
-          <Input
-            type="number" step="0.000001" min="-180" max="180"
-            value={geoLng}
-            onChange={(e) => onChangeGeoLng(e.target.value)}
-            disabled={!canEdit}
-          />
-        </Field>
-        <Field
-          label="Radius (meters)"
-          hint="Minimum 10m. Typical storefront: 50–150m."
-        >
-          <Input
-            type="number" step="1" min="10"
-            value={geoRadiusM}
-            onChange={(e) => onChangeGeoRadiusM(e.target.value)}
-            disabled={!canEdit}
-          />
-        </Field>
-      </div>
-      {canEdit && (
-        <div className={styles.geofenceActions}>
-          <Button
-            type="button" tone="secondary" busy={geoBusy}
-            disabled={geoBusy} onClick={() => { void readMyLocation(); }}
-          >
-            {geoBusy ? "Reading…" : "Use my current location"}
-          </Button>
-          <span className={styles.enforceHint}>
-            Stand at the storefront on the device you'll punch
-            from. The browser will prompt for location permission.
-          </span>
-        </div>
-      )}
-      {geoErr && <Alert tone="error">{geoErr}</Alert>}
-    </>
   );
 }
 

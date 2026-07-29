@@ -330,17 +330,10 @@ export default function EditDailyBook() {
   return (
     <PageShell gap="1rem">
       <Breadcrumbs crumbs={[
-        { label: "Daily", to: "/daily" },
-        { label: formatHumanDate(date) },
+        { label: "Daily book", to: "/daily" },
       ]} />
       <PageHeader
-        title="Daily book"
-        subtitle={(
-          <span className={styles.dateBadge}>
-            {formatHumanDate(date)}{" "}
-            <span className={styles.dateBadgeSep}>· {date}</span>
-          </span>
-        )}
+        title={formatHumanDate(date)}
         actions={(
           <div className={styles.headerActions}>
             {locked && (

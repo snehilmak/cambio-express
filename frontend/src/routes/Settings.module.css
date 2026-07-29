@@ -156,22 +156,6 @@
   font-weight: 400;
 }
 
-.geofenceGrid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
-  gap: 0.85rem;
-  margin-top: 0.65rem;
-}
-
-.geofenceActions {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 0.75rem;
-  margin-top: 0.55rem;
-}
-
-
 /* Profile tab — lifted from the retired AccountProfile.module.css
  * when /account/profile collapsed into /settings/profile. */
 .profileLead {

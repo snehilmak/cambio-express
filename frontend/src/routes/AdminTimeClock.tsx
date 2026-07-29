@@ -7,7 +7,7 @@ import {
   type TimeClockEntryRow, type TimeClockStatus,
 } from "../api/timeclock";
 import { useEmployees } from "../api/transfers";
-import { useProfile, useStoreInfo } from "../api/account";
+import { updateStoreInfo, useProfile, useStoreInfo } from "../api/account";
 import { ApiError } from "../lib/api";
 import { formatTimestamp } from "../lib/datetime";
 import {
@@ -150,6 +150,11 @@ export default function AdminTimeClock() {
           </Field>
         </div>
       </Card>
+
+      <LateThresholdSetting
+        key={storeInfo?.store?.timeclock_late_minutes_threshold ?? 5}
+        current={storeInfo?.store?.timeclock_late_minutes_threshold ?? 5}
+      />
 
       {data.isLoading && (
         <Card><TableSkeleton rows={5} cols={6} /></Card>
@@ -419,6 +424,65 @@ function LateBadge({
     return <span className={styles.subtle}>On time</span>;
   }
   return <Pill tone="warning">{`Late ${lateMinutes}m`}</Pill>;
+}
+
+
+// Store-level payroll rule: how many minutes past a planned shift's
+// start counts as "Late" for the pill above. Lives here (not in
+// Settings) so the rule sits next to the column it drives. Persists
+// via the store-info endpoint; remounts on the saved value (`key` at
+// the call site) so it re-syncs after a refetch without an effect.
+function LateThresholdSetting({ current }: { current: number }) {
+  const queryClient = useQueryClient();
+  const toast = useToast();
+  const [value, setValue] = useState(String(current));
+  const [busy, setBusy] = useState(false);
+  const dirty = value.trim() !== "" && Number(value) !== current;
+
+  async function save() {
+    const n = Math.max(0, Math.min(240, Math.round(Number(value) || 0)));
+    setBusy(true);
+    try {
+      await updateStoreInfo({ timeclock_late_minutes_threshold: n });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["timeclock", "admin"] }),
+        queryClient.invalidateQueries({ queryKey: ["admin", "store-info"] }),
+      ]);
+      toast({ message: `Late threshold set to ${n} min.`, tone: "success" });
+    } catch (e) {
+      toast({
+        message: e instanceof ApiError ? e.message : "Could not save.",
+        tone: "error",
+      });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Card>
+      <div className={styles.lateRuleRow}>
+        <Field
+          label="Mark clock-ins late after (minutes)"
+          hint="Only clock-ins later than this past the planned shift start show the 'Late' pill below. 0–240."
+        >
+          <Input
+            type="number" min="0" max="240" step="1"
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            style={{ maxWidth: "8rem" }}
+          />
+        </Field>
+        <Button
+          tone="secondary" size="sm" busy={busy}
+          disabled={busy || !dirty}
+          onClick={() => { void save(); }}
+        >
+          Save
+        </Button>
+      </div>
+    </Card>
+  );
 }
 
 
