@@ -148,25 +148,41 @@
   gap: 0.85rem 1rem;
 }
 
-.widget {
+.widgetGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  gap: 0.65rem;
+  margin-top: 0.35rem;
+}
+
+.widgetCard {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.4rem;
+  width: 100%;
+  text-align: left;
   border: 1px solid var(--db-border, #262626);
   background: var(--db-surface, #0a0a0a);
   border-radius: 0.75rem;
-  margin-bottom: 0.65rem;
-  overflow: hidden;
-}
-
-.widgetHeader {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  background: transparent;
-  border: none;
-  padding: 0.75rem 1rem;
+  padding: 0.85rem 1rem;
   cursor: pointer;
   color: var(--db-text, #f5f5f5);
   font-family: var(--db-font-body, "Inter", system-ui, sans-serif);
+  transition: border-color 120ms ease, transform 120ms ease;
+}
+
+.widgetCard:hover {
+  border-color: var(--db-border-strong, #3a3a3a);
+  transform: translateY(-1px);
+}
+
+.widgetCardTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: 0.75rem;
 }
 
 .widgetLabel {
@@ -175,13 +191,6 @@
   gap: 0.55rem;
   font-weight: 600;
   font-size: 0.92rem;
-}
-
-.widgetCaret {
-  display: inline-block;
-  width: 0.85rem;
-  color: var(--db-text-muted, #a3a3a3);
-  transition: transform 120ms ease;
 }
 
 .widgetCount {
@@ -196,9 +205,7 @@
   font-weight: 600;
 }
 
-.widgetBody {
-  border-top: 1px solid var(--db-border-subtle, #1f1f1f);
-  padding: 0.85rem 1rem 1rem;
+.lineModalBody {
   display: flex;
   flex-direction: column;
   gap: 0.85rem;
