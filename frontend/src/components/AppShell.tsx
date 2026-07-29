@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
-import { useProfile, useStoreInfo } from "../api/account";
+import { useProfile, useSessionStatus, useStoreInfo } from "../api/account";
 import { clearAccessToken, getCurrentIdentity } from "../lib/auth";
+import StoreGate from "./StoreGate";
 import { clearVisits, recordVisit } from "../lib/recency";
 import { reconcileTheme } from "../lib/theme";
 import { AnnouncementBanner } from "./AnnouncementBanner";
@@ -84,6 +85,31 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     // shouldn't inherit the previous cashier's "Most Used" tiles.
     clearVisits();
     navigate("/login", { replace: true });
+  }
+
+  // Store gate (PR C): a frozen or lapsed-subscription store locks its
+  // users out to a re-subscribe / suspended screen. Superadmin is never
+  // gated (backend returns gated=false — no store scope). While the
+  // status query is loading we render the normal shell to avoid a
+  // gate flash on every navigation.
+  const { data: sessionStatus } = useSessionStatus();
+  const gated = sessionStatus?.gated === true;
+  const gateReason = sessionStatus?.reason;
+  // The subscription gate must let the Subscribe flow render so the user
+  // can self-serve re-subscribe (Stripe Checkout). basename is "/app",
+  // so the in-router path is "/subscribe". Frozen has no self-serve path,
+  // so it gates every route.
+  const onSubscribeFlow = location.pathname.startsWith("/subscribe");
+  const showGate =
+    gated && !(gateReason === "subscription" && onSubscribeFlow);
+  if (showGate && (gateReason === "frozen" || gateReason === "subscription")) {
+    return (
+      <StoreGate
+        reason={gateReason}
+        storeName={sessionStatus?.store_name ?? ""}
+        onSignOut={onSignOut}
+      />
+    );
   }
 
   const role = identity?.role ?? "";

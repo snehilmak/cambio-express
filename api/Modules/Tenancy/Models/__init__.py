@@ -60,6 +60,15 @@ class Store(Base):
     addons        = Column(String(255), default="")
     canceled_at           = Column(DateTime, nullable=True)
     data_retention_until  = Column(DateTime, nullable=True)
+    # Superadmin store freeze (PR C). When ``frozen_at`` is set the store
+    # is suspended by the platform operator (abuse, dispute, non-payment
+    # follow-up) — DISTINCT from trial-expired and from retention-pause.
+    # The SPA gates a frozen store's users to a "suspended, contact
+    # support" screen. Cleared by the superadmin unfreeze action.
+    # ``frozen_reason`` is operator context shown in the audit log + the
+    # superadmin UI (not surfaced to the store's users).
+    frozen_at             = Column(DateTime, nullable=True)
+    frozen_reason         = Column(String(200), default="")
     # Trial-reminder dedup. send_trial_reminders() stamps this the
     # first time it sends; cleared on checkout.session.completed so a
     # second trial (post-reactivation) gets its own fresh reminder.

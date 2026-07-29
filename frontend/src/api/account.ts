@@ -241,6 +241,24 @@ export function useProfile() {
   });
 }
 
+// Store-gate status (PR C). Every authed role polls this on app load so
+// the shell can lock a frozen / lapsed-subscription store's users out to
+// a re-subscribe / suspended screen. `reason`: "frozen" | "subscription"
+// | "". Superadmin (no store) is never gated.
+export interface SessionStatus {
+  gated:      boolean;
+  reason:     "frozen" | "subscription" | "";
+  plan:       string;
+  store_name: string;
+}
+
+export function useSessionStatus() {
+  return useQuery<SessionStatus>({
+    queryKey: ["account", "session-status"],
+    queryFn: () => api<SessionStatus>("/api/v2/auth/session-status"),
+  });
+}
+
 export async function updateProfile(
   body: ProfileUpdateBody,
 ): Promise<ProfileResponse> {

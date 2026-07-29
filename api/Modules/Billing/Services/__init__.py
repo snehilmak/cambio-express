@@ -53,6 +53,7 @@ from api.Modules.Billing.Services.retention import (
 from api.Modules.Billing.Services.store_state import (
     data_retention_days_left,
     store_addon_keys,
+    store_gate_status,
     store_has_paid_plan,
 )
 from api.Modules.Billing.Services.trial import (
@@ -89,6 +90,7 @@ __all__ = [
     "create_billing_portal_session",
     "create_checkout_session",
     "data_retention_days_left",
+    "store_gate_status",
     "derive_plan_from_price",
     "ensure_referral_code",
     "ensure_stripe_customer",

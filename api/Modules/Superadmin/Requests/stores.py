@@ -136,11 +136,37 @@ class SuperadminStoreCreditResponse(BaseModel):
     stripe_txn_id: str
 
 
+class SuperadminStoreFreezeRequest(BaseModel):
+    """POST body for /superadmin/stores/{id}/freeze (PR C).
+
+    Suspends a store — the SPA gates its users to a "suspended, contact
+    support" screen. Distinct from trial-expired and retention-pause.
+    `reason` is operator context (abuse, dispute, non-payment) recorded
+    in the audit log + shown in the superadmin UI; it is NOT surfaced to
+    the store's users."""
+    model_config = ConfigDict(extra="forbid")
+
+    reason: str = Field("", max_length=200)
+
+
+class SuperadminStoreFreezeResponse(BaseModel):
+    """Result of a freeze/unfreeze. `frozen` reflects the store's new
+    state; `frozen_at` is the ISO timestamp (empty when unfrozen)."""
+    model_config = ConfigDict(extra="forbid")
+
+    ok:            bool
+    frozen:        bool
+    frozen_at:     str
+    frozen_reason: str
+
+
 __all__ = [
     "SuperadminStoreCreateRequest",
     "SuperadminStoreCreditRequest",
     "SuperadminStoreCreditResponse",
     "SuperadminStoreDetailResponse",
     "SuperadminStoreDetailRow",
+    "SuperadminStoreFreezeRequest",
+    "SuperadminStoreFreezeResponse",
     "SuperadminStoreUpdateRequest",
 ]

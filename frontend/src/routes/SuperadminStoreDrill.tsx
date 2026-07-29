@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ApiError } from "../lib/api";
 import { fmtMoney2 } from "../lib/formatters";
-import { creditStore, emailStore, extendTrial, toggleStoreActive } from "../api/superadmin";
+import { creditStore, emailStore, extendTrial, freezeStore, toggleStoreActive, unfreezeStore } from "../api/superadmin";
 import { getCurrentIdentity } from "../lib/auth";
 import {
   Alert, Breadcrumbs, Button, ButtonLink, Card, Checkbox, EmptyState,
@@ -22,6 +22,7 @@ interface StoreInfo {
   trial_status: string; created_at: string;
   trial_ends_at: string; canceled_at: string;
   stripe_customer_id: string;
+  frozen: boolean; frozen_at: string; frozen_reason: string;
 }
 
 interface TeamMember {
@@ -72,6 +73,21 @@ export default function SuperadminStoreDrill() {
   const [creditReason, setCreditReason] = useState("");
   const [creditBusy, setCreditBusy] = useState(false);
   const [creditError, setCreditError] = useState<string | null>(null);
+  const [showFreeze, setShowFreeze] = useState(false);
+  const [freezeReason, setFreezeReason] = useState("");
+  const [freezeBusy, setFreezeBusy] = useState(false);
+  const [freezeError, setFreezeError] = useState<string | null>(null);
+
+  async function doUnfreeze(id: number) {
+    setActionBusy(true);
+    try {
+      await unfreezeStore(id);
+      toast({ message: "Store unfrozen.", tone: "success" });
+      void refetch();
+    } catch (e) {
+      toastApiError(e, "Failed to unfreeze");
+    } finally { setActionBusy(false); }
+  }
 
   return (
     <PageShell gap="1.25rem">
@@ -107,6 +123,21 @@ export default function SuperadminStoreDrill() {
                 >
                   Credit account
                 </Button>
+                {data.store.frozen ? (
+                  <Button
+                    tone="secondary" size="sm" busy={actionBusy}
+                    onClick={() => { void doUnfreeze(data.store.id); }}
+                  >
+                    Unfreeze
+                  </Button>
+                ) : (
+                  <Button
+                    tone="danger" size="sm"
+                    onClick={() => { setShowFreeze(true); setFreezeError(null); }}
+                  >
+                    Freeze
+                  </Button>
+                )}
                 <Button
                   tone="secondary" size="sm"
                   busy={actionBusy}
@@ -148,6 +179,15 @@ export default function SuperadminStoreDrill() {
               </div>
             )}
           />
+
+          {data.store.frozen && (
+            <Alert tone="warning">
+              This store is <strong>frozen</strong> — its users are locked out
+              to a “suspended” screen until you unfreeze it.
+              {data.store.frozen_reason ? ` Reason: ${data.store.frozen_reason}.` : ""}
+              {data.store.frozen_at ? ` Since ${data.store.frozen_at.slice(0, 10)}.` : ""}
+            </Alert>
+          )}
 
           <KpiGrid>
             <KpiCard label="Plan" value={data.store.plan} tone={
@@ -328,6 +368,59 @@ export default function SuperadminStoreDrill() {
             </Button>
             <Button type="submit" busy={emailBusy} disabled={emailBusy}>
               {emailBusy ? "Sending…" : "Send email"}
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal
+        open={showFreeze}
+        title={`Freeze ${data?.store.name ?? "store"}`}
+        onClose={() => { setShowFreeze(false); setFreezeError(null); }}
+      >
+        <form
+          onSubmit={async (e) => {
+            e.preventDefault();
+            if (!storeId) return;
+            setFreezeBusy(true);
+            setFreezeError(null);
+            try {
+              await freezeStore(storeId, freezeReason.trim());
+              toast({ message: "Store frozen.", tone: "success" });
+              setShowFreeze(false);
+              setFreezeReason("");
+              void refetch();
+            } catch (err) {
+              setFreezeError(err instanceof ApiError ? err.message : "Could not freeze.");
+            } finally {
+              setFreezeBusy(false);
+            }
+          }}
+          style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}
+        >
+          <p style={{ fontSize: "0.85rem", color: "var(--db-text-muted)", margin: 0 }}>
+            Suspends the store. Its users are locked out to a “suspended,
+            contact support” screen — re-subscribing won’t lift it, only
+            an unfreeze here does. Their data is untouched.
+          </p>
+          <Field label="Reason (optional)">
+            <Input
+              type="text" value={freezeReason}
+              onChange={(e) => setFreezeReason(e.target.value)}
+              placeholder="Abuse, chargeback dispute, non-payment…"
+              maxLength={200}
+            />
+          </Field>
+          {freezeError && <Alert tone="error">{freezeError}</Alert>}
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
+            <Button
+              tone="secondary" type="button"
+              onClick={() => { setShowFreeze(false); setFreezeError(null); }}
+            >
+              Cancel
+            </Button>
+            <Button type="submit" tone="danger" busy={freezeBusy} disabled={freezeBusy}>
+              {freezeBusy ? "Freezing…" : "Freeze store"}
             </Button>
           </div>
         </form>

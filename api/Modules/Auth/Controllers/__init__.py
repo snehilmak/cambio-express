@@ -738,6 +738,39 @@ def me_route(claims: dict[str, Any] = Depends(get_principal)) -> dict[str, Any]:
     }
 
 
+@router.get("/session-status")
+def session_status_route(
+    db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
+) -> dict[str, Any]:
+    """Store-gate status for the authed user's SPA shell (PR C).
+
+    Every authed role calls this on app load so the chrome can decide
+    whether to gate the user out of the app to a "re-subscribe" /
+    "suspended" screen. Read-only — no login/token logic, no writes.
+
+    Returns ``{gated, reason, plan, store_name}``:
+      * ``gated``  — True when the store is frozen or its subscription
+        has fully lapsed (see ``store_gate_status``).
+      * ``reason`` — "frozen" | "subscription" | "".
+      * ``plan``   — the store's plan slug (for the re-subscribe copy).
+      * ``store_name`` — shown on the gate screen.
+
+    A superadmin (no ``store_id``) is never gated — they operate the
+    platform, not a store."""
+    from api.Modules.Billing.Services import store_gate_status
+    from api.Modules.Tenancy.Models import Store
+    store_id = claims.get("store_id")
+    store = db.get(Store, int(store_id)) if store_id is not None else None
+    status = store_gate_status(store)
+    return {
+        "gated": bool(status["gated"]),
+        "reason": str(status["reason"]),
+        "plan": (store.plan or "") if store is not None else "",
+        "store_name": (store.name or "") if store is not None else "",
+    }
+
+
 @router.get("/profile", response_model=ProfileResponse)
 def get_profile_route(
     db: Session = Depends(get_db),
