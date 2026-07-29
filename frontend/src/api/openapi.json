@@ -7719,6 +7719,50 @@
         "title": "SuperadminStoreDetailRow",
         "type": "object"
       },
+      "SuperadminStoreFreezeRequest": {
+        "additionalProperties": false,
+        "description": "POST body for /superadmin/stores/{id}/freeze (PR C).\n\nSuspends a store \u2014 the SPA gates its users to a \"suspended, contact\nsupport\" screen. Distinct from trial-expired and retention-pause.\n`reason` is operator context (abuse, dispute, non-payment) recorded\nin the audit log + shown in the superadmin UI; it is NOT surfaced to\nthe store's users.",
+        "properties": {
+          "reason": {
+            "default": "",
+            "maxLength": 200,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "title": "SuperadminStoreFreezeRequest",
+        "type": "object"
+      },
+      "SuperadminStoreFreezeResponse": {
+        "additionalProperties": false,
+        "description": "Result of a freeze/unfreeze. `frozen` reflects the store's new\nstate; `frozen_at` is the ISO timestamp (empty when unfrozen).",
+        "properties": {
+          "frozen": {
+            "title": "Frozen",
+            "type": "boolean"
+          },
+          "frozen_at": {
+            "title": "Frozen At",
+            "type": "string"
+          },
+          "frozen_reason": {
+            "title": "Frozen Reason",
+            "type": "string"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ok",
+          "frozen",
+          "frozen_at",
+          "frozen_reason"
+        ],
+        "title": "SuperadminStoreFreezeResponse",
+        "type": "object"
+      },
       "SuperadminStoreListResponse": {
         "additionalProperties": false,
         "properties": {
@@ -14361,6 +14405,74 @@
           }
         },
         "summary": "Reset Password Route",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/auth/session-status": {
+      "get": {
+        "description": "Store-gate status for the authed user's SPA shell (PR C).\n\nEvery authed role calls this on app load so the chrome can decide\nwhether to gate the user out of the app to a \"re-subscribe\" /\n\"suspended\" screen. Read-only \u2014 no login/token logic, no writes.\n\nReturns ``{gated, reason, plan, store_name}``:\n  * ``gated``  \u2014 True when the store is frozen or its subscription\n    has fully lapsed (see ``store_gate_status``).\n  * ``reason`` \u2014 \"frozen\" | \"subscription\" | \"\".\n  * ``plan``   \u2014 the store's plan slug (for the re-subscribe copy).\n  * ``store_name`` \u2014 shown on the gate screen.\n\nA superadmin (no ``store_id``) is never gated \u2014 they operate the\nplatform, not a store.",
+        "operationId": "session_status_route_auth_session_status_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Session Status Route Auth Session Status Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Session Status Route",
         "tags": [
           "auth"
         ]
@@ -25917,6 +26029,92 @@
         ]
       }
     },
+    "/superadmin/stores/{store_id}/freeze": {
+      "post": {
+        "description": "Suspend a store. Its users get gated to a \"suspended, contact\nsupport\" screen by the SPA shell (via `GET /auth/session-status`).\n\nDistinct from trial-expired and retention-pause: a frozen store can\nbe on any plan, and re-subscribing does NOT lift the freeze \u2014 only\na superadmin unfreeze does. Use for abuse, billing disputes, or a\nnon-payment follow-up hold.\n\nIdempotent-ish: re-freezing an already-frozen store just refreshes\nthe reason (and re-stamps `frozen_at`). Records an audit row.",
+        "operationId": "freeze_store_route_superadmin_stores__store_id__freeze_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "store_id",
+            "required": true,
+            "schema": {
+              "minimum": 1,
+              "title": "Store Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SuperadminStoreFreezeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuperadminStoreFreezeResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Freeze Store Route",
+        "tags": [
+          "superadmin"
+        ]
+      }
+    },
     "/superadmin/stores/{store_id}/permissions": {
       "get": {
         "description": "Permission matrix for a specific store. Superadmin can see\nand edit admin + employee roles.",
@@ -26246,6 +26444,82 @@
           }
         },
         "summary": "Toggle Store Active Route",
+        "tags": [
+          "superadmin"
+        ]
+      }
+    },
+    "/superadmin/stores/{store_id}/unfreeze": {
+      "post": {
+        "description": "Lift a store's suspension so its users can log in + use the app\nagain. No-op-safe on an already-unfrozen store. Records an audit\nrow (unfreeze is a state change worth trailing even when the store\nwasn't frozen).",
+        "operationId": "unfreeze_store_route_superadmin_stores__store_id__unfreeze_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "store_id",
+            "required": true,
+            "schema": {
+              "minimum": 1,
+              "title": "Store Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuperadminStoreFreezeResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Unfreeze Store Route",
         "tags": [
           "superadmin"
         ]

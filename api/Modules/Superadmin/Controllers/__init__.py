@@ -39,6 +39,8 @@ from api.Modules.Superadmin.Requests import (
     SuperadminStoreCreditResponse,
     SuperadminStoreDetailResponse,
     SuperadminStoreDetailRow,
+    SuperadminStoreFreezeRequest,
+    SuperadminStoreFreezeResponse,
     SuperadminStoreListResponse,
     SuperadminStoreRow,
     SuperadminStoreUpdateRequest,
@@ -848,6 +850,9 @@ def store_drill_route(
             "trial_ends_at": _iso(store.trial_ends_at),
             "canceled_at": _iso(store.canceled_at),
             "stripe_customer_id": store.stripe_customer_id or "",
+            "frozen": store.frozen_at is not None,
+            "frozen_at": _iso(store.frozen_at),
+            "frozen_reason": store.frozen_reason or "",
         },
         "team": team,
         "roster": roster,
@@ -1396,6 +1401,83 @@ def credit_store_route(
     )
     return SuperadminStoreCreditResponse(
         ok=True, amount_cents=body.amount_cents, stripe_txn_id=txn_id,
+    )
+
+
+# ── Store freeze / unfreeze (PR C) ─────────────────────────
+
+
+@router.post(
+    "/stores/{store_id}/freeze",
+    response_model=SuperadminStoreFreezeResponse,
+)
+def freeze_store_route(
+    body: SuperadminStoreFreezeRequest,
+    store_id: int = Path(..., ge=1),
+    db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
+) -> SuperadminStoreFreezeResponse:
+    """Suspend a store. Its users get gated to a "suspended, contact
+    support" screen by the SPA shell (via `GET /auth/session-status`).
+
+    Distinct from trial-expired and retention-pause: a frozen store can
+    be on any plan, and re-subscribing does NOT lift the freeze — only
+    a superadmin unfreeze does. Use for abuse, billing disputes, or a
+    non-payment follow-up hold.
+
+    Idempotent-ish: re-freezing an already-frozen store just refreshes
+    the reason (and re-stamps `frozen_at`). Records an audit row."""
+    _require_superadmin(claims)
+    from api.Modules.Tenancy.Models import Store
+    s = db.get(Store, store_id)
+    if s is None:
+        raise HTTPException(status_code=404, detail="Store not found")
+    sa = resolve_superadmin_user(db, claims)
+    s.frozen_at = utc_now()
+    s.frozen_reason = (body.reason or "").strip()[:200]
+    _audit_and_commit(
+        db, sa, "freeze_store",
+        target_id=str(s.id),
+        details=(
+            f"{s.name} ({s.slug})"
+            + (f" — {s.frozen_reason[:80]}" if s.frozen_reason else "")
+        ),
+    )
+    return SuperadminStoreFreezeResponse(
+        ok=True, frozen=True,
+        frozen_at=_iso(s.frozen_at), frozen_reason=s.frozen_reason or "",
+    )
+
+
+@router.post(
+    "/stores/{store_id}/unfreeze",
+    response_model=SuperadminStoreFreezeResponse,
+)
+def unfreeze_store_route(
+    store_id: int = Path(..., ge=1),
+    db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
+) -> SuperadminStoreFreezeResponse:
+    """Lift a store's suspension so its users can log in + use the app
+    again. No-op-safe on an already-unfrozen store. Records an audit
+    row (unfreeze is a state change worth trailing even when the store
+    wasn't frozen)."""
+    _require_superadmin(claims)
+    from api.Modules.Tenancy.Models import Store
+    s = db.get(Store, store_id)
+    if s is None:
+        raise HTTPException(status_code=404, detail="Store not found")
+    sa = resolve_superadmin_user(db, claims)
+    was_frozen = s.frozen_at is not None
+    s.frozen_at = None
+    s.frozen_reason = ""
+    _audit_and_commit(
+        db, sa, "unfreeze_store",
+        target_id=str(s.id),
+        details=f"{s.name} ({s.slug})" + ("" if was_frozen else " (was not frozen)"),
+    )
+    return SuperadminStoreFreezeResponse(
+        ok=True, frozen=False, frozen_at="", frozen_reason="",
     )
 
 

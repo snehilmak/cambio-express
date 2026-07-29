@@ -1374,6 +1374,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/session-status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Session Status Route
+         * @description Store-gate status for the authed user's SPA shell (PR C).
+         *
+         *     Every authed role calls this on app load so the chrome can decide
+         *     whether to gate the user out of the app to a "re-subscribe" /
+         *     "suspended" screen. Read-only — no login/token logic, no writes.
+         *
+         *     Returns ``{gated, reason, plan, store_name}``:
+         *       * ``gated``  — True when the store is frozen or its subscription
+         *         has fully lapsed (see ``store_gate_status``).
+         *       * ``reason`` — "frozen" | "subscription" | "".
+         *       * ``plan``   — the store's plan slug (for the re-subscribe copy).
+         *       * ``store_name`` — shown on the gate screen.
+         *
+         *     A superadmin (no ``store_id``) is never gated — they operate the
+         *     platform, not a store.
+         */
+        get: operations["session_status_route_auth_session_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/sessions": {
         parameters: {
             query?: never;
@@ -4044,6 +4078,35 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/superadmin/stores/{store_id}/freeze": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Freeze Store Route
+         * @description Suspend a store. Its users get gated to a "suspended, contact
+         *     support" screen by the SPA shell (via `GET /auth/session-status`).
+         *
+         *     Distinct from trial-expired and retention-pause: a frozen store can
+         *     be on any plan, and re-subscribing does NOT lift the freeze — only
+         *     a superadmin unfreeze does. Use for abuse, billing disputes, or a
+         *     non-payment follow-up hold.
+         *
+         *     Idempotent-ish: re-freezing an already-frozen store just refreshes
+         *     the reason (and re-stamps `frozen_at`). Records an audit row.
+         */
+        post: operations["freeze_store_route_superadmin_stores__store_id__freeze_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/superadmin/stores/{store_id}/permissions": {
         parameters: {
             query?: never;
@@ -4104,6 +4167,29 @@ export interface paths {
          * @description Enable / disable a store.
          */
         post: operations["toggle_store_active_route_superadmin_stores__store_id__toggle_active_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/superadmin/stores/{store_id}/unfreeze": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Unfreeze Store Route
+         * @description Lift a store's suspension so its users can log in + use the app
+         *     again. No-op-safe on an already-unfrozen store. Records an audit
+         *     row (unfreeze is a state change worth trailing even when the store
+         *     wasn't frozen).
+         */
+        post: operations["unfreeze_store_route_superadmin_stores__store_id__unfreeze_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -8864,6 +8950,38 @@ export interface components {
             /** Trial Ends At */
             trial_ends_at: string;
         };
+        /**
+         * SuperadminStoreFreezeRequest
+         * @description POST body for /superadmin/stores/{id}/freeze (PR C).
+         *
+         *     Suspends a store — the SPA gates its users to a "suspended, contact
+         *     support" screen. Distinct from trial-expired and retention-pause.
+         *     `reason` is operator context (abuse, dispute, non-payment) recorded
+         *     in the audit log + shown in the superadmin UI; it is NOT surfaced to
+         *     the store's users.
+         */
+        SuperadminStoreFreezeRequest: {
+            /**
+             * Reason
+             * @default
+             */
+            reason: string;
+        };
+        /**
+         * SuperadminStoreFreezeResponse
+         * @description Result of a freeze/unfreeze. `frozen` reflects the store's new
+         *     state; `frozen_at` is the ISO timestamp (empty when unfrozen).
+         */
+        SuperadminStoreFreezeResponse: {
+            /** Frozen */
+            frozen: boolean;
+            /** Frozen At */
+            frozen_at: string;
+            /** Frozen Reason */
+            frozen_reason: string;
+            /** Ok */
+            ok: boolean;
+        };
         /** SuperadminStoreListResponse */
         SuperadminStoreListResponse: {
             /** Rows */
@@ -12184,6 +12302,41 @@ export interface operations {
                 "application/json": components["schemas"]["ResetPasswordRequest"];
             };
         };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    session_status_route_auth_session_status_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {
@@ -17238,6 +17391,45 @@ export interface operations {
             };
         };
     };
+    freeze_store_route_superadmin_stores__store_id__freeze_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                store_id: number;
+            };
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SuperadminStoreFreezeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SuperadminStoreFreezeResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     superadmin_store_permissions_route_superadmin_stores__store_id__permissions_get: {
         parameters: {
             query?: never;
@@ -17385,6 +17577,41 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    unfreeze_store_route_superadmin_stores__store_id__unfreeze_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                store_id: number;
+            };
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SuperadminStoreFreezeResponse"];
                 };
             };
             /** @description Validation Error */

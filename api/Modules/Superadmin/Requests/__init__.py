@@ -13,6 +13,8 @@ from api.Modules.Superadmin.Requests.stores import (
     SuperadminStoreCreditResponse,
     SuperadminStoreDetailResponse,
     SuperadminStoreDetailRow,
+    SuperadminStoreFreezeRequest,
+    SuperadminStoreFreezeResponse,
     SuperadminStoreUpdateRequest,
 )
 
@@ -149,6 +151,8 @@ __all__ = [
     "SuperadminStoreCreditResponse",
     "SuperadminStoreDetailResponse",
     "SuperadminStoreDetailRow",
+    "SuperadminStoreFreezeRequest",
+    "SuperadminStoreFreezeResponse",
     "SuperadminStoreListResponse",
     "SuperadminStoreRow",
     "SuperadminStoreUpdateRequest",

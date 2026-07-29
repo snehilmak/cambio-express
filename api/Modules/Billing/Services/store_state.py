@@ -60,3 +60,43 @@ def data_retention_days_left(store: Store | None) -> int | None:
         return None
     delta = store.data_retention_until - utc_now()
     return int(max(0, delta.days))
+
+
+# Gate reasons returned by ``store_gate_status``. Ordered by
+# precedence — a frozen store reports "frozen" even if its plan also
+# lapsed, because the operator suspension is the more specific state.
+GATE_REASON_FROZEN = "frozen"          # superadmin suspended the store
+GATE_REASON_SUBSCRIPTION = "subscription"  # trial/grace fully elapsed or plan inactive
+GATE_REASON_NONE = ""                   # store is usable
+
+
+def store_gate_status(store: Store | None) -> dict[str, object]:
+    """Whether a store's users should be gated out of the app, and why.
+
+    Returns ``{"gated": bool, "reason": str}`` where ``reason`` is one of
+    ``GATE_REASON_FROZEN`` / ``GATE_REASON_SUBSCRIPTION`` / ``""``.
+
+    Precedence:
+      1. ``frozen_at`` set  → gated, reason="frozen" (superadmin
+         suspension; re-subscribing does NOT lift it).
+      2. ``get_trial_status(store) == "expired"`` → gated,
+         reason="subscription" (trial + grace fully elapsed, OR
+         plan == "inactive"). Self-serve re-subscribe clears it.
+      3. otherwise → not gated. A store in trial / grace / paid keeps
+         full access; grace is deliberately NOT gated so a lapsing
+         operator still gets the reduced-functionality window.
+
+    A ``None`` store (superadmin — no store scope) is never gated.
+
+    Pure read — no DB writes.
+    """
+    if store is None:
+        return {"gated": False, "reason": GATE_REASON_NONE}
+    if getattr(store, "frozen_at", None) is not None:
+        return {"gated": True, "reason": GATE_REASON_FROZEN}
+    # Local import avoids a module-load cycle (trial imports Billing.Models,
+    # which this Service also depends on).
+    from api.Modules.Billing.Services.trial import get_trial_status
+    if get_trial_status(store) == "expired":
+        return {"gated": True, "reason": GATE_REASON_SUBSCRIPTION}
+    return {"gated": False, "reason": GATE_REASON_NONE}

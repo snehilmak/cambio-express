@@ -424,6 +424,30 @@ export async function creditStore(
   );
 }
 
+export interface StoreFreezeResult {
+  ok: boolean;
+  frozen: boolean;
+  frozen_at: string;
+  frozen_reason: string;
+}
+
+// Suspend a store (PR C). Its users get gated to a "suspended, contact
+// support" screen. Re-subscribing does NOT lift it — only unfreezeStore.
+export async function freezeStore(storeId: number, reason: string) {
+  return api<StoreFreezeResult>(
+    `/api/v2/superadmin/stores/${storeId}/freeze`,
+    { method: "POST", json: { reason } },
+  );
+}
+
+// Lift a store's suspension so its users can use the app again.
+export async function unfreezeStore(storeId: number) {
+  return api<StoreFreezeResult>(
+    `/api/v2/superadmin/stores/${storeId}/unfreeze`,
+    { method: "POST" },
+  );
+}
+
 export async function emailStore(storeId: number, subject: string, message: string) {
   return api<{ ok: boolean; sent_to: string[]; total: number }>(
     `/api/v2/superadmin/stores/${storeId}/email`,
