@@ -14,8 +14,9 @@ import { getCurrentIdentity } from "../lib/auth";
 import {
   Breadcrumbs,
   Alert, Button, ButtonLink, Card, ErrorState, Field, Input, Loading,
-  PageHeader, PageShell, SectionTitle, Select, space, useToast,
+  PageHeader, PageShell, PhoneField, SectionTitle, Select, space, useToast,
 } from "../components/ui";
+import { firstError, zEmailOptional, zPhoneOptional } from "../lib/validators";
 import styles from "./SuperadminStoreForm.module.css";
 
 // /app/superadmin/stores/new + /app/superadmin/stores/:id/edit
@@ -160,6 +161,19 @@ export default function SuperadminStoreForm() {
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
+    // Client-side validation (shared validators lib) — instant inline
+    // feedback before the network roundtrip. The backend re-validates
+    // the same rules (Pydantic) since it's the real trust boundary.
+    const clientErrors: Record<string, string> = {};
+    const emailErr = firstError(zEmailOptional, email.trim());
+    if (emailErr) clientErrors.email = emailErr;
+    const phoneErr = firstError(zPhoneOptional, phone.trim());
+    if (phoneErr) clientErrors.phone = phoneErr;
+    if (Object.keys(clientErrors).length > 0) {
+      setFieldErrors(clientErrors);
+      setServerError(null);
+      return;
+    }
     setBusy(true);
     setServerError(null);
     setFieldErrors({});
@@ -276,13 +290,16 @@ export default function SuperadminStoreForm() {
               />
             </Field>
 
-            <Field label="Phone" error={fieldErrors.phone}>
-              <Input
-                type="tel" maxLength={40}
+            <Field
+              label="Phone"
+              error={fieldErrors.phone}
+              hint="US numbers are 10 digits; pick another country for international."
+            >
+              <PhoneField
                 value={phone}
-                onChange={(e) => { setPhone(e.target.value); clearFieldError("phone"); }}
-                placeholder="(512) 555-0000"
+                onChange={(v) => { setPhone(v); clearFieldError("phone"); }}
                 disabled={busy}
+                aria-invalid={Boolean(fieldErrors.phone)}
               />
             </Field>
 
