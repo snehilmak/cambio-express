@@ -26,7 +26,7 @@ import { fmtMoney2 } from "../lib/formatters";
 import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
 import {
-  Breadcrumbs, Button, Card, EmptyState, Field, Input, Loading,
+  Breadcrumbs, Button, Card, EmptyState, Field, Input, Loading, Modal,
   MoneyInput, PageHeader, PageShell, Pill, RowActions, TabsBar,
   TabsButton, Textarea,
 } from "../components/ui";
@@ -549,19 +549,21 @@ function ReceiptsPanel(props: PanelProps) {
       <p className={styles.subText}>
         Total updates as you add or delete entries — no manual entry needed.
       </p>
-      {RECEIPT_LINE_ITEMS.map((f) => (
-        <LineItemWidget
-          key={f.kind}
-          kind={f.kind}
-          label={f.label}
-          readOnly={f.readOnly === true || props.locked}
-          total={Number(props.report?.[f.key] ?? 0)}
-          items={props.lineItems.filter((li) => li.kind === f.kind)}
-          storeId={props.storeId}
-          date={props.date}
-          onChange={props.onLineItemChange}
-        />
-      ))}
+      <div className={styles.widgetGrid}>
+        {RECEIPT_LINE_ITEMS.map((f) => (
+          <LineItemWidget
+            key={f.kind}
+            kind={f.kind}
+            label={f.label}
+            readOnly={f.readOnly === true || props.locked}
+            total={Number(props.report?.[f.key] ?? 0)}
+            items={props.lineItems.filter((li) => li.kind === f.kind)}
+            storeId={props.storeId}
+            date={props.date}
+            onChange={props.onLineItemChange}
+          />
+        ))}
+      </div>
     </Card>
   );
 }
@@ -588,19 +590,21 @@ function DisbursementsPanel(props: PanelProps) {
       <p className={styles.subText}>
         Tap a row to add a timestamped entry — totals roll up automatically.
       </p>
-      {DISBURSEMENT_LINE_ITEMS.map((f) => (
-        <LineItemWidget
-          key={f.kind}
-          kind={f.kind}
-          label={f.label}
-          readOnly={props.locked}
-          total={Number(props.report?.[f.key] ?? 0)}
-          items={props.lineItems.filter((li) => li.kind === f.kind)}
-          storeId={props.storeId}
-          date={props.date}
-          onChange={props.onLineItemChange}
-        />
-      ))}
+      <div className={styles.widgetGrid}>
+        {DISBURSEMENT_LINE_ITEMS.map((f) => (
+          <LineItemWidget
+            key={f.kind}
+            kind={f.kind}
+            label={f.label}
+            readOnly={props.locked}
+            total={Number(props.report?.[f.key] ?? 0)}
+            items={props.lineItems.filter((li) => li.kind === f.kind)}
+            storeId={props.storeId}
+            date={props.date}
+            onChange={props.onLineItemChange}
+          />
+        ))}
+      </div>
     </Card>
   );
 }
@@ -1115,31 +1119,30 @@ function LineItemWidget({
   const count = items.length;
 
   return (
-    <div className={styles.widget}>
+    <>
       <button
         type="button"
-        onClick={() => setOpen((o) => !o)}
-        className={styles.widgetHeader}
-        aria-expanded={open}
+        onClick={() => { setOpen(true); setErr(null); }}
+        className={styles.widgetCard}
       >
-        <span className={styles.widgetLabel}>
-          <span
-            className={styles.widgetCaret}
-            style={{ transform: open ? "rotate(90deg)" : undefined }}
-          >
-            ▸
+        <span className={styles.widgetCardTop}>
+          <span className={styles.widgetLabel}>
+            {label}
+            {readOnly && <Pill tone="info">Auto</Pill>}
           </span>
-          {label}
-          {readOnly && <Pill tone="info">Auto</Pill>}
-          <span className={styles.widgetCount}>
-            {count} {count === 1 ? "entry" : "entries"}
-          </span>
+          <span className={styles.widgetTotal}>{fmtMoney2(total)}</span>
         </span>
-        <span className={styles.widgetTotal}>{fmtMoney2(total)}</span>
+        <span className={styles.widgetCount}>
+          {count} {count === 1 ? "entry" : "entries"}
+        </span>
       </button>
 
-      {open && (
-        <div className={styles.widgetBody}>
+      <Modal
+        open={open}
+        title={label}
+        onClose={() => { setOpen(false); cancelEdit(); setErr(null); }}
+      >
+        <div className={styles.lineModalBody}>
           {!readOnly && (
             <div className={styles.widgetAddRow}>
               <div className={styles.addRowTime}>
@@ -1299,8 +1302,8 @@ function LineItemWidget({
             </div>
           )}
         </div>
-      )}
-    </div>
+      </Modal>
+    </>
   );
 }
 
