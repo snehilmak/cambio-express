@@ -5,7 +5,7 @@ import { useDailyPeriod, type DailyReportRow } from "../api/dailybook";
 import { fmtMoney, fmtMoney2 } from "../lib/formatters";
 import {
   Breadcrumbs,
-  Button, Card, ErrorState, KpiCard, KpiGrid, Loading, PageHeader, PageShell,
+  Button, ButtonLink, Card, ErrorState, KpiCard, KpiGrid, Loading, PageHeader, PageShell,
 } from "../components/ui";
 import styles from "./DailyBook.module.css";
 
@@ -97,13 +97,13 @@ export default function DailyBook() {
             >
               ←
             </Button>
-            <Button
+            <ButtonLink
+              to={`/daily/edit?date=${today}`}
               tone="secondary" size="sm"
-              onClick={() => navMonth(0)}
-              title="Jump to current month"
+              title="Open today's daily book"
             >
               Today
-            </Button>
+            </ButtonLink>
             <Button
               tone="secondary" size="sm"
               onClick={() => navMonth(1)}
