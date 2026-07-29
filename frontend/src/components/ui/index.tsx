@@ -57,6 +57,7 @@ export { Field } from "./Field";
 export { Input } from "./Input";
 export { DateInput } from "./DateInput";
 export { MoneyInput } from "./MoneyInput";
+export { PhoneField, type PhoneFieldProps } from "./PhoneField";
 export { Select } from "./Select";
 export { Textarea } from "./Textarea";
 export { KpiCard, KpiGrid, type KpiTone } from "./KpiCard";

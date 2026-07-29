@@ -13,13 +13,33 @@ field set so the SPA covers every input the Jinja form had:
     admin_password — all optional with defaults that match the
     legacy form (admin / Store Admin / changeme123!).
 """
-from pydantic import BaseModel, ConfigDict, Field
+import re
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 # Plan vocabulary — kept aligned with `Store.plan ∈ {trial, basic,
 # pro, inactive}` per CLAUDE.md invariant #3. Any new plan needs to
 # update this regex AND `get_trial_status` simultaneously.
 _PLAN_PATTERN = r"^(trial|basic|pro|inactive)$"
+
+# Server-side email shape check — parity with the SPA's shared
+# validators lib (`frontend/src/lib/validators.ts`). The server is the
+# real trust boundary, so the same rule is enforced here regardless of
+# what the client sent. Pragmatic shape (one @, a dotted domain), not
+# full RFC 5322 — real deliverability is proven by the confirmation
+# email, not this regex. Empty is allowed (email is optional on a store).
+_EMAIL_RE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
+
+
+def _validate_optional_email(v: str | None) -> str | None:
+    """Reusable field-validator body: pass through None / "" (optional),
+    else require a valid email shape."""
+    if v is None:
+        return v
+    if v.strip() and not _EMAIL_RE.match(v.strip()):
+        raise ValueError("Enter a valid email address")
+    return v
 
 
 class SuperadminStoreDetailRow(BaseModel):
@@ -82,6 +102,8 @@ class SuperadminStoreCreateRequest(BaseModel):
     admin_name:     str = Field("Store Admin", max_length=120)
     admin_password: str = Field(..., min_length=1, max_length=200)
 
+    _v_email = field_validator("email")(_validate_optional_email)
+
 
 class SuperadminStoreUpdateRequest(BaseModel):
     """PATCH body for /superadmin/stores/{id}.
@@ -103,6 +125,8 @@ class SuperadminStoreUpdateRequest(BaseModel):
     address:          str   | None = Field(None, max_length=255)
     plan:             str   | None = Field(None, pattern=_PLAN_PATTERN)
     federal_tax_rate: float | None = Field(None, ge=0.0, le=1.0)
+
+    _v_email = field_validator("email")(_validate_optional_email)
 
 
 class SuperadminStoreCreditRequest(BaseModel):
