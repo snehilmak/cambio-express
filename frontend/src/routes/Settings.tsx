@@ -17,6 +17,7 @@ import {
 import { redeemConnectCode } from "../api/owner";
 import { ApiError } from "../lib/api";
 import { formatTimestamp } from "../lib/datetime";
+import { timezoneFromAddress } from "../lib/timezoneFromAddress";
 import { getCurrentIdentity } from "../lib/auth";
 import { passkeysSupported } from "../lib/webauthn";
 import {
@@ -167,7 +168,6 @@ function ProfileCard() {
       full_name:        data.full_name,
       email:            data.email,
       phone:            data.phone,
-      timezone:         data.timezone,
       theme_preference: data.theme_preference,
     });
   }, [data]);
@@ -290,22 +290,11 @@ function ProfileCard() {
           />
         </Field>
 
-        <Field
-          label="Timezone"
-          error={fieldErrors.timezone}
-          hint="Daily reports + audit timestamps render in this zone for you. Don't see yours? Ask your admin to add it."
-        >
-          <Select
-            value={draft.timezone ?? ""}
-            onChange={(e) => set("timezone", e.target.value)}
-            disabled={busy}
-          >
-            <option value="">— Use store / UTC default —</option>
-            {data.timezone_choices.map((tz) => (
-              <option key={tz} value={tz}>{tz}</option>
-            ))}
-          </Select>
-        </Field>
+        {/* Per-user timezone was removed — these are brick-and-mortar
+            stores, so date/time rendering follows the store's timezone
+            (set on Settings → General, suggested from the address). One
+            timezone per store keeps reports + audit trails consistent
+            across the whole team. */}
 
         <Field
           label="Appearance"
@@ -839,18 +828,44 @@ function StoreInfoCard() {
           </Field>
           <Field
             label="Timezone"
-            hint="Default timezone for date / time rendering. Cashiers can override on their personal profile. Empty = use the browser default."
+            hint="Used for every date / time across the store — reports, audit trails, receipts. Set it once here; “Detect from address” suggests it from the address above."
           >
-            <Select
-              value={timezone}
-              onChange={(e) => setTimezone(e.target.value)}
-              disabled={!canEdit}
-            >
-              <option value="">Use browser default</option>
-              {(data.store.timezone_choices ?? []).map((tz) => (
-                <option key={tz} value={tz}>{tz}</option>
-              ))}
-            </Select>
+            <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+              <Select
+                value={timezone}
+                onChange={(e) => setTimezone(e.target.value)}
+                disabled={!canEdit}
+                style={{ flex: "1 1 auto" }}
+              >
+                <option value="">Use browser default</option>
+                {(data.store.timezone_choices ?? []).map((tz) => (
+                  <option key={tz} value={tz}>{tz}</option>
+                ))}
+              </Select>
+              <Button
+                type="button"
+                tone="secondary"
+                size="sm"
+                disabled={!canEdit || !address.trim()}
+                onClick={() => {
+                  const detected = timezoneFromAddress(address);
+                  if (detected) {
+                    setTimezone(detected);
+                    toast({
+                      message: `Timezone set to ${detected} from the address. Adjust if needed, then save.`,
+                      tone: "success",
+                    });
+                  } else {
+                    toast({
+                      message: "Couldn’t detect a US state from the address — pick a timezone manually.",
+                      tone: "info",
+                    });
+                  }
+                }}
+              >
+                Detect from address
+              </Button>
+            </div>
           </Field>
         </div>
         {/* Receipt customization fields are intentionally hidden —
