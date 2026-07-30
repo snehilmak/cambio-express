@@ -335,6 +335,51 @@ def test_record_payment_caps_at_remaining(client, test_store_id):
     assert resp.get_json()["payment"]["amount"] == 40.0  # capped
 
 
+def test_return_check_fee_included_in_recoverable(client, test_store_id):
+    """The returned-check fee raises the balance the customer owes:
+    payments pay down to amount+fee, so paying the face amount alone
+    leaves the check pending and a later installment caps at the
+    remaining fee — not beyond it."""
+    token = _login(client, test_store_id)
+    auth = {"Authorization": f"Bearer {token}"}
+    # $500 check + $25 fee → $525 owed in total.
+    create = client.post(
+        "/api/v2/return-checks",
+        json={
+            "bounced_on":       "2026-04-15",
+            "customer_name":    "Fee Co",
+            "company_name":     "Fee LLC",
+            "amount":           500.0,
+            "return_check_fee": 25.0,
+        },
+        headers=auth,
+    )
+    assert create.status_code == 201
+    rid = create.get_json()["return_check"]["id"]
+
+    # Paying the face amount alone still leaves the $25 fee owed —
+    # the check stays pending, not recovered.
+    p1 = client.post(
+        f"/api/v2/return-checks/{rid}/payments",
+        json={"paid_on": "2026-04-16", "amount": 500.0},
+        headers=auth,
+    )
+    assert p1.status_code == 201
+    assert p1.get_json()["return_check"]["status"] == "pending"
+
+    # A follow-up that would overshoot caps at the remaining $25 fee.
+    p2 = client.post(
+        f"/api/v2/return-checks/{rid}/payments",
+        json={"paid_on": "2026-04-17", "amount": 999.0},
+        headers=auth,
+    )
+    assert p2.status_code == 201
+    assert p2.get_json()["payment"]["amount"] == 25.0  # capped at fee
+    rc = p2.get_json()["return_check"]
+    assert rc["status"] == "recovered"           # fee paid → done
+    assert rc["recovered_total"] == 525.0
+
+
 def test_record_payment_rejects_on_closed_check(
     client, test_store_id,
 ):

@@ -229,7 +229,10 @@ def _maybe_auto_recover(
           .filter_by(return_check_id=rc.id)
           .scalar() or 0.0
     )
-    full = float(rc.amount or 0.0)
+    # Recovery target is the full balance owed — face amount plus the
+    # returned-check fee — so a check stays pending until the fee is
+    # paid off too.
+    full = float(rc.total_due)
     if rc.status == "pending" and total >= full and full > 0:
         rc.status = "recovered"
         rc.status_changed_on = date.today()
@@ -270,7 +273,7 @@ def record_payment(
           .filter_by(return_check_id=rc.id)
           .scalar() or 0.0
     )
-    cap = max(0.0, float(rc.amount or 0.0) - existing)
+    cap = max(0.0, float(rc.total_due) - existing)
     if cap <= 0:
         raise ReturnCheckStateError(
             "Return check is already fully recovered.",
