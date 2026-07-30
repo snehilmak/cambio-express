@@ -146,7 +146,7 @@ function Table({ rows }: { rows: ReturnCheckRow[] }) {
                   <span className={styles.mono}>${r.amount.toFixed(2)}</span>
                 </td>
                 <td style={{ ...tdStyle, textAlign: "right" }}>
-                  <span className={r.recovered_total >= r.amount ? styles.recoveredFull : styles.mono}>
+                  <span className={r.recovered_total >= r.amount + r.return_check_fee ? styles.recoveredFull : styles.mono}>
                     ${r.recovered_total.toFixed(2)}
                   </span>
                   {r.payment_count > 0 && (

@@ -177,6 +177,10 @@ export default function ReturnCheckForm() {
 
   const status = isEdit ? detail.data?.return_check.status ?? "pending" : "pending";
   const recovered = isEdit ? detail.data?.return_check.recovered_total ?? 0 : 0;
+  // Total the customer owes = face amount + any returned-check fee.
+  // The recovery workflow (remaining balance, payment cap, the
+  // "recovered of X" strip) pays down to this, not the bare amount.
+  const totalDue = (Number(form.amount) || 0) + (Number(form.return_check_fee) || 0);
 
   return (
     <PageShell maxWidth="62rem">
@@ -198,7 +202,7 @@ export default function ReturnCheckForm() {
               Recovered{" "}
               <span className={styles.mono}>${recovered.toFixed(2)}</span>
               {" of "}
-              <span className={styles.mono}>${form.amount.toFixed(2)}</span>
+              <span className={styles.mono}>${totalDue.toFixed(2)}</span>
             </span>
           </div>
           <div className={styles.transitionRow}>
@@ -305,7 +309,7 @@ export default function ReturnCheckForm() {
           {status === "pending" && (
             <RecordPaymentForm
               rcId={rcId}
-              remaining={Math.max(0, form.amount - recovered)}
+              remaining={Math.max(0, totalDue - recovered)}
               disabled={busy}
             />
           )}

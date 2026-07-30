@@ -120,11 +120,21 @@ class ReturnCheck(Base):
         return float(sum((p.amount or 0.0) for p in (self.payments or [])))
 
     @property
+    def total_due(self) -> float:
+        """Full balance the customer owes on this check: the face
+        ``amount`` plus any ``return_check_fee`` the store charges for
+        the bounce. This is the target the recovery workflow pays down
+        to — a check isn't fully recovered until the fee is collected
+        too, and collected fee dollars ride the payment→P&L recovery
+        feed like the principal."""
+        return float(self.amount or 0.0) + float(self.return_check_fee or 0.0)
+
+    @property
     def remaining(self) -> float:
-        """Outstanding balance. When ``status='loss'`` / ``'fraud'``
-        the write-off equals this value. Never goes negative because
-        the payment endpoint caps each installment at remaining."""
-        return max(0.0, float(self.amount or 0.0) - self.recovered_total)
+        """Outstanding balance against ``total_due`` (face amount +
+        fee). Never goes negative because the payment endpoint caps
+        each installment at remaining."""
+        return max(0.0, self.total_due - self.recovered_total)
 
     @property
     def days_outstanding(self) -> int:
