@@ -74,6 +74,7 @@ const Reports = lazy(() => import("./routes/Reports"));
 const ResetPassword = lazy(() => import("./routes/ResetPassword"));
 const ReturnCheckForm = lazy(() => import("./routes/ReturnCheckForm"));
 const ReturnChecks = lazy(() => import("./routes/ReturnChecks"));
+const SectionHub = lazy(() => import("./routes/SectionHub"));
 const Settings = lazy(() => import("./routes/Settings"));
 const StorePermissions = lazy(() => import("./routes/StorePermissions"));
 const SettingsProfile = lazy(
@@ -217,6 +218,9 @@ export default function App() {
         <Route path="privacy"          element={<Privacy />} />
         <Route element={<AuthedShell />}>
           <Route path="home"             element={<Navigate to="/dashboard" replace />} />
+          {/* Section-hub tile landings — one per nav section, driven
+              by the same role-filtered NAV the sidebar uses. */}
+          <Route path="hub/:key"         element={<SectionHub />} />
           <Route path="dashboard"        element={<Dashboard />} />
           <Route path="transfers"        element={<RequirePermission resource="transfers" action="read"><Transfers /></RequirePermission>} />
           <Route path="transfers/new"      element={<RequirePermission resource="transfers" action="create"><NewTransfer /></RequirePermission>} />
