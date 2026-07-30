@@ -11,9 +11,11 @@ class ReturnCheckRow(BaseModel):
     id: int
     bounced_on: str  # YYYY-MM-DD
     customer_name: str
+    company_name: str = ""
     check_number: str = ""
     payer_bank: str = ""
     amount: float
+    return_check_fee: float = 0.0
     status: str
     status_changed_on: str = ""  # "" when pending
     notes: str = ""
@@ -41,9 +43,11 @@ class ReturnCheckWriteRequest(BaseModel):
 
     bounced_on:    str   = Field(..., min_length=10, max_length=10)
     customer_name: str   = Field(..., min_length=1, max_length=120)
+    company_name:  str   = Field(..., min_length=1, max_length=120)
     check_number:  str   = Field("", max_length=40)
     payer_bank:    str   = Field("", max_length=120)
     amount:        float = Field(..., gt=0)
+    return_check_fee: float = Field(0.0, ge=0)
     notes:         str   = Field("", max_length=2000)
 
 

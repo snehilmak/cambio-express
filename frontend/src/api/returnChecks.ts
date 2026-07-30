@@ -9,9 +9,11 @@ export interface ReturnCheckRow {
   id: number;
   bounced_on: string;
   customer_name: string;
+  company_name: string;
   check_number: string;
   payer_bank: string;
   amount: number;
+  return_check_fee: number;
   status: string;
   status_changed_on: string;
   notes: string;
@@ -49,9 +51,11 @@ export function useReturnCheck(rcId: number | undefined) {
 export interface ReturnCheckWriteBody {
   bounced_on: string;
   customer_name: string;
+  company_name: string;
   check_number?: string;
   payer_bank?: string;
   amount: number;
+  return_check_fee?: number;
   notes?: string;
 }
 

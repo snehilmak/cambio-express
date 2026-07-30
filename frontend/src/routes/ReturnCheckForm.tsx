@@ -20,8 +20,9 @@ import { getCurrentIdentity } from "../lib/auth";
 import {
   Breadcrumbs,
   Alert, Button, ButtonLink, Card, ConfirmDialog, DateInput, EmptyState, Field,
-  FormActions, Input, Loading, MoneyInput, PageHeader, PageShell, SectionTitle,
-  Select, space, Table, Textarea, tdStyle, thStyle,
+  FormActions, Input, Loading, MoneyInput, PageHeader, PageShell, Pill,
+  SectionTitle, Select, space, Table, Textarea, tdStyle, thStyle,
+  type PillTone,
 } from "../components/ui";
 import styles from "./ReturnCheckForm.module.css";
 
@@ -48,6 +49,16 @@ function todayIso() {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
+// Status → Pill tone. Keeps the top status strip's color vocabulary
+// aligned with the rest of the SPA (success = recovered, negative =
+// written off, warning = still open).
+const STATUS_TONE: Record<string, PillTone> = {
+  pending:   "warning",
+  recovered: "success",
+  loss:      "negative",
+  fraud:     "negative",
+};
+
 export default function ReturnCheckForm() {
   const { id } = useParams<{ id?: string }>();
   const isEdit = id !== undefined;
@@ -59,12 +70,14 @@ export default function ReturnCheckForm() {
   const payments = useReturnCheckPayments(isEdit ? rcId : undefined);
 
   const [form, setForm] = useState<ReturnCheckWriteBody>({
-    bounced_on:    todayIso(),
-    customer_name: "",
-    check_number:  "",
-    payer_bank:    "",
-    amount:        0,
-    notes:         "",
+    bounced_on:       todayIso(),
+    customer_name:    "",
+    company_name:     "",
+    check_number:     "",
+    payer_bank:       "",
+    amount:           0,
+    return_check_fee: 0,
+    notes:            "",
   });
   const [busy,  setBusy]  = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -75,12 +88,14 @@ export default function ReturnCheckForm() {
     const r = detail.data.return_check;
     // eslint-disable-next-line react-hooks/set-state-in-effect -- hydrate local editable form from server-fetched return-check on edit
     setForm({
-      bounced_on:    r.bounced_on,
-      customer_name: r.customer_name,
-      check_number:  r.check_number,
-      payer_bank:    r.payer_bank,
-      amount:        r.amount,
-      notes:         r.notes,
+      bounced_on:       r.bounced_on,
+      customer_name:    r.customer_name,
+      company_name:     r.company_name,
+      check_number:     r.check_number,
+      payer_bank:       r.payer_bank,
+      amount:           r.amount,
+      return_check_fee: r.return_check_fee,
+      notes:            r.notes,
     });
   }, [isEdit, detail.data]);
 
@@ -98,6 +113,7 @@ export default function ReturnCheckForm() {
       const body: ReturnCheckWriteBody = {
         ...form,
         amount: Number(form.amount) || 0,
+        return_check_fee: Number(form.return_check_fee) || 0,
       };
       if (isEdit) await updateReturnCheck(rcId, body);
       else        await createReturnCheck(body);
@@ -172,6 +188,51 @@ export default function ReturnCheckForm() {
         subtitle="Track a bounced check from a customer and any partial recovery."
       />
 
+      {isEdit && (
+        <div className={styles.statusBar}>
+          <div className={styles.statusBarInfo}>
+            <Pill tone={STATUS_TONE[status] ?? "neutral"} dot>
+              {status.charAt(0).toUpperCase() + status.slice(1)}
+            </Pill>
+            <span className={styles.statusMeta}>
+              Recovered{" "}
+              <span className={styles.mono}>${recovered.toFixed(2)}</span>
+              {" of "}
+              <span className={styles.mono}>${form.amount.toFixed(2)}</span>
+            </span>
+          </div>
+          <div className={styles.transitionRow}>
+            {status === "pending" && (
+              <>
+                <Button
+                  tone="danger" size="sm"
+                  onClick={() => setPendingTransition({ fn: markLoss, label: "Mark loss" })}
+                  disabled={busy}
+                >
+                  Mark loss
+                </Button>
+                <Button
+                  tone="danger" size="sm"
+                  onClick={() => setPendingTransition({ fn: markFraud, label: "Mark fraud" })}
+                  disabled={busy}
+                >
+                  Mark fraud
+                </Button>
+              </>
+            )}
+            {status !== "pending" && (
+              <Button
+                tone="secondary" size="sm"
+                onClick={() => setPendingTransition({ fn: reopenReturnCheck, label: "Reopen" })}
+                disabled={busy}
+              >
+                Reopen
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
+
       <form
         onSubmit={onSubmit}
         className="ds-form"
@@ -187,6 +248,11 @@ export default function ReturnCheckForm() {
               <Input type="text" required
                 value={form.customer_name}
                 onChange={(e) => set("customer_name", e.target.value)} />
+            </Field>
+            <Field label="Company name" highlight={field === "company_name"}>
+              <Input type="text" required
+                value={form.company_name}
+                onChange={(e) => set("company_name", e.target.value)} />
             </Field>
             <Field label="Check number">
               <Input type="text"
@@ -204,6 +270,12 @@ export default function ReturnCheckForm() {
               onChange={(v) => set("amount", v)}
               error={field === "amount" ? "Invalid amount" : undefined}
             />
+            <MoneyInput
+              label="Return check fee (optional)"
+              value={form.return_check_fee ?? 0}
+              onChange={(v) => set("return_check_fee", v)}
+              error={field === "return_check_fee" ? "Invalid fee" : undefined}
+            />
           </div>
           <Field label="Notes (optional)">
             <Textarea
@@ -220,52 +292,12 @@ export default function ReturnCheckForm() {
           <ButtonLink href="/return-checks" tone="secondary">Cancel</ButtonLink>
           <Button
             type="submit" busy={busy}
-            disabled={busy || !form.customer_name || !form.bounced_on}
+            disabled={busy || !form.customer_name || !form.company_name || !form.bounced_on}
           >
             {busy ? "Saving…" : isEdit ? "Save changes" : "Create return check"}
           </Button>
         </FormActions>
       </form>
-
-      {isEdit && (
-        <Card style={{ marginTop: space.lg }}>
-          <SectionTitle>Status</SectionTitle>
-          <p className={styles.statusLine}>
-            Current: <strong className={styles.statusName}>{status}</strong>
-            {" · "}Recovered <span className={styles.mono}>${recovered.toFixed(2)}</span>
-            {" of "}<span className={styles.mono}>${form.amount.toFixed(2)}</span>
-          </p>
-          <div className={styles.transitionRow}>
-            {status === "pending" && (
-              <>
-                <Button
-                  tone="danger"
-                  onClick={() => setPendingTransition({ fn: markLoss, label: "Mark loss" })}
-                  disabled={busy}
-                >
-                  Mark loss
-                </Button>
-                <Button
-                  tone="danger"
-                  onClick={() => setPendingTransition({ fn: markFraud, label: "Mark fraud" })}
-                  disabled={busy}
-                >
-                  Mark fraud
-                </Button>
-              </>
-            )}
-            {status !== "pending" && (
-              <Button
-                tone="secondary"
-                onClick={() => setPendingTransition({ fn: reopenReturnCheck, label: "Reopen" })}
-                disabled={busy}
-              >
-                Reopen
-              </Button>
-            )}
-          </div>
-        </Card>
-      )}
 
       {isEdit && (
         <Card style={{ marginTop: space.lg }}>

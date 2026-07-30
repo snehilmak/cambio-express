@@ -60,6 +60,7 @@ def test_create_return_check_emits_audit_row(client, test_store_id):
         json={
             "bounced_on":    date.today().isoformat(),
             "customer_name": "Audit Customer",
+            "company_name":  "Audit Co",
             "check_number":  "999",
             "payer_bank":    "Bank Z",
             "amount":        250.0,
@@ -84,6 +85,7 @@ def test_update_return_check_emits_audit_row(client, test_store_id):
         json={
             "bounced_on":    date.today().isoformat(),
             "customer_name": "Post-Rename",
+            "company_name":  "Post Co",
             "check_number":  "456",
             "payer_bank":    "Bank A",
             "amount":        500.0,

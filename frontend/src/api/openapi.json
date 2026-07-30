@@ -6191,6 +6191,11 @@
             "title": "Check Number",
             "type": "string"
           },
+          "company_name": {
+            "default": "",
+            "title": "Company Name",
+            "type": "string"
+          },
           "customer_name": {
             "title": "Customer Name",
             "type": "string"
@@ -6217,6 +6222,11 @@
           "recovered_total": {
             "default": 0.0,
             "title": "Recovered Total",
+            "type": "number"
+          },
+          "return_check_fee": {
+            "default": 0.0,
+            "title": "Return Check Fee",
             "type": "number"
           },
           "status": {
@@ -6260,6 +6270,12 @@
             "title": "Check Number",
             "type": "string"
           },
+          "company_name": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Company Name",
+            "type": "string"
+          },
           "customer_name": {
             "maxLength": 120,
             "minLength": 1,
@@ -6277,11 +6293,18 @@
             "maxLength": 120,
             "title": "Payer Bank",
             "type": "string"
+          },
+          "return_check_fee": {
+            "default": 0.0,
+            "minimum": 0.0,
+            "title": "Return Check Fee",
+            "type": "number"
           }
         },
         "required": [
           "bounced_on",
           "customer_name",
+          "company_name",
           "amount"
         ],
         "title": "ReturnCheckWriteRequest",

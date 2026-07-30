@@ -70,9 +70,11 @@ def test_create_round_trip(client, test_store_id):
         json={
             "bounced_on":    "2026-04-15",
             "customer_name": "Acme Corp",
+            "company_name":  "Acme LLC",
             "check_number":  "12345",
             "payer_bank":    "Wells Fargo",
             "amount":        750.0,
+            "return_check_fee": 25.0,
             "notes":         "second bounce",
         },
         headers={"Authorization": f"Bearer {token}"},
@@ -80,7 +82,9 @@ def test_create_round_trip(client, test_store_id):
     assert resp.status_code == 201
     rc = resp.get_json()["return_check"]
     assert rc["customer_name"] == "Acme Corp"
+    assert rc["company_name"] == "Acme LLC"
     assert rc["amount"] == 750.0
+    assert rc["return_check_fee"] == 25.0
     assert rc["status"] == "pending"
 
 
@@ -124,6 +128,7 @@ def test_create_requires_admin_role(client):
             json={
                 "bounced_on":    "2026-04-15",
                 "customer_name": "X",
+                "company_name":  "X Co",
                 "amount":        100.0,
             },
             headers={"Authorization": f"Bearer {token}"},
@@ -150,6 +155,7 @@ def test_update_round_trip(client, test_store_id):
         json={
             "bounced_on":    "2026-05-01",
             "customer_name": "New Name",
+            "company_name":  "New Co",
             "check_number":  "99",
             "payer_bank":    "Bank B",
             "amount":        300.0,
