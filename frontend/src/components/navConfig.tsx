@@ -23,6 +23,15 @@ import type { NavGroup, NavItem } from "./SlimSidebar";
 // Each variant is its own NavItem with a `roles` filter so the
 // sidebar shows exactly one Dashboard link per role.
 
+// Slug used for the section-hub route (/hub/:key). Titles are
+// unique within a single role's filtered nav, so slugifying the
+// group title is a stable per-role key. Keep this the ONLY place
+// the mapping is defined so the flyout header link + the hub route
+// resolver never drift.
+export function sectionSlug(title: string): string {
+  return title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+}
+
 export const NAV: NavGroup[] = [
   {
     title: "Daily",
@@ -32,35 +41,41 @@ export const NAV: NavGroup[] = [
         to: "/dashboard", label: "Dashboard",
         roles: ["admin", "employee"],
         icon: iconDashboard(),
+        desc: "Today's numbers at a glance.",
       },
       {
         to: "/owner/dashboard", label: "Dashboard",
         roles: ["owner"],
         icon: iconDashboard(),
+        desc: "Rollup across all your stores.",
       },
       {
         to: "/transfers", label: "Transfers",
         roles: ["admin", "employee"],
         perm: "transfers.read",
         icon: iconTransfers(),
+        desc: "Log and review money transfers.",
       },
       {
         to: "/customers", label: "Customers",
         roles: ["admin", "employee"],
         perm: "customers.read",
         icon: iconCustomers(),
+        desc: "Sender and recipient records.",
       },
       {
         to: "/daily", label: "Daily book",
         roles: ["admin", "employee"],
         perm: "daily_book.read",
         icon: iconDaily(),
+        desc: "Cash ledger and daily close-out.",
       },
       {
         to: "/return-checks", label: "Return checks",
         roles: ["admin", "employee"],
         perm: "return_checks.read",
         icon: iconReturnChecks(),
+        desc: "Track bounced checks and recovery.",
       },
       {
         // Storefront rate-board addon — admins configure the
@@ -71,6 +86,7 @@ export const NAV: NavGroup[] = [
         to: "/tv-display", label: "TV display",
         roles: ["admin"],
         icon: iconDevice(),
+        desc: "In-store rate board and pairing.",
       },
     ],
   },
@@ -89,42 +105,49 @@ export const NAV: NavGroup[] = [
         roles: ["admin", "employee"],
         perm: "time_clock.read",
         icon: iconClock(),
+        desc: "Clock in and out of shifts.",
       },
       {
         to: "/admin/timeclock", label: "Payroll",
         roles: ["admin"],
         perm: "time_clock.read",
         icon: iconReports(),
+        desc: "Shift history and hours worked.",
       },
       {
         to: "/admin/timeclock/schedule", label: "Schedule",
         roles: ["admin"],
         perm: "time_clock.read",
         icon: iconCalendarStar(),
+        desc: "Plan upcoming employee shifts.",
       },
       {
         to: "/admin/timeclock/credentials", label: "Punch credentials",
         roles: ["admin"],
         perm: "time_clock.read",
         icon: iconClock(),
+        desc: "PINs employees use to punch.",
       },
       {
         to: "/admin/cashiers", label: "Cashiers",
         roles: ["admin"],
         perm: "users.read",
         icon: iconCustomers(),
+        desc: "Manage cashier accounts.",
       },
       {
         to: "/admin/users", label: "Team users",
         roles: ["admin"],
         perm: "users.read",
         icon: iconCustomers(),
+        desc: "Admins and staff on this store.",
       },
       {
         to: "/admin/store-permissions", label: "Permissions",
         roles: ["admin"],
         perm: "settings.read",
         icon: iconShield(),
+        desc: "Control what each role can do.",
       },
     ],
   },
@@ -137,10 +160,10 @@ export const NAV: NavGroup[] = [
     roles: ["admin"],
     icon: iconReports(),
     items: [
-      { to: "/reports",            label: "Reports",     perm: "reports.read",    icon: iconReports() },
-      { to: "/monthly",            label: "Monthly P&L", perm: "monthly.read",   icon: iconMonthly() },
-      { to: "/admin/audit-log",    label: "Audit log",   perm: "reports.read",   icon: iconAudit() },
-      { to: "/admin/data-export",  label: "Data export", perm: "reports.read",   icon: iconReports() },
+      { to: "/reports",            label: "Reports",     perm: "reports.read",    icon: iconReports(), desc: "Sales, customers, and productivity." },
+      { to: "/monthly",            label: "Monthly P&L", perm: "monthly.read",   icon: iconMonthly(), desc: "Profit and loss by month." },
+      { to: "/admin/audit-log",    label: "Audit log",   perm: "reports.read",   icon: iconAudit(),   desc: "Who changed what, and when." },
+      { to: "/admin/data-export",  label: "Data export", perm: "reports.read",   icon: iconReports(), desc: "Download CSV snapshots." },
     ],
   },
   {
@@ -148,9 +171,9 @@ export const NAV: NavGroup[] = [
     roles: ["admin"],
     icon: iconBank(),
     items: [
-      { to: "/batches",            label: "ACH batches", perm: "batches.read",    icon: iconBatches() },
-      { to: "/bank",               label: "Bank sync",   perm: "bank_sync.read", icon: iconBank() },
-      { to: "/bank-transactions",  label: "Bank txns",   perm: "bank_sync.read", icon: iconBank() },
+      { to: "/batches",            label: "ACH batches", perm: "batches.read",    icon: iconBatches(), desc: "Group transfers into ACH runs." },
+      { to: "/bank",               label: "Bank sync",   perm: "bank_sync.read", icon: iconBank(),    desc: "Connect and reconcile accounts." },
+      { to: "/bank-transactions",  label: "Bank txns",   perm: "bank_sync.read", icon: iconBank(),    desc: "Categorize imported transactions." },
     ],
   },
   {
@@ -158,14 +181,14 @@ export const NAV: NavGroup[] = [
     roles: ["owner"],
     icon: iconOwner(),
     items: [
-      { to: "/owner/locations",             label: "Locations",             icon: iconOwner() },
-      { to: "/owner/connect",               label: "Connect",               icon: iconBanner() },
-      { to: "/owner/users",                 label: "Team users",            icon: iconCustomers() },
-      { to: "/owner/bulk-add-user",         label: "Bulk add user",         icon: iconOwner() },
-      { to: "/owner/cross-store-defaults",  label: "Cross-store defaults",  icon: iconRollup() },
-      { to: "/owner/activity",              label: "Activity stream",       icon: iconReports() },
-      { to: "/owner/bulk-permissions",      label: "Bulk permissions",      icon: iconSettings() },
-      { to: "/owner/settings",              label: "Owner settings",        icon: iconSettings() },
+      { to: "/owner/locations",             label: "Locations",             icon: iconOwner(),     desc: "Stores under your umbrella." },
+      { to: "/owner/connect",               label: "Connect",               icon: iconBanner(),    desc: "Link a store via invite code." },
+      { to: "/owner/users",                 label: "Team users",            icon: iconCustomers(), desc: "People across all locations." },
+      { to: "/owner/bulk-add-user",         label: "Bulk add user",         icon: iconOwner(),     desc: "Add one user to many stores." },
+      { to: "/owner/cross-store-defaults",  label: "Cross-store defaults",  icon: iconRollup(),    desc: "Shared settings for every store." },
+      { to: "/owner/activity",              label: "Activity stream",       icon: iconReports(),   desc: "Recent actions across stores." },
+      { to: "/owner/bulk-permissions",      label: "Bulk permissions",      icon: iconSettings(),  desc: "Set roles across all stores." },
+      { to: "/owner/settings",              label: "Owner settings",        icon: iconSettings(),  desc: "Your owner account preferences." },
     ],
   },
   {
@@ -177,8 +200,8 @@ export const NAV: NavGroup[] = [
     roles: ["owner"],
     icon: iconReports(),
     items: [
-      { to: "/owner/pl-rollup",  label: "P&L rollup", icon: iconRollup() },
-      { to: "/owner/reports",    label: "Reports",    icon: iconReports() },
+      { to: "/owner/pl-rollup",  label: "P&L rollup", icon: iconRollup(),  desc: "Combined P&L for all stores." },
+      { to: "/owner/reports",    label: "Reports",    icon: iconReports(), desc: "Cross-store analytics." },
     ],
   },
   {
@@ -186,7 +209,7 @@ export const NAV: NavGroup[] = [
     roles: ["superadmin"],
     icon: iconDashboard(),
     items: [
-      { to: "/superadmin/dashboard",     label: "Dashboard",     icon: iconDashboard() },
+      { to: "/superadmin/dashboard",     label: "Dashboard",     icon: iconDashboard(), desc: "Platform-wide overview." },
     ],
   },
   {
@@ -194,10 +217,10 @@ export const NAV: NavGroup[] = [
     roles: ["superadmin"],
     icon: iconPlatform(),
     items: [
-      { to: "/superadmin/stores",        label: "Stores",        icon: iconPlatform() },
-      { to: "/superadmin/users",         label: "Users",         icon: iconCustomers() },
-      { to: "/superadmin/announcements", label: "Announcements", icon: iconBanner() },
-      { to: "/superadmin/billing",       label: "Billing",       icon: iconBank() },
+      { to: "/superadmin/stores",        label: "Stores",        icon: iconPlatform(),  desc: "Every store on the platform." },
+      { to: "/superadmin/users",         label: "Users",         icon: iconCustomers(), desc: "All accounts across stores." },
+      { to: "/superadmin/announcements", label: "Announcements", icon: iconBanner(),    desc: "Broadcast banners and emails." },
+      { to: "/superadmin/billing",       label: "Billing",       icon: iconBank(),      desc: "Subscriptions and account credit." },
     ],
   },
   {
@@ -205,9 +228,9 @@ export const NAV: NavGroup[] = [
     roles: ["superadmin"],
     icon: iconReports(),
     items: [
-      { to: "/superadmin/reports",       label: "Reports",       icon: iconReports() },
-      { to: "/superadmin/audit-log",     label: "Audit log",     icon: iconAudit() },
-      { to: "/superadmin/email-log",     label: "Email log",     icon: iconBell() },
+      { to: "/superadmin/reports",       label: "Reports",       icon: iconReports(), desc: "Platform BI and drilldowns." },
+      { to: "/superadmin/audit-log",     label: "Audit log",     icon: iconAudit(),   desc: "Superadmin action history." },
+      { to: "/superadmin/email-log",     label: "Email log",     icon: iconBell(),    desc: "Outbound email delivery." },
     ],
   },
   {
@@ -215,12 +238,12 @@ export const NAV: NavGroup[] = [
     roles: ["superadmin"],
     icon: iconSettings(),
     items: [
-      { to: "/superadmin/controls",      label: "Controls",      icon: iconSettings() },
-      { to: "/superadmin/permissions",   label: "Permissions",   icon: iconShield() },
-      { to: "/superadmin/feature-flags", label: "Feature flags", icon: iconToggle() },
-      { to: "/superadmin/discounts",     label: "Discounts",     icon: iconBadge() },
-      { to: "/superadmin/maintenance",   label: "Maintenance",   icon: iconMaintenance() },
-      { to: "/superadmin/health",        label: "Health",        icon: iconHealth() },
+      { to: "/superadmin/controls",      label: "Controls",      icon: iconSettings(),    desc: "Global platform switches." },
+      { to: "/superadmin/permissions",   label: "Permissions",   icon: iconShield(),      desc: "Default role permission matrix." },
+      { to: "/superadmin/feature-flags", label: "Feature flags", icon: iconToggle(),      desc: "Per-store and global toggles." },
+      { to: "/superadmin/discounts",     label: "Discounts",     icon: iconBadge(),       desc: "Promo codes and credits." },
+      { to: "/superadmin/maintenance",   label: "Maintenance",   icon: iconMaintenance(), desc: "Maintenance mode and banners." },
+      { to: "/superadmin/health",        label: "Health",        icon: iconHealth(),      desc: "System status checks." },
     ],
   },
   {
@@ -236,18 +259,22 @@ export const NAV: NavGroup[] = [
       {
         to: "/settings", label: "Settings",
         icon: iconSettings(),
+        desc: "Profile, store info, and theme.",
       },
       {
         to: "/account/notifications", label: "Notifications",
         icon: iconBell(),
+        desc: "Choose which emails you receive.",
       },
       {
         to: "/account/activity", label: "My activity",
         icon: iconAudit(),
+        desc: "Your recent actions on the account.",
       },
       {
         to: "/account/sessions", label: "Devices",
         icon: iconDevice(),
+        desc: "Signed-in devices and sessions.",
       },
     ],
   },

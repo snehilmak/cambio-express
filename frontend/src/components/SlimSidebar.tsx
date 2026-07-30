@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 
+import { sectionSlug } from "./navConfig";
 import styles from "./SlimSidebar.module.css";
 
 export interface NavItem {
@@ -11,6 +12,9 @@ export interface NavItem {
   roles?: string[];
   /** Required permission as "resource.action". Hidden when missing. */
   perm?: string;
+  /** One-line description shown under the label on the section-hub
+   *  tile grid. Optional — tiles without one render label-only. */
+  desc?: string;
 }
 
 export interface NavGroup {
@@ -142,12 +146,32 @@ export function SlimSidebar({
             className={styles.flyoutPanel}
             role="menu"
           >
-            <div className={styles.flyoutHeader}>
+            {/* Header doubles as a link into the section's tile
+                hub — the fast list stays below for repeat nav, the
+                header opens the polished "pick where to go" grid. */}
+            <NavLink
+              to={`/hub/${sectionSlug(activeGroup.title)}`}
+              className={styles.flyoutHeader}
+              role="menuitem"
+              title={`Open the ${activeGroup.title} hub`}
+            >
               <span className={styles.flyoutHeaderIcon}>
                 {activeGroup.icon}
               </span>
-              {activeGroup.title}
-            </div>
+              <span className={styles.flyoutHeaderTitle}>
+                {activeGroup.title}
+              </span>
+              <span className={styles.flyoutHeaderChevron} aria-hidden="true">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+                  stroke="currentColor" strokeWidth="2" strokeLinecap="round"
+                  strokeLinejoin="round">
+                  <rect x="3" y="3" width="7" height="7" rx="1.5" />
+                  <rect x="14" y="3" width="7" height="7" rx="1.5" />
+                  <rect x="3" y="14" width="7" height="7" rx="1.5" />
+                  <rect x="14" y="14" width="7" height="7" rx="1.5" />
+                </svg>
+              </span>
+            </NavLink>
             <div className={styles.itemList}>
               {activeGroup.items.map((item) => (
                 <NavLink
@@ -178,7 +202,12 @@ export function SlimSidebar({
         </div>
         {groups.map((group) => (
           <div key={group.title} className={styles.drawerGroup}>
-            <div className={styles.drawerGroupTitle}>{group.title}</div>
+            <NavLink
+              to={`/hub/${sectionSlug(group.title)}`}
+              className={styles.drawerGroupTitle}
+            >
+              {group.title}
+            </NavLink>
             <div className={styles.itemList}>
               {group.items.map((item) => (
                 <NavLink
