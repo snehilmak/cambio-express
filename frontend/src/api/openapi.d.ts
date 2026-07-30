@@ -8183,6 +8183,11 @@ export interface components {
              * @default
              */
             check_number: string;
+            /**
+             * Company Name
+             * @default
+             */
+            company_name: string;
             /** Customer Name */
             customer_name: string;
             /** Id */
@@ -8207,6 +8212,11 @@ export interface components {
              * @default 0
              */
             recovered_total: number;
+            /**
+             * Return Check Fee
+             * @default 0
+             */
+            return_check_fee: number;
             /** Status */
             status: string;
             /**
@@ -8230,6 +8240,8 @@ export interface components {
              * @default
              */
             check_number: string;
+            /** Company Name */
+            company_name: string;
             /** Customer Name */
             customer_name: string;
             /**
@@ -8242,6 +8254,11 @@ export interface components {
              * @default
              */
             payer_bank: string;
+            /**
+             * Return Check Fee
+             * @default 0
+             */
+            return_check_fee: number;
         };
         /**
          * RosterResponse

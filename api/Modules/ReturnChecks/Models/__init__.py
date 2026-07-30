@@ -86,9 +86,18 @@ class ReturnCheck(Base):
     store_id        = Column(Integer, ForeignKey("store.id"), nullable=False, index=True)
     bounced_on      = Column(Date, nullable=False)
     customer_name   = Column(String(120), nullable=False)
+    # Company on the check / associated business. Required at the API
+    # level (non-empty); the column carries a server_default so the
+    # add-column migration backfills existing rows cleanly.
+    company_name    = Column(String(120), nullable=False, server_default="")
     check_number    = Column(String(40),  default="")
     payer_bank      = Column(String(120), default="")
     amount          = Column(Float,       nullable=False)
+    # Fee the store charges on a returned check (optional). Stored on
+    # the record for reference; does not auto-feed the P&L — the daily
+    # book's own return_check_hold_fees line stays the operator-entered
+    # source for that.
+    return_check_fee = Column(Float, nullable=False, server_default="0")
     status          = Column(String(16),  default="pending", nullable=False)
     status_changed_on = Column(Date,      nullable=True)
     notes           = Column(Text,        default="")

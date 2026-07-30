@@ -35,9 +35,11 @@ class ReturnCheckStateError(ValueError):
 class ReturnCheckWriteInput:
     bounced_on: date
     customer_name: str
+    company_name: str
     check_number: str
     payer_bank: str
     amount: float
+    return_check_fee: float = 0.0
     notes: str = ""
 
 
@@ -50,9 +52,11 @@ def create_return_check(
         store_id=store_id,
         bounced_on=payload.bounced_on,
         customer_name=payload.customer_name,
+        company_name=payload.company_name,
         check_number=payload.check_number,
         payer_bank=payload.payer_bank,
         amount=float(payload.amount or 0),
+        return_check_fee=float(payload.return_check_fee or 0),
         status="pending",
         notes=payload.notes,
         created_by=created_by,
@@ -74,9 +78,11 @@ def update_return_check(
         raise ReturnCheckNotFoundError(f"id={rc_id}")
     row.bounced_on = payload.bounced_on
     row.customer_name = payload.customer_name
+    row.company_name = payload.company_name
     row.check_number = payload.check_number
     row.payer_bank = payload.payer_bank
     row.amount = float(payload.amount or 0)
+    row.return_check_fee = float(payload.return_check_fee or 0)
     row.notes = payload.notes
     db.flush()
     return row

@@ -114,9 +114,11 @@ def _row(rc) -> ReturnCheckRow:
         id=rc.id,
         bounced_on=rc.bounced_on.isoformat() if rc.bounced_on else "",
         customer_name=rc.customer_name or "",
+        company_name=rc.company_name or "",
         check_number=rc.check_number or "",
         payer_bank=rc.payer_bank or "",
         amount=float(rc.amount or 0),
+        return_check_fee=float(rc.return_check_fee or 0),
         status=rc.status or "pending",
         status_changed_on=(
             rc.status_changed_on.isoformat()
@@ -144,9 +146,11 @@ def _parse_payload(body: ReturnCheckWriteRequest) -> ReturnCheckWriteInput:
     return ReturnCheckWriteInput(
         bounced_on=bounced_on,
         customer_name=body.customer_name,
+        company_name=body.company_name,
         check_number=body.check_number,
         payer_bank=body.payer_bank,
         amount=float(body.amount or 0),
+        return_check_fee=float(body.return_check_fee or 0),
         notes=body.notes,
     )
 

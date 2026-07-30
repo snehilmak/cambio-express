@@ -18,8 +18,33 @@
   font-size: 0.9rem;
 }
 
-.statusName {
-  text-transform: capitalize;
+/* De-carded status strip that sits directly under the page header on
+ * the edit view: status pill + recovered summary on the left, the
+ * transition buttons on the right. Kept light (subtle inset, not a
+ * Card) so it reads as page chrome rather than another content block. */
+.statusBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  padding: 0.6rem 0.85rem;
+  border: 1px solid var(--db-border, rgba(255, 255, 255, 0.1));
+  border-radius: 0.6rem;
+  background: var(--db-surface-2, rgba(255, 255, 255, 0.03));
+}
+
+.statusBarInfo {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.statusMeta {
+  color: var(--db-text-muted, #a3a3a3);
+  font-size: 0.9rem;
 }
 
 .transitionRow {
