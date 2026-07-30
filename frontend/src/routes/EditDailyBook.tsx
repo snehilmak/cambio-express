@@ -37,12 +37,13 @@ import styles from "./EditDailyBook.module.css";
 // Layout mirrors the legacy Jinja `daily_report.html` workflow:
 //   • Sticky 3-card totals strip at the top (Receipts / Disbursements / Net),
 //     updates live as the cashier types.
-//   • 4 tabs underneath — Receipts, Disbursements, Money Transfers,
-//     and Over/Short & Notes.
-//   • Each tab shows a mix of operator-editable inputs and line-item
-//     widgets. Line-item widgets are disclosure rows (read-only sum
-//     + an expandable list of timestamped entries with an add-row
-//     beneath).
+//   • 3 tabs underneath (mobile) — In (Receipts), Out
+//     (Disbursements), and Over/Short & Notes. Desktop shows them
+//     side-by-side.
+//   • Each tab shows a mix of operator-editable inputs and widgets.
+//     Line-item widgets are tile + modal (read-only sum + a list of
+//     timestamped entries with an add-row). The Money transfer tile
+//     in the "In" tab opens the per-company breakdown modal.
 //   • Sticky save bar pinned to the viewport bottom — Save / Cancel /
 //     Lock day. When locked the bar swaps to "Unlock to edit".
 //
@@ -60,9 +61,10 @@ import styles from "./EditDailyBook.module.css";
 // allowed set returns HTTP 422 (`test_put_rejects_extra_fields`
 // pins this).
 //
-// Specifically EXCLUDED here despite being on the form:
+// Deliberately NOT here (Category 2 / 3 — never sent via this PUT):
 //   - `money_transfer` — derived from `mt_summary` rows; written
-//      via the separate PUT /mt-breakdown endpoint.
+//      via the separate PUT /mt-breakdown endpoint and surfaced in
+//      the "In" tab through <MoneyTransferWidget>, not a form input.
 //   - line-item-derived fields (cash_purchases, drops, etc.) —
 //      mutated by adding / removing daily_line_item rows.
 //
@@ -77,12 +79,11 @@ const EDITABLE_KEYS = [
   "cash_deposit", "safe_balance", "payroll_expense",
   "over_short",
 ] as const;
-// Form fields whose VALUE is a number — wider than the
-// EDITABLE_KEYS list because some displayed-but-not-editable
-// fields (notably `money_transfer`, which mirrors the
-// mt_summary roll-up) need the same `<NumberInput>` treatment.
-// The PUT builder still loops over EDITABLE_KEYS, so these
-// wider keys never get sent.
+// Form fields whose VALUE is a number. Kept as a distinct type
+// from EDITABLE_KEYS (they currently coincide) so a future
+// displayed-but-derived field can be added to the form without
+// leaking into the PUT body — the builder always loops over
+// EDITABLE_KEYS, never NumericFormKey.
 type NumericFormKey = {
   [K in keyof FormState]: FormState[K] extends number ? K : never;
 }[keyof FormState];
@@ -94,7 +95,6 @@ interface FormState {
   bill_payment_charge: number;
   phone_recargas: number;
   boost_mobile: number;
-  money_transfer: number;
   money_order: number;
   check_cashing_fees: number;
   return_check_hold_fees: number;
@@ -139,7 +139,6 @@ const RECEIPT_INPUTS: InputFieldDef[] = [
   { key: "bill_payment_charge",    label: "Bill payment charge" },
   { key: "phone_recargas",         label: "Phone recargas" },
   { key: "boost_mobile",           label: "Boost Mobile" },
-  { key: "money_transfer",         label: "Money transfer" },
   { key: "money_order",            label: "Money order" },
   { key: "check_cashing_fees",     label: "Check cashing fees" },
   { key: "return_check_hold_fees", label: "Return check hold fees" },
@@ -408,16 +407,6 @@ export default function EditDailyBook() {
           </div>
           <div data-tab="overshort" className={styles.overShortCol}>
             <NotesPanel form={form} set={set} locked={locked} />
-            <TransfersPanel
-              set={set}
-              locked={locked}
-              date={date}
-              storeId={storeId}
-              onJumpReceipts={() => {
-                setMobileTab("receipts");
-                window.scrollTo({ top: 0, behavior: "smooth" });
-              }}
-            />
           </div>
         </div>
 
@@ -545,6 +534,23 @@ function ReceiptsPanel(props: PanelProps) {
 
       <div className={styles.panelDivider} />
 
+      <PanelTitle>Money transfer</PanelTitle>
+      <p className={styles.subText}>
+        Tap to enter each company's amount, fees, federal tax, and
+        commission. The grand total flows into Money In.
+      </p>
+      <div className={styles.widgetGrid}>
+        <MoneyTransferWidget
+          total={Number(props.report?.money_transfer ?? 0)}
+          storeId={props.storeId}
+          date={props.date}
+          locked={props.locked}
+          onChange={props.onLineItemChange}
+        />
+      </div>
+
+      <div className={styles.panelDivider} />
+
       <PanelTitle>Auto-summed entries</PanelTitle>
       <p className={styles.subText}>
         Total updates as you add or delete entries — no manual entry needed.
@@ -625,47 +631,50 @@ function emptyDraft(): MTRowDraft {
 }
 
 function draftFromRow(row: MTBreakdownRow): MTRowDraft {
-  // Prefer saved values (operator's last entry). Fall back to auto
-  // (transfer-log aggregate) when no saved row exists, so a fresh
-  // day pre-fills automatically.
-  const hasSaved = row.saved_total > 0;
-  return hasSaved
-    ? {
-        amount: row.saved_amount,
-        fees: row.saved_fees,
-        federal_tax: row.saved_federal_tax,
-        commission: row.saved_commission,
-      }
-    : {
-        amount: row.auto_amount,
-        fees: row.auto_fees,
-        federal_tax: row.auto_federal_tax,
-        commission: row.auto_commission,
-      };
+  // Manual entry only (for now): hydrate from the operator's saved
+  // values, zero when there's no saved row yet. The auto-fill from
+  // the transfer log (`row.auto_*`) is intentionally NOT used here —
+  // the transfer-log integration isn't finished, so the operator
+  // types every company's figures by hand. The backend still returns
+  // `auto_*`, so re-enabling auto-fill later is a UI-only change.
+  return {
+    amount: row.saved_amount,
+    fees: row.saved_fees,
+    federal_tax: row.saved_federal_tax,
+    commission: row.saved_commission,
+  };
 }
 
 function rowDraftTotal(d: MTRowDraft): number {
   return (d.amount || 0) + (d.fees || 0) + (d.federal_tax || 0) + (d.commission || 0);
 }
 
-function TransfersPanel({
-  set, locked, date, storeId, onJumpReceipts,
+// Money-transfer breakdown — a tile + modal that mirrors the
+// LineItemWidget pattern (cash purchases / expenses).  The tile
+// lives in the "In" tab and shows the current `money_transfer`
+// total; tapping it opens the per-company breakdown where the
+// operator enters amount / fees / federal tax / commission by
+// hand.  Manual entry only for now — the transfer-log auto-fill is
+// intentionally omitted until that integration is finished (the
+// backend still returns `auto_*`, so re-enabling it is UI-only).
+function MoneyTransferWidget({
+  total, storeId, date, locked, onChange,
 }: {
-  set: <K extends keyof FormState>(key: K, value: FormState[K]) => void;
-  locked: boolean;
-  date: string;
+  total: number;
   storeId: number;
-  onJumpReceipts: () => void;
+  date: string;
+  locked: boolean;
+  onChange: () => void;
 }) {
   const queryClient = useQueryClient();
   const breakdown = useMTBreakdown(date || undefined);
 
+  const [open, setOpen] = useState(false);
   // Local draft state, hydrated from the server payload. Keyed by
   // company name so re-ordering doesn't lose edits.
   const [drafts, setDrafts] = useState<Map<string, MTRowDraft>>(new Map());
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const [savedAt, setSavedAt] = useState<Date | null>(null);
 
   // Hydrate once the server payload settles.
   useEffect(() => {
@@ -678,40 +687,13 @@ function TransfersPanel({
   }, [breakdown.data, breakdown.isLoading, breakdown.isFetching]);
 
   const rows = breakdown.data?.rows ?? [];
+  const enteredCount = rows.filter((r) => r.saved_total > 0).length;
 
   function setCell(company: string, cell: MTCell, value: number) {
     setDrafts((prev) => {
       const next = new Map(prev);
       const cur = next.get(company) ?? emptyDraft();
       next.set(company, { ...cur, [cell]: value });
-      return next;
-    });
-  }
-
-  function resetRowToAuto(row: MTBreakdownRow) {
-    setDrafts((prev) => {
-      const next = new Map(prev);
-      next.set(row.company, {
-        amount: row.auto_amount,
-        fees: row.auto_fees,
-        federal_tax: row.auto_federal_tax,
-        commission: row.auto_commission,
-      });
-      return next;
-    });
-  }
-
-  function applyAutoAll() {
-    setDrafts((prev) => {
-      const next = new Map(prev);
-      for (const row of rows) {
-        next.set(row.company, {
-          amount: row.auto_amount,
-          fees: row.auto_fees,
-          federal_tax: row.auto_federal_tax,
-          commission: row.auto_commission,
-        });
-      }
       return next;
     });
   }
@@ -738,18 +720,17 @@ function TransfersPanel({
         };
       });
       await replaceMTBreakdown(storeId, date, writeRows);
-      // money_transfer was mirrored server-side; refresh the parent
-      // report so the receipts tab + totals strip pick up the new value.
+      // money_transfer was mirrored server-side; refresh the report
+      // (drives the tile total + Money In) and the breakdown query
+      // (re-hydrates the modal from the saved rows).
       await queryClient.invalidateQueries({
         queryKey: ["dailybook", "report", storeId, date],
       });
       await queryClient.invalidateQueries({
         queryKey: ["dailybook", "mt-breakdown", storeId, date],
       });
-      // Sync the local receipts-tab form-state too so the user sees
-      // the new money_transfer immediately on tab switch.
-      set("money_transfer", Number(draftTotal.toFixed(2)));
-      setSavedAt(new Date());
+      onChange();
+      setOpen(false);
     } catch (e) {
       setErr(humanizeError(e, "Could not save the breakdown."));
     } finally {
@@ -760,156 +741,126 @@ function TransfersPanel({
   const isLoading = breakdown.isLoading || breakdown.data == null;
 
   return (
-    <div className={styles.panelGrid}>
-      <Card padding="1.25rem 1.5rem">
-        <div className={styles.mtPanelHeader}>
-          <PanelTitle>Per-company breakdown</PanelTitle>
-          <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
-            {savedAt && <Pill tone="accent">Saved {formatTime(savedAt)}</Pill>}
+    <>
+      <button
+        type="button"
+        onClick={() => { setOpen(true); setErr(null); }}
+        className={styles.widgetCard}
+      >
+        <span className={styles.widgetCardTop}>
+          <span className={styles.widgetLabel}>Money transfer</span>
+          <span className={styles.widgetTotal}>{fmtMoney2(total)}</span>
+        </span>
+        <span className={styles.widgetCount}>
+          {enteredCount > 0
+            ? `${enteredCount} ${enteredCount === 1 ? "company" : "companies"}`
+            : "Tap to enter breakdown"}
+        </span>
+      </button>
+
+      <Modal
+        open={open}
+        title="Money transfer — per-company breakdown"
+        onClose={() => { setOpen(false); setErr(null); }}
+      >
+        <div className={styles.lineModalBody}>
+          <p className={styles.subText}>
+            Enter each company's amount, fees, federal tax, and
+            commission. The grand total saves to this day's
+            <em> Money transfer</em> line and flows into Money In.
+          </p>
+
+          {isLoading ? (
+            <Loading />
+          ) : rows.length === 0 ? (
+            <p className={styles.emptyEntries}>
+              No companies configured for this store.
+            </p>
+          ) : (
+            <div style={{ overflowX: "auto" }}>
+              <table className={styles.mtTable}>
+                <thead>
+                  <tr>
+                    <th className={styles.mtTh}>Company</th>
+                    <th className={`${styles.mtTh} ${styles.mtThNum}`}>Amount</th>
+                    <th className={`${styles.mtTh} ${styles.mtThNum}`}>Fees</th>
+                    <th className={`${styles.mtTh} ${styles.mtThNum}`}>Fed. tax</th>
+                    <th className={`${styles.mtTh} ${styles.mtThNum}`}>Commission</th>
+                    <th className={`${styles.mtTh} ${styles.mtThNum}`}>Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((r) => (
+                    <MTEditableRow
+                      key={r.company}
+                      row={r}
+                      draft={drafts.get(r.company) ?? emptyDraft()}
+                      locked={locked}
+                      onCellChange={(cell, value) => setCell(r.company, cell, value)}
+                    />
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr>
+                    <td className={`${styles.mtTd} ${styles.mtTdStrong}`}>TOTAL</td>
+                    <td className={`${styles.mtTd} ${styles.mtTdNum} ${styles.mtTdNumMuted}`}>
+                      {fmtMoney2(sumDraftField(drafts, "amount"))}
+                    </td>
+                    <td className={`${styles.mtTd} ${styles.mtTdNum} ${styles.mtTdNumMuted}`}>
+                      {fmtMoney2(sumDraftField(drafts, "fees"))}
+                    </td>
+                    <td className={`${styles.mtTd} ${styles.mtTdNum} ${styles.mtTdNumMuted}`}>
+                      {fmtMoney2(sumDraftField(drafts, "federal_tax"))}
+                    </td>
+                    <td className={`${styles.mtTd} ${styles.mtTdNum} ${styles.mtTdNumMuted}`}>
+                      {fmtMoney2(sumDraftField(drafts, "commission"))}
+                    </td>
+                    <td className={`${styles.mtTd} ${styles.mtTdNum} ${styles.mtTdNumStrong}`}>
+                      {fmtMoney2(draftTotal)}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )}
+
+          {err && <ErrorRow message={err} />}
+
+          <div className={styles.mtSaveRow}>
+            <span className={styles.mtSaveRowLeft}>
+              Grand total: <strong>{fmtMoney2(draftTotal)}</strong>
+            </span>
             <Button
               type="button"
-              tone="secondary"
-              size="sm"
-              disabled={locked || rows.length === 0}
-              onClick={applyAutoAll}
+              tone="primary"
+              size="md"
+              busy={busy}
+              disabled={busy || locked || isLoading}
+              onClick={onSave}
             >
-              Fill every row from transfer log
+              {busy ? "Saving…" : "Save breakdown"}
             </Button>
           </div>
         </div>
-        <p className={styles.subText}>
-          One row per active company. Inputs pre-fill from the operator's
-          last save when there is one, otherwise from the day's employee
-          transfer log. Saving here writes per-company rows AND syncs the
-          grand total to the receipts tab's <em>Money transfer</em> line —
-          one round trip.
-        </p>
-
-        {isLoading ? (
-          <Loading />
-        ) : rows.length === 0 ? (
-          <p className={styles.emptyEntries}>
-            No companies configured for this store.
-          </p>
-        ) : (
-          <div style={{ overflowX: "auto" }}>
-            <table className={styles.mtTable}>
-              <thead>
-                <tr>
-                  <th className={styles.mtTh}>Company</th>
-                  <th className={`${styles.mtTh} ${styles.mtThNum}`}>Amount</th>
-                  <th className={`${styles.mtTh} ${styles.mtThNum}`}>Fees</th>
-                  <th className={`${styles.mtTh} ${styles.mtThNum}`}>Fed. tax</th>
-                  <th className={`${styles.mtTh} ${styles.mtThNum}`}>Commission</th>
-                  <th className={`${styles.mtTh} ${styles.mtThNum}`}>Total</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((r) => (
-                  <MTEditableRow
-                    key={r.company}
-                    row={r}
-                    draft={drafts.get(r.company) ?? emptyDraft()}
-                    locked={locked}
-                    onCellChange={(cell, value) => setCell(r.company, cell, value)}
-                    onResetToAuto={() => resetRowToAuto(r)}
-                  />
-                ))}
-              </tbody>
-              <tfoot>
-                <tr>
-                  <td className={`${styles.mtTd} ${styles.mtTdStrong}`}>TOTAL</td>
-                  <td className={`${styles.mtTd} ${styles.mtTdNum} ${styles.mtTdNumMuted}`}>
-                    {fmtMoney2(sumDraftField(drafts, "amount"))}
-                  </td>
-                  <td className={`${styles.mtTd} ${styles.mtTdNum} ${styles.mtTdNumMuted}`}>
-                    {fmtMoney2(sumDraftField(drafts, "fees"))}
-                  </td>
-                  <td className={`${styles.mtTd} ${styles.mtTdNum} ${styles.mtTdNumMuted}`}>
-                    {fmtMoney2(sumDraftField(drafts, "federal_tax"))}
-                  </td>
-                  <td className={`${styles.mtTd} ${styles.mtTdNum} ${styles.mtTdNumMuted}`}>
-                    {fmtMoney2(sumDraftField(drafts, "commission"))}
-                  </td>
-                  <td className={`${styles.mtTd} ${styles.mtTdNum} ${styles.mtTdNumStrong}`}>
-                    {fmtMoney2(draftTotal)}
-                  </td>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
-        )}
-
-        {err && <ErrorRow message={err} />}
-
-        <div className={styles.mtSaveRow}>
-          <span className={styles.mtSaveRowLeft}>
-            Grand total syncs to the receipts tab's Money transfer line on save.
-          </span>
-          <Button
-            type="button"
-            tone="ghost"
-            size="sm"
-            onClick={onJumpReceipts}
-          >
-            ← Edit the rest of the receipts
-          </Button>
-          <Button
-            type="button"
-            tone="primary"
-            size="md"
-            busy={busy}
-            disabled={busy || locked || isLoading}
-            onClick={onSave}
-          >
-            {busy ? "Saving…" : "Save breakdown"}
-          </Button>
-        </div>
-      </Card>
-    </div>
+      </Modal>
+    </>
   );
 }
 
 function MTEditableRow({
-  row, draft, locked, onCellChange, onResetToAuto,
+  row, draft, locked, onCellChange,
 }: {
   row: MTBreakdownRow;
   draft: MTRowDraft;
   locked: boolean;
   onCellChange: (cell: MTCell, value: number) => void;
-  onResetToAuto: (row: MTBreakdownRow) => void;
 }) {
   const draftTotal = rowDraftTotal(draft);
-  const hasAuto = row.auto_total > 0;
-  const matchesAuto = (
-    Math.abs(draft.amount - row.auto_amount) < 0.005 &&
-    Math.abs(draft.fees - row.auto_fees) < 0.005 &&
-    Math.abs(draft.federal_tax - row.auto_federal_tax) < 0.005 &&
-    Math.abs(draft.commission - row.auto_commission) < 0.005
-  );
-  const overridden = hasAuto && !matchesAuto;
-
   return (
     <tr>
       <td className={`${styles.mtTd} ${styles.mtTdStrong}`}>
         <span style={{ color: companyAccent(row.company) }}>•</span>{" "}
         {row.company}
-        {overridden && (
-          <button
-            type="button"
-            onClick={() => onResetToAuto(row)}
-            disabled={locked}
-            className={styles.mtResetBtn}
-            title={`Reset to auto from transfer log (${fmtMoney2(row.auto_total)})`}
-          >
-            Reset to auto
-          </button>
-        )}
-        {row.auto_count > 0 && (
-          <span className={styles.mtRowHint}>
-            {row.auto_count} {row.auto_count === 1 ? "transfer" : "transfers"} logged
-          </span>
-        )}
       </td>
       <MTCellInput
         value={draft.amount}
@@ -1409,7 +1360,6 @@ function buildInitialForm(r: DailyReportRow | null | undefined): FormState {
     bill_payment_charge:     r?.bill_payment_charge     ?? 0,
     phone_recargas:          r?.phone_recargas          ?? 0,
     boost_mobile:            r?.boost_mobile            ?? 0,
-    money_transfer:          r?.money_transfer          ?? 0,
     money_order:             r?.money_order             ?? 0,
     check_cashing_fees:      r?.check_cashing_fees      ?? 0,
     return_check_hold_fees:  r?.return_check_hold_fees  ?? 0,
@@ -1428,11 +1378,17 @@ function computeTotals(form: FormState | null, report: DailyReportRow | null | u
   const receiptsEditable = form ? (
     form.taxable_sales + form.non_taxable + form.sales_tax +
     form.bill_payment_charge + form.phone_recargas + form.boost_mobile +
-    form.money_transfer + form.money_order +
+    form.money_order +
     form.check_cashing_fees + form.return_check_hold_fees +
     form.forward_balance + form.from_bank + form.rebates_commissions
   ) : 0;
+  // `money_transfer` is Category-3 (derived from the mt_summary
+  // per-company breakdown, mirrored onto the report). It is NOT an
+  // editable form field — reading it from the report row is what
+  // keeps Money In in sync with the saved breakdown instead of an
+  // unpersisted input.
   const receiptsDerived =
+    (report?.money_transfer ?? 0) +
     (report?.other_cash_in ?? 0) + (report?.return_check_paid_back ?? 0);
   const receipts = receiptsEditable + receiptsDerived;
 
