@@ -534,11 +534,7 @@ function ReceiptsPanel(props: PanelProps) {
 
       <div className={styles.panelDivider} />
 
-      <PanelTitle>Money transfer</PanelTitle>
-      <p className={styles.subText}>
-        Tap to enter each company's amount, fees, federal tax, and
-        commission. The grand total flows into Money In.
-      </p>
+      <PanelTitle>Tap to edit</PanelTitle>
       <div className={styles.widgetGrid}>
         <MoneyTransferWidget
           total={Number(props.report?.money_transfer ?? 0)}
