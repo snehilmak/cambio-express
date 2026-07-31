@@ -8633,12 +8633,18 @@ export interface components {
         StoreInfoUpdateRequest: {
             /** Address */
             address?: string | null;
+            /** Business Address */
+            business_address?: string | null;
+            /** Ein */
+            ein?: string | null;
             /** Email */
             email?: string | null;
             /** Enforce Business Hours */
             enforce_business_hours?: boolean | null;
             /** Federal Tax Rate */
             federal_tax_rate?: number | null;
+            /** Legal Name */
+            legal_name?: string | null;
             /** Name */
             name?: string | null;
             /** Phone */

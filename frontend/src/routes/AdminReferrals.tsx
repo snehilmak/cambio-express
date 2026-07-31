@@ -7,16 +7,21 @@ import {
 import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
 import {
-  Breadcrumbs,
   Button, ButtonLink, Card, Empty, ErrorState, KpiCard, KpiGrid, Loading,
-  PageHeader, PageShell, Pill, space, Table, tdStyle, thStyle,
+  Pill, space, Table, tdStyle, thStyle,
 } from "../components/ui";
 import styles from "./AdminReferrals.module.css";
 
-// /app/account/referrals — admin self-service for the store's
-// referral code: copy-to-clipboard for code + share link, history
-// of redemptions, lifetime credits-earned. Paid-plan only — trial
+// Referrals tab content (rendered inside the Settings shell at
+// /settings/referrals). Admin self-service for the store's referral
+// code: copy-to-clipboard for code + share link, history of
+// redemptions, lifetime credits-earned. Paid-plan only — trial
 // admins see an upsell card pointing at /app/subscribe.
+//
+// No PageShell / Breadcrumbs / PageHeader here — the Settings layout
+// (Settings.tsx) already provides the page chrome + the tab bar, so
+// this component renders bare content to avoid a doubled header +
+// nested breadcrumb.
 
 export default function AdminReferrals() {
   const identity = getCurrentIdentity();
@@ -24,19 +29,14 @@ export default function AdminReferrals() {
 
   if (identity?.role !== "admin" && identity?.role !== "owner") {
     return (
-      <PageShell>
-        <PageHeader title="Referrals" />
-        <Empty>You need a store-admin sign-in to manage referrals.</Empty>
-      </PageShell>
+      <Empty>You need a store-admin sign-in to manage referrals.</Empty>
     );
   }
 
   // Trial-plan stores get a 409 with a clear upsell.
   if (isError && error instanceof ApiError && error.status === 409) {
     return (
-      <PageShell>
-        <PageHeader title="Referrals" />
-        <Card>
+      <Card>
           <h2 className={styles.cardTitle}>Unlock referrals on a paid plan</h2>
           <p className={styles.lead}>
             Refer another store, both of you get credit. Activate Basic
@@ -46,17 +46,11 @@ export default function AdminReferrals() {
             See plans →
           </ButtonLink>
         </Card>
-      </PageShell>
     );
   }
 
   return (
-    <PageShell>
-
-      <Breadcrumbs crumbs={[{ label: "Account", to: "/settings" }, { label: "Referrals" }]} />
-
-      <PageHeader title="Referrals" />
-
+    <>
       {isLoading && <Loading />}
       {isError && !(error instanceof ApiError && error.status === 409) && (
         <ErrorState
@@ -120,7 +114,7 @@ export default function AdminReferrals() {
           </Card>
         </>
       )}
-    </PageShell>
+    </>
   );
 }
 
