@@ -915,6 +915,7 @@ function MoneyTransferWidget({
 
       <Modal
         open={open}
+        size="lg"
         title="Money transfer — per-company breakdown"
         onClose={() => { setOpen(false); setErr(null); }}
       >
@@ -1059,6 +1060,7 @@ function MTCellInput({
         onChange={onChange}
         disabled={locked}
         prefix=""
+        fullWidth
       />
     </td>
   );

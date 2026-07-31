@@ -36,7 +36,7 @@ import { tokens } from "./tokens";
 export function MoneyInput({
   value, onChange, label, hint, error,
   disabled, readOnly, prefix = "$", placeholder,
-  align = "right", style,
+  align = "right", style, fullWidth = false,
   "aria-label": ariaLabel,
 }: {
   /** Current numeric value.  `0` renders as empty input. */
@@ -57,6 +57,11 @@ export function MoneyInput({
    *  scanning of a column of amounts. */
   align?: "left" | "right";
   style?: CSSProperties;
+  /** Stretch the input box to fill its container instead of hugging
+   *  its ~20ch intrinsic width. Use inside dense grids / table cells
+   *  (e.g. the money-transfer breakdown) so columns shrink to fit the
+   *  available width instead of forcing a horizontal scroll. */
+  fullWidth?: boolean;
   "aria-label"?: string;
 }) {
   const id = useId();
@@ -109,7 +114,9 @@ export function MoneyInput({
       )}
       <span
         style={{
-          display: "inline-flex",
+          display: fullWidth ? "flex" : "inline-flex",
+          width: fullWidth ? "100%" : undefined,
+          minWidth: 0,
           alignItems: "stretch",
           background: tokens.surface,
           border: `1px solid ${isErr ? tokens.negative : tokens.border}`,
