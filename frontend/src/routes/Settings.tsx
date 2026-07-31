@@ -21,7 +21,6 @@ import { timezoneFromAddress } from "../lib/timezoneFromAddress";
 import { getCurrentIdentity } from "../lib/auth";
 import { passkeysSupported } from "../lib/webauthn";
 import {
-  Breadcrumbs,
   Alert, Button, ButtonLink, Card, Checkbox, ConfirmDialog, ErrorState, Field,
   Input, Loading, PageHeader, PageShell, SectionTitle, Select, space, Switch,
   TabsBar, TabsLink, useToast,
@@ -54,8 +53,6 @@ export default function Settings() {
 
   return (
     <PageShell maxWidth="60rem" gap="1rem">
-
-      <Breadcrumbs crumbs={[{ label: "Settings" }]} />
 
       <PageHeader title="Settings" subtitle={identity?.username || "—"} />
 
@@ -158,10 +155,17 @@ function ProfileCard() {
 
   useEffect(() => {
     if (!data) return;
+    // Admin / owner accounts sign in with their email (it's stored as
+    // the `username`), and the separate notices `email` is left blank
+    // at signup. Surface the login email as the Email so the field
+    // isn't confusingly empty; saving persists it so notices reach
+    // the same address. Employees (username isn't an email) are
+    // untouched.
+    const loginIsEmail = (data.username || "").includes("@");
     // eslint-disable-next-line react-hooks/set-state-in-effect -- hydrate local editable draft from server-fetched profile so inputs are controlled from first paint
     setDraft({
       full_name:        data.full_name,
-      email:            data.email,
+      email:            data.email || (loginIsEmail ? data.username : ""),
       phone:            data.phone,
       theme_preference: data.theme_preference,
     });
@@ -233,14 +237,19 @@ function ProfileCard() {
       })
     : "—";
 
+  // Email-login accounts (admin / owner) sign in with their email —
+  // there's no separate username to show, so we hide that read-only
+  // row and treat the Email field as the login/account email.
+  const loginIsEmail = data.username.includes("@");
+
   return (
     <Card>
       <SectionTitle>Personal info</SectionTitle>
       <p className={styles.profileLead}>
         Used for things addressed to you personally — receipts,
         password-reset emails, audit-log attribution. Your
-        username and role are set by your store admin and shown
-        here for reference.
+        {loginIsEmail ? " role is" : " username and role are"} set by
+        your store admin and shown here for reference.
       </p>
 
       {serverError && <Alert tone="error">{serverError}</Alert>}
@@ -262,7 +271,9 @@ function ProfileCard() {
         <Field
           label="Email"
           error={fieldErrors.email}
-          hint="We use this for password reset and account notices. Leave blank if you'd rather not receive email."
+          hint={loginIsEmail
+            ? "Your sign-in email. We also use it for password reset and account notices."
+            : "We use this for password reset and account notices. Leave blank if you'd rather not receive email."}
         >
           <Input
             type="email" maxLength={255}
@@ -314,7 +325,9 @@ function ProfileCard() {
         <hr className={styles.profileHr} />
 
         <div className={styles.profileReadOnlyGrid}>
-          <ProfileReadOnly label="Username" value={data.username} />
+          {!loginIsEmail && (
+            <ProfileReadOnly label="Username" value={data.username} />
+          )}
           <ProfileReadOnly label="Role" value={
             data.role.charAt(0).toUpperCase() + data.role.slice(1)
           } />
