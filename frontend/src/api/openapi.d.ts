@@ -8578,6 +8578,11 @@ export interface components {
              * @default
              */
             receipt_tax_id: string;
+            /**
+             * Sales Tax Rate
+             * @default 0
+             */
+            sales_tax_rate: number;
             /** Slug */
             slug: string;
             /**
@@ -8644,6 +8649,8 @@ export interface components {
             receipt_logo_url?: string | null;
             /** Receipt Tax Id */
             receipt_tax_id?: string | null;
+            /** Sales Tax Rate */
+            sales_tax_rate?: number | null;
             /** Store Hours */
             store_hours?: components["schemas"]["StoreHourEntry"][] | null;
             /** Timeclock Geofence Lat */

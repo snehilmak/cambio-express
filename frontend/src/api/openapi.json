@@ -6863,6 +6863,11 @@
             "title": "Receipt Tax Id",
             "type": "string"
           },
+          "sales_tax_rate": {
+            "default": 0.0,
+            "title": "Sales Tax Rate",
+            "type": "number"
+          },
           "slug": {
             "title": "Slug",
             "type": "string"
@@ -7050,6 +7055,19 @@
               }
             ],
             "title": "Receipt Tax Id"
+          },
+          "sales_tax_rate": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sales Tax Rate"
           },
           "store_hours": {
             "anyOf": [

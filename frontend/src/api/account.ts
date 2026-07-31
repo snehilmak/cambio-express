@@ -159,6 +159,7 @@ export interface StoreInfoRow {
   address: string;
   plan: string;
   federal_tax_rate: number;
+  sales_tax_rate: number;
   is_active: boolean;
   receipt_logo_url: string;
   receipt_footer:   string;
@@ -191,6 +192,7 @@ export interface StoreInfoUpdateBody {
   phone?: string;
   address?: string;
   federal_tax_rate?: number;
+  sales_tax_rate?: number;
   receipt_logo_url?: string;
   receipt_footer?:   string;
   receipt_tax_id?:   string;

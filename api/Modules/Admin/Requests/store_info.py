@@ -41,6 +41,7 @@ class StoreInfoRow(BaseModel):
     address: str = ""
     plan: str = "trial"
     federal_tax_rate: float = 0.01
+    sales_tax_rate: float = 0.0
     is_active: bool = True
     receipt_logo_url: str = ""
     receipt_footer:   str = ""
@@ -81,6 +82,7 @@ class StoreInfoUpdateRequest(BaseModel):
     phone:            str | None = Field(None, max_length=40)
     address:          str | None = Field(None, max_length=255)
     federal_tax_rate: float | None = Field(None, ge=0, le=1)
+    sales_tax_rate:   float | None = Field(None, ge=0, le=1)
     receipt_logo_url: str | None = Field(None, max_length=500)
     receipt_footer:   str | None = Field(None, max_length=500)
     receipt_tax_id:   str | None = Field(None, max_length=40)

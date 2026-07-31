@@ -15,7 +15,8 @@ from typing import Any
 # retention fields stay out of this list — they're managed by
 # superadmin / the Stripe webhook.
 EDITABLE_STORE_FIELDS: tuple[str, ...] = (
-    "name", "email", "phone", "address", "federal_tax_rate",
+    "name", "email", "phone", "address",
+    "federal_tax_rate", "sales_tax_rate",
     # Receipt customization — see ``Tenancy.Models.Store`` for the
     # per-field copy. Cleared by an empty string ("" wipes the
     # logo / footer / tax-id back to the default layout).
