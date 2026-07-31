@@ -27,10 +27,11 @@ import { fmtMoney2 } from "../lib/formatters";
 import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
 import {
-  Breadcrumbs, Button, Card, EmptyState, Field, Input, Loading, Modal,
-  MoneyInput, PageHeader, PageShell, Pill, RowActions, TabsBar,
-  TabsButton, Textarea,
+  Breadcrumbs, Button, Card, ConfirmDialog, EmptyState, Field, Input,
+  Loading, Modal, MoneyInput, PageHeader, PageShell, Pill, RowActions,
+  TabsBar, TabsButton, Textarea,
 } from "../components/ui";
+import { useUnsavedChangesGuard } from "../lib/useUnsavedChangesGuard";
 import styles from "./EditDailyBook.module.css";
 
 // /app/daily/edit?date=YYYY-MM-DD — the per-day editor.
@@ -200,6 +201,10 @@ export default function EditDailyBook() {
   const lineItemsQuery = useLineItems(date || undefined);
 
   const [form, setForm] = useState<FormState | null>(null);
+  // Baseline = last server-synced form; used to detect unsaved edits.
+  const [baseline, setBaseline] = useState<FormState | null>(null);
+  // Confirm before leaving with unsaved edits (Back to calendar).
+  const [pendingLeave, setPendingLeave] = useState(false);
   const [busy, setBusy] = useState(false);
   // Mobile-only tab.  Desktop CSS ignores the data-attr and
   // shows every panel in the grid; mobile CSS hides every
@@ -213,8 +218,10 @@ export default function EditDailyBook() {
   // save invalidation so derived totals stay in sync.
   useEffect(() => {
     if (detail.isLoading || detail.isFetching) return;
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- hydrate local editable form from server-fetched daily report
-    setForm(buildInitialForm(detail.data));
+    const init = buildInitialForm(detail.data);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- hydrate local editable form + dirty baseline from server-fetched daily report
+    setForm(init);
+    setBaseline(init);
   }, [detail.data, detail.isLoading, detail.isFetching]);
 
   // Real-time totals strip — combines editable form values with the
@@ -233,6 +240,20 @@ export default function EditDailyBook() {
   // and locks the field; 0 means "no rate set" → manual entry.
   const storeInfo = useStoreInfo();
   const salesTaxRate = Number(storeInfo.data?.store.sales_tax_rate ?? 0);
+
+  // Unsaved-edit tracking for the main form fields (line-item widgets
+  // persist immediately, so they're excluded). Arms the browser
+  // "leave site?" prompt on close / refresh; the "Back to calendar"
+  // control confirms in-app below.
+  const isDirty =
+    form != null && baseline != null &&
+    JSON.stringify(form) !== JSON.stringify(baseline);
+  useUnsavedChangesGuard(isDirty && !busy);
+
+  function onBackToCalendar() {
+    if (isDirty) setPendingLeave(true);
+    else navigate("/daily");
+  }
 
   const set = useCallback(<K extends keyof FormState>(
     key: K, value: FormState[K],
@@ -423,10 +444,21 @@ export default function EditDailyBook() {
         <StickySaveBar
           locked={locked}
           busy={busy}
-          onCancel={() => navigate("/daily")}
+          dirty={isDirty && !locked}
+          onCancel={onBackToCalendar}
           onLockToggle={onLockToggle}
         />
       </form>
+
+      <ConfirmDialog
+        open={pendingLeave}
+        title="Discard unsaved changes?"
+        message="You have unsaved edits on this day's book. Leave without saving?"
+        confirmLabel="Leave"
+        confirmTone="danger"
+        onConfirm={() => navigate("/daily")}
+        onCancel={() => setPendingLeave(false)}
+      />
     </PageShell>
   );
 }
@@ -1418,10 +1450,11 @@ function LineItemWidget({
 // ── Save bar + helpers ──────────────────────────────────────
 
 function StickySaveBar({
-  locked, busy, onCancel, onLockToggle,
+  locked, busy, dirty, onCancel, onLockToggle,
 }: {
   locked: boolean;
   busy: boolean;
+  dirty: boolean;
   onCancel: () => void;
   onLockToggle: () => void;
 }) {
@@ -1430,7 +1463,9 @@ function StickySaveBar({
       <div className={styles.saveBarLeft}>
         {locked
           ? "This day is locked. Unlock to edit any field."
-          : "Saves apply to every field in every tab."}
+          : dirty
+            ? <Pill tone="warning" dot>Unsaved changes</Pill>
+            : "Saves apply to every field in every tab."}
       </div>
       <Button
         type="button"

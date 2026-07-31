@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Controller, useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -7,9 +7,11 @@ import { useNavigate, useParams } from "react-router-dom";
 import SenderAutocomplete from "../components/SenderAutocomplete";
 import RecipientSuggestions from "../components/RecipientSuggestions";
 import {
-  Alert, Breadcrumbs, Button, Card, DateInput, ErrorState, Field, FormActions,
-  Input, Loading, MoneyInput, PageHeader, PageShell, Section, Select,
+  Alert, Breadcrumbs, Button, Card, ConfirmDialog, DateInput, ErrorState,
+  Field, FormActions, Input, Loading, MoneyInput, PageHeader, PageShell,
+  Pill, Section, Select,
 } from "../components/ui";
+import { useUnsavedChangesGuard } from "../lib/useUnsavedChangesGuard";
 import {
   previewFederalTax,
   updateTransfer,
@@ -105,7 +107,7 @@ export default function EditTransfer() {
 
   const {
     register, handleSubmit, control, setValue, setError, clearErrors,
-    reset, formState: { errors, isSubmitting },
+    reset, formState: { errors, isSubmitting, isDirty },
   } = useForm<EditFormValues>({
     resolver: zodResolver(editSchema),
     defaultValues,
@@ -152,6 +154,15 @@ export default function EditTransfer() {
   const serviceType = useWatch({ control, name: "service_type" });
   const country = useWatch({ control, name: "country" });
   const customerId = useWatch({ control, name: "customer_id" });
+
+  // Warn before losing unsaved edits (close / refresh via the hook;
+  // in-app Cancel via the confirm dialog below).
+  const [pendingLeave, setPendingLeave] = useState(false);
+  useUnsavedChangesGuard(isDirty && !isSubmitting);
+  function onCancel() {
+    if (isDirty) setPendingLeave(true);
+    else navigate(`/transfers/${transferId}`);
+  }
 
   async function onSubmit(values: EditFormValues) {
     clearErrors("root");
@@ -431,9 +442,15 @@ export default function EditTransfer() {
         {errors.root && <Alert tone="error">{errors.root.message}</Alert>}
 
         <FormActions>
+          {isDirty && (
+            <span className={styles.unsavedNote}>
+              <Pill tone="warning" dot>Unsaved changes</Pill>
+            </span>
+          )}
           <Button
+            type="button"
             tone="secondary"
-            onClick={() => navigate(`/transfers/${transferId}`)}
+            onClick={onCancel}
             disabled={isSubmitting}
           >
             Cancel
@@ -443,6 +460,16 @@ export default function EditTransfer() {
           </Button>
         </FormActions>
       </form>
+
+      <ConfirmDialog
+        open={pendingLeave}
+        title="Discard unsaved changes?"
+        message="You have unsaved edits on this transfer. Leave without saving?"
+        confirmLabel="Leave"
+        confirmTone="danger"
+        onConfirm={() => navigate(`/transfers/${transferId}`)}
+        onCancel={() => setPendingLeave(false)}
+      />
     </PageShell>
   );
 }

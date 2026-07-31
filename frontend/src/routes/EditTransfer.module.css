@@ -12,6 +12,14 @@
   color: var(--db-text-muted, #a3a3a3);
 }
 
+/* "Unsaved changes" pill in the form action bar — pushed left so
+ * Cancel / Save stay right-aligned. */
+.unsavedNote {
+  margin-right: auto;
+  display: inline-flex;
+  align-items: center;
+}
+
 .taxPreview {
   background: var(--db-surface-2, #141414) !important;
   color: var(--db-text-muted, #a3a3a3) !important;
