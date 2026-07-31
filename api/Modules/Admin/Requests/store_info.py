@@ -95,3 +95,10 @@ class StoreInfoUpdateRequest(BaseModel):
     timeclock_geofence_radius_m:  int   | None = Field(None, ge=10, le=10_000)
     timeclock_require_geofence:   bool  | None = None
     timeclock_late_minutes_threshold: int | None = Field(None, ge=0, le=240)
+    # Compliance / receipt identity fields. These are in the read
+    # schema + EDITABLE_STORE_FIELDS and the Settings form sends them
+    # on every save — they MUST be accepted here too, or `extra=forbid`
+    # 422s the whole store-info PUT (regressed the General tab save).
+    legal_name:       str | None = Field(None, max_length=200)
+    ein:              str | None = Field(None, max_length=20)
+    business_address: str | None = Field(None, max_length=500)

@@ -69,6 +69,12 @@ def test_put_store_info_updates_editable_fields(client, test_store_id):
             "address":          "123 Main St",
             "federal_tax_rate": 0.025,
             "sales_tax_rate":   0.0825,
+            # Compliance identity fields the Settings form always
+            # sends — guards against the write-schema drift that 422'd
+            # the whole General-tab save.
+            "legal_name":       "Acme Financial LLC",
+            "ein":              "12-3456789",
+            "business_address": "456 Ledger Ave",
         },
         headers={"Authorization": f"Bearer {token}"},
     )
@@ -79,6 +85,9 @@ def test_put_store_info_updates_editable_fields(client, test_store_id):
     assert body["address"]          == "123 Main St"
     assert body["federal_tax_rate"] == 0.025
     assert body["sales_tax_rate"]   == 0.0825
+    assert body["legal_name"]       == "Acme Financial LLC"
+    assert body["ein"]              == "12-3456789"
+    assert body["business_address"] == "456 Ledger Ave"
 
 
 def test_put_store_info_partial_update(client, test_store_id):

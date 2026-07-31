@@ -6960,6 +6960,30 @@
             ],
             "title": "Address"
           },
+          "business_address": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Business Address"
+          },
+          "ein": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ein"
+          },
           "email": {
             "anyOf": [
               {
@@ -6995,6 +7019,18 @@
               }
             ],
             "title": "Federal Tax Rate"
+          },
+          "legal_name": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Legal Name"
           },
           "name": {
             "anyOf": [
