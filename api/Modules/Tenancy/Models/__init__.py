@@ -92,6 +92,14 @@ class Store(Base):
     # can't tamper with it. Admins override via Settings → Store if their
     # state or vendor has a different rate.
     federal_tax_rate = Column(Float, default=0.01, nullable=False)
+    # Sales tax rate (decimal — 0.0825 = 8.25%) applied to a day's
+    # Taxable Sales in the daily book. When > 0 the daily-book editor
+    # auto-computes Sales Tax = taxable_sales × this rate and shows it
+    # read-only, so the operator can't mistype it. 0 (the default)
+    # means "no rate configured" — the Sales Tax field stays manually
+    # editable, preserving the pre-setting behavior. Admins set this
+    # via Settings → Store.
+    sales_tax_rate   = Column(Float, default=0.0, nullable=False)
     # Receipt customization. Stamped onto every printed transfer
     # receipt under /app/transfers/{id}/receipt. All three default
     # to "" so an unconfigured store falls back to the plain

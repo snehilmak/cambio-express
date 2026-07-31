@@ -22,6 +22,7 @@ import {
   type MTBreakdownRow,
   type MTBreakdownWriteRow,
 } from "../api/dailybook";
+import { useStoreInfo } from "../api/account";
 import { fmtMoney2 } from "../lib/formatters";
 import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
@@ -132,10 +133,9 @@ interface LineItemFieldDef {
   readOnly?: boolean;
 }
 
+// taxable_sales / non_taxable / sales_tax are edited together in the
+// <SalesWidget> modal (see the "In" tab), not as plain inputs here.
 const RECEIPT_INPUTS: InputFieldDef[] = [
-  { key: "taxable_sales",          label: "Taxable sales" },
-  { key: "non_taxable",            label: "Non-taxable" },
-  { key: "sales_tax",              label: "Sales tax" },
   { key: "bill_payment_charge",    label: "Bill payment charge" },
   { key: "phone_recargas",         label: "Phone recargas" },
   { key: "boost_mobile",           label: "Boost Mobile" },
@@ -227,6 +227,12 @@ export default function EditDailyBook() {
   );
 
   const storeId = identity?.store_id;
+
+  // Store-wide sales-tax rate (decimal fraction, e.g. 0.0825). When
+  // > 0 the Sales widget auto-computes Sales Tax from Taxable Sales
+  // and locks the field; 0 means "no rate set" → manual entry.
+  const storeInfo = useStoreInfo();
+  const salesTaxRate = Number(storeInfo.data?.store.sales_tax_rate ?? 0);
 
   const set = useCallback(<K extends keyof FormState>(
     key: K, value: FormState[K],
@@ -391,6 +397,8 @@ export default function EditDailyBook() {
               locked={locked}
               lineItems={lineItems}
               onLineItemChange={refreshAfterLineItem}
+              salesTaxRate={salesTaxRate}
+              persist={persistEdits}
             />
           </div>
           <div data-tab="disbursements">
@@ -516,10 +524,35 @@ interface PanelProps {
   onLineItemChange: () => void;
 }
 
-function ReceiptsPanel(props: PanelProps) {
+function ReceiptsPanel(
+  props: PanelProps & {
+    salesTaxRate: number;
+    persist: () => Promise<void>;
+  },
+) {
   return (
     <Card padding="1.25rem 1.5rem">
-      <PanelTitle>Sales & receipts</PanelTitle>
+      <PanelTitle>Tap to edit</PanelTitle>
+      <div className={styles.widgetGrid}>
+        <SalesWidget
+          form={props.form}
+          set={props.set}
+          locked={props.locked}
+          salesTaxRate={props.salesTaxRate}
+          persist={props.persist}
+        />
+        <MoneyTransferWidget
+          total={Number(props.report?.money_transfer ?? 0)}
+          storeId={props.storeId}
+          date={props.date}
+          locked={props.locked}
+          onChange={props.onLineItemChange}
+        />
+      </div>
+
+      <div className={styles.panelDivider} />
+
+      <PanelTitle>Other receipts</PanelTitle>
       <InputGrid>
         {RECEIPT_INPUTS.map((f) => (
           <NumberInput
@@ -531,19 +564,6 @@ function ReceiptsPanel(props: PanelProps) {
           />
         ))}
       </InputGrid>
-
-      <div className={styles.panelDivider} />
-
-      <PanelTitle>Tap to edit</PanelTitle>
-      <div className={styles.widgetGrid}>
-        <MoneyTransferWidget
-          total={Number(props.report?.money_transfer ?? 0)}
-          storeId={props.storeId}
-          date={props.date}
-          locked={props.locked}
-          onChange={props.onLineItemChange}
-        />
-      </div>
 
       <div className={styles.panelDivider} />
 
@@ -643,6 +663,145 @@ function draftFromRow(row: MTBreakdownRow): MTRowDraft {
 
 function rowDraftTotal(d: MTRowDraft): number {
   return (d.amount || 0) + (d.fees || 0) + (d.federal_tax || 0) + (d.commission || 0);
+}
+
+function round2(n: number): number {
+  return Math.round((Number(n) || 0) * 100) / 100;
+}
+
+// Sales widget — groups Taxable sales, Non-taxable, and Sales tax
+// into one tile + modal (the cash-purchase / money-transfer pattern).
+//
+// Sales tax behaviour depends on the store's `sales_tax_rate`:
+//   • rate > 0 → Sales tax = Taxable sales × rate, auto-computed and
+//     shown read-only so the operator can't mistype it.
+//   • rate = 0 → no rate configured; Sales tax stays manually
+//     editable, exactly as before the setting existed.
+//
+// These three are Category-1 report fields (in EDITABLE_KEYS), so the
+// modal edits the shared form state and its Save persists through the
+// normal daily-report PUT — same values, nicer grouping.
+function SalesWidget({
+  form, set, locked, salesTaxRate, persist,
+}: {
+  form: FormState;
+  set: <K extends keyof FormState>(key: K, value: FormState[K]) => void;
+  locked: boolean;
+  salesTaxRate: number;
+  persist: () => Promise<void>;
+}) {
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const autoTax = salesTaxRate > 0;
+  const computedTax = round2(form.taxable_sales * salesTaxRate);
+
+  // Keep the stored Sales tax in step with Taxable sales whenever a
+  // rate is configured and the day is editable. Guarded on the value
+  // so it never loops. Locked days keep their archived figure.
+  useEffect(() => {
+    if (!autoTax || locked) return;
+    if (Math.abs((form.sales_tax || 0) - computedTax) > 0.005) {
+      set("sales_tax", computedTax);
+    }
+  }, [autoTax, locked, computedTax, form.sales_tax, set]);
+
+  const total =
+    (form.taxable_sales || 0) + (form.non_taxable || 0) + (form.sales_tax || 0);
+
+  function onTaxableChange(v: number) {
+    set("taxable_sales", v);
+    if (autoTax && !locked) set("sales_tax", round2(v * salesTaxRate));
+  }
+
+  async function onSave() {
+    if (busy || locked) return;
+    setErr(null);
+    setBusy(true);
+    try {
+      await persist();
+      setOpen(false);
+    } catch (e) {
+      setErr(humanizeError(e, "Could not save sales."));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => { setOpen(true); setErr(null); }}
+        className={styles.widgetCard}
+      >
+        <span className={styles.widgetCardTop}>
+          <span className={styles.widgetLabel}>Sales</span>
+          <span className={styles.widgetTotal}>{fmtMoney2(total)}</span>
+        </span>
+        <span className={styles.widgetCount}>
+          Taxable · Non-taxable · Sales tax
+        </span>
+      </button>
+
+      <Modal
+        open={open}
+        title="Sales"
+        onClose={() => { setOpen(false); setErr(null); }}
+      >
+        <div className={styles.lineModalBody}>
+          <div className={styles.widgetAddRow}>
+            <div className={styles.addRowAmount}>
+              <MoneyInput
+                label="Taxable sale"
+                value={form.taxable_sales}
+                onChange={onTaxableChange}
+                disabled={locked}
+              />
+            </div>
+            <div className={styles.addRowAmount}>
+              <MoneyInput
+                label="Non-taxable"
+                value={form.non_taxable}
+                onChange={(v) => set("non_taxable", v)}
+                disabled={locked}
+              />
+            </div>
+            <div className={styles.addRowAmount}>
+              <MoneyInput
+                label="Sales tax to be paid"
+                hint={autoTax
+                  ? `Auto: ${(salesTaxRate * 100).toFixed(2)}% of taxable sale`
+                  : "Set a Sales tax rate in Settings to auto-calculate"}
+                value={form.sales_tax}
+                onChange={(v) => set("sales_tax", v)}
+                disabled={locked || autoTax}
+              />
+            </div>
+          </div>
+
+          {err && <ErrorRow message={err} />}
+
+          <div className={styles.mtSaveRow}>
+            <span className={styles.mtSaveRowLeft}>
+              Total: <strong>{fmtMoney2(total)}</strong>
+            </span>
+            <Button
+              type="button"
+              tone="primary"
+              size="md"
+              busy={busy}
+              disabled={busy || locked}
+              onClick={onSave}
+            >
+              {busy ? "Saving…" : "Save"}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+    </>
+  );
 }
 
 // Money-transfer breakdown — a tile + modal that mirrors the

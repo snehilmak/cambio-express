@@ -68,6 +68,7 @@ def test_put_store_info_updates_editable_fields(client, test_store_id):
             "phone":            "555-1234",
             "address":          "123 Main St",
             "federal_tax_rate": 0.025,
+            "sales_tax_rate":   0.0825,
         },
         headers={"Authorization": f"Bearer {token}"},
     )
@@ -77,6 +78,7 @@ def test_put_store_info_updates_editable_fields(client, test_store_id):
     assert body["phone"]            == "555-1234"
     assert body["address"]          == "123 Main St"
     assert body["federal_tax_rate"] == 0.025
+    assert body["sales_tax_rate"]   == 0.0825
 
 
 def test_put_store_info_partial_update(client, test_store_id):

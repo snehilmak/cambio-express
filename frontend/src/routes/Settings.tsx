@@ -573,6 +573,7 @@ function StoreInfoCard() {
   const [ein, setEin] = useState("");
   const [businessAddress, setBusinessAddress] = useState("");
   const [taxRatePct, setTaxRatePct] = useState("");
+  const [salesTaxPct, setSalesTaxPct] = useState("");
   const [receiptLogoUrl, setReceiptLogoUrl] = useState("");
   const [receiptFooter, setReceiptFooter] = useState("");
   const [receiptTaxId, setReceiptTaxId] = useState("");
@@ -597,6 +598,7 @@ function StoreInfoCard() {
     setEin(data.store.ein);
     setBusinessAddress(data.store.business_address);
     setTaxRatePct(((data.store.federal_tax_rate || 0) * 100).toFixed(2));
+    setSalesTaxPct(((data.store.sales_tax_rate || 0) * 100).toFixed(2));
     setReceiptLogoUrl(data.store.receipt_logo_url);
     setReceiptFooter(data.store.receipt_footer);
     setReceiptTaxId(data.store.receipt_tax_id);
@@ -625,6 +627,7 @@ function StoreInfoCard() {
         ein,
         business_address: businessAddress,
         federal_tax_rate: Number(taxRatePct) / 100,
+        sales_tax_rate: Number(salesTaxPct) / 100,
         receipt_logo_url: receiptLogoUrl,
         receipt_footer:   receiptFooter,
         receipt_tax_id:   receiptTaxId,
@@ -765,6 +768,15 @@ function StoreInfoCard() {
             <Input type="number" step="0.01" min="0" max="100"
               value={taxRatePct}
               onChange={(e) => setTaxRatePct(e.target.value)}
+              disabled={!canEdit} />
+          </Field>
+          <Field
+            label="Sales tax rate (%)"
+            hint="Applied to a day's Taxable Sales in the daily book. When set, Sales Tax auto-calculates and can't be edited by hand. Leave at 0 to enter Sales Tax manually."
+          >
+            <Input type="number" step="0.01" min="0" max="100"
+              value={salesTaxPct}
+              onChange={(e) => setSalesTaxPct(e.target.value)}
               disabled={!canEdit} />
           </Field>
           <Field
