@@ -42,6 +42,14 @@
   flex-wrap: wrap;
 }
 
+/* "Unsaved changes" pill in the form action bar — pushed to the far
+ * left so Cancel / Save stay right-aligned. */
+.unsavedNote {
+  margin-right: auto;
+  display: inline-flex;
+  align-items: center;
+}
+
 .statusMeta {
   color: var(--db-text-muted, #a3a3a3);
   font-size: 0.9rem;

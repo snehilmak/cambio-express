@@ -227,6 +227,20 @@ def test_reopen_rejects_pending(client, test_store_id):
     assert resp.status_code == 409
 
 
+def test_reopen_rejects_recovered(client, test_store_id):
+    """A fully-paid (recovered) check can't be reopened — recovery is
+    payment-driven, so the undo path is removing a payment, not
+    reopening (which would strand it with no remaining balance)."""
+    with db_session():
+        rid = _seed_rc(test_store_id, status="recovered")
+    token = _login(client, test_store_id)
+    resp = client.post(
+        f"/api/v2/return-checks/{rid}/reopen",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 409
+
+
 # ── GET /return-checks/{id}/payments ────────────────────────
 
 

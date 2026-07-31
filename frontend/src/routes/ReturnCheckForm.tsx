@@ -17,11 +17,12 @@ import {
 } from "../api/returnChecks";
 import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
+import { useUnsavedChangesGuard } from "../lib/useUnsavedChangesGuard";
 import {
   Breadcrumbs,
-  Alert, Button, ButtonLink, Card, ConfirmDialog, DateInput, EmptyState, Field,
+  Alert, Button, Card, ConfirmDialog, DateInput, EmptyState, Field,
   FormActions, Input, Loading, MoneyInput, PageHeader, PageShell, Pill,
-  SectionTitle, Select, space, Table, Textarea, tdStyle, thStyle,
+  SectionTitle, Select, Table, Textarea, tdStyle, thStyle,
   type PillTone,
 } from "../components/ui";
 import styles from "./ReturnCheckForm.module.css";
@@ -69,7 +70,7 @@ export default function ReturnCheckForm() {
   const detail = useReturnCheck(isEdit ? rcId : undefined);
   const payments = useReturnCheckPayments(isEdit ? rcId : undefined);
 
-  const [form, setForm] = useState<ReturnCheckWriteBody>({
+  const emptyForm: ReturnCheckWriteBody = {
     bounced_on:       todayIso(),
     customer_name:    "",
     company_name:     "",
@@ -78,16 +79,21 @@ export default function ReturnCheckForm() {
     amount:           0,
     return_check_fee: 0,
     notes:            "",
-  });
+  };
+  const [form, setForm] = useState<ReturnCheckWriteBody>(emptyForm);
+  // Baseline = last-saved values; the form is "dirty" when it drifts
+  // from this. Seeded from the server row on edit, reset after a save.
+  const [baseline, setBaseline] = useState<ReturnCheckWriteBody>(emptyForm);
   const [busy,  setBusy]  = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [field, setField] = useState<string | null>(null);
+  // Confirm before leaving with unsaved edits (Cancel / back button).
+  const [pendingLeave, setPendingLeave] = useState(false);
 
   useEffect(() => {
     if (!isEdit || !detail.data) return;
     const r = detail.data.return_check;
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- hydrate local editable form from server-fetched return-check on edit
-    setForm({
+    const hydrated: ReturnCheckWriteBody = {
       bounced_on:       r.bounced_on,
       customer_name:    r.customer_name,
       company_name:     r.company_name,
@@ -96,8 +102,24 @@ export default function ReturnCheckForm() {
       amount:           r.amount,
       return_check_fee: r.return_check_fee,
       notes:            r.notes,
-    });
+    };
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- hydrate local editable form + dirty baseline from server-fetched return-check on edit
+    setForm(hydrated);
+    setBaseline(hydrated);
   }, [isEdit, detail.data]);
+
+  const isDirty = JSON.stringify(form) !== JSON.stringify(baseline);
+  // Arm the browser "leave site?" prompt while there are unsaved edits
+  // (covers tab close / refresh; in-app Cancel is guarded below).
+  useUnsavedChangesGuard(isDirty && !busy);
+
+  function leave() {
+    navigate("/return-checks", { replace: true });
+  }
+  function onCancel() {
+    if (isDirty) setPendingLeave(true);
+    else leave();
+  }
 
   function set<K extends keyof ReturnCheckWriteBody>(
     key: K, value: ReturnCheckWriteBody[K],
@@ -224,7 +246,11 @@ export default function ReturnCheckForm() {
                 </Button>
               </>
             )}
-            {status !== "pending" && (
+            {/* Reopen is only for written-off checks (loss / fraud) —
+                the "customer paid after we wrote it off" case. A
+                Recovered check has no Reopen: to undo it, remove a
+                payment below (which reverts it to pending). */}
+            {(status === "loss" || status === "fraud") && (
               <Button
                 tone="secondary" size="sm"
                 onClick={() => setPendingTransition({ fn: reopenReturnCheck, label: "Reopen" })}
@@ -237,11 +263,42 @@ export default function ReturnCheckForm() {
         </div>
       )}
 
+      {isEdit && (
+        <Card>
+          <SectionTitle>Recovery payments</SectionTitle>
+          {status === "pending" && (
+            <RecordPaymentForm
+              rcId={rcId}
+              remaining={Math.max(0, totalDue - recovered)}
+              disabled={busy}
+            />
+          )}
+          {(status === "loss" || status === "fraud") && (
+            <p className={styles.statusLine}>
+              This check is closed as <strong>{status}</strong>.
+              Reopen above to record additional payments.
+            </p>
+          )}
+          {payments.isLoading && <Loading />}
+          {payments.data && payments.data.payments.length === 0 && (
+            <EmptyState title="No recovery payments recorded." />
+          )}
+          {payments.data && payments.data.payments.length > 0 && (
+            <PaymentsTable
+              rows={payments.data.payments}
+              rcId={rcId}
+              canDelete={status !== "loss" && status !== "fraud"}
+            />
+          )}
+        </Card>
+      )}
+
       <form
         onSubmit={onSubmit}
         className="ds-form"
       >
         <Card>
+          <SectionTitle>Check details</SectionTitle>
           <div className={styles.fieldGrid}>
             <Field label="Bounced on" highlight={field === "bounced_on"}>
               <DateInput required
@@ -293,7 +350,14 @@ export default function ReturnCheckForm() {
         {error && <Alert tone="error">{error}</Alert>}
 
         <FormActions>
-          <ButtonLink href="/return-checks" tone="secondary">Cancel</ButtonLink>
+          {isDirty && (
+            <span className={styles.unsavedNote}>
+              <Pill tone="warning" dot>Unsaved changes</Pill>
+            </span>
+          )}
+          <Button type="button" tone="secondary" onClick={onCancel}>
+            Cancel
+          </Button>
           <Button
             type="submit" busy={busy}
             disabled={busy || !form.customer_name || !form.company_name || !form.bounced_on}
@@ -303,35 +367,15 @@ export default function ReturnCheckForm() {
         </FormActions>
       </form>
 
-      {isEdit && (
-        <Card style={{ marginTop: space.lg }}>
-          <SectionTitle>Recovery payments</SectionTitle>
-          {status === "pending" && (
-            <RecordPaymentForm
-              rcId={rcId}
-              remaining={Math.max(0, totalDue - recovered)}
-              disabled={busy}
-            />
-          )}
-          {(status === "loss" || status === "fraud") && (
-            <p className={styles.statusLine}>
-              This check is closed as <strong>{status}</strong>.
-              Reopen above to record additional payments.
-            </p>
-          )}
-          {payments.isLoading && <Loading />}
-          {payments.data && payments.data.payments.length === 0 && (
-            <EmptyState title="No recovery payments recorded." />
-          )}
-          {payments.data && payments.data.payments.length > 0 && (
-            <PaymentsTable
-              rows={payments.data.payments}
-              rcId={rcId}
-              canDelete={status !== "loss" && status !== "fraud"}
-            />
-          )}
-        </Card>
-      )}
+      <ConfirmDialog
+        open={pendingLeave}
+        title="Discard unsaved changes?"
+        message="You have unsaved edits on this return check. Leave without saving?"
+        confirmLabel="Leave"
+        confirmTone="danger"
+        onConfirm={leave}
+        onCancel={() => setPendingLeave(false)}
+      />
 
       <ConfirmDialog
         open={pendingTransition != null}
