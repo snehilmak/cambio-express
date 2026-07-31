@@ -127,15 +127,25 @@ def mark_fraud(db: Session, store_id: int, rc_id: int) -> ReturnCheck:
 
 
 def reopen(db: Session, store_id: int, rc_id: int) -> ReturnCheck:
-    """Reopen a closed (loss / fraud / recovered) row back to
-    pending. Clears status_changed_on so the row no longer
-    contributes to any month's P&L until re-closed."""
+    """Reopen a written-off (loss / fraud) row back to pending — the
+    "customer paid after we wrote it off" case. Clears
+    status_changed_on so the row no longer contributes to any month's
+    P&L until re-closed.
+
+    A ``recovered`` check is deliberately NOT reopenable: recovery is
+    payment-driven, so the way to undo it is to remove a payment
+    (``delete_payment`` auto-reverts recovered → pending once the
+    running total drops below the amount owed). Reopening a fully-paid
+    check would strand it — pending but with no remaining balance to
+    record against and no manual "mark recovered" path back.
+    """
     row = find_return_check(db, store_id, rc_id)
     if row is None:
         raise ReturnCheckNotFoundError(f"id={rc_id}")
-    if row.status not in ("loss", "fraud", "recovered"):
+    if row.status not in ("loss", "fraud"):
         raise ReturnCheckStateError(
-            f"Cannot reopen from status {row.status}.",
+            f"Cannot reopen from status {row.status}. Recovered checks "
+            f"are reverted by removing a payment.",
         )
     row.status = "pending"
     row.status_changed_on = None
