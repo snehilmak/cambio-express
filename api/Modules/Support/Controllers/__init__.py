@@ -195,6 +195,33 @@ def update_ticket(
             claims.get("name") or claims.get("username") or ""
         )
     ticket.updated_at = utc_now()
+    # CLAUDE.md invariant #7 — every admin/superadmin mutation records
+    # an audit row. Superadmin edits any store's ticket and carries no
+    # store_id claim, so it lands in the superadmin log; a store admin
+    # lands in that store's operator log (store_id pinned to the
+    # ticket, which the guard above already proved matches the claim).
+    _summary = (
+        f"status={ticket.status} priority={ticket.priority} "
+        f"reply={'yes' if body.admin_reply is not None else 'no'}"
+    )
+    if role == "superadmin":
+        from api.Core.Audit import audit_superadmin
+        from api.Modules.Tenancy.Models import User
+        sa_user = db.get(User, int(claims["sub"]))
+        if sa_user is not None:
+            audit_superadmin(
+                db, sa_user, action="update_support_ticket",
+                target_type="support_ticket", target_id=str(ticket.id),
+                details=f"{_summary} store_id={ticket.store_id}",
+            )
+    else:
+        from api.Core.Audit import audit_operator
+        audit_operator(
+            db, claims, action="update_support_ticket",
+            target_type="support_ticket", target_id=str(ticket.id),
+            target_label=(ticket.subject or "")[:160],
+            summary=_summary, store_id=ticket.store_id,
+        )
     db.commit()
     db.refresh(ticket)
     return TicketResponse(ticket=_to_row(ticket))

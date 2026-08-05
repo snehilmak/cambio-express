@@ -245,6 +245,33 @@ def country_detail_route(
 # ── Write-side: admin-landing actions ──────────────────────────
 
 
+def _audit_tv_action(
+    db: Session, *, claims: dict[str, Any], action: str,
+    target_type: str, target_id: str, target_label: str = "",
+    summary: str = "",
+) -> None:
+    """Per-store operator-audit row for a TV-display mutation.
+    CLAUDE.md invariant #7 — every mutating endpoint records an
+    audit row. All TV-display write routes are gated by
+    ``_require_tv_store`` (store-scoped admin/employee JWT), so the
+    ``store_id`` always resolves from the claim. Mirrors BankSync's
+    ``_audit_bank_action``. Appends to the session; the caller owns
+    the commit so the row rides the mutation's transaction."""
+    from api.Modules.Audit.Services import record_operator_action
+    record_operator_action(
+        db,
+        store_id=int(claims["store_id"]),
+        user_id=int(claims["sub"]),
+        user_name=str(claims.get("name") or claims.get("username") or ""),
+        user_role=str(claims.get("role") or ""),
+        target_type=target_type,
+        target_id=target_id,
+        target_label=target_label,
+        action=action,
+        summary=summary,
+    )
+
+
 _ALLOWED_ORIENTATIONS = {"auto", "landscape", "portrait"}
 _ALLOWED_THEMES = {"light", "dark"}
 
@@ -273,6 +300,12 @@ def save_settings_route(
         theme = "light"
     display.theme = theme
     display.last_updated_at = utc_now()
+    _audit_tv_action(
+        db, claims=claims, action="update_tv_settings",
+        target_type="tv_display", target_id=str(display.id),
+        target_label=(display.title or "")[:160],
+        summary=f"orientation={display.orientation} theme={display.theme}",
+    )
     db.commit()
     return Response(status_code=204)
 
@@ -292,6 +325,14 @@ def regenerate_token_route(
     store = _require_tv_store(claims, db)
     display = _ensure_display(db, store)
     display.public_token = secrets.token_urlsafe(24)
+    # Security-relevant: the old public board URL stops working. Log
+    # the rotation but NEVER the token value.
+    _audit_tv_action(
+        db, claims=claims, action="regenerate_tv_token",
+        target_type="tv_display", target_id=str(display.id),
+        target_label=(display.title or "")[:160],
+        summary="rotated public token",
+    )
     db.commit()
     return TVDisplayRegenerateTokenResponse(
         public_token=display.public_token,
@@ -367,6 +408,12 @@ def claim_pair_code_route(
     pending.claimed_at = now
     pending.claimed_pairing_id = pairing.id
     display.last_updated_at = now
+    _audit_tv_action(
+        db, claims=claims, action="claim_tv_pairing",
+        target_type="tv_pairing", target_id=str(pairing.id),
+        target_label=(pairing.device_label or "")[:160],
+        summary="paired Fire TV device",
+    )
     db.commit()
     return Response(status_code=204)
 
@@ -392,8 +439,16 @@ def revoke_pairing_route(
     )
     if pairing is None:
         raise HTTPException(status_code=404, detail="Pairing not found")
+    # Only audit on a real state transition (unpaired → revoked),
+    # matching the DailyBook lock/unlock "no second row on a no-op".
     if pairing.revoked_at is None:
         pairing.revoked_at = utc_now()
+        _audit_tv_action(
+            db, claims=claims, action="revoke_tv_pairing",
+            target_type="tv_pairing", target_id=str(pairing.id),
+            target_label=(pairing.device_label or "")[:160],
+            summary="unpaired Fire TV device",
+        )
         db.commit()
     return Response(status_code=204)
 
@@ -437,6 +492,13 @@ def create_country_route(
     )
     db.add(country)
     display.last_updated_at = utc_now()
+    db.flush()
+    _audit_tv_action(
+        db, claims=claims, action="create_tv_country",
+        target_type="tv_country", target_id=str(country.id),
+        target_label=(country.country_name or "")[:160],
+        summary=f"code={country.country_code}",
+    )
     db.commit()
     db.refresh(country)
     return TVDisplayCountryCreateResponse(
@@ -479,7 +541,14 @@ def delete_country_route(
     (db.query(TVDisplayPayoutBank)
        .filter(TVDisplayPayoutBank.country_id == country.id)
        .delete(synchronize_session=False))
+    country_name = country.country_name or ""
     db.delete(country)
     display.last_updated_at = utc_now()
+    _audit_tv_action(
+        db, claims=claims, action="delete_tv_country",
+        target_type="tv_country", target_id=str(country_id),
+        target_label=country_name[:160],
+        summary=f"deleted country + {len(bank_ids)} bank(s) + rates",
+    )
     db.commit()
     return Response(status_code=204)
