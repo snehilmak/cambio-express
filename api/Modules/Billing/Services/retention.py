@@ -406,7 +406,6 @@ def purge_expired_stores(db: Session) -> int:
     transactional — a partial-purge crash rolls back, the cron
     job retries on the next run.
     """
-    from api.Modules.Tenancy.Models import Store
     now = utc_now()
     expired = _expired_stores(db, now)
     purged = 0

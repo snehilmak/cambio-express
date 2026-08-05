@@ -22,7 +22,6 @@ the same routes through ``asgi:asgi_app`` (the
 from __future__ import annotations
 
 import os
-from datetime import datetime
 
 from starlette.applications import Starlette
 from starlette.requests import Request

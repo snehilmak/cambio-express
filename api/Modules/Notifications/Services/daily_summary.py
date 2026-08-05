@@ -29,7 +29,7 @@ from __future__ import annotations
 import logging
 import os
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 from typing import Any, Optional
 
 from sqlalchemy import or_
@@ -222,7 +222,6 @@ def run(
 
     The caller owns the session lifecycle.
     """
-    from api.Modules.Tenancy.Models import Store
 
     if on_date is None:
         on_date = date.today() - timedelta(days=1)

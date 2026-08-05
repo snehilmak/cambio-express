@@ -25,7 +25,13 @@ from api.Modules.BankSync.Requests.transactions import (
 
 __all__ = [
     "BankAccountListResponse",
+    "BankAccountNicknameRequest",
     "BankAccountRow",
+    "BankConnectCompleteRequest",
+    "BankConnectCompleteResponse",
+    "BankConnectResponse",
+    "BankRefreshResponse",
+    "BankSyncTransactionsResponse",
     "BankRuleListResponse",
     "BankRuleResponse",
     "BankRuleRow",

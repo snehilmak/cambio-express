@@ -24,7 +24,7 @@ leading underscores so call sites in the passkey routes don't
 move during the migration window.
 """
 import os
-from typing import Any, Iterable, Sequence
+from typing import Any
 
 from sqlalchemy.orm import Session
 

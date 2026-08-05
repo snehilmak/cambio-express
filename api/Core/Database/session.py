@@ -92,7 +92,6 @@ class Base(DeclarativeBase):
     Foo(Base)`` proper typing (the callable returns ``Any``,
     which trips mypy's ``cannot subclass Any`` on every model).
     Runtime behavior is identical."""
-    pass
 
 
 def get_db() -> Generator[Session, None, None]:

@@ -273,7 +273,7 @@ def owner_connect_codes_generate_route(
     store to the owner's umbrella."""
     require_permission(claims, "settings", "create")
     import secrets
-    from datetime import datetime, timedelta
+    from datetime import timedelta
     user = _require_owner_principal(db, claims)
     from api.Modules.Tenancy.Models import OwnerConnectCode
     # 8 hex chars uppercased — collision-resistant + readable when
@@ -300,7 +300,6 @@ def owner_connect_codes_revoke_route(
     Already-redeemed codes can't be revoked — that disconnect
     flow is /owner/unlink/{store_id} instead."""
     require_permission(claims, "settings", "update")
-    from datetime import datetime
     user = _require_owner_principal(db, claims)
     from api.Modules.Owners.Repositories import find_owner_code
     c = find_owner_code(db, code_id, user.id)

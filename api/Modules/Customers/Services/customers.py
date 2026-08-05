@@ -12,7 +12,6 @@ same Owner share customers; unrelated stores are isolated. The
 Repository's ``sibling_store_ids`` is the single chokepoint that
 controls that scope.
 """
-from datetime import datetime
 from difflib import SequenceMatcher
 from typing import Any
 

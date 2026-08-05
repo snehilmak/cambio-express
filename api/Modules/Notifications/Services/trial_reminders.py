@@ -24,7 +24,6 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from api.Modules.Billing.Services.trial import (
-    EXPIRING_SOON_THRESHOLD_DAYS,
     get_trial_status,
 )
 from api.Modules.Notifications.Services.smtp import send_email

@@ -27,7 +27,7 @@ it via the `reset_last_attempt()` helper.
 import logging
 import os
 import smtplib
-from datetime import datetime, timedelta
+from datetime import timedelta
 from email.message import EmailMessage
 from typing import Any
 

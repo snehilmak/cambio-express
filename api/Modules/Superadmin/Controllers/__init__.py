@@ -640,7 +640,7 @@ def billing_overview_route(
     """Billing health: trials expiring, grace, retention queue,
     recent cancellations, webhook events."""
     _require_superadmin(claims)
-    from datetime import datetime, timedelta
+    from datetime import timedelta
     from api.Modules.Billing.Services.trial import get_trial_status
     from api.Modules.Tenancy.Models import Store
     from api.Modules.Webhooks.Models import WebhookEvent
@@ -713,7 +713,6 @@ def email_log_route(
 ) -> dict[str, Any]:
     """Paginated email event log with search + type filter."""
     _require_superadmin(claims)
-    from api.Modules.Webhooks.Models import EmailEvent
     from api.Modules.Tenancy.Models import User
     from api.Modules.Superadmin.Repositories import email_events_query
 
@@ -771,7 +770,7 @@ def store_drill_route(
     _require_superadmin(claims)
     from datetime import timedelta
     from api.Modules.Billing.Services.trial import get_trial_status
-    from api.Modules.Tenancy.Models import Store, StoreEmployee, User
+    from api.Modules.Tenancy.Models import Store, StoreEmployee
     from api.Modules.Transfers.Models import Transfer
 
     store = db.get(Store, store_id)
@@ -819,7 +818,6 @@ def store_drill_route(
     ]
 
     # Transfer stats
-    from datetime import datetime
     now = utc_now()
     stats_30d = (
         db.query(
@@ -874,9 +872,7 @@ def system_health_route(
     _require_superadmin(claims)
     import os
     import platform
-    from datetime import datetime
 
-    from api.Modules.Tenancy.Models import Store, User
     from api.Modules.Transfers.Models import Transfer
 
     # DB stats
@@ -959,7 +955,6 @@ def list_stores_route(
     claims: dict[str, Any] = Depends(get_principal),
 ) -> SuperadminStoreListResponse:
     _require_superadmin(claims)
-    from api.Modules.Tenancy.Models import Store
     from api.Modules.Superadmin.Repositories import list_all_stores_newest_first
     stores = list_all_stores_newest_first(db)
     rows = [
@@ -1166,7 +1161,7 @@ def extend_trial_route(
 ) -> dict[str, Any]:
     """Extend a store's trial by N days (default 14)."""
     _require_superadmin(claims)
-    from datetime import datetime, timedelta
+    from datetime import timedelta
     from api.Modules.Tenancy.Models import Store
     sa = resolve_superadmin_user(db, claims)
     s = db.get(Store, store_id)
@@ -1272,8 +1267,7 @@ def bulk_action_route(
     """Bulk action on multiple stores. Actions: extend_trial,
     enable, disable."""
     _require_superadmin(claims)
-    from datetime import datetime, timedelta
-    from api.Modules.Tenancy.Models import Store
+    from datetime import timedelta
     sa = resolve_superadmin_user(db, claims)
     store_ids = body.get("store_ids", [])
     action = body.get("action", "")
@@ -1494,7 +1488,7 @@ def email_store_route(
     """Send an email to a store's admin(s)."""
     _require_superadmin(claims)
     from api.Modules.Notifications.Services.smtp import send_email
-    from api.Modules.Tenancy.Models import Store, User
+    from api.Modules.Tenancy.Models import Store
     sa = resolve_superadmin_user(db, claims)
     store = db.get(Store, store_id)
     if store is None:

@@ -14,4 +14,3 @@ because they answer different questions about the same table.
 Layer rules (ADR):
     Controller → Service → Repository → Model
 """
-from typing import Any

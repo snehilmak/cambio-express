@@ -120,7 +120,6 @@ def consume_recovery_code(
     )
     if row is None:
         return False
-    from datetime import datetime
     setattr(row, "used_at", utc_now())
     db.flush()
     return True

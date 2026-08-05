@@ -4,15 +4,17 @@ Decides whether a legacy URL like ``/dashboard`` or
 ``/reports/sales-by-company`` should 301 to its ``/app/*`` SPA
 equivalent. Used by both:
 
-* ``asgi.py`` — production. Called after every other dispatch
-  branch (FastAPI, SPA shell, PublicRoutes) and before falling
-  through to Flask. Anything not handled by another app and not a
-  ``/static/*`` asset gets bounced to the SPA.
+* ``asgi.py`` — production. Called as the last dispatch branch,
+  after every other one (FastAPI, SPA shell, PublicRoutes). Anything
+  not handled by another app and not a ``/static/*`` asset gets
+  bounced to the SPA; if this resolver returns nothing it's a 404.
+  (Flask was removed in PR #550 — there's no WSGI app to fall
+  through to anymore.)
 
-* ``tests/conftest.py`` — the Flask ``test_client`` doesn't go
-  through ``asgi.py``, so the conftest wraps ``flask_app.wsgi_app``
-  with a pre-router that calls ``redirect_target`` to honour the
-  same 301s the production ASGI dispatcher applies.
+* ``tests/conftest.py`` — the Starlette ``TestClient`` (named
+  ``flask_app`` / ``test_client`` in the shim for historical
+  parity, not an actual Flask app) exercises the same
+  ``redirect_target`` 301s the production ASGI dispatcher applies.
 
 The redirect applies to **every HTTP method**, not just GET — the
 legacy POST surface has been retired (the SPA POSTs to
@@ -25,11 +27,10 @@ import re
 from typing import Callable, Optional
 
 
-# Path prefixes that NEVER redirect — owned directly by another
-# app (Starlette + Flask static) or by the ASGI router itself.
-# asgi.py routes most of these before we get here; this list is
-# the safety net for the Flask test_client bridge in
-# tests/conftest.py.
+# Path prefixes that NEVER redirect — owned directly by the
+# Starlette static mount or by the ASGI router itself. asgi.py
+# routes most of these before we get here; this list is the safety
+# net for the test-client bridge in tests/conftest.py.
 _PASS_THROUGH_PREFIXES: tuple[str, ...] = (
     "/static/",
     "/api/",

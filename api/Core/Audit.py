@@ -40,7 +40,7 @@ helpers consistently makes it harder to forget.
 from __future__ import annotations
 
 from functools import wraps
-from typing import Any, Awaitable, Callable, TypeVar
+from typing import Any, Callable, TypeVar
 
 from sqlalchemy.orm import Session
 

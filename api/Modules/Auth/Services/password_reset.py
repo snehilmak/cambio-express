@@ -12,7 +12,7 @@ that role goes through `flask reset-superadmin`.
 import hashlib
 import secrets
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 from sqlalchemy.orm import Session
 

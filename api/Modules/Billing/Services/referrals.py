@@ -24,7 +24,6 @@ Per CLAUDE.md invariant #12:
 import logging
 import secrets
 import string
-from datetime import datetime
 
 import stripe
 from sqlalchemy.orm import Session

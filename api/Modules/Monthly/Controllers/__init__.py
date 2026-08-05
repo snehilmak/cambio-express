@@ -15,7 +15,6 @@ from api.Core.Database import get_db
 from api.Modules.Auth.Controllers import get_principal
 from api.Modules.Auth.Services import resolve_store_scope
 from api.Modules.Auth.Services.principal import require_permission
-from api.Modules.Monthly.Models import MonthlyFinancial
 from api.Modules.Monthly.Repositories import list_logged_months
 from api.Modules.Monthly.Requests import (
     MonthLogged,

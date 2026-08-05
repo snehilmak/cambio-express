@@ -9,7 +9,6 @@ Superadmin:
   GET  /tickets/all      — every ticket across all stores
   PUT  /tickets/{id}     — update status / priority / reply
 """
-from datetime import datetime
 from typing import Any
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Path, Query

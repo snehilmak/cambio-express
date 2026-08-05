@@ -716,7 +716,6 @@ def disconnect_account_route(
     `disconnected_at` + flips `enabled` off; historical
     transactions are preserved + still appear in /bank-transactions
     with the account label."""
-    from datetime import datetime
     sid = _require_admin_bank_scope(claims, "update")
     row = (
         db.query(StripeBankAccount)

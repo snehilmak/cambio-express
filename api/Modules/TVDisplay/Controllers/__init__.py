@@ -26,7 +26,6 @@ Auth + gating: requires JWT principal scoped to a store; admin
 or employee role; the store must have the ``tv_display`` add-on
 active.
 """
-from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Response
 from sqlalchemy import func

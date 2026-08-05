@@ -126,7 +126,6 @@ def _names_for(
 ) -> dict[int, str]:
     """Single batch query for every employee name referenced
     by ``entries`` — avoids N+1."""
-    from api.Modules.Tenancy.Models import StoreEmployee
     ids = {e.store_employee_id for e in entries}
     from api.Modules.TimeClock.Repositories import get_employee_name_map
     return get_employee_name_map(db, ids)
@@ -980,7 +979,6 @@ def _enforce_passkey_gate(
     from webauthn import verify_authentication_response
     from webauthn.helpers import base64url_to_bytes
     from api.Modules.Auth.Services.passkey import rp_id as _rp_id, origin as _origin
-    from api.Modules.TimeClock.Models import StoreEmployeePasskey
     from api.Modules.TimeClock.Services.passkey import (
         PasskeyNotRegisteredError,
         decode_assert_token,

@@ -308,6 +308,8 @@ class ShiftUpdateRequest(BaseModel):
 
 
 class ShiftRow(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     id:                int
     store_employee_id: int
     employee_name:     str
@@ -318,4 +320,6 @@ class ShiftRow(BaseModel):
 
 
 class ShiftList(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     rows: list[ShiftRow]

@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import io
 import zipfile
-from datetime import date, datetime
+from datetime import date
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session

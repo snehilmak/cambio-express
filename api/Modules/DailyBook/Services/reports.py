@@ -12,7 +12,7 @@ Write-side (lock / unlock / ensure):
   unlock_report — clear locked_at/locked_by; no-op if no row exists.
 """
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date
 from typing import Iterable
 
 from sqlalchemy.orm import Session

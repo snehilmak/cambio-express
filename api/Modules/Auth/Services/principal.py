@@ -102,7 +102,6 @@ def invalidate_sessions_for_role(db: Session, store_id: int, role: str) -> None:
     """Revoke active refresh tokens for all users of a given role at a
     store. Forces re-login so fresh permissions take effect immediately
     instead of waiting up to 30 minutes for the access token to expire."""
-    from datetime import datetime
     from api.Modules.Auth.Models import RefreshToken
     now = utc_now()
     db.query(RefreshToken).filter(

@@ -7,7 +7,6 @@ superadmin CRUD page's `is_visible` derived flag.
 
 Pure read — no DB writes, no commits.
 """
-from datetime import datetime
 
 from sqlalchemy.orm import Session
 

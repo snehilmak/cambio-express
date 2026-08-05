@@ -21,7 +21,7 @@ Operator-editable fields: everything else in `_DAILY_REPORT_FIELDS`
 plus the dozens of one-off P&L columns.
 """
 from calendar import monthrange
-from datetime import date, datetime
+from datetime import date
 
 from sqlalchemy.orm import Session
 
