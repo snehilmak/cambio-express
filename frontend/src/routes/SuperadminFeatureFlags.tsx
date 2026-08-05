@@ -25,6 +25,7 @@ import {
   PageHeader,
   PageShell,
   Pill,
+  RowActions,
   Table,
   Textarea,
   useToast,
@@ -160,15 +161,23 @@ function FlagRow({
           {new Date(flag.created_at).toLocaleDateString()}
         </td>
         <td style={{ textAlign: "right" }}>
-          <Button size="sm" tone="secondary" onClick={handleToggle} disabled={busy}>
-            {flag.enabled_by_default ? "Disable" : "Enable"}
-          </Button>{" "}
-          <Button size="sm" tone="secondary" onClick={onToggleExpand}>
-            Overrides
-          </Button>{" "}
-          <Button size="sm" tone="secondary" onClick={handleDelete} disabled={busy}>
-            Delete
-          </Button>
+          <RowActions
+            title={flag.key}
+            actions={[
+              {
+                label: flag.enabled_by_default ? "Disable" : "Enable",
+                onClick: handleToggle, disabled: busy,
+              },
+              {
+                label: expanded ? "Hide overrides" : "Overrides",
+                onClick: onToggleExpand,
+              },
+              {
+                label: "Delete", tone: "danger",
+                onClick: handleDelete, disabled: busy,
+              },
+            ]}
+          />
         </td>
       </tr>
       {expanded && (
@@ -246,12 +255,19 @@ function OverridesPanel({ flagKey }: { flagKey: string }) {
                   </Pill>
                 </td>
                 <td style={{ textAlign: "right" }}>
-                  <Button size="sm" tone="secondary" onClick={() => handleSet(o.store_id, !o.enabled)}>
-                    Flip
-                  </Button>{" "}
-                  <Button size="sm" tone="secondary" onClick={() => handleClear(o.store_id)}>
-                    Clear
-                  </Button>
+                  <RowActions
+                    title={`${o.store_name} (${o.store_slug})`}
+                    actions={[
+                      {
+                        label: "Flip",
+                        onClick: () => handleSet(o.store_id, !o.enabled),
+                      },
+                      {
+                        label: "Clear", tone: "danger",
+                        onClick: () => handleClear(o.store_id),
+                      },
+                    ]}
+                  />
                 </td>
               </tr>
             ))}
