@@ -212,7 +212,6 @@ def time_to_convert(
     signup (created_at) to today as a proxy for "activation
     delay" — we don't yet log the exact trial→paid timestamp.
     """
-    from datetime import datetime
     from api.Modules.Tenancy.Models import Store
     from api.Modules.Reports.Services.date_helpers import (
         day_end, day_start,
@@ -255,7 +254,6 @@ def trial_expiry_timing(
     early, late, or roll into expiry. `d_from` is unused — point-
     in-time at end-of-period.
     """
-    from datetime import datetime
     from api.Modules.Tenancy.Models import Store
     from api.Modules.Reports.Services.date_helpers import day_end
 
@@ -486,7 +484,6 @@ def password_resets(
     Expired / Open). Tokens are pre-loaded with their users in
     a single IN-query (avoiding N+1).
     """
-    from datetime import datetime
     from api.Modules.Auth.Models import PasswordResetToken
     from api.Modules.Tenancy.Models import User
     from api.Modules.Reports.Services.date_helpers import (

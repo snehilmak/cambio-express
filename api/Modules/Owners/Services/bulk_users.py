@@ -21,7 +21,7 @@ from api.Modules.Admin.Services.users import (
     UsernameTakenError,
     create_store_user,
 )
-from api.Modules.Tenancy.Models import Store, StoreOwnerLink, User
+from api.Modules.Tenancy.Models import Store, StoreOwnerLink
 
 VALID_ROLES = {"admin", "employee"}
 

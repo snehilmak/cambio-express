@@ -9,7 +9,7 @@ Pure function returning the store's current trial state. Used by:
 Single source of truth so the trial-state contract stays consistent
 across all those surfaces.
 """
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 from api.Modules.Billing.Models import Store
 from api.Core.Clock import utc_now

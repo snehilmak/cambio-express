@@ -28,7 +28,7 @@ def get_referral_payload(
     embeds it directly so a cashier on the SPA doesn't have to
     derive the canonical hostname client-side.
     """
-    from api.Modules.Billing.Models import ReferralCode, ReferralRedemption
+    from api.Modules.Billing.Models import ReferralRedemption
     from api.Modules.Billing.Services import (
         ensure_referral_code, store_has_paid_plan,
     )

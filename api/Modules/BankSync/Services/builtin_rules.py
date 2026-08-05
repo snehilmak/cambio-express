@@ -18,7 +18,7 @@ Per CLAUDE.md "Bank-charge automation": built-ins NEVER auto-post
 to the daily book (`post_to_daily=False` at the call site).
 Adding a new built-in rule = appending a 3-tuple here.
 """
-from typing import Any, Iterable
+from typing import Any
 
 
 # Description substring + optional account last4 + target slug.

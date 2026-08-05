@@ -10,7 +10,7 @@ The legacy module-level state (`_is_daily_book_kind`) is passed in
 as a callable so the Flask app keeps its existing helper while the
 Service stays HTTP-agnostic.
 """
-from datetime import date, datetime
+from datetime import date
 from typing import Callable
 
 from sqlalchemy.orm import Session

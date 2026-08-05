@@ -9,7 +9,7 @@ dataclass and returns ``(rows, total)`` for paginated rendering.
 The dataclass keeps the controller signature flat — no ``**kwargs``
 smoke.
 """
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import date, datetime
 from typing import Any, Iterable, Literal
 

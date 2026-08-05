@@ -29,7 +29,6 @@ transactions can be tagged with. Three concerns live here:
 """
 from sqlalchemy.orm import Session
 
-from api.Modules.BankSync.Services.builtin_rules import is_bank_charge_slug
 from api.Modules.DailyBook.Services import LINE_ITEM_KINDS
 
 

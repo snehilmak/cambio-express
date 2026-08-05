@@ -15,7 +15,6 @@ no-ops on second call; subsequent calls (re-run, manual replay,
 etc.) return 0.
 """
 import os
-from datetime import datetime
 from typing import Any
 
 from sqlalchemy.orm import Session

@@ -10,7 +10,7 @@ Owner signup (`/signup/owner`) doesn't run through here — it has
 its own flow (no store creation; just an Owner User).
 """
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 from slugify import slugify
 from sqlalchemy.orm import Session

@@ -367,7 +367,6 @@ def finish_totp_enrollment(
     `AuthenticationError` on bad/expired tokens or invalid codes.
     Caller commits.
     """
-    from datetime import datetime
     from api.Modules.Auth.Services.totp import (
         generate_recovery_codes, verify_totp_token,
     )

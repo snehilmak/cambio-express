@@ -9,7 +9,6 @@ Migrated from `app.py`:
 - `store_has_paid_plan` → `store_has_paid_plan`
 - `data_retention_days_left` → `data_retention_days_left`
 """
-from datetime import datetime
 
 from api.Modules.Billing.Models import Store
 from api.Core.Clock import utc_now

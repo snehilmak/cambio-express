@@ -14,7 +14,7 @@ Per CLAUDE.md invariant #4: data retention timer is 180 days.
 The store retains its DB rows for that window; the
 `flask purge-expired-stores` CLI deletes them when the timer expires.
 """
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 from sqlalchemy.orm import Session
 

@@ -641,7 +641,6 @@ def export_admin_audit_log_csv_route(
     require_permission(claims, "reports", "read")
     import csv as csv_lib
     import io
-    from datetime import datetime as _datetime
 
     store_id = resolve_store_scope(claims)
     # Walk pagination to assemble the full filtered set —
@@ -1070,7 +1069,6 @@ def redeem_connect_code_route(
     if not code_str:
         raise HTTPException(status_code=422, detail="Code is required")
 
-    from datetime import datetime
     from api.Modules.Tenancy.Models import OwnerConnectCode, StoreOwnerLink, User
 
     occ = db.query(OwnerConnectCode).filter_by(code=code_str).first()

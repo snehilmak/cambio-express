@@ -23,7 +23,7 @@ Layer rules:
     Controller → Repository  ✗
     Controller → DB session  ✓ (only via Depends(get_db))
 """
-from datetime import date, datetime
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
 from sqlalchemy.orm import Session

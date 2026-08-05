@@ -370,7 +370,6 @@ def _record_login_event(db: Session, user_id: int, *, method: str = "") -> None:
     SPA-side login path so the DAU/MAU report stays accurate. Mirrors
     `app._record_login`, but uses the FastAPI request-scoped session
     rather than Flask's. Caller is responsible for committing."""
-    from datetime import datetime
     from api.Modules.Auth.Models import LoginEvent
     u = db.get(User, user_id)
     if u is None:
@@ -1415,7 +1414,6 @@ def send_password_reset_email(
     """
     import logging
     import os
-    from datetime import datetime
     from api.Core.Database import SessionLocal
     from api.Modules.Notifications.Services.smtp import send_email
     from api.Modules.Notifications.Services.templates import (
