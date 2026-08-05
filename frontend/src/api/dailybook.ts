@@ -35,6 +35,10 @@ export interface DailyReportRow {
   check_cashing_fees: number;
   return_check_hold_fees: number;
   forward_balance: number;
+  /** True when forward_balance is auto-carried from the prior logged
+   *  day (drops + safe) and the editor renders it read-only. False
+   *  only on the store's first logged day (operator-seeded). */
+  forward_balance_auto: boolean;
   from_bank: number;
   rebates_commissions: number;
   // Receipts — line-item derived (read-only)

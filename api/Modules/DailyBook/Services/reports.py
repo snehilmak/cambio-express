@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 
 from api.Modules.DailyBook.Models import DailyReport
 from api.Modules.DailyBook.Repositories import (
+    find_prior_report,
     find_report_by_date,
     list_reports_in_period,
 )
@@ -50,6 +51,12 @@ class DailyReportSummary:
     check_cashing_fees: float
     return_check_hold_fees: float
     forward_balance: float
+    # True when ``forward_balance`` is auto-carried from the previous
+    # logged day (prior.outside_cash_drops + prior.safe_balance) and
+    # the editor should render it read-only. False only on the very
+    # first logged day, where the operator seeds the opening balance
+    # by hand. See ``carry_forward_from`` + INVARIANTS.md.
+    forward_balance_auto: bool
     from_bank: float
     rebates_commissions: float
     # Receipts (line-item derived)
@@ -90,7 +97,31 @@ class PeriodSummary:
     days_logged: int
 
 
-def _summarize(r: DailyReport) -> DailyReportSummary:
+def carry_forward_from(prior: DailyReport) -> float:
+    """The forward balance a day inherits from the previous logged
+    day = that day's cash left the store overnight: what was dropped
+    to the safe / outside (``outside_cash_drops``) plus what stayed
+    in the safe (``safe_balance``). This is the opening cash the next
+    day starts with. Confirmed with the operator as the carry rule."""
+    return float((prior.outside_cash_drops or 0) + (prior.safe_balance or 0))
+
+
+def _summarize(
+    r: DailyReport, *, forward_auto: float | None = None,
+) -> DailyReportSummary:
+    """Wire-shape one report. When ``forward_auto`` is not None the
+    forward balance is auto-carried from the previous logged day —
+    we override the stored column with the fresh carry value (so the
+    editor reflects a prior-day edit even before this day is re-saved)
+    and adjust receipts / net by the delta. ``forward_auto is None``
+    means "first logged day" — the operator-seeded stored value
+    stands and the field stays editable."""
+    stored_forward = float(r.forward_balance or 0)
+    forward = stored_forward if forward_auto is None else float(forward_auto)
+    forward_delta = forward - stored_forward
+    base_receipts = float(r.total_receipts or 0)
+    total_receipts = base_receipts + forward_delta
+    total_disbursements = float(r.total_disbursements or 0)
     return DailyReportSummary(
         id=int(r.id),
         store_id=int(r.store_id),
@@ -105,7 +136,8 @@ def _summarize(r: DailyReport) -> DailyReportSummary:
         money_order=float(r.money_order or 0),
         check_cashing_fees=float(r.check_cashing_fees or 0),
         return_check_hold_fees=float(r.return_check_hold_fees or 0),
-        forward_balance=float(r.forward_balance or 0),
+        forward_balance=forward,
+        forward_balance_auto=forward_auto is not None,
         from_bank=float(r.from_bank or 0),
         rebates_commissions=float(r.rebates_commissions or 0),
         return_check_paid_back=float(r.return_check_paid_back or 0),
@@ -124,9 +156,9 @@ def _summarize(r: DailyReport) -> DailyReportSummary:
         locked=r.locked_at is not None,
         notes=str(r.notes or ""),
         locked_at=r.locked_at.isoformat() if r.locked_at else "",
-        total_receipts=float(r.total_receipts or 0),
-        total_disbursements=float(r.total_disbursements or 0),
-        net=float((r.total_receipts or 0) - (r.total_disbursements or 0)),
+        total_receipts=total_receipts,
+        total_disbursements=total_disbursements,
+        net=total_receipts - total_disbursements,
     )
 
 
@@ -134,11 +166,17 @@ def summarize_report(
     db: Session, store_id: int, report_date: date,
 ) -> DailyReportSummary | None:
     """Single-report summary by `(store, date)`. Returns `None` for
-    days the store hasn't logged yet."""
+    days the store hasn't logged yet.
+
+    Forward balance is auto-carried from the most recent prior logged
+    day when one exists; the first logged day keeps its manually
+    seeded value (``forward_balance_auto=False``)."""
     r = find_report_by_date(db, store_id, report_date)
     if r is None:
         return None
-    return _summarize(r)
+    prior = find_prior_report(db, store_id, report_date)
+    forward_auto = carry_forward_from(prior) if prior is not None else None
+    return _summarize(r, forward_auto=forward_auto)
 
 
 def summarize_period(
@@ -225,9 +263,20 @@ def update_daily_report(
         raise DailyReportLockedError(
             "Daily report is locked — unlock it before editing."
         )
+    # Forward balance auto-carries from the previous logged day when
+    # one exists — the operator can't override it (mirrors the auto
+    # sales-tax field). We skip any client-sent forward_balance here
+    # and force the carried value below, so a stale form can't clobber
+    # it. Only the very first logged day (no prior report) honours the
+    # operator-entered seed.
+    prior = find_prior_report(db, store_id, report_date)
     for field in EDITABLE_REPORT_FIELDS:
+        if field == "forward_balance" and prior is not None:
+            continue
         if field in fields:
             setattr(report, field, float(fields[field] or 0))
+    if prior is not None:
+        report.forward_balance = carry_forward_from(prior)
     report.notes = notes or ""
     report.updated_at = utc_now()
     db.flush()

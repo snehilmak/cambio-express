@@ -6304,6 +6304,11 @@ export interface components {
              */
             forward_balance: number;
             /**
+             * Forward Balance Auto
+             * @default false
+             */
+            forward_balance_auto: boolean;
+            /**
              * From Bank
              * @default 0
              */

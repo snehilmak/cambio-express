@@ -28,6 +28,31 @@ def find_report_by_date(
     )
 
 
+def find_prior_report(
+    db: Session, store_id: int, before_date: date,
+) -> DailyReport | None:
+    """Most recent DailyReport for this store strictly before
+    ``before_date``. Powers the forward-balance carry: today's
+    opening cash is derived from the previous logged day's
+    (outside_cash_drops + safe_balance). Returns ``None`` when the
+    store has no earlier report — that's the "first day" case where
+    the operator seeds the forward balance manually.
+
+    "Previous logged day", not "yesterday": a store closed Sunday
+    carries Saturday's close into Monday. Rows are only created when
+    a day is actually saved / locked (a bare GET never creates one),
+    so this skips gaps automatically."""
+    return (
+        db.query(DailyReport)
+          .filter(
+              DailyReport.store_id == store_id,
+              DailyReport.report_date < before_date,
+          )
+          .order_by(DailyReport.report_date.desc())
+          .first()
+    )
+
+
 def get_report_by_id(
     db: Session, report_id: int, store_ids: Iterable[int],
 ) -> DailyReport | None:
