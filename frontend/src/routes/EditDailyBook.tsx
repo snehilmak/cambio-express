@@ -136,6 +136,9 @@ interface LineItemFieldDef {
 
 // taxable_sales / non_taxable / sales_tax are edited together in the
 // <SalesWidget> modal (see the "In" tab), not as plain inputs here.
+// forward_balance is also NOT in this list — it renders through the
+// dedicated <ForwardBalanceInput> because it's auto-carried from the
+// prior day (read-only) on every day but the store's first.
 const RECEIPT_INPUTS: InputFieldDef[] = [
   { key: "bill_payment_charge",    label: "Bill payment charge" },
   { key: "phone_recargas",         label: "Phone recargas" },
@@ -143,7 +146,6 @@ const RECEIPT_INPUTS: InputFieldDef[] = [
   { key: "money_order",            label: "Money order" },
   { key: "check_cashing_fees",     label: "Check cashing fees" },
   { key: "return_check_hold_fees", label: "Return check hold fees" },
-  { key: "forward_balance",        label: "Forward balance" },
   { key: "from_bank",              label: "From bank" },
   { key: "rebates_commissions",    label: "Rebates / commissions" },
 ];
@@ -586,6 +588,12 @@ function ReceiptsPanel(
 
       <PanelTitle>Other receipts</PanelTitle>
       <InputGrid>
+        <ForwardBalanceInput
+          value={props.form.forward_balance}
+          auto={props.report?.forward_balance_auto === true}
+          disabled={props.locked}
+          onChange={(v) => props.set("forward_balance", v)}
+        />
         {RECEIPT_INPUTS.map((f) => (
           <NumberInput
             key={f.key}
@@ -1530,6 +1538,34 @@ function NumberInput({
       value={Number.isFinite(value) ? value : 0}
       onChange={onChange}
       disabled={disabled}
+    />
+  );
+}
+
+/** Forward balance (opening cash carried from the previous day).
+ *  Auto-carried = previous logged day's (Outside cash drops + Safe
+ *  balance); the server forces that value on save, so the field is
+ *  read-only whenever `auto` is true (every day but the store's very
+ *  first). On the first day there's no prior report — the operator
+ *  seeds the opening balance once and it carries forward from then
+ *  on. Same auto-lock pattern as the sales-tax field. */
+function ForwardBalanceInput({
+  value, auto, disabled, onChange,
+}: {
+  value: number;
+  auto: boolean;
+  disabled?: boolean;
+  onChange: (next: number) => void;
+}) {
+  return (
+    <MoneyInput
+      label="Forward balance"
+      hint={auto
+        ? "Auto: yesterday's cash drops + safe balance"
+        : "Opening balance — set once; it carries forward automatically."}
+      value={Number.isFinite(value) ? value : 0}
+      onChange={onChange}
+      disabled={disabled || auto}
     />
   );
 }

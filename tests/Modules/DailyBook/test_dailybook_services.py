@@ -171,3 +171,108 @@ def test_period_summary_response_validates(test_store_id):
         )
     assert resp.days_logged == 1
     assert resp.rows[0].taxable_sales == 100.0
+
+
+# ── Forward-balance carry-forward ───────────────────────────
+#
+# forward_balance auto-carries from the previous logged day
+# (outside_cash_drops + safe_balance). The first logged day has no
+# prior report, so the operator seeds it by hand and it stays
+# editable; every day after is auto + read-only.
+
+
+def test_forward_balance_first_day_is_manual(test_store_id):
+    from tests._app import db
+    from api.Modules.DailyBook.Services import summarize_report
+    d = date(2026, 3, 2)
+    with db_session():
+        _seed_report(test_store_id, d, forward_balance=500.0)
+        s = summarize_report(db.session, test_store_id, d)
+    assert s is not None
+    # No earlier report → operator-seeded value stands, editable.
+    assert s.forward_balance_auto is False
+    assert s.forward_balance == 500.0
+
+
+def test_forward_balance_carries_from_prior_day(test_store_id):
+    from tests._app import db
+    from api.Modules.DailyBook.Services import summarize_report
+    day1 = date(2026, 3, 2)
+    day2 = date(2026, 3, 3)
+    with db_session():
+        # Prior day left 120 dropped to the safe + 380 in the safe.
+        _seed_report(
+            test_store_id, day1,
+            outside_cash_drops=120.0, safe_balance=380.0,
+            forward_balance=500.0,
+        )
+        # Day 2's own stored forward is deliberately stale (0); the
+        # summary must override it with the carried value.
+        _seed_report(test_store_id, day2, taxable_sales=100.0,
+                     forward_balance=0.0)
+        s = summarize_report(db.session, test_store_id, day2)
+    assert s is not None
+    assert s.forward_balance_auto is True
+    assert s.forward_balance == 500.0  # 120 drops + 380 safe
+    # The carried value flows into receipts even though the stored
+    # column was stale.
+    assert s.total_receipts == 600.0   # 100 taxable + 500 forward
+    assert s.net == s.total_receipts - s.total_disbursements
+
+
+def test_forward_balance_skips_gap_days(test_store_id):
+    """Carry comes from the most recent *logged* prior day, not a
+    fixed 'yesterday' — a store closed a day still carries."""
+    from tests._app import db
+    from api.Modules.DailyBook.Services import summarize_report
+    sat = date(2026, 3, 7)
+    mon = date(2026, 3, 9)  # Sunday (the 8th) skipped
+    with db_session():
+        _seed_report(test_store_id, sat,
+                     outside_cash_drops=50.0, safe_balance=250.0)
+        _seed_report(test_store_id, mon)
+        s = summarize_report(db.session, test_store_id, mon)
+    assert s.forward_balance_auto is True
+    assert s.forward_balance == 300.0  # Saturday's 50 + 250
+
+
+def test_update_forces_forward_balance_on_carried_day(test_store_id):
+    """A stale / tampered client forward_balance can't overwrite the
+    carried value on a day that has a prior report."""
+    from tests._app import db
+    from api.Modules.DailyBook.Services import (
+        summarize_report, update_daily_report,
+    )
+    day1 = date(2026, 3, 2)
+    day2 = date(2026, 3, 3)
+    with db_session():
+        _seed_report(test_store_id, day1,
+                     outside_cash_drops=100.0, safe_balance=400.0)
+        update_daily_report(
+            db.session, store_id=test_store_id, report_date=day2,
+            fields={"forward_balance": 9999.0, "taxable_sales": 10.0},
+        )
+        db.session.commit()
+        s = summarize_report(db.session, test_store_id, day2)
+    # Client sent 9999 but the server forced the carry (100 + 400).
+    assert s.forward_balance == 500.0
+    assert s.forward_balance_auto is True
+
+
+def test_update_honors_seed_on_first_day(test_store_id):
+    """The very first logged day has no prior report — the operator's
+    seeded forward_balance is honoured and stays editable."""
+    from tests._app import db
+    from api.Modules.DailyBook.Services import (
+        summarize_report, update_daily_report,
+    )
+    d = date(2026, 3, 2)
+    with db_session():
+        update_daily_report(
+            db.session, store_id=test_store_id, report_date=d,
+            fields={"forward_balance": 750.0},
+        )
+        db.session.commit()
+        s = summarize_report(db.session, test_store_id, d)
+    assert s.forward_balance == 750.0
+    assert s.forward_balance_auto is False

@@ -29,6 +29,10 @@ class DailyReportRow(BaseModel):
     check_cashing_fees: float = 0.0
     return_check_hold_fees: float = 0.0
     forward_balance: float = 0.0
+    # True when forward_balance is auto-carried from the previous
+    # logged day (drops + safe) and the editor renders it read-only;
+    # False only on the first logged day (operator-seeded).
+    forward_balance_auto: bool = False
     from_bank: float = 0.0
     rebates_commissions: float = 0.0
     # Receipts (line-item derived — read-only in editor)

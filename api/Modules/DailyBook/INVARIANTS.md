@@ -67,6 +67,12 @@ over_short
 
 Plus `notes` (text, separate parameter).
 
+**`forward_balance` is conditionally operator-editable.** It is in
+`EDITABLE_REPORT_FIELDS` (so the schema accepts it), but it only
+honours the operator's value on the store's **first logged day**.
+From the second logged day on it is **auto-carried** — see
+"Forward-balance carry" below.
+
 ### Category 2: Line-item-derived
 
 These columns are the **sum of `daily_line_item` rows** with the
@@ -161,6 +167,49 @@ individual_total = amount + fees + commission + federal_tax
 **Do not change these formulas** without coordinating with the
 monthly P&L module (`api/Modules/Monthly/`), which sums these into
 monthly totals.
+
+
+## Forward-balance carry
+
+`forward_balance` is the opening cash a day starts with. It is
+**auto-carried from the previous logged day**:
+
+```
+forward_balance(today) = prior.outside_cash_drops + prior.safe_balance
+```
+
+where `prior` is the most recent report with `report_date <` today
+(`find_prior_report` — "previous *logged* day", so a store closed
+Sunday carries Saturday's close into Monday; a bare GET never
+creates a row, so gaps are skipped, not zero-filled).
+
+Rules:
+
+- **First logged day** (no prior report): `forward_balance_auto` is
+  `False`. The operator seeds the opening balance by hand and the
+  field is editable. This is the ONLY day it's editable.
+- **Every later day**: `forward_balance_auto` is `True`. The editor
+  renders the field read-only; `update_daily_report` **ignores any
+  client-sent `forward_balance` and forces the carried value**, so a
+  stale or tampered form can't clobber it (same posture as the auto
+  sales-tax field).
+- `summarize_report` overrides the stored column with the fresh
+  carry value on read and adjusts `total_receipts` / `net` by the
+  delta — so editing yesterday's drops/safe is reflected on today
+  even before today is re-saved. `carry_forward_from(prior)` is the
+  single source of the formula (Services/reports.py).
+- **`summarize_period` does NOT override** — the range report uses
+  the stored column (`forward_balance_auto` defaults `False` there).
+  Fine because the value was forced-correct at each day's save.
+- **`forward_balance` does NOT feed the Monthly P&L.** Monthly's
+  `_DAILY_DERIVED_FIELDS` sums only cash/check purchases + expenses,
+  payroll, and check-cashing fees — never `forward_balance`,
+  `safe_balance`, or `outside_cash_drops`. So the carry only affects
+  the daily book's own receipts / net / over-short display.
+
+If you change the carry formula, update `carry_forward_from`,
+`test_dailybook_services.py` (the `test_forward_balance_*` cases),
+and this section together.
 
 
 ## Lock rules

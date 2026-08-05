@@ -2392,6 +2392,11 @@
             "title": "Forward Balance",
             "type": "number"
           },
+          "forward_balance_auto": {
+            "default": false,
+            "title": "Forward Balance Auto",
+            "type": "boolean"
+          },
           "from_bank": {
             "default": 0.0,
             "title": "From Bank",
@@ -6491,6 +6496,7 @@
         "type": "object"
       },
       "ShiftList": {
+        "additionalProperties": false,
         "properties": {
           "rows": {
             "items": {
@@ -6507,6 +6513,7 @@
         "type": "object"
       },
       "ShiftRow": {
+        "additionalProperties": false,
         "properties": {
           "employee_name": {
             "title": "Employee Name",
