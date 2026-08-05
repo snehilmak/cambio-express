@@ -162,19 +162,57 @@ def _summarize(
     )
 
 
+def _carry_only_summary(
+    store_id: int, report_date: date, forward: float,
+) -> DailyReportSummary:
+    """A virtual, not-yet-saved day that carries only the forward
+    balance from the previous logged day. Every other field is zero.
+    Returned by ``summarize_report`` when the operator opens a fresh
+    day (no row saved yet) that nonetheless has a prior day to carry
+    from — so the forward-balance box shows the carried value
+    read-only *before* the first save, instead of a blank editable
+    field. ``id=0`` flags "not persisted"; the editor keys every
+    write off (store, date), never the id, so this is safe."""
+    return DailyReportSummary(
+        id=0, store_id=store_id, report_date=report_date.isoformat(),
+        taxable_sales=0.0, non_taxable=0.0, sales_tax=0.0,
+        bill_payment_charge=0.0, phone_recargas=0.0, boost_mobile=0.0,
+        money_transfer=0.0, money_order=0.0, check_cashing_fees=0.0,
+        return_check_hold_fees=0.0,
+        forward_balance=forward, forward_balance_auto=True,
+        from_bank=0.0, rebates_commissions=0.0,
+        return_check_paid_back=0.0, other_cash_in=0.0,
+        cash_deposit=0.0, safe_balance=0.0, payroll_expense=0.0,
+        cash_purchases=0.0, cash_expense=0.0, check_purchases=0.0,
+        check_expense=0.0, outside_cash_drops=0.0, checks_deposit=0.0,
+        other_cash_out=0.0, over_short=0.0,
+        locked=False, notes="", locked_at="",
+        total_receipts=forward, total_disbursements=0.0, net=forward,
+    )
+
+
 def summarize_report(
     db: Session, store_id: int, report_date: date,
 ) -> DailyReportSummary | None:
-    """Single-report summary by `(store, date)`. Returns `None` for
-    days the store hasn't logged yet.
+    """Single-report summary by `(store, date)`.
 
     Forward balance is auto-carried from the most recent prior logged
-    day when one exists; the first logged day keeps its manually
-    seeded value (``forward_balance_auto=False``)."""
+    day whenever one exists — including on a **fresh, not-yet-saved
+    day**: if no row exists here yet but a prior day does, we return a
+    virtual carry-only summary so the forward-balance box shows the
+    carried value read-only before the operator saves anything.
+
+    Returns `None` only when the store has NO prior report at all —
+    the genuine first day, where the operator seeds the opening
+    balance by hand (``forward_balance_auto=False`` once saved)."""
     r = find_report_by_date(db, store_id, report_date)
-    if r is None:
-        return None
     prior = find_prior_report(db, store_id, report_date)
+    if r is None:
+        if prior is None:
+            return None
+        return _carry_only_summary(
+            store_id, report_date, carry_forward_from(prior),
+        )
     forward_auto = carry_forward_from(prior) if prior is not None else None
     return _summarize(r, forward_auto=forward_auto)
 
