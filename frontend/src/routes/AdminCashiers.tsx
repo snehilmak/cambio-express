@@ -13,7 +13,7 @@ import { getCurrentIdentity } from "../lib/auth";
 import {
   Breadcrumbs,
   Alert, Button, Card, ErrorState, Input, Loading,
-  PageHeader, PageShell,
+  PageHeader, PageShell, RowActions,
 } from "../components/ui";
 import styles from "./AdminCashiers.module.css";
 
@@ -184,21 +184,20 @@ export default function AdminCashiers() {
                           </Button>
                         )}
                       </span>
-                      <Button
-                        tone="secondary" size="sm"
-                        onClick={() => toggle(m)}
-                        title={m.is_active ? "Deactivate" : "Reactivate"}
-                      >
-                        {m.is_active ? "Deactivate" : "Reactivate"}
-                      </Button>
-                      {m.is_active && (
-                        <Button
-                          tone="secondary" size="sm"
-                          onClick={() => remove(m)}
-                        >
-                          ✕
-                        </Button>
-                      )}
+                      <RowActions
+                        title={m.name}
+                        actions={[
+                          {
+                            label: m.is_active ? "Deactivate" : "Reactivate",
+                            onClick: () => toggle(m),
+                          },
+                          {
+                            label: "Remove", tone: "danger",
+                            hidden: !m.is_active,
+                            onClick: () => remove(m),
+                          },
+                        ]}
+                      />
                     </>
                   )}
                 </li>

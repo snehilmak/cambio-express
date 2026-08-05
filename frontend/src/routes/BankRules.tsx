@@ -15,8 +15,8 @@ import { ApiError } from "../lib/api";
 import {
   Breadcrumbs,
   Button, Card, ConfirmDialog, EmptyState, ErrorState, Field,
-  Input, Loading, PageHeader, PageShell, Section, Select, Table, tdStyle,
-  thStyle, useToast,
+  Input, Loading, PageHeader, PageShell, RowActions, Section, Select,
+  Table, tdStyle, thStyle, useToast,
 } from "../components/ui";
 import styles from "./BankRules.module.css";
 
@@ -333,11 +333,20 @@ export default function BankRules() {
                     <td style={tdStyle}>{r.target_kind}</td>
                     <td style={tdStyle}>{r.match_count}</td>
                     <td style={tdStyle} className={styles.actionsCell}>
-                      <Button tone="secondary" size="sm" onClick={() => startEdit(r)}>Edit</Button>
-                      <Button tone="secondary" size="sm" onClick={() => handleToggle(r)}>
-                        {r.enabled ? "Disable" : "Enable"}
-                      </Button>
-                      <Button tone="danger" size="sm" onClick={() => setPendingDelete(r)}>Delete</Button>
+                      <RowActions
+                        title={r.description || r.desc_match_value || "Rule"}
+                        actions={[
+                          { label: "Edit", onClick: () => startEdit(r) },
+                          {
+                            label: r.enabled ? "Disable" : "Enable",
+                            onClick: () => handleToggle(r),
+                          },
+                          {
+                            label: "Delete", tone: "danger",
+                            onClick: () => setPendingDelete(r),
+                          },
+                        ]}
+                      />
                     </td>
                   </tr>
                 ))}
