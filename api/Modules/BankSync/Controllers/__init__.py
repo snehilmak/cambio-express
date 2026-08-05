@@ -429,6 +429,12 @@ def create_rule_route(
         description=body.description.strip(),
     )
     db.add(r); db.flush()
+    _audit_bank_action(
+        db, claims=claims, action="create", target_type="bank_rule",
+        target_id=str(r.id),
+        target_label=(r.description or r.desc_match_value or "")[:160],
+        summary=f"target={r.target_kind}",
+    )
     db.commit()
     return BankRuleResponse(rule=_adapt_rule(db, r))
 
@@ -456,6 +462,12 @@ def update_rule_route(
     r.target_kind = body.target_kind
     r.auto_post = body.auto_post
     r.description = body.description.strip()
+    _audit_bank_action(
+        db, claims=claims, action="update", target_type="bank_rule",
+        target_id=str(r.id),
+        target_label=(r.description or r.desc_match_value or "")[:160],
+        summary=f"target={r.target_kind}",
+    )
     db.commit()
     return BankRuleResponse(rule=_adapt_rule(db, r))
 
@@ -471,6 +483,12 @@ def toggle_rule_route(
     sid = resolve_store_scope(claims)
     r = _find_owned_rule(db, sid, rule_id)
     r.enabled = body.enabled
+    _audit_bank_action(
+        db, claims=claims, action="update", target_type="bank_rule",
+        target_id=str(r.id),
+        target_label=(r.description or r.desc_match_value or "")[:160],
+        summary=f"enabled={r.enabled}",
+    )
     db.commit()
     return BankRuleResponse(rule=_adapt_rule(db, r))
 
@@ -484,6 +502,11 @@ def delete_rule_route(
     require_permission(claims, "bank_sync", "delete")
     sid = resolve_store_scope(claims)
     r = _find_owned_rule(db, sid, rule_id)
+    _audit_bank_action(
+        db, claims=claims, action="delete", target_type="bank_rule",
+        target_id=str(rule_id),
+        target_label=(r.description or r.desc_match_value or "")[:160],
+    )
     db.delete(r)
     db.commit()
     return None
@@ -509,10 +532,12 @@ def _require_admin_bank_scope(claims: dict[str, Any], action: str = "read") -> i
 def _audit_bank_action(
     db: Session, *, claims: dict[str, Any], action: str,
     target_id: str, target_label: str, summary: str = "",
+    target_type: str = "bank_account",
 ) -> None:
     """Per-store operator-audit row for a bank-sync mutation.
     CLAUDE.md invariant #7 — every mutating endpoint records an
-    audit row."""
+    audit row. ``target_type`` defaults to ``bank_account``; rule
+    mutations pass ``bank_rule``."""
     from api.Modules.Audit.Services import record_operator_action
     record_operator_action(
         db,
@@ -520,7 +545,7 @@ def _audit_bank_action(
         user_id=int(claims["sub"]),
         user_name=str(claims.get("name") or claims.get("username") or ""),
         user_role=str(claims.get("role") or ""),
-        target_type="bank_account",
+        target_type=target_type,
         target_id=target_id,
         target_label=target_label,
         action=action,

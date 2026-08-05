@@ -276,3 +276,59 @@ def test_delete_404_for_other_stores_rule(client, test_store_id):
         headers={"Authorization": f"Bearer {token}"},
     )
     assert resp.status_code == 404
+
+
+# ── Audit coverage (invariant #7) ───────────────────────────
+
+
+def _latest_rule_audit(store_id, action):
+    from api.Modules.Audit.Models import OperatorAuditLog
+    return (
+        db.session.query(OperatorAuditLog)
+          .filter_by(store_id=store_id, target_type="bank_rule", action=action)
+          .order_by(OperatorAuditLog.id.desc())
+          .first()
+    )
+
+
+def test_rule_mutations_write_audit_rows(client, test_store_id):
+    """Every BankRule mutation records an operator-audit row — a wrong
+    rule silently misroutes money on a live P&L (invariant #7)."""
+    token = _login(client, test_store_id)
+    auth = {"Authorization": f"Bearer {token}"}
+
+    resp = client.post(
+        "/api/v2/bank/rules",
+        json={"target_kind": "bank_charge_210",
+              "desc_match_type": "contains",
+              "desc_match_value": "RDC FEE",
+              "description": "RDC"},
+        headers=auth,
+    )
+    assert resp.status_code == 201
+    with db_session():
+        created = _latest_rule_audit(test_store_id, "create")
+        assert created is not None
+        rid = int(created.target_id)
+
+    client.put(
+        f"/api/v2/bank/rules/{rid}",
+        json={"target_kind": "bank_charge_230", "priority": 5},
+        headers=auth,
+    )
+    with db_session():
+        upd = _latest_rule_audit(test_store_id, "update")
+        assert upd is not None and upd.target_id == str(rid)
+
+    client.post(
+        f"/api/v2/bank/rules/{rid}/toggle",
+        json={"enabled": False}, headers=auth,
+    )
+    with db_session():
+        tog = _latest_rule_audit(test_store_id, "update")
+        assert "enabled=False" in (tog.summary or "")
+
+    client.delete(f"/api/v2/bank/rules/{rid}", headers=auth)
+    with db_session():
+        deleted = _latest_rule_audit(test_store_id, "delete")
+        assert deleted is not None and deleted.target_id == str(rid)
