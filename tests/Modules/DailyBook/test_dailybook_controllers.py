@@ -51,6 +51,26 @@ def test_get_report_returns_404_when_missing(test_store_id, authed_client):
     assert resp.status_code == 404
 
 
+def test_get_fresh_day_returns_carried_forward_balance(
+    test_store_id, authed_client,
+):
+    """A day with no saved row but a prior logged day returns 200 with
+    the carried forward balance (read-only), not 404 — so the editor
+    shows the opening cash before the operator saves anything."""
+    prior = date.today() - timedelta(days=1)
+    with db_session():
+        _seed_report(
+            test_store_id, prior,
+            outside_cash_drops=100.0, safe_balance=400.0,
+        )
+    today = date.today().isoformat()
+    resp = authed_client.get(f"/daily/{test_store_id}/{today}")
+    assert resp.status_code == 200
+    row = resp.json()["report"]
+    assert row["forward_balance"] == 500.0
+    assert row["forward_balance_auto"] is True
+
+
 def test_get_report_returns_summary(test_store_id, authed_client):
     today = date.today()
     with db_session():

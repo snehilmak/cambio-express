@@ -194,6 +194,29 @@ def test_forward_balance_first_day_is_manual(test_store_id):
     assert s.forward_balance == 500.0
 
 
+def test_forward_balance_carries_on_fresh_unsaved_day(test_store_id):
+    """The bug the operator hit: they filled yesterday (safe + drops)
+    but today's report row doesn't exist yet. summarize_report must
+    still return the carried forward balance (read-only) instead of
+    None — otherwise the editor shows a blank, editable box."""
+    from tests._app import db
+    from api.Modules.DailyBook.Services import summarize_report
+    day1 = date(2026, 4, 1)
+    day2 = date(2026, 4, 2)  # never saved — no DailyReport row
+    with db_session():
+        _seed_report(
+            test_store_id, day1,
+            outside_cash_drops=90.0, safe_balance=410.0,
+        )
+        s = summarize_report(db.session, test_store_id, day2)
+    assert s is not None, "fresh day with a prior must not 404"
+    assert s.id == 0                       # virtual, not persisted
+    assert s.forward_balance == 500.0      # 90 drops + 410 safe
+    assert s.forward_balance_auto is True  # read-only in the editor
+    assert s.total_receipts == 500.0
+    assert s.net == 500.0
+
+
 def test_forward_balance_carries_from_prior_day(test_store_id):
     from tests._app import db
     from api.Modules.DailyBook.Services import summarize_report
