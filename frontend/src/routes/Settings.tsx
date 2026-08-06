@@ -23,8 +23,8 @@ import { passkeysSupported } from "../lib/webauthn";
 import { useUnsavedChangesGuard } from "../lib/useUnsavedChangesGuard";
 import {
   Alert, Button, ButtonLink, Card, Checkbox, ConfirmDialog, ErrorState, Field,
-  Input, Loading, PageHeader, PageShell, SectionTitle, Select, space, Switch,
-  TabsBar, TabsLink, useToast,
+  Input, Loading, PageHeader, PageShell, Pill, SectionTitle, Select, space,
+  Switch, TabsBar, TabsLink, useToast,
 } from "../components/ui";
 import styles from "./Settings.module.css";
 
