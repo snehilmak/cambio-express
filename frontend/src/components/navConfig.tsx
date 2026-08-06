@@ -152,19 +152,16 @@ export const NAV: NavGroup[] = [
     ],
   },
   {
-    // Reports — everything that's a read-only retrospective view
-    // of store activity (audit trails, P&L, exported snapshots).
-    // Separate from Finance so the sidebar tells the user "go here
-    // to LOOK at what happened" vs "go here to MOVE money."
+    // Reports — a DIRECT LINK to the Report Center (no fly-out menu).
+    // The Center itself surfaces every report by category, including
+    // Monthly P&L, the Audit log, and Data export — the entries that
+    // used to live here as sidebar sub-items. Clicking "Reports" goes
+    // straight to the Center; see `to` handling in SlimSidebar.
     title: "Reports",
     roles: ["admin"],
     icon: iconReports(),
-    items: [
-      { to: "/reports",            label: "Reports",     perm: "reports.read",    icon: iconReports(), desc: "Sales, customers, and productivity." },
-      { to: "/monthly",            label: "Monthly P&L", perm: "monthly.read",   icon: iconMonthly(), desc: "Profit and loss by month." },
-      { to: "/admin/audit-log",    label: "Audit log",   perm: "reports.read",   icon: iconAudit(),   desc: "Who changed what, and when." },
-      { to: "/admin/data-export",  label: "Data export", perm: "reports.read",   icon: iconReports(), desc: "Download CSV snapshots." },
-    ],
+    to: "/reports",
+    items: [],
   },
   {
     title: "Finance",
@@ -287,7 +284,9 @@ export const SUPPORT_LINK: NavItem = {
 // Filter NAV down to the groups + items that the current role
 // can see. A group is dropped entirely if its `roles` excludes
 // this user OR if every item gets filtered out (so we don't
-// render an empty icon-only button).
+// render an empty icon-only button) — UNLESS it's a direct-link
+// group (`to` set), which is a destination in its own right and
+// legitimately carries no sub-items.
 export function filterNavForRole(
   role: string,
   permissions: string[] = [],
@@ -302,7 +301,7 @@ export function filterNavForRole(
   return NAV
     .filter((g) => !g.roles || g.roles.includes(role))
     .map((g) => ({ ...g, items: g.items.filter(visible) }))
-    .filter((g) => g.items.length > 0);
+    .filter((g) => g.items.length > 0 || !!g.to);
 }
 
 // Inline stroke SVGs per CLAUDE.md design system: stroke-width 2,
@@ -405,18 +404,6 @@ function iconReturnChecks() {
       <path d="M7 10h6" />
       <path d="M7 14h4" />
       <path d="M17 9l3 3-3 3" />
-    </svg>
-  );
-}
-function iconMonthly() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false"
-      stroke="currentColor" strokeWidth="2" strokeLinecap="round"
-      strokeLinejoin="round">
-      <rect x="3" y="6" width="18" height="14" rx="2" />
-      <path d="M3 10h18" />
-      <path d="M8 4v4" />
-      <path d="M16 4v4" />
     </svg>
   );
 }

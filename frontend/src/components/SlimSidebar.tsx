@@ -25,6 +25,12 @@ export interface NavGroup {
   items: NavItem[];
   /** Roles that should see this group. Omit for "everyone authed". */
   roles?: string[];
+  /** When set, the group is a DIRECT LINK: the icon-column button
+   *  becomes a NavLink to this path and there is no fly-out / hub.
+   *  Use for a section that IS a single destination (e.g. Reports →
+   *  the Report Center) rather than a menu of sub-pages. `items`
+   *  should be `[]` for a direct-link group. */
+  to?: string;
 }
 
 
@@ -94,6 +100,24 @@ export function SlimSidebar({
           <span className={styles.brandMark}>$</span>
         </div>
         {groups.map((group) => {
+          // Direct-link group (e.g. Reports → Report Center): render a
+          // NavLink straight to its destination, no fly-out.
+          if (group.to) {
+            return (
+              <NavLink
+                key={group.title}
+                to={group.to}
+                className={({ isActive }) =>
+                  `${styles.groupBtn}${isActive ? " " + styles.isActive : ""}`
+                }
+                title={group.title}
+                aria-label={group.title}
+              >
+                <span className={styles.groupIcon}>{group.icon}</span>
+                <span className={styles.groupLabel}>{group.title}</span>
+              </NavLink>
+            );
+          }
           const isActive = openGroup === group.title
             || group.items.some((i) => location.pathname.startsWith(i.to));
           return (
@@ -202,11 +226,18 @@ export function SlimSidebar({
         </div>
         {groups.map((group) => (
           <div key={group.title} className={styles.drawerGroup}>
+            {/* Direct-link group: the title IS the destination, no
+                /hub landing and no sub-item list. */}
             <NavLink
-              to={`/hub/${sectionSlug(group.title)}`}
-              className={styles.drawerGroupTitle}
+              to={group.to ?? `/hub/${sectionSlug(group.title)}`}
+              className={group.to
+                ? ({ isActive }) =>
+                    `${styles.itemRow}${isActive ? " " + styles.isActive : ""}`
+                : styles.drawerGroupTitle}
             >
-              {group.title}
+              {group.to
+                ? <><span className={styles.itemIcon}>{group.icon}</span><span>{group.title}</span></>
+                : group.title}
             </NavLink>
             <div className={styles.itemList}>
               {group.items.map((item) => (

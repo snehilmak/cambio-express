@@ -131,7 +131,7 @@ export default function Monthly() {
             </Select>
             {year && month && (
               <ButtonLink
-                href={`/monthly/edit?year=${year}&month=${month}`}
+                to={`/monthly/edit?year=${year}&month=${month}`}
                 tone="primary"
                 size="sm"
               >

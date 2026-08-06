@@ -361,3 +361,62 @@ def test_openapi_includes_reports_paths(api_client):
         "/reports/cashier-productivity",
     }
     assert expected.issubset(paths)
+
+
+# ── Report Center admin extras (Monthly P&L / Audit log / Export) ──
+
+
+def test_with_admin_store_extras_injects_and_is_pure():
+    """Monthly P&L is prepended to Financial; a Logs & Exports
+    category is appended. The input registry is not mutated."""
+    from api.Modules.Reports.Services.categories import (
+        REPORT_CATEGORIES, with_admin_store_extras,
+    )
+    before_financial = next(
+        c for c in REPORT_CATEGORIES if c["key"] == "financial"
+    )
+    before_len = len(before_financial["reports"])
+    before_cats = len(REPORT_CATEGORIES)
+
+    out = with_admin_store_extras(REPORT_CATEGORIES)
+
+    fin = next(c for c in out if c["key"] == "financial")
+    assert fin["reports"][0]["key"] == "monthly_pl"
+    assert fin["reports"][0]["url"] == "/monthly"
+    assert out[-1]["key"] == "logs_exports"
+    keys = {r["key"] for r in out[-1]["reports"]}
+    assert keys == {"audit_log", "data_export"}
+
+    # Non-mutating: the source registry is untouched.
+    assert len(before_financial["reports"]) == before_len
+    assert len(REPORT_CATEGORIES) == before_cats
+
+
+def test_admin_report_list_surfaces_monthly_pl_and_logs(authed_client):
+    """GET /reports (admin store index) includes Monthly P&L in
+    Financial + a Logs & Exports category, all with ready urls."""
+    resp = authed_client.get("/reports")
+    assert resp.status_code == 200, resp.text
+    cats = {c["key"]: c for c in resp.json()["categories"]}
+
+    fin = cats["financial"]
+    monthly = next(r for r in fin["reports"] if r["key"] == "monthly_pl")
+    assert monthly["url"] == "/monthly"
+    assert monthly["status"] == "ready"
+
+    assert "logs_exports" in cats
+    le = {r["key"]: r for r in cats["logs_exports"]["reports"]}
+    assert le["audit_log"]["url"] == "/admin/audit-log"
+    assert le["data_export"]["url"] == "/admin/data-export"
+    assert all(r["status"] == "ready" for r in cats["logs_exports"]["reports"])
+
+
+def test_owner_report_list_excludes_admin_extras():
+    """The owner umbrella index (prefix='owner_') must NOT carry the
+    store-scoped admin extras — those routes don't apply to it."""
+    from api.Modules.Reports.Controllers import _build_report_list
+    resp = _build_report_list(prefix="owner_")
+    keys = {c.key for c in resp.categories}
+    assert "logs_exports" not in keys
+    fin = next(c for c in resp.categories if c.key == "financial")
+    assert all(r.key != "monthly_pl" for r in fin.reports)
