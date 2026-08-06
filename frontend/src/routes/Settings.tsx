@@ -760,38 +760,6 @@ function StoreInfoCard() {
               onChange={(e) => setAddress(e.target.value)}
               disabled={!canEdit} />
           </Field>
-          <SectionTitle>Business / Legal</SectionTitle>
-          <Field label="Legal name" hint="Official business name for compliance filings">
-            <Input type="text" value={legalName}
-              onChange={(e) => setLegalName(e.target.value)}
-              disabled={!canEdit} />
-          </Field>
-          <Field label="EIN" hint="Federal employer identification number">
-            <Input type="text" value={ein} placeholder="XX-XXXXXXX"
-              maxLength={20}
-              onChange={(e) => setEin(e.target.value)}
-              disabled={!canEdit} />
-          </Field>
-          <Field label="Business address" hint="Legal address (if different from store address)">
-            <Input type="text" value={businessAddress}
-              onChange={(e) => setBusinessAddress(e.target.value)}
-              disabled={!canEdit} />
-          </Field>
-          <Field label="Federal tax rate (%)">
-            <Input type="number" step="0.01" min="0" max="100"
-              value={taxRatePct}
-              onChange={(e) => setTaxRatePct(e.target.value)}
-              disabled={!canEdit} />
-          </Field>
-          <Field
-            label="Sales tax rate (%)"
-            hint="Applied to a day's Taxable Sales in the daily book. When set, Sales Tax auto-calculates and can't be edited by hand. Leave at 0 to enter Sales Tax manually."
-          >
-            <Input type="number" step="0.01" min="0" max="100"
-              value={salesTaxPct}
-              onChange={(e) => setSalesTaxPct(e.target.value)}
-              disabled={!canEdit} />
-          </Field>
           <Field
             label="Timezone"
             hint="Used for every date / time across the store — reports, audit trails, receipts. Set it once here; “Detect from address” suggests it from the address above."
@@ -832,6 +800,51 @@ function StoreInfoCard() {
                 Detect from address
               </Button>
             </div>
+          </Field>
+        </div>
+      </Card>
+
+      {/* Business / Legal is its own card — the compliance identity +
+          tax config, kept apart from the day-to-day store contact
+          fields above. (It used to be a bare <SectionTitle> dropped
+          mid-grid, which rendered as a stray one-column cell.) */}
+      <Card>
+        <SectionTitle>Business / Legal</SectionTitle>
+        <p className={styles.helpText}>
+          Compliance identity + tax rates — used on tax exports and
+          filings. Leave blank if they match the store info above.
+        </p>
+        <div className={styles.storeGrid}>
+          <Field label="Legal name" hint="Official business name for compliance filings">
+            <Input type="text" value={legalName}
+              onChange={(e) => setLegalName(e.target.value)}
+              disabled={!canEdit} />
+          </Field>
+          <Field label="EIN" hint="Federal employer identification number">
+            <Input type="text" value={ein} placeholder="XX-XXXXXXX"
+              maxLength={20}
+              onChange={(e) => setEin(e.target.value)}
+              disabled={!canEdit} />
+          </Field>
+          <Field label="Business address" hint="Legal address (if different from store address)">
+            <Input type="text" value={businessAddress}
+              onChange={(e) => setBusinessAddress(e.target.value)}
+              disabled={!canEdit} />
+          </Field>
+          <Field label="Federal tax rate (%)">
+            <Input type="number" step="0.01" min="0" max="100"
+              value={taxRatePct}
+              onChange={(e) => setTaxRatePct(e.target.value)}
+              disabled={!canEdit} />
+          </Field>
+          <Field
+            label="Sales tax rate (%)"
+            hint="Applied to a day's Taxable Sales in the daily book. When set, Sales Tax auto-calculates and can't be edited by hand. Leave at 0 to enter Sales Tax manually."
+          >
+            <Input type="number" step="0.01" min="0" max="100"
+              value={salesTaxPct}
+              onChange={(e) => setSalesTaxPct(e.target.value)}
+              disabled={!canEdit} />
           </Field>
         </div>
         {/* Receipt customization fields are intentionally hidden —
