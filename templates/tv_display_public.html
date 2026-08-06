@@ -45,94 +45,86 @@ html, body {
   text-rendering: optimizeLegibility;
 }
 
-/* Light theme — default. White background, near-black text.
-   Country header bands are near-black with neon-green accent rule. */
+/* Palette is driven by DineroBook's design tokens (design-tokens.css,
+   linked above) so the board reads as part of the product and flips
+   with `data-theme` for free:
+     - Flat surfaces / text / borders use the semantic --db-* tokens,
+       which already invert between light + dark — so there is almost
+       no theme-specific CSS to maintain here.
+     - The country / header BRAND BANDS stay dark in BOTH themes (the
+       neon-on-near-black brand mark). They can't use a flipping
+       surface token because they must contrast with the body, which
+       DOES flip — so they read from theme-tuned local vars
+       (--tv-band-*): near-black on the light page, an *elevated*
+       near-black on the dark page so they still stand off the body.
+     - The accent rule stays true neon (--db-brand, fixed) — correct
+       on a dark band in either theme. */
 body {
-  background: #f4f6fa;
-  color: #0a0a0a;
+  /* Light defaults; the dark block below lifts these to elevated
+     near-blacks so the bands don't disappear into the dark body. */
+  --tv-band:       #0a0a0a;   /* the title header bar */
+  --tv-band-head:  #0a0a0a;   /* section + board column heads */
+  --tv-band-text:  #ffffff;
+
+  background: var(--db-surface);
+  color: var(--db-text);
 }
 .tv-board { padding: 24px 28px; }
 .tv-header {
-  background: #0a0a0a;
-  color: #fff;
-  border: 1px solid #0a0a0a;
+  background: var(--tv-band);
+  color: var(--tv-band-text);
+  border: 1px solid var(--tv-band);
 }
 .tv-header::after {
-  background: var(--db-neon, #3fff00);
+  background: var(--db-brand);
 }
 .tv-section {
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
+  background: var(--db-surface-2);
+  border: 1px solid var(--db-border);
 }
 .tv-section-head {
-  background: #0a0a0a;
-  color: #fff;
+  background: var(--tv-band-head);
+  color: var(--tv-band-text);
 }
 .tv-section-head::after {
-  background: var(--db-neon, #3fff00);
+  background: var(--db-brand);
 }
 .tv-board-header {
-  background: #0a0a0a;
-  color: #fff;
-  border: 1px solid #1f242d;
+  background: var(--tv-band-head);
+  color: var(--tv-band-text);
+  border: 1px solid var(--tv-band-head);
 }
 .tv-board-header::after {
-  background: var(--db-neon, #3fff00);
+  background: var(--db-brand);
 }
-.tv-row { border-top-color: #eef0f5; }
-.tv-row:nth-child(odd) { background: #f9fafc; }
-.tv-bank { color: #0a0a0a; }
+.tv-row { border-top-color: var(--db-border-subtle); }
+.tv-row:nth-child(odd) { background: var(--db-fill-subtle); }
+.tv-bank { color: var(--db-text); }
 .tv-cell {
-  color: #0a0a0a;
-  border-left-color: #eef0f5;
+  color: var(--db-text);
+  border-left-color: var(--db-border-subtle);
 }
-.tv-cell.empty { color: #b6bcc8; }
-.tv-empty { background: #ffffff; color: #4a5061; }
-.tv-empty h2 { color: #0a0a0a; }
+.tv-cell.empty { color: var(--db-text-muted); }
+.tv-empty { background: var(--db-surface-2); color: var(--db-text-muted); }
+.tv-empty h2 { color: var(--db-text); }
 .tv-footer {
-  background: rgba(10, 10, 10, 0.04);
-  color: #4a5061;
+  background: var(--db-fill-subtle);
+  color: var(--db-text-muted);
 }
-.tv-footer .powered b { color: #0a0a0a; }
+.tv-footer .powered b { color: var(--db-text); }
 
-/* Dark theme — flips surfaces, keeps neon green accent identical
-   so the brand reads consistently across both modes. */
+/* Dark theme — everything flat flips automatically via the --db-*
+   tokens. Only two things are genuinely theme-specific: the brand
+   bands lift to an elevated near-black so they read against the
+   near-black body, and the bank name / empty-state / footer emphasis
+   pop in brand neon instead of body text. */
 [data-theme="dark"] body {
-  background: #0a0a0a;
-  color: #f4f6fa;
+  --tv-band:      #14181f;   /* elevated band on the near-black page */
+  --tv-band-head: #1f242d;
 }
-[data-theme="dark"] .tv-header {
-  background: #14181f;
-  border-color: #1f242d;
-}
-[data-theme="dark"] .tv-section {
-  background: #14181f;
-  border-color: #1f242d;
-}
-[data-theme="dark"] .tv-section-head {
-  background: #1f242d;
-  color: #fff;
-}
-[data-theme="dark"] .tv-board-header {
-  background: #1f242d;
-  color: #fff;
-  border-color: #2a3040;
-}
-[data-theme="dark"] .tv-row { border-top-color: #1f242d; }
-[data-theme="dark"] .tv-row:nth-child(odd) { background: #181c24; }
-[data-theme="dark"] .tv-bank { color: var(--db-neon, #3fff00); }
-[data-theme="dark"] .tv-cell {
-  color: #f4f6fa;
-  border-left-color: #1f242d;
-}
-[data-theme="dark"] .tv-cell.empty { color: #4a5061; }
-[data-theme="dark"] .tv-empty { background: #14181f; color: #a3b0c8; }
-[data-theme="dark"] .tv-empty h2 { color: var(--db-neon, #3fff00); }
-[data-theme="dark"] .tv-footer {
-  background: rgba(255, 255, 255, 0.03);
-  color: #8b94a8;
-}
-[data-theme="dark"] .tv-footer .powered b { color: var(--db-neon, #3fff00); }
+[data-theme="dark"] .tv-bank { color: var(--db-brand); }
+[data-theme="dark"] .tv-empty h2 { color: var(--db-brand); }
+[data-theme="dark"] .tv-footer .powered b { color: var(--db-brand); }
 
 /* ─── Layout primitives (theme-agnostic) ─── */
 
