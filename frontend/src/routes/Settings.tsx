@@ -20,10 +20,11 @@ import { formatTimestamp } from "../lib/datetime";
 import { timezoneFromAddress } from "../lib/timezoneFromAddress";
 import { getCurrentIdentity } from "../lib/auth";
 import { passkeysSupported } from "../lib/webauthn";
+import { useUnsavedChangesGuard } from "../lib/useUnsavedChangesGuard";
 import {
   Alert, Button, ButtonLink, Card, Checkbox, ConfirmDialog, ErrorState, Field,
-  Input, Loading, PageHeader, PageShell, SectionTitle, Select, space, Switch,
-  TabsBar, TabsLink, useToast,
+  Input, Loading, PageHeader, PageShell, Pill, SectionTitle, Select, space,
+  Switch, TabsBar, TabsLink, useToast,
 } from "../components/ui";
 import styles from "./Settings.module.css";
 
@@ -149,6 +150,8 @@ function ProfileCard() {
 
   const toast = useToast();
   const [draft, setDraft] = useState<ProfileUpdateBody>({});
+  // Last-saved snapshot; the form is "dirty" when `draft` drifts from it.
+  const [baseline, setBaseline] = useState<ProfileUpdateBody>({});
   const [busy, setBusy]   = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -162,14 +165,20 @@ function ProfileCard() {
     // the same address. Employees (username isn't an email) are
     // untouched.
     const loginIsEmail = (data.username || "").includes("@");
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- hydrate local editable draft from server-fetched profile so inputs are controlled from first paint
-    setDraft({
+    const hydrated: ProfileUpdateBody = {
       full_name:        data.full_name,
       email:            data.email || (loginIsEmail ? data.username : ""),
       phone:            data.phone,
       theme_preference: data.theme_preference,
-    });
+    };
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- hydrate local editable draft + dirty baseline from server-fetched profile so inputs are controlled from first paint
+    setDraft(hydrated);
+    setBaseline(hydrated);
   }, [data]);
+
+  const isDirty = JSON.stringify(draft) !== JSON.stringify(baseline);
+  // Arm the browser "leave site?" prompt while there are unsaved edits.
+  useUnsavedChangesGuard(isDirty && !busy);
 
   function set<K extends keyof ProfileUpdateBody>(
     key: K, value: ProfileUpdateBody[K],
@@ -190,6 +199,7 @@ function ProfileCard() {
     setFieldErrors({});
     try {
       await updateProfile(draft);
+      setBaseline(draft);  // edits are now the saved state — clear dirty
       toast({ message: "Profile updated.", tone: "success" });
       queryClient.invalidateQueries({ queryKey: ["account", "profile"] });
     } catch (err) {
@@ -335,10 +345,13 @@ function ProfileCard() {
           <ProfileReadOnly label="Last sign-in" value={lastLogin} />
         </div>
 
-        <div style={{ marginTop: space.sm, display: "flex", gap: "0.6rem" }}>
-          <Button type="submit" busy={busy} disabled={busy}>
+        <div style={{ marginTop: space.sm, display: "flex", gap: "0.6rem", alignItems: "center" }}>
+          <Button type="submit" busy={busy} disabled={busy || !isDirty}>
             {busy ? "Saving…" : "Save profile"}
           </Button>
+          {isDirty && !busy && (
+            <Pill tone="warning" dot>Unsaved changes</Pill>
+          )}
         </div>
       </form>
     </Card>
@@ -595,14 +608,31 @@ function StoreInfoCard() {
   const [enforceHours, setEnforceHours] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  // Last-saved snapshot (JSON) — the form is dirty when it drifts.
+  const [baseline, setBaseline] = useState<string>("");
   const toast = useToast();
+
+  // Serialize every editable field into one comparable snapshot. Same
+  // key order here + at hydrate so the dirty compare is stable.
+  const snapshot = (h: StoreHourEntry[], enforce: boolean) => JSON.stringify({
+    name, email, phone, address, legalName, ein, businessAddress,
+    taxRatePct, salesTaxPct, receiptLogoUrl, receiptFooter, receiptTaxId,
+    timezone, hours: h, enforceHours: enforce,
+  });
 
   // Hydrate the form from the read-side row when it arrives.
   // Federal tax is stored as a decimal (0.01 = 1%) but operators
   // think in percents — display + edit accordingly.
   useEffect(() => {
     if (!data?.store) return;
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- hydrate local editable store-settings fields from server-fetched row (federal_tax_rate gets a decimal->percent conversion for display)
+    const hydratedHours =
+      data.store.store_hours && data.store.store_hours.length === 7
+        ? data.store.store_hours.map((h) => ({ ...h }))
+        : defaultHours();
+    const taxPct = ((data.store.federal_tax_rate || 0) * 100).toFixed(2);
+    const salesPct = ((data.store.sales_tax_rate || 0) * 100).toFixed(2);
+    const enforce = Boolean(data.store.enforce_business_hours);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- hydrate local editable store-settings fields + dirty baseline from server-fetched row (federal_tax_rate gets a decimal->percent conversion for display)
     setName(data.store.name);
     setEmail(data.store.email);
     setPhone(data.store.phone);
@@ -610,24 +640,37 @@ function StoreInfoCard() {
     setLegalName(data.store.legal_name);
     setEin(data.store.ein);
     setBusinessAddress(data.store.business_address);
-    setTaxRatePct(((data.store.federal_tax_rate || 0) * 100).toFixed(2));
-    setSalesTaxPct(((data.store.sales_tax_rate || 0) * 100).toFixed(2));
+    setTaxRatePct(taxPct);
+    setSalesTaxPct(salesPct);
     setReceiptLogoUrl(data.store.receipt_logo_url);
     setReceiptFooter(data.store.receipt_footer);
     setReceiptTaxId(data.store.receipt_tax_id);
     setTimezone(data.store.timezone);
-    setHours(
-      data.store.store_hours && data.store.store_hours.length === 7
-        ? data.store.store_hours.map((h) => ({ ...h }))
-        : defaultHours(),
-    );
-    setEnforceHours(Boolean(data.store.enforce_business_hours));
+    setHours(hydratedHours);
+    setEnforceHours(enforce);
+    // Baseline mirrors the snapshot() shape exactly (same key order).
+    setBaseline(JSON.stringify({
+      name: data.store.name, email: data.store.email,
+      phone: data.store.phone, address: data.store.address,
+      legalName: data.store.legal_name, ein: data.store.ein,
+      businessAddress: data.store.business_address,
+      taxRatePct: taxPct, salesTaxPct: salesPct,
+      receiptLogoUrl: data.store.receipt_logo_url,
+      receiptFooter: data.store.receipt_footer,
+      receiptTaxId: data.store.receipt_tax_id,
+      timezone: data.store.timezone,
+      hours: hydratedHours, enforceHours: enforce,
+    }));
   }, [data]);
 
   const canEdit =
     identity?.role === "admin" ||
     identity?.role === "owner" ||
     identity?.role === "superadmin";
+
+  const isDirty = baseline !== "" && snapshot(hours, enforceHours) !== baseline;
+  // Arm the browser "leave site?" prompt while there are unsaved edits.
+  useUnsavedChangesGuard(isDirty && !busy && canEdit);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -651,6 +694,8 @@ function StoreInfoCard() {
       await queryClient.invalidateQueries({
         queryKey: ["admin", "store-info"],
       });
+      // Edits are now the saved state — clear the dirty flag.
+      setBaseline(snapshot(hours, enforceHours));
       toast({ message: "Store info saved.", tone: "success" });
     } catch (e) {
       setErr(e instanceof ApiError ? e.message : "Could not save.");
@@ -888,8 +933,11 @@ function StoreInfoCard() {
       {err && <Alert tone="error">{err}</Alert>}
 
       {canEdit && (
-        <div style={{ display: "flex", justifyContent: "flex-end" }}>
-          <Button type="submit" busy={busy} disabled={busy || !name}>
+        <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: "0.6rem" }}>
+          {isDirty && !busy && (
+            <Pill tone="warning" dot>Unsaved changes</Pill>
+          )}
+          <Button type="submit" busy={busy} disabled={busy || !name || !isDirty}>
             {busy ? "Saving…" : "Save"}
           </Button>
         </div>
