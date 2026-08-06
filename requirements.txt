@@ -9,6 +9,10 @@ pyotp==2.9.0
 qrcode==7.4.2
 webauthn==2.7.1
 Pillow==10.4.0
+# Deterministic (text-layer) parsing of remittance-company daily
+# reports — see api/Modules/ReportImport. No OCR/vision: these PDFs
+# carry a real text layer, so extraction is free + offline.
+pdfplumber==0.11.10
 pytest==8.2.0
 # ── FastAPI ─────────────────────────────────────────────────────
 # Flask is gone as of PR #550 — asgi.py is the production entry
