@@ -619,6 +619,7 @@ router in `api/main.py`.
 | `Monthly` | P&L with auto bank-charge feed (see Bank-charge automation) |
 | `Notifications` | SMTP send, email templates, trial reminders, locked-day digest |
 | `Owners` | Multi-store owner umbrella + dashboard rollup |
+| `ReportImport` | Parse remittance-company daily close reports (Intermex first) — deterministic text-layer parse, no OCR/vision |
 | `Reports` | Per-store + platform reports, CSV exports (registry-driven) |
 | `ReturnChecks` | Returned-check tracking + payments |
 | `Superadmin` | `/superadmin/*` controls, anomalies, BI reports |

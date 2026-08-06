@@ -9,6 +9,13 @@ pyotp==2.9.0
 qrcode==7.4.2
 webauthn==2.7.1
 Pillow==10.4.0
+# Deterministic (text-layer) parsing of remittance-company daily
+# reports — see api/Modules/ReportImport. No OCR/vision: these PDFs
+# carry a real text layer, so extraction is free + offline.
+# Pinned to 0.11.9 (not 0.11.10): 0.11.10 requires Pillow>=12.2.0,
+# which conflicts with our Pillow==10.4.0 pin. 0.11.9 accepts
+# Pillow 10.x and its extract_text() output is identical.
+pdfplumber==0.11.9
 pytest==8.2.0
 # ── FastAPI ─────────────────────────────────────────────────────
 # Flask is gone as of PR #550 — asgi.py is the production entry

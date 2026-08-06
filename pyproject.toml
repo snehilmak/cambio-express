@@ -226,4 +226,5 @@ files = [
     "api/Modules/Transfers/Services/companies.py",
     "api/Modules/Transfers/Services/form_inputs.py",
     "api/Modules/Transfers/Services/tax.py",
+    "api/Modules/ReportImport/Services/intermex.py",
 ]
