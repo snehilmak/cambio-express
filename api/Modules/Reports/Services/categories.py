@@ -259,7 +259,11 @@ SUPERADMIN_REPORT_CATEGORIES: list[dict[str, Any]] = [
             {"key": "audit_log",
              "label": "Superadmin Audit Log",
              "description": "Every superadmin mutation, with target and actor.",
-             "url": "/app/superadmin/audit-log"},
+             # SPA route WITHOUT the /app basename — the Report Center
+             # renders report links via react-router `to`, which adds
+             # the /app basename itself. (A literal `/app/...` here
+             # would double to `/app/app/...`.)
+             "url": "/superadmin/audit-log"},
             {"key": "password_resets",
              "label": "Password Resets",
              "description": "Reset-token activity in the period (used / expired / open).",
@@ -275,6 +279,66 @@ SUPERADMIN_REPORT_CATEGORIES: list[dict[str, Any]] = [
         ],
     },
 ]
+
+
+# ── Admin-store-only Report Center entries ──────────────────
+#
+# These surface pages that live OUTSIDE the /reports drilldown family
+# (the month-keyed P&L, the operator audit log, the CSV export
+# catalog) inside the store admin's Report Center, so "Reports" is the
+# single place to find everything. They carry literal SPA `url`s
+# (no /app basename — the React Report Center adds it via `to`).
+#
+# Injected ONLY into the admin store index (endpoint_prefix="") by
+# `with_admin_store_extras`. The owner umbrella index
+# (endpoint_prefix="owner_") must NOT include them — those are
+# store-scoped routes an owner viewing the umbrella has no use for.
+
+ADMIN_MONTHLY_PL_REPORT: dict[str, Any] = {
+    "key": "monthly_pl",
+    "label": "Monthly P&L",
+    "description": "Full profit & loss for a single month — income, expenses, and net.",
+    "url": "/monthly",
+}
+
+ADMIN_LOGS_EXPORTS_CATEGORY: dict[str, Any] = {
+    "key":   "logs_exports",
+    "label": "Logs & Exports",
+    "icon":  '<svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>',
+    "reports": [
+        {"key": "audit_log",
+         "label": "Audit log",
+         "description": "Who changed what, and when — the store's operator audit trail.",
+         "url": "/admin/audit-log"},
+        {"key": "data_export",
+         "label": "Data export",
+         "description": "Download CSV / ZIP snapshots of your store's data.",
+         "url": "/admin/data-export"},
+    ],
+}
+
+
+def with_admin_store_extras(
+    registry: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Return a shallow copy of the admin report registry with the
+    store-only entries injected: Monthly P&L prepended to the
+    Financial category, plus a trailing Logs & Exports category.
+
+    Admin store index (``/reports``) only — do NOT call this for the
+    owner umbrella index, which must stay free of store-scoped routes.
+    Non-mutating: the input registry is left untouched."""
+    out: list[dict[str, Any]] = []
+    for cat in registry:
+        if cat.get("key") == "financial":
+            out.append({
+                **cat,
+                "reports": [ADMIN_MONTHLY_PL_REPORT, *cat["reports"]],
+            })
+        else:
+            out.append(cat)
+    out.append(ADMIN_LOGS_EXPORTS_CATEGORY)
+    return out
 
 
 def url_from_endpoint(endpoint: str) -> str | None:

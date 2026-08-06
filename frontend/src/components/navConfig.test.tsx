@@ -27,9 +27,22 @@ describe("filterNavForRole → section-hub resolution", () => {
 
     it(`drops empty groups for ${role} (no blank hubs)`, () => {
       const groups = filterNavForRole(role, []);
-      for (const g of groups) expect(g.items.length).toBeGreaterThan(0);
+      // Every surviving group is either a real menu (has items) or a
+      // direct-link group (has `to`, e.g. Reports → Report Center).
+      // What we never want is a group with neither — a blank hub.
+      for (const g of groups) {
+        expect(g.items.length > 0 || !!g.to).toBe(true);
+      }
     });
   }
+
+  it("admin Reports is a direct link to the Report Center (no submenu)", () => {
+    const groups = filterNavForRole("admin", ["reports.read"]);
+    const reports = groups.find((g) => g.title === "Reports");
+    expect(reports).toBeDefined();
+    expect(reports!.to).toBe("/reports");
+    expect(reports!.items).toHaveLength(0);
+  });
 
   it("admin can resolve the Daily hub to its destinations", () => {
     // Admin has every Daily permission by default in this context

@@ -33,6 +33,11 @@ export default function SectionHub() {
   // so a stale link never strands the user on a blank page.
   if (!group) return <Navigate to="/dashboard" replace />;
 
+  // Direct-link group (e.g. Reports): there is no tile grid — the
+  // section IS a single destination. Forward there so a stale
+  // /hub/<slug> link lands on the real page.
+  if (group.to) return <Navigate to={group.to} replace />;
+
   return (
     <PageShell maxWidth="72rem">
       <PageHeader

@@ -52,7 +52,6 @@ export default function ReportCenter({
     <section>
       <PageHeader
         title="Report Center"
-        subtitle="Browse every report by category."
         actions={(
           <div className={styles.searchBox}>
             <Input
@@ -125,7 +124,7 @@ function ReportRowView({ report }: { report: ReportRow }) {
       </div>
       <div>
         {ready
-          ? <ButtonLink href={report.url ?? "#"} size="sm">View</ButtonLink>
+          ? <ButtonLink to={report.url ?? "#"} size="sm">View</ButtonLink>
           : <Pill tone="info">Coming soon</Pill>}
       </div>
     </div>

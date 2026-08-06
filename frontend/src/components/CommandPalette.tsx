@@ -17,6 +17,16 @@ function buildItems(role: string, permissions: string[] = []): CommandItem[] {
   const groups = filterNavForRole(role, permissions);
   const items: CommandItem[] = [];
   for (const g of groups) {
+    // Direct-link group (e.g. Reports): the group itself is the
+    // destination, so add it as its own command entry.
+    if (g.to) {
+      items.push({
+        label: g.title,
+        to: g.to,
+        group: g.title,
+        keywords: g.title.toLowerCase(),
+      });
+    }
     for (const item of g.items) {
       items.push({
         label: item.label,

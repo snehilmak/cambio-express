@@ -464,13 +464,22 @@ def _build_report_list(prefix: str = "") -> ReportListResponse:
     legacy ``endpoint_prefix='owner_'`` knob: empty for the admin
     index, ``'owner_'`` for the owner index."""
     from api.Modules.Reports.Services.categories import (
-        REPORT_CATEGORIES, resolved_categories,
+        REPORT_CATEGORIES, resolved_categories, with_admin_store_extras,
+    )
+    # The admin store index (prefix="") also surfaces the store-only
+    # pages — Monthly P&L, the audit log, the CSV export catalog — so
+    # "Reports" is the single place to find everything. The owner
+    # umbrella index (prefix="owner_") stays free of those
+    # store-scoped routes.
+    registry = (
+        with_admin_store_extras(REPORT_CATEGORIES) if prefix == ""
+        else REPORT_CATEGORIES
     )
     # Pure resolver — no Flask request context needed (the old
     # ``url_for`` lookup was a dead path after PR #503 deleted the
     # HTML drilldown routes; the convention-based fallback handled
     # every endpoint in practice).
-    resolved = resolved_categories(REPORT_CATEGORIES, endpoint_prefix=prefix)
+    resolved = resolved_categories(registry, endpoint_prefix=prefix)
     return ReportListResponse(categories=[
         ReportCategory(
             key=cat["key"],
