@@ -65,6 +65,13 @@ def _register_routers(app: FastAPI) -> None:
     from api.Modules.Monthly.Controllers import router as monthly_router
     app.include_router(monthly_router, prefix="/monthly", tags=["monthly"])
 
+    from api.Modules.ReportImport.Controllers import (
+        router as report_import_router,
+    )
+    app.include_router(
+        report_import_router, prefix="/report-import", tags=["report-import"],
+    )
+
     from api.Modules.Admin.Controllers import router as admin_router
     app.include_router(admin_router, prefix="/admin", tags=["admin"])
 

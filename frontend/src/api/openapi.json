@@ -3039,6 +3039,177 @@
         "title": "HTTPValidationError",
         "type": "object"
       },
+      "IntermexParseRequest": {
+        "additionalProperties": false,
+        "description": "Upload body: the report PDF, base64-encoded.",
+        "properties": {
+          "content_base64": {
+            "maxLength": 31457280,
+            "minLength": 1,
+            "title": "Content Base64",
+            "type": "string"
+          },
+          "filename": {
+            "default": "",
+            "title": "Filename",
+            "type": "string"
+          }
+        },
+        "required": [
+          "content_base64"
+        ],
+        "title": "IntermexParseRequest",
+        "type": "object"
+      },
+      "IntermexReportResponse": {
+        "additionalProperties": false,
+        "description": "Parsed report preview. ``report_date`` is the report's own\n``Fecha`` (may differ from the day the operator is editing \u2014 the\nSPA warns on a mismatch). ``all_reconcile`` is the safe-to-commit\nsignal (every active Giro reconciles + matches the stated total).",
+        "properties": {
+          "agency": {
+            "title": "Agency",
+            "type": "string"
+          },
+          "all_reconcile": {
+            "title": "All Reconcile",
+            "type": "boolean"
+          },
+          "bill_payment_totals": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SectionTotalsResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "bill_payments": {
+            "items": {
+              "$ref": "#/components/schemas/IntermexTxnRowResponse"
+            },
+            "title": "Bill Payments",
+            "type": "array"
+          },
+          "giros": {
+            "items": {
+              "$ref": "#/components/schemas/IntermexTxnRowResponse"
+            },
+            "title": "Giros",
+            "type": "array"
+          },
+          "giros_totals": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SectionTotalsResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "money_order_totals": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SectionTotalsResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "money_orders": {
+            "items": {
+              "$ref": "#/components/schemas/IntermexTxnRowResponse"
+            },
+            "title": "Money Orders",
+            "type": "array"
+          },
+          "report_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Report Date"
+          }
+        },
+        "required": [
+          "agency",
+          "report_date",
+          "giros",
+          "money_orders",
+          "bill_payments",
+          "giros_totals",
+          "money_order_totals",
+          "bill_payment_totals",
+          "all_reconcile"
+        ],
+        "title": "IntermexReportResponse",
+        "type": "object"
+      },
+      "IntermexTxnRowResponse": {
+        "additionalProperties": false,
+        "description": "One parsed transaction row (Giro / money order / bill payment).\n\n``federal_tax`` is populated only for Giros. ``reconciles`` is the\nGiros invariant (send + fee + tax == total); informational for the\nother sections.",
+        "properties": {
+          "cancelled": {
+            "title": "Cancelled",
+            "type": "boolean"
+          },
+          "cashier": {
+            "title": "Cashier",
+            "type": "string"
+          },
+          "confirm_number": {
+            "title": "Confirm Number",
+            "type": "string"
+          },
+          "federal_tax": {
+            "title": "Federal Tax",
+            "type": "number"
+          },
+          "fee": {
+            "title": "Fee",
+            "type": "number"
+          },
+          "reconciles": {
+            "title": "Reconciles",
+            "type": "boolean"
+          },
+          "replacement": {
+            "title": "Replacement",
+            "type": "boolean"
+          },
+          "section": {
+            "title": "Section",
+            "type": "string"
+          },
+          "send_amount": {
+            "title": "Send Amount",
+            "type": "number"
+          },
+          "total_collected": {
+            "title": "Total Collected",
+            "type": "number"
+          }
+        },
+        "required": [
+          "section",
+          "confirm_number",
+          "send_amount",
+          "fee",
+          "federal_tax",
+          "total_collected",
+          "cashier",
+          "cancelled",
+          "replacement",
+          "reconciles"
+        ],
+        "title": "IntermexTxnRowResponse",
+        "type": "object"
+      },
       "LineItemCreateRequest": {
         "additionalProperties": false,
         "description": "POST body for /daily/{store}/{date}/line-items. Validates\nagainst the same parsers the legacy form uses (`parse_at_time`,\n`parse_amount`) so error messages match for cutover parity.",
@@ -6394,6 +6565,45 @@
           "totals"
         ],
         "title": "SalesByServiceResponse",
+        "type": "object"
+      },
+      "SectionTotalsResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "amount": {
+            "title": "Amount",
+            "type": "number"
+          },
+          "balance": {
+            "title": "Balance",
+            "type": "number"
+          },
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "fees": {
+            "title": "Fees",
+            "type": "number"
+          },
+          "processed": {
+            "title": "Processed",
+            "type": "integer"
+          },
+          "voided": {
+            "title": "Voided",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "count",
+          "processed",
+          "voided",
+          "amount",
+          "fees",
+          "balance"
+        ],
+        "title": "SectionTotalsResponse",
         "type": "object"
       },
       "ServiceTypeRow": {
@@ -20612,6 +20822,82 @@
         "summary": "Owner Users Route",
         "tags": [
           "owner"
+        ]
+      }
+    },
+    "/report-import/intermex/parse": {
+      "post": {
+        "description": "Parse an uploaded Intermex daily-close PDF and return the\nstructured rows for review. In-memory only \u2014 the PDF is never\npersisted.\n\nAuth: a store operator with daily-book write access (the import\nfeeds the day's money-transfer log). Bad base64 / non-PDF / a\nlayout the parser doesn't recognise all return 422 with a clear\nmessage rather than 500.",
+        "operationId": "parse_intermex_route_report_import_intermex_parse_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IntermexParseRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntermexReportResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Parse Intermex Route",
+        "tags": [
+          "report-import"
         ]
       }
     },
