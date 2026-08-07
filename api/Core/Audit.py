@@ -44,9 +44,14 @@ from typing import Any, Callable, TypeVar
 
 from sqlalchemy.orm import Session
 
-from api.Modules.Audit.Models import OperatorAuditLog, SuperadminAuditLog
+from api.Modules.Audit.Models import (
+    OperatorAuditLog,
+    OwnerAuditLog,
+    SuperadminAuditLog,
+)
 from api.Modules.Audit.Services.recorder import (
     record_operator_action,
+    record_owner_action,
     record_superadmin_action,
 )
 
@@ -114,6 +119,30 @@ def audit_superadmin(
         db,
         admin_id=user.id,
         admin_name=user.full_name or user.username or "",
+        action=action,
+        target_type=target_type,
+        target_id=target_id,
+        details=details,
+    )
+
+
+def audit_owner(
+    db: Session,
+    user: Any,
+    *,
+    action: str,
+    target_type: str = "",
+    target_id: str = "",
+    details: str = "",
+) -> OwnerAuditLog:
+    """Record an owner-umbrella action, sourcing identity from the
+    resolved ``User`` row (the owner principal already loaded for the
+    route's permission gate). Use for owner mutations that span the
+    umbrella rather than one store. Returns the unsaved row."""
+    return record_owner_action(
+        db,
+        owner_id=user.id,
+        owner_name=user.full_name or user.username or "",
         action=action,
         target_type=target_type,
         target_id=target_id,

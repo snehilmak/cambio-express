@@ -28,6 +28,7 @@ from sqlalchemy.orm import Session
 
 from api.Modules.Audit.Models import (
     OperatorAuditLog,
+    OwnerAuditLog,
     SuperadminAuditLog,
 )
 
@@ -75,6 +76,42 @@ def record_superadmin_action(
         target_type=str(target_type)[:_SUPERADMIN_TARGET_TYPE_MAX],
         target_id=str(target_id)[:_SUPERADMIN_TARGET_ID_MAX],
         details=str(details)[:_SUPERADMIN_DETAILS_MAX],
+    )
+    db.add(row)
+    return row
+
+
+_OWNER_ACTION_MAX = 40
+_OWNER_TARGET_TYPE_MAX = 30
+_OWNER_TARGET_ID_MAX = 60
+_OWNER_NAME_MAX = 120
+_OWNER_DETAILS_MAX = 2000
+
+
+def record_owner_action(
+    db: Session,
+    *,
+    owner_id: int,
+    owner_name: str,
+    action: str,
+    target_type: str = "",
+    target_id: str = "",
+    details: str = "",
+) -> OwnerAuditLog:
+    """Append a row to the owner-umbrella audit log.
+
+    For owner actions that span the umbrella rather than one store
+    (connect-code mint/revoke, ...). ``owner_name`` is a snapshot so
+    the entry survives a later User delete. No commit — the caller
+    wraps it in the mutation's transaction.
+    """
+    row = OwnerAuditLog(
+        owner_id=owner_id,
+        owner_name=str(owner_name or "")[:_OWNER_NAME_MAX],
+        action=str(action)[:_OWNER_ACTION_MAX],
+        target_type=str(target_type)[:_OWNER_TARGET_TYPE_MAX],
+        target_id=str(target_id)[:_OWNER_TARGET_ID_MAX],
+        details=str(details)[:_OWNER_DETAILS_MAX],
     )
     db.add(row)
     return row
