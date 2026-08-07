@@ -2999,6 +2999,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/report-import/intermex/parse": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Parse Intermex Route
+         * @description Parse an uploaded Intermex daily-close PDF and return the
+         *     structured rows for review. In-memory only — the PDF is never
+         *     persisted.
+         *
+         *     Auth: a store operator with daily-book write access (the import
+         *     feeds the day's money-transfer log). Bad base64 / non-PDF / a
+         *     layout the parser doesn't recognise all return 422 with a clear
+         *     message rather than 500.
+         */
+        post: operations["parse_intermex_route_report_import_intermex_parse_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/reports": {
         parameters: {
             query?: never;
@@ -6604,6 +6631,73 @@ export interface components {
             detail?: components["schemas"]["ValidationError"][];
         };
         /**
+         * IntermexParseRequest
+         * @description Upload body: the report PDF, base64-encoded.
+         */
+        IntermexParseRequest: {
+            /** Content Base64 */
+            content_base64: string;
+            /**
+             * Filename
+             * @default
+             */
+            filename: string;
+        };
+        /**
+         * IntermexReportResponse
+         * @description Parsed report preview. ``report_date`` is the report's own
+         *     ``Fecha`` (may differ from the day the operator is editing — the
+         *     SPA warns on a mismatch). ``all_reconcile`` is the safe-to-commit
+         *     signal (every active Giro reconciles + matches the stated total).
+         */
+        IntermexReportResponse: {
+            /** Agency */
+            agency: string;
+            /** All Reconcile */
+            all_reconcile: boolean;
+            bill_payment_totals: components["schemas"]["SectionTotalsResponse"] | null;
+            /** Bill Payments */
+            bill_payments: components["schemas"]["IntermexTxnRowResponse"][];
+            /** Giros */
+            giros: components["schemas"]["IntermexTxnRowResponse"][];
+            giros_totals: components["schemas"]["SectionTotalsResponse"] | null;
+            money_order_totals: components["schemas"]["SectionTotalsResponse"] | null;
+            /** Money Orders */
+            money_orders: components["schemas"]["IntermexTxnRowResponse"][];
+            /** Report Date */
+            report_date: string | null;
+        };
+        /**
+         * IntermexTxnRowResponse
+         * @description One parsed transaction row (Giro / money order / bill payment).
+         *
+         *     ``federal_tax`` is populated only for Giros. ``reconciles`` is the
+         *     Giros invariant (send + fee + tax == total); informational for the
+         *     other sections.
+         */
+        IntermexTxnRowResponse: {
+            /** Cancelled */
+            cancelled: boolean;
+            /** Cashier */
+            cashier: string;
+            /** Confirm Number */
+            confirm_number: string;
+            /** Federal Tax */
+            federal_tax: number;
+            /** Fee */
+            fee: number;
+            /** Reconciles */
+            reconciles: boolean;
+            /** Replacement */
+            replacement: boolean;
+            /** Section */
+            section: string;
+            /** Send Amount */
+            send_amount: number;
+            /** Total Collected */
+            total_collected: number;
+        };
+        /**
          * LineItemCreateRequest
          * @description POST body for /daily/{store}/{date}/line-items. Validates
          *     against the same parsers the legacy form uses (`parse_at_time`,
@@ -8291,6 +8385,21 @@ export interface components {
             /** Rows */
             rows: components["schemas"]["ServiceTypeRow"][];
             totals: components["schemas"]["AggregatedTotals"];
+        };
+        /** SectionTotalsResponse */
+        SectionTotalsResponse: {
+            /** Amount */
+            amount: number;
+            /** Balance */
+            balance: number;
+            /** Count */
+            count: number;
+            /** Fees */
+            fees: number;
+            /** Processed */
+            processed: number;
+            /** Voided */
+            voided: number;
         };
         /** ServiceTypeRow */
         ServiceTypeRow: {
@@ -15159,6 +15268,43 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    parse_intermex_route_report_import_intermex_parse_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IntermexParseRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntermexReportResponse"];
                 };
             };
             /** @description Validation Error */

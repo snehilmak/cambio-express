@@ -1,0 +1,108 @@
+.uploadPane {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.lead {
+  margin: 0;
+  color: var(--db-text-muted, #a3a3a3);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.fileLabel input[type="file"] {
+  font-size: 0.9rem;
+  color: var(--db-text, #f5f5f5);
+}
+
+.result {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.summaryRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.agency {
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.sub {
+  font-size: 0.82rem;
+  color: var(--db-text-muted, #a3a3a3);
+  margin-top: 0.15rem;
+}
+
+.sectionTitle {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 600;
+  color: var(--db-text-muted, #a3a3a3);
+  margin-top: 0.25rem;
+}
+
+.tableWrap {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.86rem;
+}
+
+.table th {
+  text-align: left;
+  padding: 0.4rem 0.55rem;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--db-text-muted, #a3a3a3);
+  border-bottom: 1px solid var(--db-border, #262626);
+  white-space: nowrap;
+}
+
+.table td {
+  padding: 0.45rem 0.55rem;
+  border-bottom: 1px solid var(--db-border-subtle, #1f1f1f);
+  white-space: nowrap;
+}
+
+.num {
+  text-align: right;
+}
+
+.mono {
+  font-family: var(--db-font-mono, "JetBrains Mono", monospace);
+}
+
+.cancelled td {
+  opacity: 0.55;
+  text-decoration: line-through;
+}
+
+.otherCounts {
+  font-size: 0.84rem;
+  color: var(--db-text-muted, #a3a3a3);
+}
+
+.soon {
+  font-style: italic;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin-top: 0.4rem;
+}

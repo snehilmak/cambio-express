@@ -33,6 +33,7 @@ import {
 } from "../components/ui";
 import { useUnsavedChangesGuard } from "../lib/useUnsavedChangesGuard";
 import styles from "./EditDailyBook.module.css";
+import { ImportReportModal } from "./ImportReportModal";
 
 // /app/daily/edit?date=YYYY-MM-DD — the per-day editor.
 //
@@ -564,6 +565,7 @@ function ReceiptsPanel(
     persist: () => Promise<void>;
   },
 ) {
+  const [importOpen, setImportOpen] = useState(false);
   return (
     <Card padding="1.25rem 1.5rem">
       <PanelTitle>Tap to edit</PanelTitle>
@@ -583,6 +585,24 @@ function ReceiptsPanel(
           onChange={props.onLineItemChange}
         />
       </div>
+
+      {!props.locked && (
+        <div style={{ marginTop: "0.6rem" }}>
+          <Button
+            type="button"
+            tone="secondary"
+            size="sm"
+            onClick={() => setImportOpen(true)}
+          >
+            Import Intermex report
+          </Button>
+        </div>
+      )}
+      <ImportReportModal
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        reportDate={props.date}
+      />
 
       <div className={styles.panelDivider} />
 
