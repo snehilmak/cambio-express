@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 
 import { useLoggedMonths, useMonthly, type MonthlyRow } from "../api/monthly";
@@ -20,6 +20,26 @@ const MONTH_NAMES = [
   "Jan", "Feb", "Mar", "Apr", "May", "Jun",
   "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
 ];
+
+interface YearMonth { year: number; month: number; }
+
+// The month picker must always be usable — even before the store has
+// saved a single monthly P&L. Offer the current month + the previous
+// 11, merged with any months that DO have a saved row (which may be
+// older than the 12-month window), newest first.
+function buildMonthOptions(logged: YearMonth[]): YearMonth[] {
+  const seen = new Map<string, YearMonth>();
+  const now = new Date();
+  for (let i = 0; i < 12; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const ym: YearMonth = { year: d.getFullYear(), month: d.getMonth() + 1 };
+    seen.set(`${ym.year}-${ym.month}`, ym);
+  }
+  for (const lm of logged) seen.set(`${lm.year}-${lm.month}`, lm);
+  return [...seen.values()].sort(
+    (a, b) => b.year - a.year || b.month - a.month,
+  );
+}
 
 const INCOME_FIELDS: Array<{ key: keyof MonthlyRow; label: string }> = [
   { key: "taxable_sales",          label: "Taxable sales" },
@@ -68,15 +88,22 @@ export default function Monthly() {
 
   const yearParam  = sp.get("year");
   const monthParam = sp.get("month");
+  const monthOptions = useMemo(
+    () => buildMonthOptions(months.data?.months ?? []),
+    [months.data],
+  );
 
-  // Default to the most recent logged month on first paint.
+  // Default on first paint: the most recent month that has a saved
+  // row (so you land on real data), else the current month — so the
+  // page is never blank with an unusable picker.
   useEffect(() => {
     if (yearParam && monthParam) return;
-    const first = months.data?.months[0];
-    if (!first) return;
+    const now = new Date();
+    const target = months.data?.months[0]
+      ?? { year: now.getFullYear(), month: now.getMonth() + 1 };
     const params = new URLSearchParams(sp);
-    params.set("year",  String(first.year));
-    params.set("month", String(first.month));
+    params.set("year",  String(target.year));
+    params.set("month", String(target.month));
     setSP(params, { replace: true });
   }, [yearParam, monthParam, months.data, sp, setSP]);
 
@@ -96,7 +123,10 @@ export default function Monthly() {
   return (
     <PageShell gap="1rem">
 
-      <Breadcrumbs crumbs={[{ label: "Monthly P&L" }]} />
+      <Breadcrumbs crumbs={[
+        { label: "Reports", to: "/reports" },
+        { label: "Monthly P&L" },
+      ]} />
 
       <PageHeader
         title="Monthly P&L"
@@ -120,7 +150,7 @@ export default function Monthly() {
               }}
               style={{ width: "auto" }}
             >
-              {(months.data?.months ?? []).map((m) => (
+              {monthOptions.map((m) => (
                 <option
                   key={`${m.year}-${m.month}`}
                   value={`${m.year}-${m.month}`}
@@ -141,13 +171,6 @@ export default function Monthly() {
           </div>
         )}
       />
-
-      {(months.data?.months.length ?? 0) === 0 && !months.isLoading && (
-        <EmptyState
-          title="No monthly P&L logged yet"
-          body="Log a month via the legacy /monthly page first."
-        />
-      )}
 
       {detail.isLoading && <Loading />}
       {detail.isError && (
