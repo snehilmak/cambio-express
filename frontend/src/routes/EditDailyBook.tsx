@@ -1288,6 +1288,7 @@ function LineItemWidget({
       <Modal
         open={open}
         title={label}
+        size="lg"
         onClose={() => { setOpen(false); cancelEdit(); setErr(null); }}
       >
         <div className={styles.lineModalBody}>

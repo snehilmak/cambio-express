@@ -605,7 +605,13 @@ def line_items_update_route(
 
     fields = body.model_dump(exclude_unset=True)
     parsed_time = None
-    if "at_time" in fields and fields["at_time"] is not None:
+    # Time is OPTIONAL. The SPA's inline-edit always sends `at_time`
+    # (even when the row has no time), so a blank value must mean
+    # "leave the time as-is" — NOT an error. Only a non-blank value is
+    # parsed. Mirrors the create route's `if body.at_time.strip()`
+    # guard; without this, editing a timeless row 422'd with "Enter a
+    # valid time (HH:MM)."
+    if "at_time" in fields and (fields["at_time"] or "").strip():
         try:
             parsed_time = parse_at_time(fields["at_time"])
         except LineItemValidationError as exc:

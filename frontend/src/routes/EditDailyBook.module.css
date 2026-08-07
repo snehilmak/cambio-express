@@ -256,6 +256,15 @@
   font-size: 0.88rem;
 }
 
+/* Inline-edit inputs fill their cell + shrink with it, so the edit
+   row (time / amount / note / actions) stays inside the modal instead
+   of forcing a horizontal scroll. */
+.widgetTd :is(input, select) {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
 .editRowActions {
   display: flex;
   gap: 0.4rem;

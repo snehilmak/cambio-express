@@ -641,3 +641,57 @@ def test_line_items_require_jwt(test_store_id, api_client):
     assert g.status_code == 401
     assert p.status_code == 401
     assert d.status_code == 401
+
+
+# ── Line-item edit: time is OPTIONAL on update ──────────────
+
+
+def test_patch_line_item_blank_time_is_allowed(client, test_store_id):
+    """Editing a line item that has no time must NOT 422 with 'Enter a
+    valid time' — the SPA's inline edit always sends `at_time`, so a
+    blank value means 'leave the time as-is', matching create's guard.
+    """
+    today = date.today().isoformat()
+    token = _login_admin_token(client, test_store_id)
+    headers = {"Authorization": f"Bearer {token}"}
+    # Create a check-deposit line item with NO time.
+    created = client.post(
+        f"/api/v2/daily/{test_store_id}/{today}/line-items",
+        json={"kind": "check_deposit", "at_time": "", "amount": "100.00"},
+        headers=headers,
+    )
+    assert created.status_code == 201, created.get_data(as_text=True)
+    item_id = created.get_json()["id"]
+    assert created.get_json()["at_time"] == ""
+
+    # Edit the amount, still sending a blank time (as the SPA does).
+    resp = client.patch(
+        f"/api/v2/daily/{test_store_id}/line-items/{item_id}",
+        json={"at_time": "", "amount": 250.0, "note": "reconciled"},
+        headers=headers,
+    )
+    assert resp.status_code == 200, resp.get_data(as_text=True)
+    body = resp.get_json()
+    assert body["amount"] == 250.0
+    assert body["at_time"] == ""      # stayed timeless, no error
+    assert body["note"] == "reconciled"
+
+
+def test_patch_line_item_valid_time_still_parsed(client, test_store_id):
+    """A non-blank time on edit is still parsed + persisted."""
+    today = date.today().isoformat()
+    token = _login_admin_token(client, test_store_id)
+    headers = {"Authorization": f"Bearer {token}"}
+    created = client.post(
+        f"/api/v2/daily/{test_store_id}/{today}/line-items",
+        json={"kind": "check_deposit", "at_time": "", "amount": "50.00"},
+        headers=headers,
+    )
+    item_id = created.get_json()["id"]
+    resp = client.patch(
+        f"/api/v2/daily/{test_store_id}/line-items/{item_id}",
+        json={"at_time": "14:30", "amount": 50.0},
+        headers=headers,
+    )
+    assert resp.status_code == 200, resp.get_data(as_text=True)
+    assert resp.get_json()["at_time"] == "14:30"
