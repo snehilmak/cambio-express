@@ -2,14 +2,21 @@ import { useState } from "react";
 
 import { Alert, Button, Loading, Modal, Pill } from "../components/ui";
 import { ApiError } from "../lib/api";
-import { parseIntermexReport, type IntermexReport } from "../api/reportImport";
+import {
+  commitIntermexReport,
+  parseIntermexReport,
+  type IntermexCommit,
+  type IntermexReport,
+} from "../api/reportImport";
 import styles from "./ImportReportModal.module.css";
 
 // Daily-book "Import Intermex report" flow.  Upload the company's
 // "Reporte de cierre del día" PDF → the backend parses it IN MEMORY
-// (nothing stored) → we show the extracted rows for review.  Writing
-// the reviewed transfers into the day's money-transfer log is a
-// follow-up; the Commit button is intentionally disabled here.
+// (nothing stored) → we show the extracted rows for review → Commit
+// aggregates the settled giros into the day's money-transfer breakdown
+// (the Intermex company row) and reports how it reconciles against the
+// transfers already logged.  The PDF is re-parsed server-side on
+// commit — the client never sends money numbers.
 
 function money(n: number): string {
   return n.toLocaleString("en-US", {
@@ -24,31 +31,55 @@ function humanize(e: unknown): string {
 }
 
 export function ImportReportModal({
-  open, onClose, reportDate,
+  open, onClose, storeId, reportDate, onCommitted,
 }: {
   open: boolean;
   onClose: () => void;
+  /** Store whose daily book is being edited. */
+  storeId: number;
   /** The day being edited (YYYY-MM-DD) — used to warn if the report's
-   *  own date doesn't match. */
+   *  own date doesn't match, and the day the giros commit to. */
   reportDate: string;
+  /** Called after a successful commit so the editor re-fetches the
+   *  daily report (its money-transfer total changed). */
+  onCommitted?: () => void;
 }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [result, setResult] = useState<IntermexReport | null>(null);
+  const [file, setFile] = useState<File | null>(null);
   const [fileName, setFileName] = useState("");
+  const [committing, setCommitting] = useState(false);
+  const [committed, setCommitted] = useState<IntermexCommit | null>(null);
 
   function reset() {
     setResult(null); setErr(null); setBusy(false); setFileName("");
+    setFile(null); setCommitting(false); setCommitted(null);
   }
 
-  async function handleFile(file: File) {
-    setErr(null); setResult(null); setBusy(true); setFileName(file.name);
+  async function handleFile(f: File) {
+    setErr(null); setResult(null); setCommitted(null); setBusy(true);
+    setFileName(f.name); setFile(f);
     try {
-      setResult(await parseIntermexReport(file));
+      setResult(await parseIntermexReport(f));
     } catch (e) {
       setErr(humanize(e));
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function handleCommit() {
+    if (!file || committing) return;
+    setErr(null); setCommitting(true);
+    try {
+      const res = await commitIntermexReport(file, storeId, reportDate);
+      setCommitted(res);
+      onCommitted?.();
+    } catch (e) {
+      setErr(humanize(e));
+    } finally {
+      setCommitting(false);
     }
   }
 
@@ -157,14 +188,48 @@ export function ImportReportModal({
             <span className={styles.soon}> (wired next)</span>
           </div>
 
+          {committed && (
+            <Alert tone={committed.matches_logged ? "success" : "warning"}>
+              Committed {committed.giros_committed} giro
+              {committed.giros_committed === 1 ? "" : "s"} to{" "}
+              <strong>{committed.company}</strong> for {reportDate}:{" "}
+              <strong>{money(committed.amount)}</strong> sent ·{" "}
+              {money(committed.fees)} fees · {money(committed.federal_tax)}{" "}
+              fed. tax.
+              {committed.matches_logged
+                ? " Matches the transfers already logged for this day."
+                : ` Heads up — you have ${money(committed.logged_amount)} ` +
+                  "logged as Intermex transfers for this day; the report " +
+                  "total is now the money-transfer figure."}
+            </Alert>
+          )}
+
+          {err && <Alert tone="error">{err}</Alert>}
+
           <div className={styles.actions}>
-            <Button tone="secondary" onClick={reset}>
+            <Button tone="secondary" onClick={reset} disabled={committing}>
               Import another
             </Button>
-            <Button tone="primary" disabled title="Coming next">
-              Commit to transfer log
-            </Button>
-            <Pill tone="info">Review only — commit coming next</Pill>
+            {committed ? (
+              <Button
+                tone="primary"
+                onClick={() => { reset(); onClose(); }}
+              >
+                Done
+              </Button>
+            ) : (
+              <Button
+                tone="primary"
+                busy={committing}
+                disabled={committing || !result.all_reconcile}
+                title={result.all_reconcile
+                  ? undefined
+                  : "The giros must reconcile before committing"}
+                onClick={() => void handleCommit()}
+              >
+                {committing ? "Committing…" : "Commit to money transfers"}
+              </Button>
+            )}
           </div>
         </div>
       )}

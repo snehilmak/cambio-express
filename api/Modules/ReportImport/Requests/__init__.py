@@ -1,5 +1,7 @@
 """ReportImport — request/response schemas."""
 from api.Modules.ReportImport.Requests.reports import (
+    IntermexCommitRequest,
+    IntermexCommitResponse,
     IntermexParseRequest,
     IntermexReportResponse,
     IntermexTxnRowResponse,
@@ -7,6 +9,8 @@ from api.Modules.ReportImport.Requests.reports import (
 )
 
 __all__ = [
+    "IntermexCommitRequest",
+    "IntermexCommitResponse",
     "IntermexParseRequest",
     "IntermexReportResponse",
     "IntermexTxnRowResponse",

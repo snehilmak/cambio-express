@@ -2999,6 +2999,36 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/report-import/intermex/commit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Commit Intermex Route
+         * @description Commit a reviewed Intermex report into the day's money-transfer
+         *     breakdown. The PDF is re-parsed server-side (the client never sends
+         *     money numbers) and the active giros aggregate into the Intermex
+         *     company row of ``report_date``'s MT breakdown — every other
+         *     company's manual override is preserved. Returns a reconcile
+         *     comparison against the transfers already logged for the day.
+         *
+         *     Auth: a store operator with daily-book write access, scoped to
+         *     their own store (cross-store commit → opaque 403, matching the
+         *     daily-book write surface). A locked day → 403. A report with no
+         *     settled giros, or one whose giros don't reconcile, → 422.
+         */
+        post: operations["commit_intermex_route_report_import_intermex_commit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/report-import/intermex/parse": {
         parameters: {
             query?: never;
@@ -6634,6 +6664,58 @@ export interface components {
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /**
+         * IntermexCommitRequest
+         * @description Commit body: the same base64 PDF the operator reviewed, plus the
+         *     store + day to attach it to. The bytes are re-parsed server-side —
+         *     the client never sends money numbers, so a tampered review can't
+         *     poison the ledger. ``report_date`` is the day the operator is
+         *     editing (may differ from the report's own Fecha; the SPA warns).
+         */
+        IntermexCommitRequest: {
+            /** Content Base64 */
+            content_base64: string;
+            /**
+             * Filename
+             * @default
+             */
+            filename: string;
+            /** Report Date */
+            report_date: string;
+            /** Store Id */
+            store_id: number;
+        };
+        /**
+         * IntermexCommitResponse
+         * @description Commit outcome + reconcile comparison against already-logged
+         *     transfers. ``matches_logged`` is True when the report's send total
+         *     matches the Intermex transfers the store already logged for the
+         *     day (within half a cent) — the "these agree" signal.
+         */
+        IntermexCommitResponse: {
+            /** Amount */
+            amount: number;
+            /** Committed Total */
+            committed_total: number;
+            /** Company */
+            company: string;
+            /** Federal Tax */
+            federal_tax: number;
+            /** Fees */
+            fees: number;
+            /** Giros Committed */
+            giros_committed: number;
+            /** Grand Total */
+            grand_total: number;
+            /** Logged Amount */
+            logged_amount: number;
+            /** Logged Total */
+            logged_total: number;
+            /** Matches Logged */
+            matches_logged: boolean;
+            /** Previous Saved Total */
+            previous_saved_total: number;
         };
         /**
          * IntermexParseRequest
@@ -15273,6 +15355,43 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    commit_intermex_route_report_import_intermex_commit_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IntermexCommitRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntermexCommitResponse"];
                 };
             };
             /** @description Validation Error */
