@@ -642,11 +642,11 @@ def billing_overview_route(
     _require_superadmin(claims)
     from datetime import timedelta
     from api.Modules.Billing.Services.trial import get_trial_status
-    from api.Modules.Tenancy.Models import Store
+    from api.Modules.Superadmin.Repositories import list_all_stores
     from api.Modules.Webhooks.Models import WebhookEvent
 
     now = utc_now()
-    stores = db.query(Store).all()
+    stores = list_all_stores(db)
 
     expiring_soon: list[dict[str, Any]] = []
     in_grace: list[dict[str, Any]] = []
