@@ -2592,17 +2592,6 @@
             ],
             "title": "Forward Balance"
           },
-          "from_bank": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "From Bank"
-          },
           "money_order": {
             "anyOf": [
               {

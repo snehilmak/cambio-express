@@ -256,7 +256,6 @@ class DailyReportUpdateRequest(BaseModel):
     check_cashing_fees:      float | None = None
     return_check_hold_fees:  float | None = None
     forward_balance:         float | None = None
-    from_bank:               float | None = None
     rebates_commissions:     float | None = None
     cash_deposit:            float | None = None
     safe_balance:            float | None = None

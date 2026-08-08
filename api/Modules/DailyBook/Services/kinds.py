@@ -37,6 +37,11 @@ LINE_ITEM_KINDS: dict[str, tuple[str, str, str]] = {
     # as the rest of the kinds above.
     "other_cash_in":  ("other_cash_in",          "other cash in",        "entries"),
     "other_cash_out": ("other_cash_out",         "other cash out",       "entries"),
+    # Cash pulled from the bank into the drawer. A store can make
+    # multiple bank runs in a day, so this is a multi-entry kind like
+    # drops — was a single operator-typed `from_bank` total before the
+    # conversion; existing values were backfilled to one line item.
+    "from_bank":      ("from_bank",               "cash from bank",       "entries"),
     # Outside-cash drops (ATM drops, safe drops). Originally lived
     # in its own `DailyDrop` table + bespoke routes/IIFE —
     # collapsed into the generic kind system after the data

@@ -266,7 +266,7 @@ EDITABLE_REPORT_FIELDS: tuple[str, ...] = (
     "bill_payment_charge", "phone_recargas", "boost_mobile",
     "money_order", "money_order_fees",
     "check_cashing_fees", "return_check_hold_fees",
-    "forward_balance", "from_bank", "rebates_commissions",
+    "forward_balance", "rebates_commissions",
     "cash_deposit", "safe_balance", "payroll_expense", "over_short",
 )
 
