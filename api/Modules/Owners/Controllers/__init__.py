@@ -595,16 +595,15 @@ def owner_store_detail_route(
     require_permission(claims, "reports", "read")
     from datetime import date as ddate, timedelta
     from api.Modules.DailyBook.Models import DailyReport
-    from api.Modules.Tenancy.Models import Store, StoreOwnerLink
+    from api.Modules.Tenancy.Models import Store
     from api.Modules.Transfers.Models import Transfer
+    from api.Modules.Owners.Repositories import find_link
     from api.Modules.Owners.Services import (
         OWNER_TRANSFER_EXCLUDED as _OWNER_TRANSFER_EXCLUDED,
         owner_period_window as _owner_period_window,
     )
     user = _require_owner(db, claims)
-    link = db.query(StoreOwnerLink).filter_by(
-        owner_id=user.id, store_id=store_id,
-    ).first()
+    link = find_link(db, user.id, store_id)
     if link is None:
         raise HTTPException(
             status_code=404, detail="That store is not linked to your account.",
