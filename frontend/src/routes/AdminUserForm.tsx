@@ -10,10 +10,23 @@ import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
 import {
   Breadcrumbs,
-  Alert, Button, ButtonLink, Card, ErrorState, Field, Input, Loading,
+  Alert, Button, Card, ConfirmDialog, ErrorState, Field, Input, Loading,
   PageHeader, PageShell, Select, space,
 } from "../components/ui";
+import { useUnsavedGuard } from "../lib/useUnsavedGuard";
 import styles from "./AdminUserForm.module.css";
+
+interface UserDraft {
+  username:  string;
+  full_name: string;
+  role:      string;
+  is_active: boolean;
+  password:  string;
+}
+
+function makeBlankUser(): UserDraft {
+  return { username: "", full_name: "", role: "employee", is_active: true, password: "" };
+}
 
 // /app/admin/users/new and /app/admin/users/:uid/edit — combined
 // create + edit form. Mirrors the legacy admin_user_form.html
@@ -35,19 +48,9 @@ export default function AdminUserForm() {
 
   // Form state — three sources hydrate it: the detail response on
   // edit, blank defaults on create.
-  const [draft, setDraft] = useState<{
-    username:  string;
-    full_name: string;
-    role:      string;
-    is_active: boolean;
-    password:  string;
-  }>(() => ({
-    username:  "",
-    full_name: "",
-    role:      "employee",
-    is_active: true,
-    password:  "",
-  }));
+  const [draft, setDraft] = useState<UserDraft>(makeBlankUser);
+  // Baseline = last server-synced (or blank) draft; drives the guard.
+  const [baseline, setBaseline] = useState<UserDraft>(makeBlankUser);
   const [busy, setBusy]   = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -55,15 +58,22 @@ export default function AdminUserForm() {
   useEffect(() => {
     if (!isEdit || !detail.data) return;
     const u = detail.data.user;
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- hydrate local editable draft from server-fetched user record on edit
-    setDraft({
+    const hydrated: UserDraft = {
       username:  u.username,
       full_name: u.full_name,
       role:      u.role || "employee",
       is_active: u.is_active,
       password:  "",
-    });
+    };
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- hydrate local editable draft + dirty baseline from server-fetched user record on edit
+    setDraft(hydrated);
+    setBaseline(hydrated);
   }, [isEdit, detail.data]);
+
+  const isDirty = JSON.stringify(draft) !== JSON.stringify(baseline);
+  const guard = useUnsavedGuard(isDirty && !busy, {
+    message: "You have unsaved edits on this user. Leave without saving?",
+  });
 
   const isSelf = useMemo(() => {
     if (!isEdit || !detail.data || !identity) return false;
@@ -268,10 +278,19 @@ export default function AdminUserForm() {
             <Button type="submit" busy={busy} disabled={busy}>
               {busy ? "Saving…" : (isEdit ? "Save Changes" : "Create User")}
             </Button>
-            <ButtonLink href="/admin/users" tone="secondary">Cancel</ButtonLink>
+            <Button
+              type="button"
+              tone="secondary"
+              onClick={() => guard.confirmLeave(() => navigate("/admin/users"))}
+              disabled={busy}
+            >
+              Cancel
+            </Button>
           </div>
         </form>
       </Card>
+
+      <ConfirmDialog {...guard.dialogProps} />
     </PageShell>
   );
 }

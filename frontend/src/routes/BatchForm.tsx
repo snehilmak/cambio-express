@@ -11,9 +11,10 @@ import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
 import {
   Breadcrumbs,
-  Alert, Button, ButtonLink, Card, DateInput, Field, FormActions, Input, Loading,
+  Alert, Button, Card, ConfirmDialog, DateInput, Field, FormActions, Input, Loading,
   MoneyInput, PageHeader, PageShell, Select, Textarea,
 } from "../components/ui";
+import { useUnsavedGuard } from "../lib/useUnsavedGuard";
 import styles from "./BatchForm.module.css";
 
 // Combined New/Edit form for ACH batches at /app/batches/new
@@ -33,6 +34,22 @@ function todayIso() {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
+// Blank new-batch form. A factory (not a const) so `form` and
+// `baseline` each get an independent copy with the same values —
+// keeping create-mode dirty detection honest.
+function makeBlankBatch(): BatchWriteBody {
+  return {
+    ach_date:       todayIso(),
+    company:        COMPANIES[0],
+    batch_ref:      "",
+    ach_amount:     0,
+    transfer_dates: "",
+    status:         "Pending",
+    reconciled:     false,
+    notes:          "",
+  };
+}
+
 export default function BatchForm() {
   const { id } = useParams<{ id?: string }>();
   const isEdit = id !== undefined;
@@ -42,16 +59,9 @@ export default function BatchForm() {
 
   const detail = useBatch(isEdit ? batchId : undefined);
 
-  const [form, setForm] = useState<BatchWriteBody>({
-    ach_date:       todayIso(),
-    company:        COMPANIES[0],
-    batch_ref:      "",
-    ach_amount:     0,
-    transfer_dates: "",
-    status:         "Pending",
-    reconciled:     false,
-    notes:          "",
-  });
+  const [form, setForm] = useState<BatchWriteBody>(makeBlankBatch);
+  // Baseline = last server-synced (or blank) form; drives the guard.
+  const [baseline, setBaseline] = useState<BatchWriteBody>(makeBlankBatch);
   const [busy,  setBusy]  = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [field, setField] = useState<string | null>(null);
@@ -60,8 +70,7 @@ export default function BatchForm() {
   useEffect(() => {
     if (!isEdit || !detail.data) return;
     const b = detail.data.batch;
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- hydrate local editable form from server-fetched batch on edit
-    setForm({
+    const hydrated: BatchWriteBody = {
       ach_date:       b.ach_date,
       company:        b.company,
       batch_ref:      b.batch_ref,
@@ -70,8 +79,16 @@ export default function BatchForm() {
       status:         b.status,
       reconciled:     b.reconciled,
       notes:          b.notes,
-    });
+    };
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- hydrate local editable form + dirty baseline from server-fetched batch on edit
+    setForm(hydrated);
+    setBaseline(hydrated);
   }, [isEdit, detail.data]);
+
+  const isDirty = JSON.stringify(form) !== JSON.stringify(baseline);
+  const guard = useUnsavedGuard(isDirty && !busy, {
+    message: "You have unsaved edits on this batch. Leave without saving?",
+  });
 
   function set<K extends keyof BatchWriteBody>(
     key: K, value: BatchWriteBody[K],
@@ -199,7 +216,14 @@ export default function BatchForm() {
         {error && <Alert tone="error">{error}</Alert>}
 
         <FormActions>
-          <ButtonLink href="/batches" tone="secondary">Cancel</ButtonLink>
+          <Button
+            type="button"
+            tone="secondary"
+            onClick={() => guard.confirmLeave(() => navigate("/batches"))}
+            disabled={busy}
+          >
+            Cancel
+          </Button>
           <Button
             type="submit" busy={busy}
             disabled={busy || !form.batch_ref || !form.ach_date}
@@ -208,6 +232,8 @@ export default function BatchForm() {
           </Button>
         </FormActions>
       </form>
+
+      <ConfirmDialog {...guard.dialogProps} />
     </PageShell>
   );
 }

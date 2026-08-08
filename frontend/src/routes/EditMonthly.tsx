@@ -10,9 +10,10 @@ import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
 import {
   Breadcrumbs,
-  Alert, Button, Card, FormActions, Loading, MoneyInput, PageHeader,
-  PageShell, Textarea,
+  Alert, Button, Card, ConfirmDialog, FormActions, Loading, MoneyInput,
+  PageHeader, PageShell, Textarea,
 } from "../components/ui";
+import { useUnsavedGuard } from "../lib/useUnsavedGuard";
 import styles from "./EditMonthly.module.css";
 
 // Edit page for the monthly P&L at /app/monthly/edit?year=Y&month=M.
@@ -82,6 +83,8 @@ export default function EditMonthly() {
   );
 
   const [form, setForm] = useState<MonthlyUpdateBody | null>(null);
+  // Baseline = last server-synced form; drives the unsaved-changes guard.
+  const [baseline, setBaseline] = useState<MonthlyUpdateBody | null>(null);
   const [busy, setBusy] = useState(false);
   const [err,  setErr]  = useState<string | null>(null);
 
@@ -93,9 +96,17 @@ export default function EditMonthly() {
       const v = r ? (r as unknown as Record<string, number>)[f.key] : 0;
       (init as Record<string, number>)[f.key] = (v ?? 0) as number;
     }
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- hydrate local editable form from server-fetched monthly P&L row once the GET resolves
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- hydrate local editable form + dirty baseline from server-fetched monthly P&L row once the GET resolves
     setForm(init);
+    setBaseline(init);
   }, [detail.data, detail.isLoading, detail.isFetching]);
+
+  const isDirty =
+    form != null && baseline != null &&
+    JSON.stringify(form) !== JSON.stringify(baseline);
+  const guard = useUnsavedGuard(isDirty && !busy, {
+    message: "You have unsaved edits on this month's P&L. Leave without saving?",
+  });
 
   function set<K extends keyof MonthlyUpdateBody>(
     key: K, value: MonthlyUpdateBody[K],
@@ -209,8 +220,11 @@ export default function EditMonthly() {
 
         <FormActions>
           <Button
+            type="button"
             tone="secondary"
-            onClick={() => navigate(`/monthly?year=${year}&month=${month}`)}
+            onClick={() => guard.confirmLeave(
+              () => navigate(`/monthly?year=${year}&month=${month}`),
+            )}
             disabled={busy}
           >
             Cancel
@@ -220,6 +234,8 @@ export default function EditMonthly() {
           </Button>
         </FormActions>
       </form>
+
+      <ConfirmDialog {...guard.dialogProps} />
     </PageShell>
   );
 }
