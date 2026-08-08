@@ -3,7 +3,6 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { useReturnChecks, type ReturnCheckRow } from "../api/returnChecks";
 import { getCurrentIdentity } from "../lib/auth";
 import {
-  Breadcrumbs,
   ButtonLink, Card, Empty, PageHeader,
   PageShell, Pill, Table as KitTable, TableStates, tdStyle,
   thStyle, type PillTone,
@@ -48,8 +47,6 @@ export default function ReturnChecks() {
 
   return (
     <PageShell>
-
-      <Breadcrumbs crumbs={[{ label: "Return checks" }]} />
 
       <PageHeader
         title="Return checks"

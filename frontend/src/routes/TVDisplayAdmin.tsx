@@ -16,7 +16,7 @@ import { formatTimestamp } from "../lib/datetime";
 import {
   Button, ButtonLink, Card, ConfirmDialog, ErrorState, Field,
   IconButton, Input, Loading, PageShell, Section, Select,
-  Breadcrumbs, TabsBar, TabsLink,
+  TabsBar, TabsLink,
 } from "../components/ui";
 import styles from "./TVDisplayAdmin.module.css";
 
@@ -129,7 +129,6 @@ export default function TVDisplayAdmin() {
 
   return (
     <PageShell gap="1.25rem">
-      <Breadcrumbs crumbs={[{ label: "TV Display" }]} />
       <TabsBar>
         <TabsLink to="/tv-display/overview">Overview</TabsLink>
         <TabsLink to="/tv-display/content">Content</TabsLink>

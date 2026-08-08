@@ -7,7 +7,6 @@ import {
 import { getCurrentIdentity } from "../lib/auth";
 import { useUrlFilterState } from "../lib/useUrlFilterState";
 import {
-  Breadcrumbs,
   ButtonLink, Card, DateInput, Empty, Field, Input,
   PageHeader, PageShell, Pager, Pill, Select, Table, TableStates,
   tdStyle, thStyle,
@@ -90,8 +89,6 @@ export default function Transfers() {
 
   return (
     <PageShell>
-
-      <Breadcrumbs crumbs={[{ label: "Transfers" }]} />
 
       <PageHeader
         title="Transfers"
