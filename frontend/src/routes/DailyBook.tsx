@@ -4,7 +4,6 @@ import { Link, useSearchParams } from "react-router-dom";
 import { useDailyPeriod, type DailyReportRow } from "../api/dailybook";
 import { fmtMoney, fmtMoney2 } from "../lib/formatters";
 import {
-  Breadcrumbs,
   Button, ButtonLink, Card, ErrorState, KpiCard, KpiGrid, Loading, PageHeader, PageShell,
 } from "../components/ui";
 import styles from "./DailyBook.module.css";
@@ -82,8 +81,6 @@ export default function DailyBook() {
 
   return (
     <PageShell gap="1.5rem">
-
-      <Breadcrumbs crumbs={[{ label: "Daily" }]} />
 
       <PageHeader
         title="Daily Book"
