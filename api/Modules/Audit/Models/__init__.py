@@ -92,4 +92,38 @@ class SuperadminAuditLog(Base):
     created_at  = Column(DateTime, default=datetime.utcnow)
 
 
-__all__ = ["OperatorAuditLog", "SuperadminAuditLog", "TransferAudit"]
+class OwnerAuditLog(Base):
+    """Append-only audit log for multi-store OWNER actions that
+    aren't scoped to a single store — connect-code mint / revoke,
+    and other owner-umbrella mutations added later.
+
+    Why its own table: owners span many stores, so these don't fit
+    the store-scoped ``OperatorAuditLog`` (there's no single
+    ``store_id`` to hang them on); and the actor is an owner, not a
+    platform superadmin, so ``SuperadminAuditLog`` would misattribute
+    them. ``owner_name`` is a snapshot so the row still identifies the
+    actor after the User row is deleted.
+
+    Append-only; read by the owner activity surface (future). Not a
+    per-store model, so it's intentionally NOT in the retention
+    purge's ``_STORE_OWNED_MODELS`` list.
+    """
+
+    __tablename__ = "owner_audit_log"
+    id           = Column(Integer, primary_key=True)
+    owner_id     = Column(Integer, ForeignKey("user.id"), nullable=False, index=True)
+    owner_name   = Column(String(120), default="")
+    action       = Column(String(40), nullable=False)
+    target_type  = Column(String(30), default="")
+    target_id    = Column(String(60), default="")
+    details      = Column(Text, default="")
+    created_at   = Column(DateTime, default=datetime.utcnow)
+    owner        = relationship("User", foreign_keys=[owner_id])
+
+
+__all__ = [
+    "OperatorAuditLog",
+    "OwnerAuditLog",
+    "SuperadminAuditLog",
+    "TransferAudit",
+]

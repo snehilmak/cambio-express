@@ -324,3 +324,63 @@ def test_unlink_rejects_extra_fields(client):
         headers={"Authorization": f"Bearer {token}"},
     )
     assert resp.status_code == 422
+
+
+# ── Owner-audit coverage (invariant #7) ─────────────────────
+
+
+def _latest_owner_audit(owner_id, action):
+    from api.Modules.Audit.Models import OwnerAuditLog
+    from tests._app import db
+    return (
+        db.session.query(OwnerAuditLog)
+          .filter_by(owner_id=owner_id, action=action)
+          .order_by(OwnerAuditLog.id.desc())
+          .first()
+    )
+
+
+def test_generate_records_owner_audit(client):
+    with db_session():
+        owner_id, _, pw = _make_owner()
+    token = _login_owner(client, "boss-cc@x.com", pw)
+    resp = client.post(
+        "/api/v2/owner/connect-codes",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 201
+    with db_session():
+        row = _latest_owner_audit(owner_id, "generate_connect_code")
+    assert row is not None
+    assert row.target_type == "owner_connect_code"
+    assert row.owner_name  # snapshot captured
+
+
+def test_revoke_records_owner_audit_once(client):
+    from api.Modules.Tenancy.Models import OwnerConnectCode
+    from api.Modules.Audit.Models import OwnerAuditLog
+    from tests._app import db
+    with db_session():
+        owner_id, _, pw = _make_owner()
+        c = OwnerConnectCode(
+            owner_id=owner_id, code="AUDITREV",
+            expires_at=datetime.utcnow() + timedelta(days=7),
+        )
+        db.session.add(c); db.session.commit()
+        cid = c.id
+    token = _login_owner(client, "boss-cc@x.com", pw)
+    r1 = client.post(
+        f"/api/v2/owner/connect-codes/{cid}/revoke",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r1.status_code == 200
+    # Re-revoking is a no-op → must NOT append a second audit row.
+    client.post(
+        f"/api/v2/owner/connect-codes/{cid}/revoke",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    with db_session():
+        n = (db.session.query(OwnerAuditLog)
+             .filter_by(owner_id=owner_id, action="revoke_connect_code")
+             .count())
+    assert n == 1

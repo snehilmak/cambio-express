@@ -285,6 +285,12 @@ def owner_connect_codes_generate_route(
         expires_at=utc_now() + timedelta(days=7),
     )
     db.add(c); db.flush()
+    from api.Core.Audit import audit_owner
+    audit_owner(
+        db, user, action="generate_connect_code",
+        target_type="owner_connect_code", target_id=str(c.id),
+        details=f"minted connect code (expires {c.expires_at.isoformat()})",
+    )
     db.commit()
     return OwnerConnectCodeResponse(code=_adapt_code(c))
 
@@ -310,8 +316,16 @@ def owner_connect_codes_revoke_route(
             status_code=409,
             detail="Already redeemed — use /owner/unlink/{store_id} to disconnect.",
         )
+    # Audit only on the actual revoke transition (re-revoking an
+    # already-revoked code is a no-op and shouldn't append a row).
     if c.revoked_at is None:
         c.revoked_at = utc_now()
+        from api.Core.Audit import audit_owner
+        audit_owner(
+            db, user, action="revoke_connect_code",
+            target_type="owner_connect_code", target_id=str(c.id),
+            details=f"revoked code {c.code}",
+        )
     db.commit()
     return OwnerConnectCodeResponse(code=_adapt_code(c))
 
