@@ -13,7 +13,7 @@ from api.Core.Database import get_db
 from api.Modules.Auth.Controllers import get_principal
 from api.Modules.Auth.Services.principal import require_permission
 from api.Modules.DailyBook.Models import DailyLineItem
-from api.Modules.DailyBook.Repositories import list_line_items
+from api.Modules.DailyBook.Repositories import find_report_by_date, list_line_items
 from api.Modules.DailyBook.Requests import (
     DailyReportResponse,
     DailyReportRow,
@@ -318,12 +318,7 @@ def lock_daily_route(
     # Snapshot the prior lock state — the audit row only fires on
     # a state transition (matches the legacy /daily/<ds>/lock
     # `was_locked` guard).
-    from api.Modules.DailyBook.Models import DailyReport
-    existing = (
-        db.query(DailyReport)
-          .filter_by(store_id=int(store_id), report_date=d)
-          .first()
-    )
+    existing = find_report_by_date(db, int(store_id), d)
     was_locked = bool(existing and existing.locked_at)
     user_id = int(claims["sub"])
     rpt = lock_report(db, int(store_id), d, locked_by_user_id=user_id)
@@ -390,12 +385,7 @@ def unlock_daily_route(
                 "daily book."
             ),
         )
-    from api.Modules.DailyBook.Models import DailyReport
-    existing = (
-        db.query(DailyReport)
-          .filter_by(store_id=int(store_id), report_date=d)
-          .first()
-    )
+    existing = find_report_by_date(db, int(store_id), d)
     was_locked = bool(existing and existing.locked_at)
     result = unlock_report(db, int(store_id), d)
     if result is None:
