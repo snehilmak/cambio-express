@@ -2,7 +2,7 @@ import { useLocation } from "react-router-dom";
 
 import { ReportDrilldown } from "../../components/ReportDrilldown";
 import { fmtMoney2 } from "../../lib/formatters";
-import { fontSize } from "../../components/ui";
+import { fontSize, tokens } from "../../components/ui";
 
 export default function CashierProductivity() {
   const isOwner = useLocation().pathname.startsWith("/owner/");
@@ -30,7 +30,7 @@ export default function CashierProductivity() {
                 <span style={{
                   marginLeft: "0.5rem",
                   fontSize: fontSize.xs,
-                  color: "var(--db-text-muted, #a3a3a3)",
+                  color: tokens.textMuted,
                 }}>
                   (inactive)
                 </span>

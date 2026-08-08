@@ -3,7 +3,7 @@ import { useLocation, useSearchParams } from "react-router-dom";
 
 import { ReportDrilldown } from "../../components/ReportDrilldown";
 import { fmtMoney2 } from "../../lib/formatters";
-import { fontSize } from "../../components/ui";
+import { fontSize, tokens } from "../../components/ui";
 import { fmtDateCompact } from "../../lib/formatters";
 
 export default function HighValueTransfers() {
@@ -32,7 +32,7 @@ export default function HighValueTransfers() {
         <label style={{
           display: "flex", flexDirection: "column", gap: "0.15rem",
           fontSize: fontSize.xs,
-          color: "var(--db-text-muted, #a3a3a3)",
+          color: tokens.textMuted,
           textTransform: "uppercase", letterSpacing: "0.05em",
         }}>
           <span>Threshold ($)</span>
@@ -43,8 +43,8 @@ export default function HighValueTransfers() {
             onChange={e => commitThreshold(e.target.value)}
             style={{
               padding: "0.35rem 0.5rem",
-              background: "var(--db-surface, #0a0a0a)", color: "inherit",
-              border: "1px solid var(--db-border, #262626)",
+              background: tokens.surface, color: "inherit",
+              border: `1px solid ${tokens.border}`,
               borderRadius: "0.4rem", fontSize: "0.85rem",
             }}
           />

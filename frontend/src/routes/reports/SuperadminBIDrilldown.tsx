@@ -17,7 +17,7 @@ import { chartSeries, countChartOptions, moneyChartOptions, seriesFill } from ".
 import { fmtShortDate } from "../../lib/formatters";
 import {
   Button, Card, EmptyState, ErrorState, KpiCard, KpiGrid,
-  PageHeader, PageShell, TableSkeleton, tdStyle, thStyle,
+  PageHeader, PageShell, TableSkeleton, tdStyle, thStyle, tokens,
 } from "../../components/ui";
 import styles from "./SuperadminBIDrilldown.module.css";
 
@@ -275,7 +275,7 @@ export default function SuperadminBIDrilldown() {
                     <td key={k} style={{
                       ...tdStyle,
                       textAlign: numeric ? "right" : "left",
-                      fontFamily: numeric ? "var(--db-font-mono, 'JetBrains Mono', monospace)" : undefined,
+                      fontFamily: numeric ? tokens.fontMono : undefined,
                     }}>
                       {fmtCell(k, r[k])}
                     </td>
@@ -387,11 +387,11 @@ function ViewModeToggle({
             className={styles.viewToggleBtn}
             style={{
               background: active
-                ? "var(--db-surface-2, #141414)"
+                ? tokens.surface2
                 : "transparent",
               color: active
-                ? "var(--db-text, #f5f5f5)"
-                : "var(--db-text-muted, #a3a3a3)",
+                ? tokens.text
+                : tokens.textMuted,
               fontWeight: active ? 600 : 400,
             }}
           >

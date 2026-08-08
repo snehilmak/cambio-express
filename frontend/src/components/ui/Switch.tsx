@@ -91,7 +91,7 @@ function thumbStyle(on: boolean): CSSProperties {
     width: "0.95rem",
     height: "0.95rem",
     borderRadius: 999,
-    background: on ? "var(--db-on-accent, #0a0a0a)" : tokens.text,
+    background: on ? tokens.onAccent : tokens.text,
     transition: "left 140ms ease-out",
     pointerEvents: "none",
   };
