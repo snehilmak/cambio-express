@@ -17,7 +17,7 @@ import {
 } from "../api/returnChecks";
 import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
-import { useUnsavedChangesGuard } from "../lib/useUnsavedChangesGuard";
+import { useUnsavedGuard } from "../lib/useUnsavedGuard";
 import {
   Breadcrumbs,
   Alert, Button, Card, ConfirmDialog, DateInput, EmptyState, Field,
@@ -87,8 +87,6 @@ export default function ReturnCheckForm() {
   const [busy,  setBusy]  = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [field, setField] = useState<string | null>(null);
-  // Confirm before leaving with unsaved edits (Cancel / back button).
-  const [pendingLeave, setPendingLeave] = useState(false);
 
   useEffect(() => {
     if (!isEdit || !detail.data) return;
@@ -109,16 +107,16 @@ export default function ReturnCheckForm() {
   }, [isEdit, detail.data]);
 
   const isDirty = JSON.stringify(form) !== JSON.stringify(baseline);
-  // Arm the browser "leave site?" prompt while there are unsaved edits
-  // (covers tab close / refresh; in-app Cancel is guarded below).
-  useUnsavedChangesGuard(isDirty && !busy);
+  // Browser prompt on close/refresh + in-app discard confirm on Cancel.
+  const guard = useUnsavedGuard(isDirty && !busy, {
+    message: "You have unsaved edits on this return check. Leave without saving?",
+  });
 
   function leave() {
     navigate("/return-checks", { replace: true });
   }
   function onCancel() {
-    if (isDirty) setPendingLeave(true);
-    else leave();
+    guard.confirmLeave(leave);
   }
 
   function set<K extends keyof ReturnCheckWriteBody>(
@@ -367,15 +365,7 @@ export default function ReturnCheckForm() {
         </FormActions>
       </form>
 
-      <ConfirmDialog
-        open={pendingLeave}
-        title="Discard unsaved changes?"
-        message="You have unsaved edits on this return check. Leave without saving?"
-        confirmLabel="Leave"
-        confirmTone="danger"
-        onConfirm={leave}
-        onCancel={() => setPendingLeave(false)}
-      />
+      <ConfirmDialog {...guard.dialogProps} />
 
       <ConfirmDialog
         open={pendingTransition != null}
