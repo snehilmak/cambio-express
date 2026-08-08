@@ -8,22 +8,120 @@
  * the header chrome; everything below moves here.
  */
 
-.headerActions {
+/* ── Top toolbar (breadcrumb · day stepper · lock) ───────────
+ * Sticky so day-nav + the lock control stay reachable while the
+ * form scrolls. Opaque page background masks the content that
+ * scrolls underneath. The column summary headers pin just below
+ * it (`.colHeader top` ≈ this element's height). */
+.toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem 1rem;
+  flex-wrap: wrap;
+  min-height: 3rem;
+  background: var(--db-bg, #0a0a0a);
+  padding: 0.25rem 0 0.5rem;
+}
+
+.toolbarLead {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.toolbarTrail {
   display: inline-flex;
   gap: 0.5rem;
   align-items: center;
   flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
-.totalsStrip {
-  position: sticky;
-  top: 0.25rem;
-  z-index: 5;
-  display: flex;
-  gap: 0.75rem;
-  flex-wrap: wrap;
+/* Day stepper — ‹ date › + calendar shortcut, centered. */
+.dayStepper {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.stepBtn,
+.stepCalBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.1rem;
+  height: 2.1rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--db-border, #262626);
   background: var(--db-surface, #0a0a0a);
-  padding-bottom: 0.25rem;
+  color: var(--db-text, #f5f5f5);
+  cursor: pointer;
+  transition: border-color 120ms ease, background 120ms ease, transform 120ms ease;
+}
+
+.stepCalBtn {
+  color: var(--db-text-muted, #a3a3a3);
+  margin-left: 0.15rem;
+}
+
+.stepBtn:hover,
+.stepCalBtn:hover {
+  border-color: var(--db-accent, #3fff00);
+  color: var(--db-accent, #3fff00);
+}
+
+.stepBtn:active,
+.stepCalBtn:active {
+  transform: scale(0.94);
+}
+
+.stepDate {
+  min-width: 9.5rem;
+  text-align: center;
+  font-family: var(--db-font-display, "Space Grotesk", sans-serif);
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--db-text, #f5f5f5);
+}
+
+.lockBtnInner {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+/* ── Sticky per-column summary header ────────────────────────
+ * One header per column (In / Out / Over Short). Pins just under
+ * the toolbar so its column body scrolls behind it. Subtle,
+ * design-system-safe: dark surface + a single accent stripe. */
+.colHeader {
+  position: sticky;
+  top: 3.75rem;
+  z-index: 10;
+  background: var(--db-surface-2, #141414);
+  border: 1px solid var(--db-border, #262626);
+  border-top: 3px solid var(--db-accent, #3fff00);
+  border-radius: 0.875rem;
+  padding: 0.7rem 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.colHeaderRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.colHeaderValue {
+  font-family: var(--db-font-mono, "JetBrains Mono", monospace);
+  font-size: 1.35rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
 }
 
 .totalsLabel {
@@ -40,14 +138,12 @@
   color: var(--db-text-muted, #a3a3a3);
 }
 
-/* Mobile tab strip — anchored just above the form grid.
- * Hidden at ≥60rem because the desktop layout shows every
- * panel at once. */
+/* Mobile tab strip — picks which column is visible below 60rem.
+ * Hidden at ≥60rem where the desktop grid shows all three columns.
+ * Not sticky: the toolbar above it is the sticky element, and
+ * stacking two sticky bars at the top on a phone eats too much of
+ * the viewport. */
 .mobileTabs {
-  position: sticky;
-  top: 0;
-  z-index: 5;
-  background: var(--db-bg, #0a0a0a);
   padding: 0.35rem 0;
   margin-bottom: 0.5rem;
 }
@@ -91,6 +187,16 @@
   display: block;
 }
 
+/* A column = sticky summary header + scrolling body. `min-width: 0`
+ * keeps the grid cell from overflowing its track. */
+.col {
+  min-width: 0;
+}
+
+.colBody {
+  min-width: 0;
+}
+
 @media (max-width: 59.99rem) {
   .dailyLayout > [data-tab] {
     display: none;
@@ -99,6 +205,13 @@
   .dailyLayout[data-active-tab="disbursements"] > [data-tab="disbursements"],
   .dailyLayout[data-active-tab="overshort"] > [data-tab="overshort"] {
     display: block;
+  }
+  /* On a phone only one column shows and the toolbar height varies
+   * with wrapping, so don't pin the header to a fixed offset — let
+   * it scroll with the column. The total is still right on top. */
+  .colHeader {
+    position: static;
+    top: auto;
   }
 }
 

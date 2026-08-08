@@ -89,6 +89,24 @@ export function formatDate(
 }
 
 
+/** Add ``delta`` days to a ``YYYY-MM-DD`` calendar date, returning a
+ *  new ``YYYY-MM-DD`` string. Timezone-safe: the date is built at UTC
+ *  midnight and stepped in UTC, so a local offset or DST boundary can
+ *  never bump the result onto the wrong calendar day. Returns the
+ *  input unchanged when it isn't a valid ISO date (defensive — callers
+ *  pass a route param). Used by the daily-book day stepper. */
+export function addDaysIso(iso: string, delta: number): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  if (!m) return iso;
+  const d = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
+  d.setUTCDate(d.getUTCDate() + delta);
+  const y = d.getUTCFullYear();
+  const mo = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const da = String(d.getUTCDate()).padStart(2, "0");
+  return `${y}-${mo}-${da}`;
+}
+
+
 /** One entry of the ``Store.store_hours`` array (mirrors the
  *  backend ``StoreHourEntry`` Pydantic shape). */
 export interface StoreHourLike {
