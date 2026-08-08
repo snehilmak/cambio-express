@@ -6,6 +6,7 @@ import {
   Breadcrumbs, Card, KpiCard, KpiGrid, Loading, PageHeader, PageShell,
   Pill, SectionTitle,
 } from "../components/ui";
+import styles from "./OwnerSettings.module.css";
 
 export default function OwnerSettings() {
   const { data: profile } = useProfile();
@@ -29,18 +30,18 @@ export default function OwnerSettings() {
 
       <Card>
         <SectionTitle>Profile</SectionTitle>
-        <div style={{ display: "grid", gridTemplateColumns: "8rem 1fr", gap: "0.5rem 1rem", fontSize: "0.9rem" }}>
-          <span style={{ color: "var(--db-text-muted)" }}>Username</span>
+        <div className={styles.profileGrid}>
+          <span className={styles.muted}>Username</span>
           <span>{profile?.username ?? "—"}</span>
-          <span style={{ color: "var(--db-text-muted)" }}>Full name</span>
+          <span className={styles.muted}>Full name</span>
           <span>{profile?.full_name || "—"}</span>
-          <span style={{ color: "var(--db-text-muted)" }}>Email</span>
+          <span className={styles.muted}>Email</span>
           <span>{profile?.email || "—"}</span>
-          <span style={{ color: "var(--db-text-muted)" }}>Phone</span>
+          <span className={styles.muted}>Phone</span>
           <span>{profile?.phone || "—"}</span>
         </div>
-        <div style={{ marginTop: "0.75rem" }}>
-          <Link to="/settings/profile" style={{ color: "var(--db-accent)", fontSize: "0.85rem" }}>
+        <div className={styles.editRow}>
+          <Link to="/settings/profile" className={styles.editLink}>
             Edit profile →
           </Link>
         </div>
@@ -48,7 +49,7 @@ export default function OwnerSettings() {
 
       <Card>
         <SectionTitle>Quick actions</SectionTitle>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(14rem, 1fr))", gap: "0.75rem" }}>
+        <div className={styles.quickGrid}>
           <QuickLink to="/owner/locations" title="Locations" desc="View all linked stores" />
           <QuickLink to="/owner/connect" title="Connect stores" desc="Generate or manage invite codes" />
           <QuickLink to="/owner/users" title="Team users" desc="Users across your umbrella" />
@@ -63,25 +64,20 @@ export default function OwnerSettings() {
       {locations && (
         <Card>
           <SectionTitle>Linked stores</SectionTitle>
-          <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+          <div className={styles.storeList}>
             {locations.rows.map((s) => (
               <Link
                 key={s.store_id}
                 to={`/owner/store/${s.store_id}`}
-                style={{
-                  display: "flex", justifyContent: "space-between", alignItems: "center",
-                  padding: "0.5rem 0.75rem", borderRadius: "0.375rem",
-                  border: "1px solid var(--db-border)", color: "var(--db-text)",
-                  textDecoration: "none", transition: "border-color 150ms",
-                }}
+                className={styles.storeRow}
               >
-                <span style={{ fontWeight: 500 }}>{s.store_name}</span>
+                <span className={styles.storeName}>{s.store_name}</span>
                 <Pill tone="accent">{s.transfer_count} transfers</Pill>
               </Link>
             ))}
             {storeCount === 0 && (
-              <p style={{ color: "var(--db-text-muted)", fontSize: "0.85rem" }}>
-                No stores linked yet. <Link to="/owner/connect" style={{ color: "var(--db-accent)" }}>Generate a connect code</Link> to get started.
+              <p className={styles.emptyNote}>
+                No stores linked yet. <Link to="/owner/connect" className={styles.emptyLink}>Generate a connect code</Link> to get started.
               </p>
             )}
           </div>
@@ -95,16 +91,9 @@ export default function OwnerSettings() {
 
 function QuickLink({ to, title, desc }: { to: string; title: string; desc: string }) {
   return (
-    <Link
-      to={to}
-      style={{
-        display: "block", padding: "0.75rem", borderRadius: "0.5rem",
-        border: "1px solid var(--db-border)", textDecoration: "none",
-        color: "var(--db-text)", transition: "border-color 150ms, transform 150ms",
-      }}
-    >
-      <div style={{ fontWeight: 600, fontSize: "0.9rem" }}>{title}</div>
-      <div style={{ fontSize: "0.8rem", color: "var(--db-text-muted)", marginTop: "0.15rem" }}>{desc}</div>
+    <Link to={to} className={styles.quickLink}>
+      <div className={styles.quickTitle}>{title}</div>
+      <div className={styles.quickDesc}>{desc}</div>
     </Link>
   );
 }
