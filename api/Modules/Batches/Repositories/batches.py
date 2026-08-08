@@ -54,6 +54,11 @@ def sum_transfer_totals_for_batch_refs(
     Note: the legacy ACHBatch.transfers_total property runs ONE
     query per batch — fine for a single row, expensive on a
     page of 50. This helper does it in one bulk query.
+
+    Cancelled transfers are excluded (they keep their batch_id but
+    never settle) so a voided transfer doesn't inflate the batch
+    total / variance — same rule as the model property and
+    summarize_transfers_for_day.
     """
     if not batch_refs:
         return {}
@@ -68,6 +73,7 @@ def sum_transfer_totals_for_batch_refs(
         .filter(
             Transfer.store_id == store_id,
             Transfer.batch_id.in_(batch_refs),
+            Transfer.status != "Cancelled",
         )
         .group_by(Transfer.batch_id)
         .all()
@@ -78,7 +84,8 @@ def sum_transfer_totals_for_batch_refs(
 def transfer_count_by_batch_ref(
     db: Session, store_id: int, batch_refs: list[str],
 ) -> dict[str, int]:
-    """Bulk-count transfers per batch_ref."""
+    """Bulk-count transfers per batch_ref. Excludes Cancelled
+    transfers to match transfers_total / the model properties."""
     if not batch_refs:
         return {}
     rows = (
@@ -86,6 +93,7 @@ def transfer_count_by_batch_ref(
         .filter(
             Transfer.store_id == store_id,
             Transfer.batch_id.in_(batch_refs),
+            Transfer.status != "Cancelled",
         )
         .group_by(Transfer.batch_id)
         .all()

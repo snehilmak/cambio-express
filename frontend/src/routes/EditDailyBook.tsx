@@ -91,7 +91,7 @@ type NumericFormKey = {
   [K in keyof FormState]: FormState[K] extends number ? K : never;
 }[keyof FormState];
 
-interface FormState {
+export interface FormState {
   taxable_sales: number;
   non_taxable: number;
   sales_tax: number;
@@ -1741,7 +1741,7 @@ function buildInitialForm(r: DailyReportRow | null | undefined): FormState {
   };
 }
 
-function computeTotals(form: FormState | null, report: DailyReportRow | null | undefined) {
+export function computeTotals(form: FormState | null, report: DailyReportRow | null | undefined) {
   const receiptsEditable = form ? (
     form.taxable_sales + form.non_taxable + form.sales_tax +
     form.bill_payment_charge + form.phone_recargas + form.boost_mobile +
@@ -1759,8 +1759,16 @@ function computeTotals(form: FormState | null, report: DailyReportRow | null | u
     (report?.other_cash_in ?? 0) + (report?.return_check_paid_back ?? 0);
   const receipts = receiptsEditable + receiptsDerived;
 
+  // NOTE: `safe_balance` is deliberately NOT summed here. The server's
+  // DailyReport.total_disbursements excludes it (see
+  // api/Modules/DailyBook/INVARIANTS.md) because safe balance is cash
+  // RETAINED overnight — it becomes the next day's opening
+  // `forward_balance` (carry = prior.outside_cash_drops +
+  // prior.safe_balance). Counting it as a disbursement here overstated
+  // "Out" and understated the day's position, so the editor disagreed
+  // with the calendar/period views (which use the server's net).
   const disbursementsEditable = form ? (
-    form.cash_deposit + form.safe_balance + form.payroll_expense
+    form.cash_deposit + form.payroll_expense
   ) : 0;
   const disbursementsDerived =
     (report?.cash_purchases ?? 0) + (report?.cash_expense ?? 0) +
