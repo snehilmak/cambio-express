@@ -1,0 +1,91 @@
+/* Page-specific layout for OwnerSettings. Kit primitives (Card,
+   KpiCard, SectionTitle, Pill) cover everything else — only the
+   umbrella profile grid, quick-action tiles, and linked-store rows
+   live here. */
+
+.profileGrid {
+  display: grid;
+  grid-template-columns: 8rem 1fr;
+  gap: 0.5rem 1rem;
+  font-size: 0.9rem;
+}
+
+.muted {
+  color: var(--db-text-muted);
+}
+
+.editRow {
+  margin-top: 0.75rem;
+}
+
+.editLink {
+  color: var(--db-accent);
+  font-size: 0.85rem;
+}
+
+.quickGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+  gap: 0.75rem;
+}
+
+.quickLink {
+  display: block;
+  padding: 0.75rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--db-border);
+  text-decoration: none;
+  color: var(--db-text);
+  transition: border-color 150ms, transform 150ms;
+}
+
+.quickLink:hover {
+  border-color: var(--db-accent);
+  transform: translateY(-1px);
+}
+
+.quickTitle {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.quickDesc {
+  font-size: 0.8rem;
+  color: var(--db-text-muted);
+  margin-top: 0.15rem;
+}
+
+.storeList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.storeRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.375rem;
+  border: 1px solid var(--db-border);
+  color: var(--db-text);
+  text-decoration: none;
+  transition: border-color 150ms;
+}
+
+.storeRow:hover {
+  border-color: var(--db-accent);
+}
+
+.storeName {
+  font-weight: 500;
+}
+
+.emptyNote {
+  color: var(--db-text-muted);
+  font-size: 0.85rem;
+}
+
+.emptyLink {
+  color: var(--db-accent);
+}
