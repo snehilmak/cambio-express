@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 
-import { computeTotals, type FormState } from "./EditDailyBook";
+import { computeTotals, type FormState } from "./editDailyBook.totals";
 import type { DailyReportRow } from "../api/dailybook";
 
 // Regression test for the daily-book totals: `safe_balance` must NOT be
