@@ -1,5 +1,3 @@
-import { Link } from "react-router-dom";
-
 import {
   useAdminUsers,
   type AdminUserRow,
@@ -9,7 +7,7 @@ import { getCurrentIdentity } from "../lib/auth";
 import { formatDate } from "../lib/datetime";
 import {
   Breadcrumbs,
-  Button, ButtonLink, Card, Empty, PageHeader,
+  ButtonLink, Card, Empty, PageHeader,
   PageShell, Pill, Table, TableStates, tdStyle, thStyle,
 } from "../components/ui";
 import styles from "./AdminUsers.module.css";
@@ -135,12 +133,9 @@ function UserTable({
             </td>
             <td style={tdStyle}>
               {u.id !== selfId ? (
-                <Link
-                  to={`/admin/users/${u.id}/edit`}
-                  style={{ textDecoration: "none" }}
-                >
-                  <Button tone="secondary" size="sm">Edit</Button>
-                </Link>
+                <ButtonLink to={`/admin/users/${u.id}/edit`} tone="secondary" size="sm">
+                  Edit
+                </ButtonLink>
               ) : (
                 <span className={styles.mutedSmall}>(you)</span>
               )}
