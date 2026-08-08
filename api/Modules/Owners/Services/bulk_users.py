@@ -21,7 +21,7 @@ from api.Modules.Admin.Services.users import (
     UsernameTakenError,
     create_store_user,
 )
-from api.Modules.Tenancy.Models import Store, StoreOwnerLink
+from api.Modules.Owners.Repositories import get_store_names_map, store_ids_for_owner
 
 VALID_ROLES = {"admin", "employee"}
 
@@ -62,8 +62,8 @@ def bulk_add_user_to_stores(
         # Keeps a runaway bulk-create from racing the rate limiter.
         raise ValueError("Cannot target more than 50 stores in one call.")
 
-    allowed = _owner_store_ids(db, owner_id)
-    name_lookup = _store_names_by_id(db, list(set(store_ids)))
+    allowed = store_ids_for_owner(db, owner_id)
+    name_lookup = get_store_names_map(db, list(set(store_ids)))
 
     results: list[dict[str, Any]] = []
     for sid in store_ids:
@@ -100,23 +100,3 @@ def bulk_add_user_to_stores(
             "detail": "",
         })
     return results
-
-
-def _owner_store_ids(db: Session, owner_id: int) -> set[int]:
-    rows = (
-        db.query(StoreOwnerLink.store_id)
-          .filter_by(owner_id=owner_id)
-          .all()
-    )
-    return {sid for (sid,) in rows}
-
-
-def _store_names_by_id(db: Session, store_ids: list[int]) -> dict[int, str]:
-    if not store_ids:
-        return {}
-    rows = (
-        db.query(Store.id, Store.name)
-          .filter(Store.id.in_(store_ids))
-          .all()
-    )
-    return {sid: name for sid, name in rows}
