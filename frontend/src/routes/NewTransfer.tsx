@@ -10,6 +10,7 @@ import {
   Breadcrumbs,
   Button,
   Card,
+  ConfirmDialog,
   DateInput,
   Field,
   FormActions,
@@ -22,6 +23,7 @@ import {
   space,
   tokens,
 } from "../components/ui";
+import { useUnsavedGuard } from "../lib/useUnsavedGuard";
 import { getOpenStatus } from "../lib/datetime";
 import {
   createTransfer,
@@ -144,11 +146,17 @@ export default function NewTransfer() {
 
   const {
     register, handleSubmit, control, setValue, setError, clearErrors,
-    formState: { errors, isSubmitting },
+    formState: { errors, isSubmitting, isDirty },
   } = useForm<TransferFormValues>({
     resolver: zodResolver(transferSchema),
     defaultValues,
     mode: "onSubmit",  // surface field errors on submit, not as the user types
+  });
+
+  // Guard against losing a half-entered transfer: browser prompt on
+  // hard navigation + a discard confirm on Cancel while dirty.
+  const guard = useUnsavedGuard(isDirty && !isSubmitting, {
+    message: "You have unsaved edits on this transfer. Leave without saving?",
   });
 
   // ``useWatch`` (vs ``watch``) gets us a stable subscription to
@@ -453,8 +461,9 @@ export default function NewTransfer() {
 
         <FormActions>
           <Button
+            type="button"
             tone="secondary"
-            onClick={() => navigate("/transfers")}
+            onClick={() => guard.confirmLeave(() => navigate("/transfers"))}
             disabled={isSubmitting}
           >
             Cancel
@@ -464,6 +473,8 @@ export default function NewTransfer() {
           </Button>
         </FormActions>
       </form>
+
+      <ConfirmDialog {...guard.dialogProps} />
     </PageShell>
   );
 }

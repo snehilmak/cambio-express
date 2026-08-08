@@ -3,6 +3,7 @@ import { useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ApiError } from "../lib/api";
+import { useUnsavedChangesGuard } from "../lib/useUnsavedChangesGuard";
 import {
   Alert, Breadcrumbs, Button, Card, Checkbox, Loading,
   PageHeader, PageShell, Pill, SectionTitle, useToast,
@@ -60,6 +61,9 @@ export default function OwnerStorePermissions() {
   const isDirty = data && draft
     ? JSON.stringify(data.matrix) !== JSON.stringify(draft.matrix)
     : false;
+  // Warn on tab-close / refresh while the permission matrix has unsaved
+  // toggles (the page saves in place — no navigating Cancel to guard).
+  useUnsavedChangesGuard(isDirty);
 
   function toggle(role: string, resource: string, action: string) {
     if (!draft || !draft.editable_roles.includes(role)) return;
