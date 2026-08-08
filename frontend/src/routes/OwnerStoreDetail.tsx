@@ -13,7 +13,7 @@ import {
   Card, ErrorState, KpiCard, KpiGrid, Loading, PageHeader, PageShell,
   Section, TabsBar, TabsButton, Table, tdStyle, thStyle,
 } from "../components/ui";
-import { chartTokens, moneyChartOptions } from "../lib/chartOptions";
+import { chartSeries, chartTokens, moneyChartOptions, seriesFill } from "../lib/chartOptions";
 import styles from "./OwnerStoreDetail.module.css";
 
 ChartJS.register(
@@ -129,8 +129,8 @@ export default function OwnerStoreDetail() {
                       {
                         label: "Receipts ($)",
                         data: data.receipts_data,
-                        borderColor: "#3fff00",
-                        backgroundColor: "rgba(63,255,0,0.1)",
+                        borderColor: chartSeries().accent,
+                        backgroundColor: seriesFill("positive", 0.1),
                         fill: true,
                         tension: 0.25,
                         pointRadius: 0,
@@ -139,8 +139,8 @@ export default function OwnerStoreDetail() {
                       {
                         label: "Over/Short ($)",
                         data: data.over_short_data,
-                        borderColor: "#ff9500",
-                        backgroundColor: "rgba(255,149,0,0.1)",
+                        borderColor: chartSeries().warning,
+                        backgroundColor: seriesFill("warning", 0.1),
                         tension: 0.25,
                         pointRadius: 0,
                         yAxisID: "y1",
@@ -217,7 +217,7 @@ export default function OwnerStoreDetail() {
                       datasets: [{
                         label: "Volume ($)",
                         data: data.company_rows.map((c) => c.volume),
-                        backgroundColor: "rgba(63,255,0,0.5)",
+                        backgroundColor: seriesFill("positive", 0.5),
                       }],
                     }}
                     options={moneyChartOptions("Volume")}

@@ -19,7 +19,9 @@ import {
   type ActivityEntry,
   type VolumeByCompany,
 } from "../api/superadmin";
-import { chartTokens, countChartOptions, moneyChartOptions } from "../lib/chartOptions";
+import {
+  chartSeries, chartTokens, countChartOptions, moneyChartOptions, seriesFill,
+} from "../lib/chartOptions";
 import {
   Breadcrumbs,
   Card,
@@ -205,6 +207,7 @@ function SignupChart({
   referral: number[];
 }) {
   const t = chartTokens();
+  const s = chartSeries();
   const shortLabels = labels.map((l) => fmtShortDate(l));
   return (
     <Line
@@ -214,8 +217,8 @@ function SignupChart({
           {
             label: "Direct",
             data: direct,
-            borderColor: "#3fff00",
-            backgroundColor: "rgba(63, 255, 0, 0.1)",
+            borderColor: s.accent,
+            backgroundColor: seriesFill("positive", 0.1),
             fill: true,
             tension: 0.3,
             pointRadius: 0,
@@ -224,8 +227,8 @@ function SignupChart({
           {
             label: "Referral",
             data: referral,
-            borderColor: "#00bfff",
-            backgroundColor: "rgba(0, 191, 255, 0.08)",
+            borderColor: s.info,
+            backgroundColor: seriesFill("info", 0.08),
             fill: true,
             tension: 0.3,
             pointRadius: 0,
@@ -254,6 +257,7 @@ function PlanDoughnut({
   trial: number; basic: number; pro: number; inactive: number;
 }) {
   const t = chartTokens();
+  const s = chartSeries();
   return (
     <Doughnut
       data={{
@@ -261,10 +265,10 @@ function PlanDoughnut({
         datasets: [{
           data: [trial, basic, pro, inactive],
           backgroundColor: [
-            "#f59e0b",
-            "#3fff00",
-            "#00bfff",
-            "#6b7280",
+            s.warning,
+            s.accent,
+            s.info,
+            s.neutral,
           ],
           borderColor: "transparent",
           borderWidth: 0,
@@ -295,6 +299,7 @@ function PlanDoughnut({
 
 
 function MrrTrendChart({ labels, values }: { labels: string[]; values: number[] }) {
+  const s = chartSeries();
   return (
     <Line
       data={{
@@ -302,8 +307,8 @@ function MrrTrendChart({ labels, values }: { labels: string[]; values: number[] 
         datasets: [{
           label: "MRR",
           data: values,
-          borderColor: "#3fff00",
-          backgroundColor: "rgba(63, 255, 0, 0.1)",
+          borderColor: s.accent,
+          backgroundColor: seriesFill("positive", 0.1),
           fill: true,
           tension: 0.3,
           pointRadius: 3,
@@ -318,6 +323,7 @@ function MrrTrendChart({ labels, values }: { labels: string[]; values: number[] 
 
 function VolumeBar({ rows }: { rows: VolumeByCompany[] }) {
   const t = chartTokens();
+  const s = chartSeries();
   return (
     <Bar
       data={{
@@ -325,8 +331,8 @@ function VolumeBar({ rows }: { rows: VolumeByCompany[] }) {
         datasets: [{
           label: "Volume",
           data: rows.map((r) => r.total),
-          backgroundColor: "rgba(63, 255, 0, 0.6)",
-          borderColor: "#3fff00",
+          backgroundColor: seriesFill("positive", 0.6),
+          borderColor: s.accent,
           borderWidth: 1,
           borderRadius: 4,
         }],

@@ -61,6 +61,52 @@ export function chartTokens() {
 }
 
 
+/** Resolved design-system series colors for chart dataset strokes +
+ *  solid slice fills. Canvas can't read ``var(--db-*)`` at runtime, so
+ *  resolve them off the document at call time — same pattern as
+ *  ``chartTokens()``, so a chart built after a theme flip picks up the
+ *  new palette. Use these instead of hard-coded hex on any Line / Bar /
+ *  Doughnut so the "one saturated accent + jewel/state seconds" rule
+ *  holds and nothing drifts off-palette.
+ *
+ *   - ``accent``   — primary series (neon, darkens in light mode)
+ *   - ``info``     — second line/slice
+ *   - ``warning``  — amber slice/series
+ *   - ``negative`` — red slice/series
+ *   - ``neutral``  — muted "other" slice */
+export function chartSeries() {
+  return {
+    accent:   _resolveToken("--db-accent", "#3fff00"),
+    info:     _resolveToken("--db-info", "#5ea9ff"),
+    warning:  _resolveToken("--db-warning", "#ffb020"),
+    negative: _resolveToken("--db-negative", "#ff4d6d"),
+    neutral:  _resolveToken("--db-text-muted", "#a3a3a3"),
+  };
+}
+
+
+// Fallback RGB triples matching the dark-mode ``--db-<name>-rgb``
+// tokens, for pre-mount / SSR contexts with no ``document``.
+const _SERIES_RGB_FALLBACK: Record<string, string> = {
+  positive: "63, 255, 0",
+  info:     "94, 169, 255",
+  warning:  "255, 176, 32",
+  negative: "255, 77, 109",
+};
+
+/** Translucent chart fill built from a design-system
+ *  ``--db-<name>-rgb`` triple, so a dataset's fill tracks the palette
+ *  instead of hard-coded channel values. ``name`` is one of the
+ *  ``-rgb`` token stems (``positive`` is the neon accent fill). */
+export function seriesFill(
+  name: "positive" | "info" | "warning" | "negative",
+  alpha: number,
+): string {
+  const rgb = _resolveToken(`--db-${name}-rgb`, _SERIES_RGB_FALLBACK[name]);
+  return `rgba(${rgb}, ${alpha})`;
+}
+
+
 // Shared base — extracted so the two presets only differ in their
 // tick formatter + the tooltip label.
 function baseOptions<T extends ChartType = "line">(
