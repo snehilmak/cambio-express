@@ -6358,6 +6358,11 @@ export interface components {
              */
             money_order: number;
             /**
+             * Money Order Fees
+             * @default 0
+             */
+            money_order_fees: number;
+            /**
              * Money Transfer
              * @default 0
              */
@@ -6466,6 +6471,8 @@ export interface components {
             from_bank?: number | null;
             /** Money Order */
             money_order?: number | null;
+            /** Money Order Fees */
+            money_order_fees?: number | null;
             /** Non Taxable */
             non_taxable?: number | null;
             /**

@@ -66,6 +66,7 @@ def _to_row(s: DailyReportSummary) -> DailyReportRow:
         bill_payment_charge=s.bill_payment_charge,
         phone_recargas=s.phone_recargas, boost_mobile=s.boost_mobile,
         money_transfer=s.money_transfer, money_order=s.money_order,
+        money_order_fees=s.money_order_fees,
         check_cashing_fees=s.check_cashing_fees,
         return_check_hold_fees=s.return_check_hold_fees,
         forward_balance=s.forward_balance,

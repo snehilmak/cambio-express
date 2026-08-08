@@ -48,6 +48,7 @@ class DailyReportSummary:
     boost_mobile: float
     money_transfer: float
     money_order: float
+    money_order_fees: float
     check_cashing_fees: float
     return_check_hold_fees: float
     forward_balance: float
@@ -134,6 +135,7 @@ def _summarize(
         boost_mobile=float(r.boost_mobile or 0),
         money_transfer=float(r.money_transfer or 0),
         money_order=float(r.money_order or 0),
+        money_order_fees=float(r.money_order_fees or 0),
         check_cashing_fees=float(r.check_cashing_fees or 0),
         return_check_hold_fees=float(r.return_check_hold_fees or 0),
         forward_balance=forward,
@@ -177,8 +179,8 @@ def _carry_only_summary(
         id=0, store_id=store_id, report_date=report_date.isoformat(),
         taxable_sales=0.0, non_taxable=0.0, sales_tax=0.0,
         bill_payment_charge=0.0, phone_recargas=0.0, boost_mobile=0.0,
-        money_transfer=0.0, money_order=0.0, check_cashing_fees=0.0,
-        return_check_hold_fees=0.0,
+        money_transfer=0.0, money_order=0.0, money_order_fees=0.0,
+        check_cashing_fees=0.0, return_check_hold_fees=0.0,
         forward_balance=forward, forward_balance_auto=True,
         from_bank=0.0, rebates_commissions=0.0,
         return_check_paid_back=0.0, other_cash_in=0.0,
@@ -262,7 +264,8 @@ def ensure_daily_report(
 EDITABLE_REPORT_FIELDS: tuple[str, ...] = (
     "taxable_sales", "non_taxable", "sales_tax",
     "bill_payment_charge", "phone_recargas", "boost_mobile",
-    "money_order", "check_cashing_fees", "return_check_hold_fees",
+    "money_order", "money_order_fees",
+    "check_cashing_fees", "return_check_hold_fees",
     "forward_balance", "from_bank", "rebates_commissions",
     "cash_deposit", "safe_balance", "payroll_expense", "over_short",
 )

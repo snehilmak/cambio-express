@@ -26,6 +26,7 @@ class DailyReportRow(BaseModel):
     boost_mobile: float = 0.0
     money_transfer: float = 0.0
     money_order: float = 0.0
+    money_order_fees: float = 0.0
     check_cashing_fees: float = 0.0
     return_check_hold_fees: float = 0.0
     forward_balance: float = 0.0
@@ -251,6 +252,7 @@ class DailyReportUpdateRequest(BaseModel):
     phone_recargas:          float | None = None
     boost_mobile:            float | None = None
     money_order:             float | None = None
+    money_order_fees:        float | None = None
     check_cashing_fees:      float | None = None
     return_check_hold_fees:  float | None = None
     forward_balance:         float | None = None
