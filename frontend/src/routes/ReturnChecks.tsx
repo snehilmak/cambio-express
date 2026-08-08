@@ -1,12 +1,12 @@
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 
 import { useReturnChecks, type ReturnCheckRow } from "../api/returnChecks";
 import { getCurrentIdentity } from "../lib/auth";
 import {
   Breadcrumbs,
-  Button, ButtonLink, Card, Empty, PageHeader,
+  ButtonLink, Card, Empty, PageHeader,
   PageShell, Pill, Table as KitTable, TableStates, tdStyle,
-  thStyle, tokens, type PillTone,
+  thStyle, type PillTone,
 } from "../components/ui";
 import styles from "./ReturnChecks.module.css";
 
@@ -116,23 +116,16 @@ function Table({ rows }: { rows: ReturnCheckRow[] }) {
           {rows.map((r) => {
             // Whole-row click navigates to edit so a cashier can
             // tap any cell. The explicit Edit button on the right
-            // is the discoverable affordance; this just makes the
-            // rest of the row not feel inert.
+            // is the discoverable, keyboard-reachable affordance;
+            // this just makes the rest of the row not feel inert.
+            // Hover is a CSS class (honors prefers-reduced-motion)
+            // rather than JS style mutation.
             const open = () => navigate(`/return-checks/${r.id}/edit`);
             return (
               <tr
                 key={r.id}
-                style={{
-                  transition: "background 120ms ease",
-                  cursor: "pointer",
-                }}
+                className={styles.row}
                 onClick={open}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = tokens.surface;
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = "transparent";
-                }}
               >
                 <td style={tdStyle}>
                   <span className={styles.monoMuted}>{r.bounced_on}</span>
@@ -165,14 +158,13 @@ function Table({ rows }: { rows: ReturnCheckRow[] }) {
                   // navigate twice and React-Router warns.
                   onClick={(e) => e.stopPropagation()}
                 >
-                  <Link
+                  <ButtonLink
                     to={`/return-checks/${r.id}/edit`}
-                    style={{ textDecoration: "none" }}
+                    tone="secondary"
+                    size="sm"
                   >
-                    <Button tone="secondary" size="sm">
-                      Edit / Record payment
-                    </Button>
-                  </Link>
+                    Edit / Record payment
+                  </ButtonLink>
                 </td>
               </tr>
             );
