@@ -237,42 +237,44 @@ function OverridesPanel({ flagKey }: { flagKey: string }) {
         </div>
       )}
       {data && data.rows.length > 0 && (
-        <table style={{ width: "100%", fontSize: "0.85rem", marginBottom: "0.75rem" }}>
-          <thead>
-            <tr>
-              <th style={{ textAlign: "left" }}>Store</th>
-              <th>Override</th>
-              <th style={{ textAlign: "right" }}>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.rows.map((o: StoreOverrideRow) => (
-              <tr key={o.store_id}>
-                <td>{o.store_name} <span style={{ color: "var(--db-text-muted)" }}>({o.store_slug})</span></td>
-                <td>
-                  <Pill tone={o.enabled ? "accent" : "neutral"}>
-                    {o.enabled ? "ON" : "OFF"}
-                  </Pill>
-                </td>
-                <td style={{ textAlign: "right" }}>
-                  <RowActions
-                    title={`${o.store_name} (${o.store_slug})`}
-                    actions={[
-                      {
-                        label: "Flip",
-                        onClick: () => handleSet(o.store_id, !o.enabled),
-                      },
-                      {
-                        label: "Clear", tone: "danger",
-                        onClick: () => handleClear(o.store_id),
-                      },
-                    ]}
-                  />
-                </td>
+        <div style={{ marginBottom: "0.75rem" }}>
+          <Table style={{ fontSize: "0.85rem" }}>
+            <thead>
+              <tr>
+                <th style={{ textAlign: "left" }}>Store</th>
+                <th>Override</th>
+                <th style={{ textAlign: "right" }}>Actions</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {data.rows.map((o: StoreOverrideRow) => (
+                <tr key={o.store_id}>
+                  <td>{o.store_name} <span style={{ color: "var(--db-text-muted)" }}>({o.store_slug})</span></td>
+                  <td>
+                    <Pill tone={o.enabled ? "accent" : "neutral"}>
+                      {o.enabled ? "ON" : "OFF"}
+                    </Pill>
+                  </td>
+                  <td style={{ textAlign: "right" }}>
+                    <RowActions
+                      title={`${o.store_name} (${o.store_slug})`}
+                      actions={[
+                        {
+                          label: "Flip",
+                          onClick: () => handleSet(o.store_id, !o.enabled),
+                        },
+                        {
+                          label: "Clear", tone: "danger",
+                          onClick: () => handleClear(o.store_id),
+                        },
+                      ]}
+                    />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </Table>
+        </div>
       )}
       <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
         <Input
