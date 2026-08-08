@@ -6467,8 +6467,6 @@ export interface components {
             check_cashing_fees?: number | null;
             /** Forward Balance */
             forward_balance?: number | null;
-            /** From Bank */
-            from_bank?: number | null;
             /** Money Order */
             money_order?: number | null;
             /** Money Order Fees */

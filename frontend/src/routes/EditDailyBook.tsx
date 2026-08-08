@@ -78,7 +78,7 @@ const EDITABLE_KEYS = [
   "bill_payment_charge", "phone_recargas", "boost_mobile",
   "money_order",
   "money_order_fees", "check_cashing_fees", "return_check_hold_fees",
-  "forward_balance", "from_bank", "rebates_commissions",
+  "forward_balance", "rebates_commissions",
   "cash_deposit", "safe_balance", "payroll_expense",
   "over_short",
 ] as const;
@@ -103,7 +103,6 @@ interface FormState {
   check_cashing_fees: number;
   return_check_hold_fees: number;
   forward_balance: number;
-  from_bank: number;
   rebates_commissions: number;
   cash_deposit: number;
   safe_balance: number;
@@ -148,11 +147,11 @@ const RECEIPT_INPUTS: InputFieldDef[] = [
   { key: "phone_recargas",         label: "Phone recargas" },
   { key: "boost_mobile",           label: "Boost Mobile" },
   { key: "money_order",            label: "Money order" },
-  { key: "from_bank",              label: "From bank" },
   { key: "rebates_commissions",    label: "Rebates / commissions" },
 ];
 
 const RECEIPT_LINE_ITEMS: LineItemFieldDef[] = [
+  { key: "from_bank",              label: "Cash from bank",        kind: "from_bank" },
   { key: "other_cash_in",          label: "Other cash in",         kind: "other_cash_in" },
   { key: "return_check_paid_back", label: "Return check payback", kind: "return_payback", readOnly: true },
 ];
@@ -1731,7 +1730,6 @@ function buildInitialForm(r: DailyReportRow | null | undefined): FormState {
     check_cashing_fees:      r?.check_cashing_fees      ?? 0,
     return_check_hold_fees:  r?.return_check_hold_fees  ?? 0,
     forward_balance:         r?.forward_balance         ?? 0,
-    from_bank:               r?.from_bank               ?? 0,
     rebates_commissions:     r?.rebates_commissions     ?? 0,
     cash_deposit:            r?.cash_deposit            ?? 0,
     safe_balance:            r?.safe_balance            ?? 0,
@@ -1747,7 +1745,7 @@ function computeTotals(form: FormState | null, report: DailyReportRow | null | u
     form.bill_payment_charge + form.phone_recargas + form.boost_mobile +
     form.money_order + form.money_order_fees +
     form.check_cashing_fees + form.return_check_hold_fees +
-    form.forward_balance + form.from_bank + form.rebates_commissions
+    form.forward_balance + form.rebates_commissions
   ) : 0;
   // `money_transfer` is Category-3 (derived from the mt_summary
   // per-company breakdown, mirrored onto the report). It is NOT an
@@ -1755,7 +1753,7 @@ function computeTotals(form: FormState | null, report: DailyReportRow | null | u
   // keeps Money In in sync with the saved breakdown instead of an
   // unpersisted input.
   const receiptsDerived =
-    (report?.money_transfer ?? 0) +
+    (report?.money_transfer ?? 0) + (report?.from_bank ?? 0) +
     (report?.other_cash_in ?? 0) + (report?.return_check_paid_back ?? 0);
   const receipts = receiptsEditable + receiptsDerived;
 

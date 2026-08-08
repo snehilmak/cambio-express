@@ -223,6 +223,41 @@ def test_recompute_sums_kind_and_writes_back(test_store_id):
         assert rpt.cash_expense == 35.0
 
 
+def test_from_bank_line_items_roll_up_to_field(test_store_id):
+    """from_bank is now a multi-entry kind (several bank runs a day) —
+    its line items sum into DailyReport.from_bank, which still feeds
+    total_receipts."""
+    from api.Modules.DailyBook.Models import DailyReport
+    from tests._app import db
+    from api.Modules.DailyBook.Services import (
+        add_line_item, recompute_line_items_total,
+    )
+    today = date.today()
+    with db_session():
+        for amt in (100.0, 250.0):  # two bank runs
+            add_line_item(
+                db.session,
+                store_id=test_store_id, report_date=today,
+                kind="from_bank", at_time=None, amount=amt,
+            )
+        db.session.commit()
+        total = recompute_line_items_total(
+            db.session, test_store_id, today,
+            kind="from_bank", daily_report_field="from_bank",
+        )
+        db.session.commit()
+        assert total == 350.0
+        rpt = (
+            db.session.query(DailyReport)
+              .filter_by(store_id=test_store_id, report_date=today)
+              .first()
+        )
+        assert rpt is not None
+        assert rpt.from_bank == 350.0
+        # Still a receipt: rolls into total_receipts.
+        assert rpt.total_receipts == 350.0
+
+
 def test_recompute_zeroes_field_when_no_line_items(test_store_id):
     """If all line items of a kind are deleted, the recompute pushes
     0.0 onto the field — clearing stale totals."""

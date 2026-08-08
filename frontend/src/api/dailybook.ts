@@ -85,7 +85,6 @@ export interface DailyReportUpdateBody {
   check_cashing_fees?: number;
   return_check_hold_fees?: number;
   forward_balance?: number;
-  from_bank?: number;
   rebates_commissions?: number;
   cash_deposit?: number;
   safe_balance?: number;

@@ -61,7 +61,7 @@ taxable_sales, non_taxable, sales_tax,
 bill_payment_charge, phone_recargas, boost_mobile,
 money_order, money_order_fees, check_cashing_fees,
 return_check_hold_fees,
-forward_balance, from_bank, rebates_commissions,
+forward_balance, rebates_commissions,
 cash_deposit, safe_balance, payroll_expense,
 over_short
 ```
@@ -91,6 +91,7 @@ matching `kind`. The mapping is canonical in
 | `other_cash_out` | `other_cash_out` | Catch-all ad-hoc payout |
 | `outside_cash_drops` | `drop` | Cashier dropped excess cash to the safe / ATM |
 | `checks_deposit` | `check_deposit` | Trip to the bank with checks |
+| `from_bank` | `from_bank` | Cash pulled from the bank into the drawer (multiple bank runs per day) |
 
 **These fields are NOT writable via the daily-report PUT.** They get
 recomputed by `_recompute_line_items_total` on every line-item
@@ -127,6 +128,7 @@ these fields, or the request 422s:
 - `other_cash_out` (Category 2 — other_cash_out kind)
 - `outside_cash_drops` (Category 2 — drop kind)
 - `checks_deposit` (Category 2 — check_deposit kind)
+- `from_bank` (Category 2 — from_bank kind)
 
 Plus the database-managed fields (id, store_id, report_date,
 locked_at, locked_by, updated_at) and the computed properties

@@ -314,6 +314,7 @@ def test_put_rejects_extra_fields(client, test_store_id):
     "other_cash_out",
     "outside_cash_drops",
     "checks_deposit",
+    "from_bank",
 ])
 def test_put_rejects_every_derived_field(client, test_store_id, derived_field):
     today_iso = date.today().isoformat()
