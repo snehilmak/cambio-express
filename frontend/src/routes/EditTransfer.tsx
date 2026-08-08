@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { Controller, useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -11,7 +11,7 @@ import {
   Field, FormActions, Input, Loading, MoneyInput, PageHeader, PageShell,
   Pill, Section, Select,
 } from "../components/ui";
-import { useUnsavedChangesGuard } from "../lib/useUnsavedChangesGuard";
+import { useUnsavedGuard } from "../lib/useUnsavedGuard";
 import {
   previewFederalTax,
   updateTransfer,
@@ -155,13 +155,13 @@ export default function EditTransfer() {
   const country = useWatch({ control, name: "country" });
   const customerId = useWatch({ control, name: "customer_id" });
 
-  // Warn before losing unsaved edits (close / refresh via the hook;
-  // in-app Cancel via the confirm dialog below).
-  const [pendingLeave, setPendingLeave] = useState(false);
-  useUnsavedChangesGuard(isDirty && !isSubmitting);
+  // Warn before losing unsaved edits: browser prompt on close/refresh +
+  // an in-app discard confirm on Cancel, via the shared guard.
+  const guard = useUnsavedGuard(isDirty && !isSubmitting, {
+    message: "You have unsaved edits on this transfer. Leave without saving?",
+  });
   function onCancel() {
-    if (isDirty) setPendingLeave(true);
-    else navigate(`/transfers/${transferId}`);
+    guard.confirmLeave(() => navigate(`/transfers/${transferId}`));
   }
 
   async function onSubmit(values: EditFormValues) {
@@ -461,15 +461,7 @@ export default function EditTransfer() {
         </FormActions>
       </form>
 
-      <ConfirmDialog
-        open={pendingLeave}
-        title="Discard unsaved changes?"
-        message="You have unsaved edits on this transfer. Leave without saving?"
-        confirmLabel="Leave"
-        confirmTone="danger"
-        onConfirm={() => navigate(`/transfers/${transferId}`)}
-        onCancel={() => setPendingLeave(false)}
-      />
+      <ConfirmDialog {...guard.dialogProps} />
     </PageShell>
   );
 }

@@ -31,7 +31,7 @@ import {
   Loading, Modal, MoneyInput, PageHeader, PageShell, Pill, RowActions,
   TabsBar, TabsButton, Textarea,
 } from "../components/ui";
-import { useUnsavedChangesGuard } from "../lib/useUnsavedChangesGuard";
+import { useUnsavedGuard } from "../lib/useUnsavedGuard";
 import { computeTotals, type FormState } from "./editDailyBook.totals";
 import styles from "./EditDailyBook.module.css";
 import { ImportReportModal } from "./ImportReportModal";
@@ -190,8 +190,6 @@ export default function EditDailyBook() {
   const [form, setForm] = useState<FormState | null>(null);
   // Baseline = last server-synced form; used to detect unsaved edits.
   const [baseline, setBaseline] = useState<FormState | null>(null);
-  // Confirm before leaving with unsaved edits (Back to calendar).
-  const [pendingLeave, setPendingLeave] = useState(false);
   const [busy, setBusy] = useState(false);
   // Mobile-only tab.  Desktop CSS ignores the data-attr and
   // shows every panel in the grid; mobile CSS hides every
@@ -235,11 +233,12 @@ export default function EditDailyBook() {
   const isDirty =
     form != null && baseline != null &&
     JSON.stringify(form) !== JSON.stringify(baseline);
-  useUnsavedChangesGuard(isDirty && !busy);
+  const guard = useUnsavedGuard(isDirty && !busy, {
+    message: "You have unsaved edits on this day's book. Leave without saving?",
+  });
 
   function onBackToCalendar() {
-    if (isDirty) setPendingLeave(true);
-    else navigate("/daily");
+    guard.confirmLeave(() => navigate("/daily"));
   }
 
   const set = useCallback(<K extends keyof FormState>(
@@ -437,15 +436,7 @@ export default function EditDailyBook() {
         />
       </form>
 
-      <ConfirmDialog
-        open={pendingLeave}
-        title="Discard unsaved changes?"
-        message="You have unsaved edits on this day's book. Leave without saving?"
-        confirmLabel="Leave"
-        confirmTone="danger"
-        onConfirm={() => navigate("/daily")}
-        onCancel={() => setPendingLeave(false)}
-      />
+      <ConfirmDialog {...guard.dialogProps} />
     </PageShell>
   );
 }
