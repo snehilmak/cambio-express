@@ -11,8 +11,8 @@ import {
 import { ApiError } from "../lib/api";
 import {
   Breadcrumbs,
-  Alert, Button, Card, ErrorState, Loading, PageHeader, PageShell, Pill,
-  SectionTitle,
+  Alert, Button, ButtonLink, Card, ConfirmDialog, ErrorState, Loading,
+  PageHeader, PageShell, Pill,
 } from "../components/ui";
 import styles from "./AdminSubscription.module.css";
 
@@ -171,14 +171,10 @@ export default function AdminSubscription() {
                 >
                   {busy === "portal" ? "Opening…" : "Manage Billing"}
                 </Button>
-                <Link to="/subscribe" style={{ textDecoration: "none" }}>
-                  <Button tone="secondary">Change Plan</Button>
-                </Link>
+                <ButtonLink to="/subscribe" tone="secondary">Change Plan</ButtonLink>
               </>
             ) : (
-              <Link to="/subscribe" style={{ textDecoration: "none" }}>
-                <Button>Choose a Plan</Button>
-              </Link>
+              <ButtonLink to="/subscribe" tone="primary">Choose a Plan</ButtonLink>
             )}
           </div>
           {has_paid_plan && (
@@ -267,11 +263,12 @@ export default function AdminSubscription() {
         )}
       </div>
 
-      {showCancel && has_paid_plan && (
-        <div className={styles.modalBackdrop} onClick={() => setShowCancel(false)}>
-          <div className={styles.modalCard} onClick={(e) => e.stopPropagation()}>
-            <SectionTitle>Before you cancel</SectionTitle>
-            <p>
+      <ConfirmDialog
+        open={showCancel && has_paid_plan}
+        title="Before you cancel"
+        message={
+          <>
+            <p style={{ marginTop: 0 }}>
               You're about to cancel your <strong>{plan_label}</strong>{" "}
               subscription. We hold your data so you can come back without
               losing a thing.
@@ -284,25 +281,18 @@ export default function AdminSubscription() {
               months and you're right back in. After 6 months, all of this
               store's data is permanently deleted.
             </div>
-            <p className={styles.muted}>
+            <p className={styles.muted} style={{ marginBottom: 0 }}>
               Clicking continue takes you to Stripe to confirm the cancellation.
             </p>
-            <div className={styles.modalActions}>
-              <Button tone="secondary" onClick={() => setShowCancel(false)}>
-                Keep Subscription
-              </Button>
-              <Button
-                tone="danger"
-                busy={busy === "cancel"}
-                disabled={busy === "cancel"}
-                onClick={() => handlePortal("cancel")}
-              >
-                {busy === "cancel" ? "Opening…" : "Continue to Cancel"}
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
+          </>
+        }
+        confirmLabel={busy === "cancel" ? "Opening…" : "Continue to Cancel"}
+        cancelLabel="Keep Subscription"
+        confirmTone="danger"
+        busy={busy === "cancel"}
+        onConfirm={() => handlePortal("cancel")}
+        onCancel={() => setShowCancel(false)}
+      />
     </PageShell>
   );
 }
