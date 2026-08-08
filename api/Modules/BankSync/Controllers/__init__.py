@@ -27,6 +27,8 @@ from api.Modules.BankSync.Models import (
 )
 from api.Modules.BankSync.Repositories import (
     BankTransactionFilters,
+    find_account_in_store,
+    get_rule_by_id,
     list_accounts,
     list_rules,
 )
@@ -370,11 +372,7 @@ def _validate_rule_body(body: BankRuleWriteRequest) -> None:
 
 
 def _find_owned_rule(db: Session, store_id: int, rule_id: int) -> BankRule:
-    r = (
-        db.query(BankRule)
-          .filter(BankRule.id == rule_id, BankRule.store_id == store_id)
-          .one_or_none()
-    )
+    r = get_rule_by_id(db, rule_id, store_id)
     if r is None:
         raise HTTPException(status_code=404, detail="Bank rule not found")
     return r
@@ -386,15 +384,7 @@ def _validate_account_owned(db: Session, store_id: int, account_id: int | None):
     is None (rule applies to all accounts)."""
     if account_id is None:
         return
-    a = (
-        db.query(StripeBankAccount)
-          .filter(
-              StripeBankAccount.id == account_id,
-              StripeBankAccount.store_id == store_id,
-          )
-          .one_or_none()
-    )
-    if a is None:
+    if find_account_in_store(db, account_id, store_id) is None:
         raise HTTPException(
             status_code=422,
             detail={

@@ -29,6 +29,7 @@ import os
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
+from api.Modules.Notifications.Services.format import fmt_money_2 as _fmt_money_2
 from api.Modules.Notifications.Services.smtp import send_email
 from api.Modules.Notifications.Services.templates import render_email_template
 from typing import Any
@@ -36,15 +37,6 @@ from api.Core.Clock import utc_now
 
 
 _log = logging.getLogger(__name__)
-
-
-def _fmt_money_2(n: float) -> str:
-    """Mirror the React editor's mono money format so the digest
-    line items look the same in the inbox as on screen."""
-    try:
-        return "${:,.2f}".format(float(n or 0))
-    except (TypeError, ValueError):
-        return "$0.00"
 
 
 LOCKED_DAY_SUBJECT = "Daily book locked — {store_name}, {date_human}"

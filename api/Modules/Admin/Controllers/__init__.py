@@ -177,14 +177,6 @@ def update_store_info_route(
 # ── Team roster ─────────────────────────────────────────────
 
 
-def _require_admin_role(claims: dict[str, Any]) -> None:
-    if claims.get("role") not in ("admin", "owner", "superadmin"):
-        raise HTTPException(
-            status_code=403,
-            detail="Only store admins can manage the team roster",
-        )
-
-
 def _team_row(e) -> TeamMemberRow:
     return TeamMemberRow(
         id=e.id, name=e.name or "", is_active=bool(e.is_active),
@@ -370,7 +362,6 @@ def subscription_summary_route(
     )
     trial_days_left = None
     if store.plan == "trial" and store.trial_ends_at is not None:
-        from datetime import datetime
         delta = store.trial_ends_at - utc_now()
         trial_days_left = max(0, delta.days)
     # Check with Stripe if the subscription is scheduled for
@@ -1003,7 +994,7 @@ def update_store_permissions_route(
             target_type="store_role_override",
             target_id=str(sid),
             target_label=f"{len(matrix) + len(changes)} permission change(s)",
-            summary=f"updated store permission overrides",
+            summary="updated store permission overrides",
         )
         from api.Modules.Auth.Services.principal import invalidate_sessions_for_role
         for r in affected_roles:

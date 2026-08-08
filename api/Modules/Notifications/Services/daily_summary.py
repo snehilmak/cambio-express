@@ -35,6 +35,7 @@ from typing import Any, Optional
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
+from api.Modules.Notifications.Services.format import fmt_money_2 as _fmt_money_2
 from api.Modules.Notifications.Services.smtp import send_email
 from api.Modules.Notifications.Services.templates import render_email_template
 from api.Core.Clock import utc_now
@@ -83,13 +84,6 @@ class DailyTotals:
     disbursements:   float
     over_short:      float
     has_activity:    bool
-
-
-def _fmt_money_2(n: float) -> str:
-    try:
-        return "${:,.2f}".format(float(n or 0))
-    except (TypeError, ValueError):
-        return "$0.00"
 
 
 def compute_daily_totals(

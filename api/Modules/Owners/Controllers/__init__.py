@@ -912,7 +912,6 @@ def owner_activity_route(
 
     store_names = get_store_names_map(db, sids)
 
-    per_page = pagination.per_page
     needle = q.strip()
 
     oal_q = db.query(OperatorAuditLog).filter(
