@@ -3044,6 +3044,104 @@
         "title": "HTTPValidationError",
         "type": "object"
       },
+      "IntermexCommitRequest": {
+        "additionalProperties": false,
+        "description": "Commit body: the same base64 PDF the operator reviewed, plus the\nstore + day to attach it to. The bytes are re-parsed server-side \u2014\nthe client never sends money numbers, so a tampered review can't\npoison the ledger. ``report_date`` is the day the operator is\nediting (may differ from the report's own Fecha; the SPA warns).",
+        "properties": {
+          "content_base64": {
+            "maxLength": 31457280,
+            "minLength": 1,
+            "title": "Content Base64",
+            "type": "string"
+          },
+          "filename": {
+            "default": "",
+            "title": "Filename",
+            "type": "string"
+          },
+          "report_date": {
+            "title": "Report Date",
+            "type": "string"
+          },
+          "store_id": {
+            "minimum": 1.0,
+            "title": "Store Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "content_base64",
+          "store_id",
+          "report_date"
+        ],
+        "title": "IntermexCommitRequest",
+        "type": "object"
+      },
+      "IntermexCommitResponse": {
+        "additionalProperties": false,
+        "description": "Commit outcome + reconcile comparison against already-logged\ntransfers. ``matches_logged`` is True when the report's send total\nmatches the Intermex transfers the store already logged for the\nday (within half a cent) \u2014 the \"these agree\" signal.",
+        "properties": {
+          "amount": {
+            "title": "Amount",
+            "type": "number"
+          },
+          "committed_total": {
+            "title": "Committed Total",
+            "type": "number"
+          },
+          "company": {
+            "title": "Company",
+            "type": "string"
+          },
+          "federal_tax": {
+            "title": "Federal Tax",
+            "type": "number"
+          },
+          "fees": {
+            "title": "Fees",
+            "type": "number"
+          },
+          "giros_committed": {
+            "title": "Giros Committed",
+            "type": "integer"
+          },
+          "grand_total": {
+            "title": "Grand Total",
+            "type": "number"
+          },
+          "logged_amount": {
+            "title": "Logged Amount",
+            "type": "number"
+          },
+          "logged_total": {
+            "title": "Logged Total",
+            "type": "number"
+          },
+          "matches_logged": {
+            "title": "Matches Logged",
+            "type": "boolean"
+          },
+          "previous_saved_total": {
+            "title": "Previous Saved Total",
+            "type": "number"
+          }
+        },
+        "required": [
+          "company",
+          "giros_committed",
+          "amount",
+          "fees",
+          "federal_tax",
+          "committed_total",
+          "grand_total",
+          "logged_amount",
+          "logged_total",
+          "previous_saved_total",
+          "matches_logged"
+        ],
+        "title": "IntermexCommitResponse",
+        "type": "object"
+      },
       "IntermexParseRequest": {
         "additionalProperties": false,
         "description": "Upload body: the report PDF, base64-encoded.",
@@ -20827,6 +20925,82 @@
         "summary": "Owner Users Route",
         "tags": [
           "owner"
+        ]
+      }
+    },
+    "/report-import/intermex/commit": {
+      "post": {
+        "description": "Commit a reviewed Intermex report into the day's money-transfer\nbreakdown. The PDF is re-parsed server-side (the client never sends\nmoney numbers) and the active giros aggregate into the Intermex\ncompany row of ``report_date``'s MT breakdown \u2014 every other\ncompany's manual override is preserved. Returns a reconcile\ncomparison against the transfers already logged for the day.\n\nAuth: a store operator with daily-book write access, scoped to\ntheir own store (cross-store commit \u2192 opaque 403, matching the\ndaily-book write surface). A locked day \u2192 403. A report with no\nsettled giros, or one whose giros don't reconcile, \u2192 422.",
+        "operationId": "commit_intermex_route_report_import_intermex_commit_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IntermexCommitRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntermexCommitResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Commit Intermex Route",
+        "tags": [
+          "report-import"
         ]
       }
     },

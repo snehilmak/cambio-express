@@ -24,6 +24,42 @@ class IntermexParseRequest(BaseModel):
     filename: str = ""
 
 
+class IntermexCommitRequest(BaseModel):
+    """Commit body: the same base64 PDF the operator reviewed, plus the
+    store + day to attach it to. The bytes are re-parsed server-side —
+    the client never sends money numbers, so a tampered review can't
+    poison the ledger. ``report_date`` is the day the operator is
+    editing (may differ from the report's own Fecha; the SPA warns)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    content_base64: str = Field(..., min_length=1, max_length=MAX_PDF_BYTES * 2)
+    filename: str = ""
+    store_id: int = Field(..., ge=1)
+    report_date: str  # YYYY-MM-DD — the day to attach the giros to
+
+
+class IntermexCommitResponse(BaseModel):
+    """Commit outcome + reconcile comparison against already-logged
+    transfers. ``matches_logged`` is True when the report's send total
+    matches the Intermex transfers the store already logged for the
+    day (within half a cent) — the "these agree" signal."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    company: str
+    giros_committed: int
+    amount: float
+    fees: float
+    federal_tax: float
+    committed_total: float
+    grand_total: float
+    logged_amount: float
+    logged_total: float
+    previous_saved_total: float
+    matches_logged: bool
+
+
 class IntermexTxnRowResponse(BaseModel):
     """One parsed transaction row (Giro / money order / bill payment).
 

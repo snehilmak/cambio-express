@@ -607,7 +607,9 @@ function ReceiptsPanel(
       <ImportReportModal
         open={importOpen}
         onClose={() => setImportOpen(false)}
+        storeId={props.storeId}
         reportDate={props.date}
+        onCommitted={props.onLineItemChange}
       />
 
       <div className={styles.panelDivider} />
