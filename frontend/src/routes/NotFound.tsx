@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 
+import { tokens } from "../components/ui";
 import { getCurrentIdentity } from "../lib/auth";
 
 // Catch-all for unknown SPA routes. Mounted twice in App.tsx — once
@@ -31,21 +32,21 @@ export default function NotFound() {
     >
       <h1
         style={{
-          fontFamily: "var(--db-font-display, 'Space Grotesk', sans-serif)",
+          fontFamily: tokens.fontDisplay,
           fontSize: "clamp(2rem, 5vw, 3rem)",
           margin: 0,
         }}
       >
         404
       </h1>
-      <p style={{ color: "var(--db-text-muted, #a3a3a3)", margin: 0 }}>
+      <p style={{ color: tokens.textMuted, margin: 0 }}>
         That page hasn't been built yet.
       </p>
       <Link
         to={target}
         style={{
-          color: "var(--db-accent, #3fff00)",
-          fontFamily: "var(--db-font-mono, 'JetBrains Mono', monospace)",
+          color: tokens.accent,
+          fontFamily: tokens.fontMono,
         }}
       >
         {label}

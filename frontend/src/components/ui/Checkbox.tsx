@@ -1,5 +1,7 @@
 import type { CSSProperties, ReactNode } from "react";
 
+import { tokens } from "./tokens";
+
 /** Boolean control.  Visually styled to match the kit's
  *  surface / border tokens; behaviourally a plain native
  *  `<input type="checkbox">` so form-libraries (react-hook-form,
@@ -62,7 +64,7 @@ const inputStyle: CSSProperties = {
   width: "1rem",
   height: "1rem",
   marginTop: "0.15rem",   // align with the first line of the label
-  accentColor: "var(--db-accent, #3fff00)",
+  accentColor: tokens.accent,
   cursor: "inherit",
   flexShrink: 0,
 };
