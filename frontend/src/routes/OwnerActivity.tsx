@@ -6,7 +6,7 @@ import { formatTimestamp } from "../lib/datetime";
 import { useUrlFilterState } from "../lib/useUrlFilterState";
 import {
   Breadcrumbs, Card, EmptyState, Input, Loading, PageHeader, PageShell,
-  Pill, Table,
+  Pager, Pill, Table,
 } from "../components/ui";
 
 interface ActivityRow {
@@ -44,7 +44,6 @@ function useOwnerActivity(q: string, page: number) {
 export default function OwnerActivity() {
   const filters = useUrlFilterState({ q: "" });
   const { data, isLoading, isError } = useOwnerActivity(filters.params.q, filters.page);
-  const page = filters.page;
   const setPage = filters.setPage;
 
   return (
@@ -113,13 +112,16 @@ export default function OwnerActivity() {
             </tbody>
           </Table>
           {data.total_pages > 1 && (
-            <div style={{ display: "flex", justifyContent: "center", gap: "0.5rem", padding: "0.75rem" }}>
-              <button type="button" aria-label="Previous page" disabled={page <= 1} onClick={() => setPage(page - 1)}>← Prev</button>
-              <span style={{ fontSize: "0.85rem", color: "var(--db-text-muted)" }}>
-                Page {data.page} of {data.total_pages} ({data.total} events)
-              </span>
-              <button type="button" aria-label="Next page" disabled={page >= data.total_pages} onClick={() => setPage(page + 1)}>Next →</button>
-            </div>
+            <Pager
+              page={data.page}
+              totalPages={data.total_pages}
+              onPage={setPage}
+              leading={
+                <span style={{ fontSize: "0.85rem", color: "var(--db-text-muted)" }}>
+                  {data.total} events
+                </span>
+              }
+            />
           )}
         </Card>
       )}
