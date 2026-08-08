@@ -24,6 +24,7 @@ import {
 } from "../api/dailybook";
 import { useStoreInfo } from "../api/account";
 import { fmtMoney2 } from "../lib/formatters";
+import { addDaysIso } from "../lib/datetime";
 import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
 import {
@@ -39,17 +40,20 @@ import { ImportReportModal } from "./ImportReportModal";
 // /app/daily/edit?date=YYYY-MM-DD — the per-day editor.
 //
 // Layout mirrors the legacy Jinja `daily_report.html` workflow:
-//   • Sticky 3-card totals strip at the top (Receipts / Disbursements / Net),
-//     updates live as the cashier types.
-//   • 3 tabs underneath (mobile) — In (Receipts), Out
-//     (Disbursements), and Over/Short & Notes. Desktop shows them
-//     side-by-side.
-//   • Each tab shows a mix of operator-editable inputs and widgets.
-//     Line-item widgets are tile + modal (read-only sum + a list of
-//     timestamped entries with an add-row). The Money transfer tile
-//     in the "In" tab opens the per-company breakdown modal.
-//   • Sticky save bar pinned to the viewport bottom — Save / Cancel /
-//     Lock day. When locked the bar swaps to "Unlock to edit".
+//   • Sticky top toolbar: breadcrumb (Daily book / date) · a
+//     prev/next day stepper (← / → arrow keys too) · the lock
+//     control. Stays put as the form scrolls.
+//   • 3 columns (desktop) / tabs (mobile) — In (Receipts), Out
+//     (Disbursements), Over/Short & Notes. Each column carries its
+//     own sticky summary header showing that column's total, so the
+//     column body scrolls behind it.
+//   • Each column shows a mix of operator-editable inputs and
+//     widgets. Line-item widgets are tile + modal (read-only sum +
+//     a list of timestamped entries with an add-row). The Money
+//     transfer tile in the "In" column opens the per-company
+//     breakdown modal.
+//   • Sticky save bar pinned to the viewport bottom — Save / Back.
+//     The lock/unlock toggle lives in the top toolbar, not here.
 //
 // All line-item kinds (drops, check deposits, cash purchases, etc.)
 // fire through the FastAPI `/api/v2/daily/{store}/{date}/line-items`
@@ -157,17 +161,16 @@ const DISBURSEMENT_LINE_ITEMS: LineItemFieldDef[] = [
 ];
 
 // Layout strategy:
-//   - Desktop (≥60rem): all four panels render in a CSS-grid
-//     layout — Receipts + Disbursements side-by-side at the top,
-//     Transfers full-width below them, Notes full-width at the
-//     bottom.  Operator sees everything at once and never has to
-//     click to switch sections.
-//   - Mobile (<60rem): the same JSX renders, but a sticky tab
-//     strip at the top picks which panel is visible.  CSS hides
-//     the other three (via `display:none`) so the page only
-//     paints one section at a time and never scrolls past 100vh.
+//   - Desktop (≥60rem): the three columns render side-by-side in a
+//     CSS-grid — In (Receipts) | Out (Disbursements) | Over Short &
+//     Notes. Each has its own sticky summary header. Operator sees
+//     everything at once and never has to click to switch sections.
+//   - Mobile (<60rem): the same JSX renders, but a tab strip picks
+//     which column is visible. CSS hides the other two (via
+//     `display:none`) so the page only paints one section at a time
+//     and never scrolls past 100vh.
 // The legacy `?tab=` query param is ignored — links from the
-// calendar drop the operator on the Receipts tab by default.
+// calendar drop the operator on the In (Receipts) column by default.
 
 type DailyTab = "receipts" | "disbursements" | "overshort";
 const DAILY_TAB_DEFS: Array<{ id: DailyTab; label: string }> = [
@@ -240,6 +243,41 @@ export default function EditDailyBook() {
   function onBackToCalendar() {
     guard.confirmLeave(() => navigate("/daily"));
   }
+
+  // Prev/next-day stepper. Routes through the unsaved-changes guard so
+  // an in-progress edit prompts before we navigate away. Movement is
+  // unbounded in both directions — viewing a past day or prepping a
+  // future one is legitimate; the target loads its own report (or a
+  // blank one that auto-creates on first save).
+  function goToDay(delta: number) {
+    if (!date) return;
+    guard.confirmLeave(
+      () => navigate(`/daily/edit?date=${addDaysIso(date, delta)}`),
+    );
+  }
+
+  // Arrow keys step days — but only when the user isn't typing in a
+  // field, so ←/→ still move the text caret inside inputs. Modifier
+  // combos (⌘←, etc.) are left to the browser.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      const el = document.activeElement as HTMLElement | null;
+      const tag = el?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" ||
+          el?.isContentEditable) {
+        return;
+      }
+      if (!date) return;
+      const delta = e.key === "ArrowLeft" ? -1 : 1;
+      guard.confirmLeave(
+        () => navigate(`/daily/edit?date=${addDaysIso(date, delta)}`),
+      );
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [date, guard, navigate]);
 
   const set = useCallback(<K extends keyof FormState>(
     key: K, value: FormState[K],
@@ -339,37 +377,45 @@ export default function EditDailyBook() {
   const locked = report?.locked === true;
   const lineItems = lineItemsQuery.data?.items ?? [];
 
+  const netNeg = totals.net < 0;
+
   return (
     <PageShell gap="1rem">
-      <Breadcrumbs crumbs={[
-        { label: "Daily book", to: "/daily" },
-      ]} />
-      <PageHeader
-        title={formatHumanDate(date)}
-        actions={(
-          <div className={styles.headerActions}>
-            {locked && (
-              <Pill tone="warning">
-                Locked · {formatLockedAt(report?.locked_at)}
-              </Pill>
-            )}
-            {savedAt && !locked && (
-              <Pill tone="accent">Saved {formatTime(savedAt)}</Pill>
-            )}
-          </div>
-        )}
-      />
+      {/* Top toolbar: breadcrumb (left) · day stepper (center) ·
+          lock control (right). Sticky so day-nav + lock stay reachable
+          as the form scrolls. The column summary headers below pin
+          just under it — see `.toolbar` / `.colHeader` offsets in the
+          module CSS. */}
+      <div className={styles.toolbar}>
+        <div className={styles.toolbarLead}>
+          <Breadcrumbs crumbs={[
+            { label: "Daily book", to: "/daily" },
+            { label: formatHumanDate(date) },
+          ]} />
+        </div>
 
-      <TotalsStrip
-        receipts={totals.receipts}
-        disbursements={totals.disbursements}
-        net={totals.net}
-        overShort={form.over_short}
-      />
+        <DayStepper
+          date={date}
+          onPrev={() => goToDay(-1)}
+          onNext={() => goToDay(1)}
+          onCalendar={onBackToCalendar}
+        />
+
+        <div className={styles.toolbarTrail}>
+          {locked ? (
+            <Pill tone="warning" dot>
+              Locked · {formatLockedAt(report?.locked_at)}
+            </Pill>
+          ) : savedAt ? (
+            <Pill tone="accent">Saved {formatTime(savedAt)}</Pill>
+          ) : null}
+          <LockButton locked={locked} busy={busy} onToggle={onLockToggle} />
+        </div>
+      </div>
 
       {/* Mobile-only tab strip.  CSS hides it at ≥60rem viewports
           (see `.mobileTabs` in EditDailyBook.module.css) so the
-          desktop grid renders all four panels at once. */}
+          desktop grid renders all three columns at once. */}
       <div className={styles.mobileTabs}>
         <TabsBar>
           {DAILY_TAB_DEFS.map((t) => (
@@ -385,43 +431,61 @@ export default function EditDailyBook() {
       </div>
 
       <form onSubmit={onSubmit} className={styles.form}>
-        {/* CSS-grid layout: desktop renders all four panels in a
-            grid (Receipts | Disbursements top, Transfers full-
-            width, Notes full-width).  Mobile renders only the
-            panel matching `mobileTab` via the `[data-tab]`
-            attribute selector — see `.dailyLayout` rules. */}
+        {/* CSS-grid layout: desktop renders all three columns in a
+            grid (In | Out | Over Short). Each column carries its own
+            sticky summary header so the column body scrolls behind it.
+            Mobile renders only the column matching `mobileTab` via the
+            `[data-tab]` attribute selector — see `.dailyLayout`. */}
         <div
           className={styles.dailyLayout}
           data-active-tab={mobileTab}
         >
-          <div data-tab="receipts">
-            <ReceiptsPanel
-              form={form}
-              set={set}
-              report={report}
-              date={date}
-              storeId={storeId}
-              locked={locked}
-              lineItems={lineItems}
-              onLineItemChange={refreshAfterLineItem}
-              salesTaxRate={salesTaxRate}
-              persist={persistEdits}
-            />
+          <div data-tab="receipts" className={styles.col}>
+            <ColumnHeader label="In" value={totals.receipts} tone="accent" />
+            <div className={styles.colBody}>
+              <ReceiptsPanel
+                form={form}
+                set={set}
+                report={report}
+                date={date}
+                storeId={storeId}
+                locked={locked}
+                lineItems={lineItems}
+                onLineItemChange={refreshAfterLineItem}
+                salesTaxRate={salesTaxRate}
+                persist={persistEdits}
+              />
+            </div>
           </div>
-          <div data-tab="disbursements">
-            <DisbursementsPanel
-              form={form}
-              set={set}
-              report={report}
-              date={date}
-              storeId={storeId}
-              locked={locked}
-              lineItems={lineItems}
-              onLineItemChange={refreshAfterLineItem}
-            />
+          <div data-tab="disbursements" className={styles.col}>
+            <ColumnHeader label="Out" value={totals.disbursements} tone="negative" />
+            <div className={styles.colBody}>
+              <DisbursementsPanel
+                form={form}
+                set={set}
+                report={report}
+                date={date}
+                storeId={storeId}
+                locked={locked}
+                lineItems={lineItems}
+                onLineItemChange={refreshAfterLineItem}
+              />
+            </div>
           </div>
-          <div data-tab="overshort" className={styles.overShortCol}>
-            <NotesPanel form={form} set={set} locked={locked} />
+          <div data-tab="overshort" className={styles.col}>
+            <ColumnHeader
+              label="Over Short"
+              value={totals.net}
+              tone={netNeg ? "negative" : "accent"}
+              sub={
+                Math.abs(form.over_short) >= 0.005
+                  ? `Drawer: ${fmtMoney2(form.over_short)}`
+                  : undefined
+              }
+            />
+            <div className={`${styles.colBody} ${styles.overShortCol}`}>
+              <NotesPanel form={form} set={set} locked={locked} />
+            </div>
           </div>
         </div>
 
@@ -432,7 +496,6 @@ export default function EditDailyBook() {
           busy={busy}
           dirty={isDirty && !locked}
           onCancel={onBackToCalendar}
-          onLockToggle={onLockToggle}
         />
       </form>
 
@@ -441,36 +504,87 @@ export default function EditDailyBook() {
   );
 }
 
-// ── Sticky totals strip ──────────────────────────────────────
+// ── Toolbar · day stepper · lock · sticky column headers ─────
 
-function TotalsStrip({
-  receipts, disbursements, net, overShort,
+/** Prev / next day arrows + a calendar shortcut, centered in the
+ *  toolbar. Lets the operator walk day-to-day without bouncing back
+ *  to the month view. The date label mirrors the breadcrumb crumb. */
+function DayStepper({
+  date, onPrev, onNext, onCalendar,
 }: {
-  receipts: number;
-  disbursements: number;
-  net: number;
-  overShort: number;
+  date: string;
+  onPrev: () => void;
+  onNext: () => void;
+  onCalendar: () => void;
 }) {
-  const netNeg = net < 0;
   return (
-    <div className={styles.totalsStrip}>
-      <TotalsCard label="In" value={receipts} tone="accent" />
-      <TotalsCard label="Out" value={disbursements} tone="negative" />
-      <TotalsCard
-        label="Over short"
-        value={net}
-        tone={netNeg ? "negative" : "accent"}
-        sub={
-          Math.abs(overShort) >= 0.005
-            ? `Drawer: ${fmtMoney2(overShort)}`
-            : undefined
-        }
-      />
+    <div className={styles.dayStepper}>
+      <button
+        type="button"
+        className={styles.stepBtn}
+        onClick={onPrev}
+        aria-label="Previous day"
+        title="Previous day (←)"
+      >
+        <ChevronLeftIcon />
+      </button>
+      <span className={styles.stepDate}>{formatHumanDate(date)}</span>
+      <button
+        type="button"
+        className={styles.stepBtn}
+        onClick={onNext}
+        aria-label="Next day"
+        title="Next day (→)"
+      >
+        <ChevronRightIcon />
+      </button>
+      <button
+        type="button"
+        className={styles.stepCalBtn}
+        onClick={onCalendar}
+        aria-label="Back to calendar"
+        title="Back to calendar"
+      >
+        <CalendarIcon />
+      </button>
     </div>
   );
 }
 
-function TotalsCard({
+/** Top-right lock control. Red padlock "Lock" while editable; flips to
+ *  a green open-padlock "Unlock" once the day is locked. Locking saves
+ *  first (handled by the parent's `onLockToggle`) so no stale snapshot
+ *  is frozen. */
+function LockButton({
+  locked, busy, onToggle,
+}: {
+  locked: boolean;
+  busy: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <Button
+      type="button"
+      tone={locked ? "primary" : "danger"}
+      size="md"
+      busy={busy}
+      disabled={busy}
+      onClick={onToggle}
+    >
+      <span className={styles.lockBtnInner}>
+        {locked ? <UnlockIcon /> : <LockIcon />}
+        {locked ? "Unlock" : "Lock"}
+      </span>
+    </Button>
+  );
+}
+
+/** Sticky per-column summary header (In / Out / Over Short). Subtle,
+ *  design-system-safe: dark surface, a single accent stripe on top,
+ *  the total in mono. It pins to the top of its own column so the
+ *  column body scrolls behind it instead of behind a detached page
+ *  bar. `tone` only swaps the accent + value color. */
+function ColumnHeader({
   label, value, tone, sub,
 }: {
   label: string;
@@ -478,50 +592,84 @@ function TotalsCard({
   tone: "accent" | "negative";
   sub?: string;
 }) {
-  // The top-border accent is the only thing that varies between
-  // tones at runtime; everything else lives in the module's
-  // ``.totalsCard`` class. Inline the border-top so the tone
-  // discriminator doesn't need a per-variant CSS class.
-  const borderAccent =
+  const accent =
     tone === "accent" ? "var(--db-accent, #3fff00)" : "var(--db-negative, #ff3b30)";
   const valueColor =
     tone === "negative" ? "var(--db-negative, #ff3b30)" : "var(--db-text, #f5f5f5)";
   return (
-    <div
-      style={{
-        background: "var(--db-surface-2, #141414)",
-        border: "1px solid var(--db-border, #262626)",
-        borderTop: `3px solid ${borderAccent}`,
-        borderRadius: "0.875rem",
-        padding: "0.85rem 1.1rem",
-        flex: 1,
-        minWidth: "12rem",
-      }}
-    >
-      <div className={styles.totalsLabel}>{label}</div>
-      <div
-        style={{
-          fontFamily: "var(--db-font-mono, 'JetBrains Mono', monospace)",
-          fontSize: "1.55rem",
-          fontWeight: 700,
-          marginTop: "0.2rem",
-          color: valueColor,
-          letterSpacing: "-0.01em",
-        }}
-      >
-        {fmtMoney2(value)}
+    <div className={styles.colHeader} style={{ borderTopColor: accent }}>
+      <div className={styles.colHeaderRow}>
+        <span className={styles.totalsLabel}>{label}</span>
+        <span className={styles.colHeaderValue} style={{ color: valueColor }}>
+          {fmtMoney2(value)}
+        </span>
       </div>
       {sub && <div className={styles.totalHint}>{sub}</div>}
     </div>
   );
 }
 
+// Inline stroke SVGs (design system: no emoji in controls;
+// stroke-width 2, round caps, currentColor, fill none).
+function ChevronLeftIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="2" strokeLinecap="round"
+      strokeLinejoin="round" aria-hidden="true">
+      <path d="M15 18l-6-6 6-6" />
+    </svg>
+  );
+}
+
+function ChevronRightIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="2" strokeLinecap="round"
+      strokeLinejoin="round" aria-hidden="true">
+      <path d="M9 18l6-6-6-6" />
+    </svg>
+  );
+}
+
+function CalendarIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="2" strokeLinecap="round"
+      strokeLinejoin="round" aria-hidden="true">
+      <rect x="3" y="4" width="18" height="18" rx="2" />
+      <path d="M16 2v4M8 2v4M3 10h18" />
+    </svg>
+  );
+}
+
+function LockIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="2" strokeLinecap="round"
+      strokeLinejoin="round" aria-hidden="true">
+      <rect x="3" y="11" width="18" height="11" rx="2" />
+      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+    </svg>
+  );
+}
+
+function UnlockIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="2" strokeLinecap="round"
+      strokeLinejoin="round" aria-hidden="true">
+      <rect x="3" y="11" width="18" height="11" rx="2" />
+      <path d="M7 11V7a5 5 0 0 1 9.9-1" />
+    </svg>
+  );
+}
+
 // ── Panels ───────────────────────────────────────────────────
 //
-// `TabBar` component retired — the daily book renders all
-// panels stacked inline now (see the render() above).  The
-// per-tab totals (Receipts / Disbursements totals) still
-// surface via the always-visible `<TotalsStrip>` at the top.
+// `TabBar` component retired — the daily book renders all three
+// columns side-by-side on desktop (see the render() above). Each
+// column's total (In / Out / Over Short) surfaces in its own
+// sticky `<ColumnHeader>` that the column body scrolls behind.
 
 interface PanelProps {
   form: FormState;
@@ -1572,22 +1720,21 @@ function LineItemWidget({
 // ── Save bar + helpers ──────────────────────────────────────
 
 function StickySaveBar({
-  locked, busy, dirty, onCancel, onLockToggle,
+  locked, busy, dirty, onCancel,
 }: {
   locked: boolean;
   busy: boolean;
   dirty: boolean;
   onCancel: () => void;
-  onLockToggle: () => void;
 }) {
   return (
     <div className={styles.saveBar}>
       <div className={styles.saveBarLeft}>
         {locked
-          ? "This day is locked. Unlock to edit any field."
+          ? "This day is locked. Use Unlock (top-right) to edit any field."
           : dirty
             ? <Pill tone="warning" dot>Unsaved changes</Pill>
-            : "Saves apply to every field in every tab."}
+            : "Saves apply to every field in every column."}
       </div>
       <Button
         type="button"
@@ -1597,16 +1744,6 @@ function StickySaveBar({
         disabled={busy}
       >
         Back to calendar
-      </Button>
-      <Button
-        type="button"
-        tone={locked ? "secondary" : "secondary"}
-        size="md"
-        busy={busy}
-        onClick={onLockToggle}
-        disabled={busy}
-      >
-        {locked ? "Unlock to edit" : "Lock day"}
       </Button>
       {!locked && (
         <Button
