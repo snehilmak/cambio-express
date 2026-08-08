@@ -21,7 +21,7 @@ from api.Modules.Admin.Services.users import (
     UsernameTakenError,
     create_store_user,
 )
-from api.Modules.Owners.Repositories import get_store_names_map, owner_store_ids
+from api.Modules.Owners.Repositories import get_store_names_map, store_ids_for_owner
 
 VALID_ROLES = {"admin", "employee"}
 
@@ -62,7 +62,7 @@ def bulk_add_user_to_stores(
         # Keeps a runaway bulk-create from racing the rate limiter.
         raise ValueError("Cannot target more than 50 stores in one call.")
 
-    allowed = owner_store_ids(db, owner_id)
+    allowed = store_ids_for_owner(db, owner_id)
     name_lookup = get_store_names_map(db, list(set(store_ids)))
 
     results: list[dict[str, Any]] = []

@@ -65,14 +65,15 @@ def owner_period_window(
 
 
 def owner_store_ids(db: Session, user: Any) -> list[int]:
-    """Store IDs the given owner is linked to. Empty if none."""
-    from api.Modules.Tenancy.Models import StoreOwnerLink
-    links = (
-        db.query(StoreOwnerLink)
-          .filter_by(owner_id=user.id)
-          .all()
-    )
-    return [int(l.store_id) for l in links]
+    """Store IDs the given owner is linked to, sorted. Empty if none.
+
+    Thin ``User``-taking wrapper over the canonical repository query
+    ``store_links.store_ids_for_owner(db, owner_id)`` — kept because
+    the seven controller call sites pass a ``User`` and expect an
+    ordered ``list``. Sorted for deterministic output (the repo
+    returns an unordered set)."""
+    from api.Modules.Owners.Repositories import store_ids_for_owner
+    return sorted(store_ids_for_owner(db, user.id))
 
 
 def owner_kpis(
