@@ -707,14 +707,7 @@ def disconnect_account_route(
     transactions are preserved + still appear in /bank-transactions
     with the account label."""
     sid = _require_admin_bank_scope(claims, "update")
-    row = (
-        db.query(StripeBankAccount)
-          .filter(
-              StripeBankAccount.id == account_id,
-              StripeBankAccount.store_id == sid,
-          )
-          .one_or_none()
-    )
+    row = find_account_in_store(db, account_id, sid)
     if row is None:
         # Same opaque 404 for cross-store probes + genuine missing
         # ids — tenancy boundary.
@@ -828,14 +821,7 @@ def set_account_nickname_route(
     Admin-role + same-store gated; cross-tenant ids opaque 404.
     """
     sid = _require_admin_bank_scope(claims, "update")
-    row = (
-        db.query(StripeBankAccount)
-          .filter(
-              StripeBankAccount.id == account_id,
-              StripeBankAccount.store_id == sid,
-          )
-          .one_or_none()
-    )
+    row = find_account_in_store(db, account_id, sid)
     if row is None:
         raise HTTPException(status_code=404, detail="Bank account not found")
     # Trim + cap to the column width — Pydantic max_length already
