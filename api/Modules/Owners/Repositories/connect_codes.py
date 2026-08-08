@@ -23,6 +23,19 @@ def list_codes_for_owner(
     )
 
 
+def find_by_code(
+    db: Session, code: str,
+) -> OwnerConnectCode | None:
+    """Look up a connect code by its string value (the redemption
+    path). Returns None when no code matches. Validity checks
+    (revoked / used / expired) stay in the Controller."""
+    return (
+        db.query(OwnerConnectCode)
+          .filter(OwnerConnectCode.code == code)
+          .first()
+    )
+
+
 def find_owner_code(
     db: Session, code_id: int, owner_id: int,
 ) -> OwnerConnectCode | None:

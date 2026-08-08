@@ -1060,9 +1060,11 @@ def redeem_connect_code_route(
     if not code_str:
         raise HTTPException(status_code=422, detail="Code is required")
 
-    from api.Modules.Tenancy.Models import OwnerConnectCode, StoreOwnerLink, User
+    from api.Modules.Tenancy.Models import StoreOwnerLink, User
+    from api.Modules.Owners.Repositories import connect_codes as connect_codes_repo
+    from api.Modules.Owners.Repositories import store_links as store_links_repo
 
-    occ = db.query(OwnerConnectCode).filter_by(code=code_str).first()
+    occ = connect_codes_repo.find_by_code(db, code_str)
     if occ is None:
         raise HTTPException(status_code=404, detail="Code not found")
     if occ.revoked_at is not None:
@@ -1072,9 +1074,7 @@ def redeem_connect_code_route(
     if occ.expires_at and occ.expires_at < utc_now():
         raise HTTPException(status_code=422, detail="Code has expired")
 
-    existing = db.query(StoreOwnerLink).filter_by(
-        owner_id=occ.owner_id, store_id=sid,
-    ).first()
+    existing = store_links_repo.find_link(db, occ.owner_id, sid)
     if existing:
         raise HTTPException(status_code=409, detail="Store is already linked to this owner")
 
