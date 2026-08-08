@@ -2421,6 +2421,11 @@
             "title": "Money Order",
             "type": "number"
           },
+          "money_order_fees": {
+            "default": 0.0,
+            "title": "Money Order Fees",
+            "type": "number"
+          },
           "money_transfer": {
             "default": 0.0,
             "title": "Money Transfer",
@@ -2608,6 +2613,17 @@
               }
             ],
             "title": "Money Order"
+          },
+          "money_order_fees": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Money Order Fees"
           },
           "non_taxable": {
             "anyOf": [

@@ -77,7 +77,7 @@ const EDITABLE_KEYS = [
   "taxable_sales", "non_taxable", "sales_tax",
   "bill_payment_charge", "phone_recargas", "boost_mobile",
   "money_order",
-  "check_cashing_fees", "return_check_hold_fees",
+  "money_order_fees", "check_cashing_fees", "return_check_hold_fees",
   "forward_balance", "from_bank", "rebates_commissions",
   "cash_deposit", "safe_balance", "payroll_expense",
   "over_short",
@@ -99,6 +99,7 @@ interface FormState {
   phone_recargas: number;
   boost_mobile: number;
   money_order: number;
+  money_order_fees: number;
   check_cashing_fees: number;
   return_check_hold_fees: number;
   forward_balance: number;
@@ -137,6 +138,8 @@ interface LineItemFieldDef {
 
 // taxable_sales / non_taxable / sales_tax are edited together in the
 // <SalesWidget> modal (see the "In" tab), not as plain inputs here.
+// money_order_fees / check_cashing_fees / return_check_hold_fees are
+// grouped in the <FeesWidget> modal for the same reason.
 // forward_balance is also NOT in this list — it renders through the
 // dedicated <ForwardBalanceInput> because it's auto-carried from the
 // prior day (read-only) on every day but the store's first.
@@ -145,8 +148,6 @@ const RECEIPT_INPUTS: InputFieldDef[] = [
   { key: "phone_recargas",         label: "Phone recargas" },
   { key: "boost_mobile",           label: "Boost Mobile" },
   { key: "money_order",            label: "Money order" },
-  { key: "check_cashing_fees",     label: "Check cashing fees" },
-  { key: "return_check_hold_fees", label: "Return check hold fees" },
   { key: "from_bank",              label: "From bank" },
   { key: "rebates_commissions",    label: "Rebates / commissions" },
 ];
@@ -577,6 +578,12 @@ function ReceiptsPanel(
           salesTaxRate={props.salesTaxRate}
           persist={props.persist}
         />
+        <FeesWidget
+          form={props.form}
+          set={props.set}
+          locked={props.locked}
+          persist={props.persist}
+        />
         <MoneyTransferWidget
           total={Number(props.report?.money_transfer ?? 0)}
           storeId={props.storeId}
@@ -837,6 +844,116 @@ function SalesWidget({
                 value={form.sales_tax}
                 onChange={(v) => set("sales_tax", v)}
                 disabled={locked || autoTax}
+              />
+            </div>
+          </div>
+
+          {err && <ErrorRow message={err} />}
+
+          <div className={styles.mtSaveRow}>
+            <span className={styles.mtSaveRowLeft}>
+              Total: <strong>{fmtMoney2(total)}</strong>
+            </span>
+            <Button
+              type="button"
+              tone="primary"
+              size="md"
+              busy={busy}
+              disabled={busy || locked}
+              onClick={onSave}
+            >
+              {busy ? "Saving…" : "Save"}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+    </>
+  );
+}
+
+// Fees box — groups the store's fee-revenue receipt lines
+// (money-order fee, check-cashing fee, return-check hold fee) behind
+// one tile + modal, mirroring <SalesWidget>. Same modelling: all
+// three are Category-1 report fields (in EDITABLE_KEYS), so the modal
+// edits shared form state and its Save persists through the normal
+// daily-report PUT. Grouping keeps the "Other receipts" grid short and
+// puts the fee lines that used to be loose tiles in one place.
+function FeesWidget({
+  form, set, locked, persist,
+}: {
+  form: FormState;
+  set: <K extends keyof FormState>(key: K, value: FormState[K]) => void;
+  locked: boolean;
+  persist: () => Promise<void>;
+}) {
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const total =
+    (form.money_order_fees || 0) +
+    (form.check_cashing_fees || 0) +
+    (form.return_check_hold_fees || 0);
+
+  async function onSave() {
+    if (busy || locked) return;
+    setErr(null);
+    setBusy(true);
+    try {
+      await persist();
+      setOpen(false);
+    } catch (e) {
+      setErr(humanizeError(e, "Could not save fees."));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => { setOpen(true); setErr(null); }}
+        className={styles.widgetCard}
+      >
+        <span className={styles.widgetCardTop}>
+          <span className={styles.widgetLabel}>Fees</span>
+          <span className={styles.widgetTotal}>{fmtMoney2(total)}</span>
+        </span>
+        <span className={styles.widgetCount}>
+          Money order · Check cashing · Return check hold
+        </span>
+      </button>
+
+      <Modal
+        open={open}
+        title="Fees"
+        onClose={() => { setOpen(false); setErr(null); }}
+      >
+        <div className={styles.lineModalBody}>
+          <div className={styles.widgetAddRow}>
+            <div className={styles.addRowAmount}>
+              <MoneyInput
+                label="Money order fee"
+                value={form.money_order_fees}
+                onChange={(v) => set("money_order_fees", v)}
+                disabled={locked}
+              />
+            </div>
+            <div className={styles.addRowAmount}>
+              <MoneyInput
+                label="Check cashing fees"
+                value={form.check_cashing_fees}
+                onChange={(v) => set("check_cashing_fees", v)}
+                disabled={locked}
+              />
+            </div>
+            <div className={styles.addRowAmount}>
+              <MoneyInput
+                label="Return check hold fees"
+                value={form.return_check_hold_fees}
+                onChange={(v) => set("return_check_hold_fees", v)}
+                disabled={locked}
               />
             </div>
           </div>
@@ -1610,6 +1727,7 @@ function buildInitialForm(r: DailyReportRow | null | undefined): FormState {
     phone_recargas:          r?.phone_recargas          ?? 0,
     boost_mobile:            r?.boost_mobile            ?? 0,
     money_order:             r?.money_order             ?? 0,
+    money_order_fees:        r?.money_order_fees        ?? 0,
     check_cashing_fees:      r?.check_cashing_fees      ?? 0,
     return_check_hold_fees:  r?.return_check_hold_fees  ?? 0,
     forward_balance:         r?.forward_balance         ?? 0,
@@ -1627,7 +1745,7 @@ function computeTotals(form: FormState | null, report: DailyReportRow | null | u
   const receiptsEditable = form ? (
     form.taxable_sales + form.non_taxable + form.sales_tax +
     form.bill_payment_charge + form.phone_recargas + form.boost_mobile +
-    form.money_order +
+    form.money_order + form.money_order_fees +
     form.check_cashing_fees + form.return_check_hold_fees +
     form.forward_balance + form.from_bank + form.rebates_commissions
   ) : 0;

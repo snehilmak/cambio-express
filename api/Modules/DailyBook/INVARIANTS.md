@@ -59,7 +59,8 @@ frontend's `EDITABLE_KEYS` in `EditDailyBook.tsx`.
 ```
 taxable_sales, non_taxable, sales_tax,
 bill_payment_charge, phone_recargas, boost_mobile,
-money_order, check_cashing_fees, return_check_hold_fees,
+money_order, money_order_fees, check_cashing_fees,
+return_check_hold_fees,
 forward_balance, from_bank, rebates_commissions,
 cash_deposit, safe_balance, payroll_expense,
 over_short
@@ -138,7 +139,7 @@ locked_at, locked_by, updated_at) and the computed properties
 ```
 total_receipts = taxable_sales + non_taxable + sales_tax
                 + bill_payment_charge + phone_recargas + boost_mobile
-                + money_transfer + money_order
+                + money_transfer + money_order + money_order_fees
                 + check_cashing_fees + return_check_hold_fees
                 + return_check_paid_back
                 + forward_balance + from_bank + other_cash_in

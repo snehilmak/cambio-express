@@ -220,6 +220,28 @@ def test_put_updates_existing_report(client, test_store_id):
     assert resp.get_json()["report"]["taxable_sales"] == 200.0
 
 
+def test_put_persists_money_order_fees(client, test_store_id):
+    """The Fees box's new money_order_fees field is operator-editable:
+    it saves through the daily-report PUT and rolls into
+    total_receipts alongside the other fee columns."""
+    today_iso = date.today().isoformat()
+    token = _login_admin_token(client, test_store_id)
+    resp = client.put(
+        f"/api/v2/daily/{test_store_id}/{today_iso}",
+        json={
+            "money_order_fees":       12.0,
+            "check_cashing_fees":      8.0,
+            "return_check_hold_fees":  5.0,
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 200, resp.get_data(as_text=True)
+    row = resp.get_json()["report"]
+    assert row["money_order_fees"] == 12.0
+    # All three fee lines flow into total_receipts.
+    assert row["total_receipts"] == 25.0
+
+
 def test_put_rejects_locked_report(client, test_store_id):
     from api.Modules.DailyBook.Models import DailyReport
     from tests._app import db

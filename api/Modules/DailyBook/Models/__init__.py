@@ -41,6 +41,7 @@ class DailyReport(Base):
     boost_mobile          = Column(Float, default=0.0)
     money_transfer        = Column(Float, default=0.0)
     money_order           = Column(Float, default=0.0)
+    money_order_fees      = Column(Float, default=0.0)
     check_cashing_fees    = Column(Float, default=0.0)
     return_check_hold_fees= Column(Float, default=0.0)
     return_check_paid_back= Column(Float, default=0.0)
@@ -76,6 +77,7 @@ class DailyReport(Base):
             self.taxable_sales, self.non_taxable, self.sales_tax,
             self.bill_payment_charge, self.phone_recargas,
             self.boost_mobile, self.money_transfer, self.money_order,
+            self.money_order_fees,
             self.check_cashing_fees, self.return_check_hold_fees,
             self.return_check_paid_back, self.forward_balance,
             self.from_bank, self.other_cash_in, self.rebates_commissions,
