@@ -12,7 +12,7 @@ import {
   Card, ErrorState, KpiCard, KpiGrid, Loading, PageHeader, PageShell,
   Section, TabsBar, TabsButton, Table, tdStyle, thStyle,
 } from "../components/ui";
-import { moneyChartOptions } from "../lib/chartOptions";
+import { chartSeries, moneyChartOptions, seriesFill } from "../lib/chartOptions";
 import styles from "./OwnerDashboard.module.css";
 
 ChartJS.register(
@@ -99,8 +99,8 @@ export default function OwnerDashboard() {
                       datasets: [{
                         label: "Volume ($)",
                         data: data.series_volume,
-                        borderColor: "#3fff00",
-                        backgroundColor: "rgba(63,255,0,0.1)",
+                        borderColor: chartSeries().accent,
+                        backgroundColor: seriesFill("positive", 0.1),
                         fill: true,
                         tension: 0.25,
                         pointRadius: 0,

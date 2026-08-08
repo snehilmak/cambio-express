@@ -13,7 +13,7 @@ import {
 import { Bar, Line } from "react-chartjs-2";
 
 import { api, downloadCsv } from "../../lib/api";
-import { countChartOptions, moneyChartOptions } from "../../lib/chartOptions";
+import { chartSeries, countChartOptions, moneyChartOptions, seriesFill } from "../../lib/chartOptions";
 import { fmtShortDate } from "../../lib/formatters";
 import {
   Button, Card, EmptyState, ErrorState, KpiCard, KpiGrid,
@@ -420,10 +420,10 @@ function ChartBlock({
     datasets: [{
       label: plan.yLabel,
       data: series,
-      borderColor: "#3fff00",
+      borderColor: chartSeries().accent,
       backgroundColor: plan.kind === "line"
-        ? "rgba(63, 255, 0, 0.12)"
-        : "rgba(63, 255, 0, 0.55)",
+        ? seriesFill("positive", 0.12)
+        : seriesFill("positive", 0.55),
       fill: plan.kind === "line",
       tension: 0.25,
       pointRadius: 0,
