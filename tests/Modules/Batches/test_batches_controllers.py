@@ -43,7 +43,7 @@ def _seed_batch(store_id, *, ach_amount=1000.0, batch_ref="B-001",
 
 
 def _seed_transfer(store_id, *, batch_ref, send_amount=500.0,
-                    federal_tax=5.0, send_date_=None):
+                    federal_tax=5.0, send_date_=None, status="Sent"):
     from api.Modules.Transfers.Models import Transfer
     from tests._app import db
     t = Transfer(
@@ -54,7 +54,7 @@ def _seed_transfer(store_id, *, batch_ref, send_amount=500.0,
         send_amount=send_amount,
         federal_tax=federal_tax,
         batch_id=batch_ref,
-        status="Sent",
+        status=status,
     )
     db.session.add(t); db.session.commit()
     return t.id
@@ -116,6 +116,60 @@ def test_list_computes_variance_from_transfers(client, test_store_id):
     assert bv["transfers_total"] == 909.0
     assert bv["variance"] == 91.0
     assert bv["transfer_count"] == 2
+
+
+def test_cancelled_transfers_excluded_from_batch_totals(client, test_store_id):
+    """A cancelled transfer keeps its batch_id but never settles, so it
+    must NOT inflate transfers_total / variance / transfer_count — same
+    rule as summarize_transfers_for_day. Covers the bulk-repo path used
+    by the list endpoint."""
+    with db_session():
+        _seed_batch(
+            test_store_id, ach_amount=1000.0, batch_ref="B-CX",
+            ach_date_=date(2026, 1, 8),
+        )
+        # One settled ($600 + $6) and one cancelled ($400 + $4).
+        _seed_transfer(test_store_id, batch_ref="B-CX",
+                       send_amount=600.0, federal_tax=6.0, status="Sent")
+        _seed_transfer(test_store_id, batch_ref="B-CX",
+                       send_amount=400.0, federal_tax=4.0,
+                       status="Cancelled")
+
+    token = _login(client, test_store_id)
+    resp = client.get(
+        "/api/v2/batches",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    bcx = {r["batch_ref"]: r for r in resp.get_json()["rows"]}["B-CX"]
+    # Only the settled transfer counts: 606, not 1010.
+    assert bcx["transfers_total"] == 606.0
+    assert bcx["variance"] == 394.0  # 1000 - 606
+    assert bcx["transfer_count"] == 1
+
+
+def test_cancelled_transfers_excluded_from_model_property(test_store_id):
+    """The ACHBatch.transfers_total / transfer_count properties (single-
+    batch detail path) apply the same Cancelled exclusion."""
+    from api.Modules.Batches.Models import ACHBatch
+    from tests._app import db
+    with db_session():
+        _seed_batch(
+            test_store_id, ach_amount=800.0, batch_ref="B-CXP",
+            ach_date_=date(2026, 1, 9),
+        )
+        _seed_transfer(test_store_id, batch_ref="B-CXP",
+                       send_amount=500.0, federal_tax=5.0, status="Sent")
+        _seed_transfer(test_store_id, batch_ref="B-CXP",
+                       send_amount=200.0, federal_tax=2.0,
+                       status="Cancelled")
+        batch = (
+            db.session.query(ACHBatch)
+              .filter_by(store_id=test_store_id, batch_ref="B-CXP")
+              .first()
+        )
+        assert batch.transfers_total == 505.0
+        assert batch.transfer_count == 1
+        assert batch.variance == 295.0  # 800 - 505
 
 
 def test_list_supports_sort_by_ach_amount(client, test_store_id):

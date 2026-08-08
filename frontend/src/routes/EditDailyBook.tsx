@@ -32,6 +32,7 @@ import {
   TabsBar, TabsButton, Textarea,
 } from "../components/ui";
 import { useUnsavedChangesGuard } from "../lib/useUnsavedChangesGuard";
+import { computeTotals, type FormState } from "./editDailyBook.totals";
 import styles from "./EditDailyBook.module.css";
 import { ImportReportModal } from "./ImportReportModal";
 
@@ -91,25 +92,8 @@ type NumericFormKey = {
   [K in keyof FormState]: FormState[K] extends number ? K : never;
 }[keyof FormState];
 
-interface FormState {
-  taxable_sales: number;
-  non_taxable: number;
-  sales_tax: number;
-  bill_payment_charge: number;
-  phone_recargas: number;
-  boost_mobile: number;
-  money_order: number;
-  money_order_fees: number;
-  check_cashing_fees: number;
-  return_check_hold_fees: number;
-  forward_balance: number;
-  rebates_commissions: number;
-  cash_deposit: number;
-  safe_balance: number;
-  payroll_expense: number;
-  over_short: number;
-  notes: string;
-}
+// FormState + computeTotals live in ./editDailyBook.totals so this
+// route file exports only its component (react-refresh lint rule).
 
 interface InputFieldDef {
   // `NumericFormKey` rather than `EditKey` because the form
@@ -1739,39 +1723,6 @@ function buildInitialForm(r: DailyReportRow | null | undefined): FormState {
     over_short:              r?.over_short              ?? 0,
     notes:                   r?.notes                   ?? "",
   };
-}
-
-function computeTotals(form: FormState | null, report: DailyReportRow | null | undefined) {
-  const receiptsEditable = form ? (
-    form.taxable_sales + form.non_taxable + form.sales_tax +
-    form.bill_payment_charge + form.phone_recargas + form.boost_mobile +
-    form.money_order + form.money_order_fees +
-    form.check_cashing_fees + form.return_check_hold_fees +
-    form.forward_balance + form.rebates_commissions
-  ) : 0;
-  // `money_transfer` is Category-3 (derived from the mt_summary
-  // per-company breakdown, mirrored onto the report). It is NOT an
-  // editable form field — reading it from the report row is what
-  // keeps Money In in sync with the saved breakdown instead of an
-  // unpersisted input.
-  const receiptsDerived =
-    (report?.money_transfer ?? 0) + (report?.from_bank ?? 0) +
-    (report?.other_cash_in ?? 0) + (report?.return_check_paid_back ?? 0);
-  const receipts = receiptsEditable + receiptsDerived;
-
-  const disbursementsEditable = form ? (
-    form.cash_deposit + form.safe_balance + form.payroll_expense
-  ) : 0;
-  const disbursementsDerived =
-    (report?.cash_purchases ?? 0) + (report?.cash_expense ?? 0) +
-    (report?.check_purchases ?? 0) + (report?.check_expense ?? 0) +
-    (report?.outside_cash_drops ?? 0) + (report?.checks_deposit ?? 0) +
-    (report?.other_cash_out ?? 0);
-  const disbursements = disbursementsEditable + disbursementsDerived;
-
-  const overShort = form?.over_short ?? 0;
-  const net = receipts - disbursements + overShort;
-  return { receipts, disbursements, net };
 }
 
 // `fmtMoney` retired alongside the TabBar — was only used for the

@@ -50,6 +50,7 @@ class ACHBatch(Base):
                 func.coalesce(func.sum(Transfer.send_amount), 0.0)
               + func.coalesce(func.sum(Transfer.federal_tax), 0.0))
              .filter_by(store_id=self.store_id, batch_id=self.batch_ref)
+             .filter(Transfer.status != "Cancelled")
              .scalar())
         return float(v or 0.0)
 
@@ -65,7 +66,7 @@ class ACHBatch(Base):
             return 0
         return int(s.query(Transfer).filter_by(
             store_id=self.store_id, batch_id=self.batch_ref,
-        ).count())
+        ).filter(Transfer.status != "Cancelled").count())
 
 
 # Re-export Transfer so existing
