@@ -13,10 +13,11 @@ import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
 import {
   Breadcrumbs,
-  Alert, Button, ButtonLink, Card, ErrorState, Field, Input, Loading,
+  Alert, Button, Card, ConfirmDialog, ErrorState, Field, Input, Loading,
   PageHeader, PageShell, PhoneField, SectionTitle, Select, space, useToast,
 } from "../components/ui";
 import { firstError, zEmailOptional, zPhoneOptional } from "../lib/validators";
+import { useUnsavedGuard } from "../lib/useUnsavedGuard";
 import styles from "./SuperadminStoreForm.module.css";
 
 // /app/superadmin/stores/new + /app/superadmin/stores/:id/edit
@@ -72,7 +73,15 @@ export default function SuperadminStoreForm() {
   const [busy,        setBusy]        = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  // Baseline snapshot for the unsaved-changes guard. Captured from the
+  // hydrated row on edit, and from the blank defaults at mount on create.
+  const [baseline, setBaseline] = useState<string | null>(null);
   const toast = useToast();
+
+  const snapshot = JSON.stringify({
+    name, slug, email, phone, address, plan, federalTaxRate,
+    adminName, adminUsername, adminPassword,
+  });
 
   // Hydrate the form once the GET resolves on edit.
   useEffect(() => {
@@ -87,7 +96,32 @@ export default function SuperadminStoreForm() {
     setAddress(s.address);
     setPlan(s.plan || "trial");
     setFederalTaxRate(String(s.federal_tax_rate ?? 0.01));
+    // Capture the dirty baseline from the hydrated values directly —
+    // building it off `snapshot` here would still see the pre-hydrate
+    // (blank) field values, since the setters above haven't applied yet.
+    setBaseline(JSON.stringify({
+      name: s.name, slug: s.slug, email: s.email, phone: s.phone,
+      address: s.address, plan: s.plan || "trial",
+      federalTaxRate: String(s.federal_tax_rate ?? 0.01),
+      adminName, adminUsername, adminPassword,
+    }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- admin* are create-only defaults, stable in edit mode; re-running on their change isn't wanted
   }, [detailQuery.data, isEdit]);
+
+  // Create mode: capture the blank baseline once at mount so typing marks dirty.
+  useEffect(() => {
+    if (isEdit) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- seed the dirty baseline from the initial blank snapshot once for create mode
+    setBaseline(snapshot);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- capture the initial blank snapshot exactly once for create mode
+  }, []);
+
+  const isDirty = baseline !== null && snapshot !== baseline;
+  const guard = useUnsavedGuard(isDirty && !busy, {
+    message: "You have unsaved edits on this store. Leave without saving?",
+  });
+  const leaveToStores = () =>
+    guard.confirmLeave(() => navigate("/superadmin/stores"));
 
   if (identity?.role !== "superadmin") {
     return (
@@ -240,9 +274,9 @@ export default function SuperadminStoreForm() {
         ]} />
 
         <PageHeader title={heading} />
-        <ButtonLink to="/superadmin/stores" tone="secondary">
+        <Button type="button" tone="secondary" onClick={leaveToStores}>
           ← Back to stores
-        </ButtonLink>
+        </Button>
       </div>
 
       <Card padding="1.5rem">
@@ -404,12 +438,14 @@ export default function SuperadminStoreForm() {
                 ? (isEdit ? "Saving…" : "Creating…")
                 : (isEdit ? "Save changes" : "Create store")}
             </Button>
-            <ButtonLink to="/superadmin/stores" tone="secondary">
+            <Button type="button" tone="secondary" onClick={leaveToStores}>
               Cancel
-            </ButtonLink>
+            </Button>
           </div>
         </form>
       </Card>
+
+      <ConfirmDialog {...guard.dialogProps} />
     </PageShell>
   );
 }
