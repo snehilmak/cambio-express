@@ -9,6 +9,16 @@ from sqlalchemy.orm import Session
 from api.Modules.Tenancy.Models import StoreOwnerLink
 
 
+def owner_store_ids(db: Session, owner_id: int) -> set[int]:
+    """The set of store ids in an owner's umbrella."""
+    rows = (
+        db.query(StoreOwnerLink.store_id)
+          .filter_by(owner_id=owner_id)
+          .all()
+    )
+    return {sid for (sid,) in rows}
+
+
 def find_link(
     db: Session, owner_id: int, store_id: int,
 ) -> StoreOwnerLink | None:
