@@ -1465,17 +1465,6 @@ def send_password_reset_email(
             )
 
 
-# Back-compat alias for any external caller that still imports the
-# old name. The private leading-underscore version was internal to
-# this module; the public ``send_password_reset_email`` is the
-# enqueue-safe entry point.
-def _deliver_password_reset_email(issued) -> None:
-    """Deprecated — use ``send_password_reset_email`` directly with
-    primitives. Kept as a thin shim while any external callers
-    rotate over."""
-    send_password_reset_email(issued.user.id, issued.raw_token)
-
-
 @router.post("/reset-password")
 @_rate_limiter.limit("5/minute;20/hour")
 def reset_password_route(

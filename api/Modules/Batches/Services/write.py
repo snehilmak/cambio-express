@@ -11,7 +11,6 @@ from datetime import date
 from sqlalchemy.orm import Session
 
 from api.Modules.Batches.Models import ACHBatch
-from api.Modules.Batches.Repositories.batches import list_batches_for_store
 
 
 class BatchValidationError(ValueError):
@@ -103,15 +102,6 @@ def update_batch(
     row.notes = payload.notes
     db.flush()
     return row
-
-
-def list_store_batches_raw(
-    db: Session, store_id: int,
-) -> list[ACHBatch]:
-    """Convenience re-export so the Controller can fetch a single
-    batch by id without going through the totals-bulking
-    BatchSummary path used by the read-side list endpoint."""
-    return list_batches_for_store(db, store_id)
 
 
 def find_batch(
