@@ -2,9 +2,10 @@
 from unittest.mock import MagicMock
 
 
-def _store(companies=None):
+def _store(companies=None, disabled=""):
     s = MagicMock()
     s.companies = companies
+    s.companies_disabled = disabled
     return s
 
 
@@ -90,3 +91,132 @@ def test_preserves_company_order_from_csv():
     assert result == ["Zelle", "Apple Pay", "Cash App"]
 
 
+
+# ── disabled toggles (store_mt_company_roster) ────────────
+
+
+def test_roster_marks_disabled_companies():
+    from api.Modules.Transfers.Services import store_mt_company_roster
+    roster = store_mt_company_roster(
+        _store("Intermex,Maxi,Barri", disabled="Maxi"),
+    )
+    assert roster == [
+        ("Intermex", True), ("Maxi", False), ("Barri", True),
+    ]
+
+
+def test_active_list_excludes_disabled():
+    """The daily book / transfer form consume only enabled names."""
+    from api.Modules.Transfers.Services import store_mt_companies
+    result = store_mt_companies(_store("Intermex,Maxi,Barri", disabled="Maxi"))
+    assert result == ["Intermex", "Barri"]
+
+
+def test_disabled_match_is_case_insensitive():
+    from api.Modules.Transfers.Services import store_mt_companies
+    result = store_mt_companies(_store("Intermex,Maxi", disabled="maxi"))
+    assert result == ["Intermex"]
+
+
+def test_all_disabled_returns_empty_not_defaults():
+    """A configured roster with everything toggled off must NOT
+    fall back to the defaults — the operator chose 'nothing'."""
+    from api.Modules.Transfers.Services import store_mt_companies
+    result = store_mt_companies(
+        _store("Intermex,Maxi", disabled="Intermex,Maxi"),
+    )
+    assert result == []
+
+
+def test_default_roster_respects_disabled():
+    """Unconfigured roster (defaults) still honors a disabled
+    entry — defensive; the write path always sets both columns."""
+    from api.Modules.Transfers.Services import store_mt_companies
+    result = store_mt_companies(_store("", disabled="Barri"))
+    assert result == ["Intermex", "Maxi"]
+
+
+# ── encode_mt_companies (Settings write path) ─────────────
+
+
+def _entries(*pairs):
+    return [{"name": n, "enabled": e} for n, e in pairs]
+
+
+def test_encode_roundtrip():
+    from api.Modules.Transfers.Services import encode_mt_companies
+    companies, disabled = encode_mt_companies(
+        _entries(("Intermex", True), ("Maxi", False), ("Ria", True)),
+    )
+    assert companies == "Intermex,Maxi,Ria"
+    assert disabled == "Maxi"
+
+
+def test_encode_strips_whitespace():
+    from api.Modules.Transfers.Services import encode_mt_companies
+    companies, disabled = encode_mt_companies(
+        _entries(("  Intermex  ", True)),
+    )
+    assert companies == "Intermex"
+    assert disabled == ""
+
+
+def test_encode_rejects_empty_name():
+    import pytest
+    from api.Modules.Transfers.Services import encode_mt_companies
+    with pytest.raises(ValueError):
+        encode_mt_companies(_entries(("   ", True)))
+
+
+def test_encode_rejects_comma_in_name():
+    import pytest
+    from api.Modules.Transfers.Services import encode_mt_companies
+    with pytest.raises(ValueError):
+        encode_mt_companies(_entries(("Ria, Inc", True)))
+
+
+def test_encode_rejects_case_insensitive_duplicate():
+    import pytest
+    from api.Modules.Transfers.Services import encode_mt_companies
+    with pytest.raises(ValueError):
+        encode_mt_companies(_entries(("Maxi", True), ("maxi", False)))
+
+
+def test_encode_rejects_overlong_name():
+    import pytest
+    from api.Modules.Transfers.Services import (
+        MAX_MT_COMPANY_NAME_LEN, encode_mt_companies,
+    )
+    with pytest.raises(ValueError):
+        encode_mt_companies(
+            _entries(("X" * (MAX_MT_COMPANY_NAME_LEN + 1), True)),
+        )
+
+
+def test_encode_rejects_empty_roster():
+    import pytest
+    from api.Modules.Transfers.Services import encode_mt_companies
+    with pytest.raises(ValueError):
+        encode_mt_companies([])
+
+
+def test_encode_rejects_over_cap():
+    import pytest
+    from api.Modules.Transfers.Services import (
+        MAX_MT_COMPANIES, encode_mt_companies,
+    )
+    with pytest.raises(ValueError):
+        encode_mt_companies(
+            _entries(*[(f"Co{i}", True) for i in range(MAX_MT_COMPANIES + 1)]),
+        )
+
+
+def test_encode_allows_all_disabled():
+    """All-off is a legitimate operator choice — UIs show their
+    empty states rather than the write being rejected."""
+    from api.Modules.Transfers.Services import encode_mt_companies
+    companies, disabled = encode_mt_companies(
+        _entries(("Intermex", False), ("Maxi", False)),
+    )
+    assert companies == "Intermex,Maxi"
+    assert disabled == "Intermex,Maxi"

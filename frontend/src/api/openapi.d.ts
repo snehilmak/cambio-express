@@ -7047,6 +7047,23 @@ export interface components {
             fees: number;
         };
         /**
+         * MTCompanyEntry
+         * @description One money-transfer company on the store's roster. ``enabled``
+         *     False hides it from the daily book + transfer form without
+         *     losing the name (historical MT-summary rows keep referencing
+         *     it). Deep validation (dedupe, caps, no commas) lives in
+         *     ``Transfers.Services.encode_mt_companies``.
+         */
+        MTCompanyEntry: {
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
+            /** Name */
+            name: string;
+        };
+        /**
          * MonthLogged
          * @description One (year, month) entry the store has logged.
          */
@@ -8750,6 +8767,11 @@ export interface components {
              * @default
              */
             legal_name: string;
+            /**
+             * Mt Companies
+             * @default []
+             */
+            mt_companies: components["schemas"]["MTCompanyEntry"][];
             /** Name */
             name: string;
             /**
@@ -8844,6 +8866,8 @@ export interface components {
             federal_tax_rate?: number | null;
             /** Legal Name */
             legal_name?: string | null;
+            /** Mt Companies */
+            mt_companies?: components["schemas"]["MTCompanyEntry"][] | null;
             /** Name */
             name?: string | null;
             /** Phone */
