@@ -227,6 +227,9 @@ def replace_mt_breakdown(
     # money_transfer field.
     if rows:
         report.money_transfer = float(grand_total)
+        # money_transfer feeds total_receipts, so the derived
+        # over_short reconciliation has to be refreshed with it.
+        report.over_short = report.computed_over_short
         report.updated_at = utc_now()
     db.flush()
     return float(grand_total)

@@ -139,7 +139,10 @@ def run(session: Session, report: Any, base_url: str | None = None) -> int:
     receipts = float(report.total_receipts or 0)
     disbursements = float(report.total_disbursements or 0)
     over_short = float(report.over_short or 0)
-    net = receipts - disbursements + over_short
+    # Net = the day's cash position (receipts − disbursements), same as
+    # the calendar/period views. Over/Short is a separate derived
+    # reconciliation line; adding it to net would double-count it.
+    net = receipts - disbursements
 
     try:
         recipients = eligible_recipients(session, store)

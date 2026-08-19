@@ -264,7 +264,12 @@ def run(
         date_human = on_date.strftime("%B %d, %Y")
         view_url = f"{base_url}/app/daily/edit?date={date_iso}"
         notifications_url = f"{base_url}/app/account/notifications"
-        net = totals.receipts - totals.disbursements + totals.over_short
+        # Net = the day's cash position (receipts − disbursements),
+        # matching the calendar/period views. Over/Short is a SEPARATE
+        # derived reconciliation line — adding it here would double-
+        # count it (it already reflects safe balance + payouts vs
+        # receipts). See DailyBook/INVARIANTS.md.
+        net = totals.receipts - totals.disbursements
         subject = DAILY_SUMMARY_SUBJECT.format(
             store_name=store.name, date_human=date_human,
         )

@@ -173,6 +173,12 @@ def recompute_line_items_total(
     ) or 0.0
     report = ensure_daily_report(db, store_id, report_date)
     setattr(report, daily_report_field, float(total))
+    # Over/Short is a derived reconciliation over these line-item totals
+    # (drops, deposits, purchases, expenses…), so it has to be refreshed
+    # here too — not just on the report PUT. Keeps the stored column
+    # correct after a line-item add/edit/delete. (setattr to dodge the
+    # SQLAlchemy 1.x Column[float] typing trap, matching above.)
+    setattr(report, "over_short", report.computed_over_short)
     setattr(report, "updated_at", utc_now())
     db.flush()
     return float(total)

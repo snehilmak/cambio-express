@@ -85,7 +85,8 @@ const EDITABLE_KEYS = [
   "money_order_fees", "check_cashing_fees", "return_check_hold_fees",
   "forward_balance", "rebates_commissions",
   "cash_deposit", "safe_balance", "payroll_expense",
-  "over_short",
+  // over_short removed — it's a derived cash reconciliation computed
+  // by the server + computeTotals, never sent in the PUT body.
 ] as const;
 // Form fields whose VALUE is a number. Kept as a distinct type
 // from EDITABLE_KEYS (they currently coincide) so a future
@@ -172,11 +173,13 @@ const DISBURSEMENT_LINE_ITEMS: LineItemFieldDef[] = [
 // The legacy `?tab=` query param is ignored — links from the
 // calendar drop the operator on the In (Receipts) column by default.
 
-type DailyTab = "receipts" | "disbursements" | "overshort";
+// Two columns now: In (Receipts) and Out (Disbursements). Over/Short is
+// a derived readout in the toolbar, not a column; Notes render
+// full-width below the grid.
+type DailyTab = "receipts" | "disbursements";
 const DAILY_TAB_DEFS: Array<{ id: DailyTab; label: string }> = [
   { id: "receipts",      label: "In" },
   { id: "disbursements", label: "Out" },
-  { id: "overshort",     label: "Over Short" },
 ];
 
 // ── Component ────────────────────────────────────────────────
@@ -377,15 +380,15 @@ export default function EditDailyBook() {
   const locked = report?.locked === true;
   const lineItems = lineItemsQuery.data?.items ?? [];
 
-  const netNeg = totals.net < 0;
+  const overShortNeg = totals.overShort < -0.005;
 
   return (
     <PageShell gap="1rem">
       {/* Top toolbar: breadcrumb (left) · day stepper (center) ·
-          lock control (right). Sticky so day-nav + lock stay reachable
-          as the form scrolls. The column summary headers below pin
-          just under it — see `.toolbar` / `.colHeader` offsets in the
-          module CSS. */}
+          Over/Short readout + lock control (right). Sticky so day-nav,
+          the reconciliation, and lock stay reachable as the form
+          scrolls. The column summary headers below pin just under it —
+          see `.toolbar` / `.colHeader` offsets in the module CSS. */}
       <div className={styles.toolbar}>
         <div className={styles.toolbarLead}>
           <Breadcrumbs crumbs={[
@@ -402,6 +405,7 @@ export default function EditDailyBook() {
         />
 
         <div className={styles.toolbarTrail}>
+          <OverShortReadout value={totals.overShort} negative={overShortNeg} />
           {locked ? (
             <Pill tone="warning" dot>
               Locked · {formatLockedAt(report?.locked_at)}
@@ -413,9 +417,9 @@ export default function EditDailyBook() {
         </div>
       </div>
 
-      {/* Mobile-only tab strip.  CSS hides it at ≥60rem viewports
-          (see `.mobileTabs` in EditDailyBook.module.css) so the
-          desktop grid renders all three columns at once. */}
+      {/* Mobile-only tab strip. CSS hides it at ≥60rem viewports (see
+          `.mobileTabs`) so the desktop grid renders both columns at
+          once. Notes render full-width below the grid on every size. */}
       <div className={styles.mobileTabs}>
         <TabsBar>
           {DAILY_TAB_DEFS.map((t) => (
@@ -431,11 +435,11 @@ export default function EditDailyBook() {
       </div>
 
       <form onSubmit={onSubmit} className={styles.form}>
-        {/* CSS-grid layout: desktop renders all three columns in a
-            grid (In | Out | Over Short). Each column carries its own
-            sticky summary header so the column body scrolls behind it.
-            Mobile renders only the column matching `mobileTab` via the
-            `[data-tab]` attribute selector — see `.dailyLayout`. */}
+        {/* CSS-grid layout: desktop renders both columns side-by-side
+            (In | Out). Each column carries its own sticky summary header
+            so the column body scrolls behind it. Mobile renders only
+            the column matching `mobileTab` via the `[data-tab]`
+            attribute selector — see `.dailyLayout`. */}
         <div
           className={styles.dailyLayout}
           data-active-tab={mobileTab}
@@ -472,22 +476,9 @@ export default function EditDailyBook() {
               />
             </div>
           </div>
-          <div data-tab="overshort" className={styles.col}>
-            <ColumnHeader
-              label="Over Short"
-              value={totals.net}
-              tone={netNeg ? "negative" : "accent"}
-              sub={
-                Math.abs(form.over_short) >= 0.005
-                  ? `Drawer: ${fmtMoney2(form.over_short)}`
-                  : undefined
-              }
-            />
-            <div className={`${styles.colBody} ${styles.overShortCol}`}>
-              <NotesPanel form={form} set={set} locked={locked} />
-            </div>
-          </div>
         </div>
+
+        <NotesPanel form={form} set={set} locked={locked} />
 
         {error && <ErrorRow message={error} />}
 
@@ -605,6 +596,41 @@ function ColumnHeader({
         </span>
       </div>
       {sub && <div className={styles.totalHint}>{sub}</div>}
+    </div>
+  );
+}
+
+/** Read-only Over/Short reconciliation, shown in the toolbar. The
+ *  operator never types this — it's derived from the day's entries
+ *  (see computeTotals / DailyReport.computed_over_short). Green when
+ *  over/zero (healthy surplus), red when short (a miscount or
+ *  data-entry error to chase down). */
+function OverShortReadout({
+  value, negative,
+}: {
+  value: number;
+  negative: boolean;
+}) {
+  return (
+    <div
+      className={styles.osReadout}
+      title={
+        "Over / Short — auto-computed cash reconciliation " +
+        "(cash out + safe balance − cash in). A short (red, negative) " +
+        "value means cash was miscounted or a figure was mis-entered."
+      }
+    >
+      <span className={styles.osReadoutLabel}>Over / Short</span>
+      <span
+        className={styles.osReadoutValue}
+        style={{
+          color: negative
+            ? "var(--db-negative, #ff3b30)"
+            : "var(--db-accent, #3fff00)",
+        }}
+      >
+        {fmtMoney2(value)}
+      </span>
     </div>
   );
 }
@@ -1384,6 +1410,9 @@ function companyAccent(name: string): string {
   return "var(--db-text-muted, #a3a3a3)";
 }
 
+/** Full-width Notes box, rendered below the In / Out columns. Over/Short
+ *  used to live here as an editable field — it's now a derived toolbar
+ *  readout, so this panel is notes-only. */
 function NotesPanel({
   form, set, locked,
 }: {
@@ -1392,35 +1421,18 @@ function NotesPanel({
   locked: boolean;
 }) {
   return (
-    <div className={styles.panelGrid}>
-      <Card padding="1.25rem 1.5rem">
-        <PanelTitle>Over / short</PanelTitle>
-        <p className={styles.subText}>
-          Positive number means the till had more cash than expected;
-          negative is short. Folded into "Net position" above.
-        </p>
-        <div style={{ maxWidth: "16rem" }}>
-          <NumberInput
-            label="Over / short"
-            value={form.over_short}
-            onChange={(v) => set("over_short", v)}
-            disabled={locked}
-          />
-        </div>
-      </Card>
-      <Card padding="1.25rem 1.5rem">
-        <PanelTitle>Notes</PanelTitle>
-        <Field label="Anything the closer should know">
-          <Textarea
-            value={form.notes ?? ""}
-            onChange={(e) => set("notes", e.target.value)}
-            rows={6}
-            disabled={locked}
-            placeholder="e.g. cash drop at 2pm, register short due to refund …"
-          />
-        </Field>
-      </Card>
-    </div>
+    <Card padding="1.25rem 1.5rem">
+      <PanelTitle>Notes</PanelTitle>
+      <Field label="Anything the closer should know">
+        <Textarea
+          value={form.notes ?? ""}
+          onChange={(e) => set("notes", e.target.value)}
+          rows={4}
+          disabled={locked}
+          placeholder="e.g. cash drop at 2pm, safe short due to refund …"
+        />
+      </Field>
+    </Card>
   );
 }
 
@@ -1848,7 +1860,6 @@ function buildInitialForm(r: DailyReportRow | null | undefined): FormState {
     cash_deposit:            r?.cash_deposit            ?? 0,
     safe_balance:            r?.safe_balance            ?? 0,
     payroll_expense:         r?.payroll_expense         ?? 0,
-    over_short:              r?.over_short              ?? 0,
     notes:                   r?.notes                   ?? "",
   };
 }

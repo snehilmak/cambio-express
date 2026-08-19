@@ -2630,17 +2630,6 @@
             "title": "Notes",
             "type": "string"
           },
-          "over_short": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Over Short"
-          },
           "payroll_expense": {
             "anyOf": [
               {

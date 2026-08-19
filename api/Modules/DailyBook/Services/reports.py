@@ -154,7 +154,17 @@ def _summarize(
         outside_cash_drops=float(r.outside_cash_drops or 0),
         checks_deposit=float(r.checks_deposit or 0),
         other_cash_out=float(r.other_cash_out or 0),
-        over_short=float(r.over_short or 0),
+        # Over/Short is derived (see DailyReport.computed_over_short),
+        # recomputed here from the carry-adjusted totals so the displayed
+        # reconciliation tracks a prior-day edit before this day is
+        # re-saved — same treatment as `net` above. Equals the stored
+        # column except by the forward-carry delta.
+        over_short=(
+            total_disbursements
+            - float(r.check_purchases or 0) - float(r.check_expense or 0)
+            + float(r.safe_balance or 0)
+            - total_receipts
+        ),
         locked=r.locked_at is not None,
         notes=str(r.notes or ""),
         locked_at=r.locked_at.isoformat() if r.locked_at else "",
@@ -261,13 +271,17 @@ def ensure_daily_report(
 # write-side cut intentionally limits to top-level totals; line
 # items (drops, check deposits) and per-MT-company breakdowns
 # are derived from their own tables and migrate in follow-up PRs.
+# `over_short` is deliberately NOT here — it's a derived cash-drawer
+# reconciliation, computed server-side (DailyReport.computed_over_short)
+# and never typed. Sending it would 422 (the request schema forbids
+# extras). See INVARIANTS.md → "Over/Short is derived".
 EDITABLE_REPORT_FIELDS: tuple[str, ...] = (
     "taxable_sales", "non_taxable", "sales_tax",
     "bill_payment_charge", "phone_recargas", "boost_mobile",
     "money_order", "money_order_fees",
     "check_cashing_fees", "return_check_hold_fees",
     "forward_balance", "rebates_commissions",
-    "cash_deposit", "safe_balance", "payroll_expense", "over_short",
+    "cash_deposit", "safe_balance", "payroll_expense",
 )
 
 
@@ -319,6 +333,11 @@ def update_daily_report(
     if prior is not None:
         report.forward_balance = carry_forward_from(prior)
     report.notes = notes or ""
+    # Over/Short is derived, not typed — recompute it from the freshly
+    # written fields so the stored column (read by the owner dashboards,
+    # tax export, and daily-summary email) is always the correct
+    # reconciliation.
+    report.over_short = report.computed_over_short
     report.updated_at = utc_now()
     db.flush()
     return report
