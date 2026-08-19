@@ -57,6 +57,8 @@ STORE_OWNED_MODELS: list[str] = [
     "StoreEmployee", "Customer",
     "ReferralCode", "ReferralRedemption",
     "TVDisplay",
+    # SupportMessage FKs to SupportTicket — purge child first.
+    "SupportMessage",
     "SupportTicket",
     "AnnouncementStore",
     "User",
@@ -97,7 +99,7 @@ def _store_owned_models() -> list[tuple[type, str]]:
         StoreEmployeePasskey, TimeClockEntry, TimeClockShift,
     )
     from api.Modules.Transfers.Models import Transfer
-    from api.Modules.Support.Models import SupportTicket
+    from api.Modules.Support.Models import SupportMessage, SupportTicket
     from api.Modules.TVDisplay.Models import TVDisplay
     from api.Modules.Announcements.Models import AnnouncementStore
 
@@ -136,6 +138,8 @@ def _store_owned_models() -> list[tuple[type, str]]:
         # chain in the purge function. Listing it here covers the
         # parent row itself.
         (TVDisplay, "store_id"),
+        # SupportMessage FKs to SupportTicket — child purges first.
+        (SupportMessage, "store_id"),
         (SupportTicket, "store_id"),
         # Announcement targeting rows — drop the store's targeting
         # links (the Announcement rows themselves are global, not

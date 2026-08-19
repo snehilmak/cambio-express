@@ -20,7 +20,38 @@ class UpdateTicketRequest(BaseModel):
 
     status: str | None = None
     priority: str | None = None
+    # Legacy single-reply field. Still accepted: setting it now ALSO
+    # appends a staff message to the thread (the thread is the source
+    # of truth; this column is dual-written for back-compat).
     admin_reply: str | None = None
+
+
+class CreateMessageRequest(BaseModel):
+    """One reply into a ticket's conversation thread."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    body: str = Field(..., min_length=1, max_length=5000)
+
+
+class MessageRow(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: int
+    ticket_id: int
+    author_name: str
+    # "user" (someone at the store) or "staff" (platform side) —
+    # drives which side the chat bubble renders on.
+    author_kind: str
+    body: str
+    created_at: str
+
+
+class MessageListResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    messages: list[MessageRow]
+    total: int
 
 
 class TicketRow(BaseModel):

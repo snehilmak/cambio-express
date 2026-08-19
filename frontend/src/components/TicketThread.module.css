@@ -1,0 +1,73 @@
+/* Chat-style ticket thread (TicketThread.tsx). Shared by the
+   store-side Support page and the superadmin ticket queue. */
+
+.thread {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 0.25rem 0;
+}
+
+.rowMine {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.rowTheirs {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.bubble {
+  max-width: 42rem;
+  border: 1px solid var(--db-border, #262626);
+  border-radius: 0.75rem;
+  padding: 0.6rem 0.85rem;
+  background: var(--db-surface-2, #141414);
+}
+
+.bubbleMine {
+  border-color: var(--db-border-strong, #3a3a3a);
+}
+
+/* Platform-side replies carry the accent stripe so "support said
+   this" is scannable regardless of which side is viewing. */
+.bubbleStaff {
+  border-left: 3px solid var(--db-accent, #3fff00);
+}
+
+.bubbleMeta {
+  font-size: 0.72rem;
+  color: var(--db-text-muted, #a3a3a3);
+  margin-bottom: 0.25rem;
+}
+
+.bubbleBody {
+  margin: 0;
+  font-size: 0.9rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.replyRow {
+  display: flex;
+  gap: 0.6rem;
+  align-items: flex-end;
+  margin-top: 0.35rem;
+}
+
+.replyRow > :first-child {
+  flex: 1;
+}
+
+.reopenRow {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  margin-top: 0.35rem;
+}
+
+.closedNote {
+  color: var(--db-text-muted, #a3a3a3);
+  font-size: 0.85rem;
+}

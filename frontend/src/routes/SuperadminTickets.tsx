@@ -2,11 +2,12 @@ import { useState, type FormEvent } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
 import { TICKET_STATUS_TONES, updateTicket, useAllTickets, type TicketRow } from "../api/support";
+import { TicketThread } from "../components/TicketThread";
 import { fmtDateTime } from "../lib/formatters";
 import { ApiError } from "../lib/api";
 import {
   Alert, Breadcrumbs, Button, Card, EmptyState, ErrorState,
-  Field, Loading, PageHeader, PageShell, Pill, Select, Textarea,
+  Field, Loading, PageHeader, PageShell, Pill, Select,
   useToast,
 } from "../components/ui";
 import styles from "./SuperadminTickets.module.css";
@@ -84,8 +85,9 @@ export default function SuperadminTickets() {
 function TicketCard({ ticket: t }: { ticket: TicketRow }) {
   const qc = useQueryClient();
   const toast = useToast();
-  const [replying, setReplying] = useState(false);
-  const [reply, setReply] = useState(t.admin_reply || "");
+  // Collapsed by default — expanding shows the conversation thread
+  // (which owns replies) plus the status/priority controls.
+  const [expanded, setExpanded] = useState(false);
   const [newStatus, setNewStatus] = useState(t.status);
   const [newPriority, setNewPriority] = useState(t.priority || "");
   const [busy, setBusy] = useState(false);
@@ -99,15 +101,11 @@ function TicketCard({ ticket: t }: { ticket: TicketRow }) {
       const body: Record<string, string> = {};
       if (newStatus !== t.status) body.status = newStatus;
       if (newPriority && newPriority !== (t.priority || "")) body.priority = newPriority;
-      if (reply.trim() && reply.trim() !== (t.admin_reply || "").trim()) {
-        body.admin_reply = reply.trim();
-      }
       if (Object.keys(body).length > 0) {
         await updateTicket(t.id, body);
         void qc.invalidateQueries({ queryKey: ["tickets"] });
         toast({ message: "Ticket updated.", tone: "success" });
       }
-      setReplying(false);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not update ticket.");
     } finally {
@@ -137,59 +135,55 @@ function TicketCard({ ticket: t }: { ticket: TicketRow }) {
               <span className={styles.metaCat}>{t.category}</span>
             </div>
           </div>
-          <Button tone="secondary" size="sm" onClick={() => setReplying((v) => !v)}>
-            {replying ? "Cancel" : "Respond"}
+          <Button tone="secondary" size="sm" onClick={() => setExpanded((v) => !v)}>
+            {expanded ? "Collapse" : "Open conversation"}
           </Button>
         </div>
 
-        <p className={styles.body}>{t.body}</p>
-
-        {t.admin_reply && !replying && (
-          <div className={styles.replyBox}>
-            <div className={styles.replyMeta}>
-              Reply by {t.replied_by} · {t.replied_at ? fmtDateTime(t.replied_at) : ""}
-            </div>
-            <p className={styles.replyBody}>{t.admin_reply}</p>
-          </div>
-        )}
+        {!expanded && <p className={styles.body}>{t.body}</p>}
 
         {error && <Alert tone="error">{error}</Alert>}
 
-        {replying && (
-          <form onSubmit={onSave} className={styles.formInner}>
-            <div className={styles.formGrid}>
-              <Field label="Status">
-                <Select value={newStatus} onChange={(e) => setNewStatus(e.target.value)}>
-                  <option value="open">Open</option>
-                  <option value="in_progress">In progress</option>
-                  <option value="resolved">Resolved</option>
-                  <option value="closed">Closed</option>
-                </Select>
-              </Field>
-              <Field label="Priority">
-                <Select value={newPriority} onChange={(e) => setNewPriority(e.target.value)}>
-                  <option value="">— None —</option>
-                  <option value="P1">P1 — Critical</option>
-                  <option value="P2">P2 — High</option>
-                  <option value="P3">P3 — Medium</option>
-                  <option value="P4">P4 — Low</option>
-                </Select>
-              </Field>
-            </div>
-            <Field label="Reply to user">
-              <Textarea
-                value={reply}
-                onChange={(e) => setReply(e.target.value)}
-                rows={3}
-                placeholder="Type your response…"
-              />
-            </Field>
-            <div className={styles.formActions}>
-              <Button type="submit" busy={busy} disabled={busy}>
-                {busy ? "Saving…" : "Save"}
-              </Button>
-            </div>
-          </form>
+        {expanded && (
+          <>
+            {/* Replies live in the thread (staff replies dual-write
+                the legacy admin_reply column server-side). */}
+            <TicketThread ticket={t} viewerKind="staff" />
+
+            <form onSubmit={onSave} className={styles.formInner}>
+              <div className={styles.formGrid}>
+                <Field label="Status">
+                  <Select value={newStatus} onChange={(e) => setNewStatus(e.target.value)}>
+                    <option value="open">Open</option>
+                    <option value="in_progress">In progress</option>
+                    <option value="resolved">Resolved</option>
+                    <option value="closed">Closed</option>
+                  </Select>
+                </Field>
+                <Field label="Priority">
+                  <Select value={newPriority} onChange={(e) => setNewPriority(e.target.value)}>
+                    <option value="">— None —</option>
+                    <option value="P1">P1 — Critical</option>
+                    <option value="P2">P2 — High</option>
+                    <option value="P3">P3 — Medium</option>
+                    <option value="P4">P4 — Low</option>
+                  </Select>
+                </Field>
+                <div className={styles.formActions}>
+                  <Button
+                    type="submit" tone="secondary" busy={busy}
+                    disabled={
+                      busy ||
+                      (newStatus === t.status &&
+                        (newPriority || "") === (t.priority || ""))
+                    }
+                  >
+                    {busy ? "Saving…" : "Update status"}
+                  </Button>
+                </div>
+              </div>
+            </form>
+          </>
         )}
       </div>
     </Card>

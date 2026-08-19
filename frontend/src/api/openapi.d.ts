@@ -4473,6 +4473,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/tickets/{ticket_id}/messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Ticket Messages
+         * @description The ticket's conversation thread, oldest first. Same scoping
+         *     as the ticket detail.
+         */
+        get: operations["list_ticket_messages_tickets__ticket_id__messages_get"];
+        put?: never;
+        /**
+         * Create Ticket Message
+         * @description Reply into the thread. Any principal in the ticket's store
+         *     (or superadmin). Closed tickets are read-only — 409, the UI
+         *     offers Reopen instead. A store-side reply to a resolved ticket
+         *     auto-reopens it (replying means it wasn't resolved). Returns the
+         *     ticket so the client sees any status flip without a second
+         *     fetch.
+         */
+        post: operations["create_ticket_message_tickets__ticket_id__messages_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tickets/{ticket_id}/reopen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reopen Ticket
+         * @description Reopen a CLOSED ticket (the store side's one action on a
+         *     closed ticket — e.g. the issue came back). Open/in-progress/
+         *     resolved tickets don't need this: 409.
+         */
+        post: operations["reopen_ticket_tickets__ticket_id__reopen_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/timeclock/break/start": {
         parameters: {
             query?: never;
@@ -6092,6 +6144,14 @@ export interface components {
              */
             tax: number;
         };
+        /**
+         * CreateMessageRequest
+         * @description One reply into a ticket's conversation thread.
+         */
+        CreateMessageRequest: {
+            /** Body */
+            body: string;
+        };
         /** CreateTicketRequest */
         CreateTicketRequest: {
             /** Body */
@@ -7062,6 +7122,28 @@ export interface components {
             enabled: boolean;
             /** Name */
             name: string;
+        };
+        /** MessageListResponse */
+        MessageListResponse: {
+            /** Messages */
+            messages: components["schemas"]["MessageRow"][];
+            /** Total */
+            total: number;
+        };
+        /** MessageRow */
+        MessageRow: {
+            /** Author Kind */
+            author_kind: string;
+            /** Author Name */
+            author_name: string;
+            /** Body */
+            body: string;
+            /** Created At */
+            created_at: string;
+            /** Id */
+            id: number;
+            /** Ticket Id */
+            ticket_id: number;
         };
         /**
          * MonthLogged
@@ -18380,6 +18462,115 @@ export interface operations {
                 "application/json": components["schemas"]["UpdateTicketRequest"];
             };
         };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TicketResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_ticket_messages_tickets__ticket_id__messages_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                ticket_id: number;
+            };
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_ticket_message_tickets__ticket_id__messages_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                ticket_id: number;
+            };
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateMessageRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TicketResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reopen_ticket_tickets__ticket_id__reopen_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                ticket_id: number;
+            };
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {

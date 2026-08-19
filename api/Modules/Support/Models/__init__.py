@@ -4,6 +4,14 @@
 feature request, question, or general feedback). Scoped to
 ``(store_id, user_id)`` so store admins see their store's tickets
 and superadmin sees everything.
+
+``SupportMessage`` — one row per reply in a ticket's conversation
+thread (chat-style, both directions). The legacy
+``SupportTicket.admin_reply`` column predates the thread: it held a
+single overwritable staff reply. It's kept (and dual-written with
+the latest staff message) for back-compat, but the thread is the
+source of truth — existing replies were backfilled into messages by
+the ``d2e8b4f6a1c3`` migration.
 """
 from __future__ import annotations
 
@@ -36,4 +44,29 @@ class SupportTicket(Base):
     closed_at   = Column(DateTime, nullable=True)
 
 
-__all__ = ["SupportTicket"]
+class SupportMessage(Base):
+    """One reply in a ticket's conversation thread.
+
+    ``store_id`` is denormalized from the ticket so the retention
+    purge (`_STORE_OWNED_MODELS`, invariant #4) can cascade by
+    store without joining through the ticket. ``author_name`` is a
+    display snapshot (like ``SupportTicket.submitted_by``) so the
+    thread stays readable if the user row is later deleted.
+    ``author_kind`` is ``"user"`` (someone at the store) or
+    ``"staff"`` (platform side) — it drives the chat-bubble side
+    in the UI.
+    """
+    __tablename__ = "support_message"
+    id             = Column(Integer, primary_key=True)
+    ticket_id      = Column(Integer, ForeignKey("support_ticket.id"),
+                            nullable=False, index=True)
+    store_id       = Column(Integer, ForeignKey("store.id"),
+                            nullable=False, index=True)
+    author_user_id = Column(Integer, ForeignKey("user.id"), nullable=True)
+    author_name    = Column(String(120), nullable=False, default="")
+    author_kind    = Column(String(10), nullable=False, default="user")
+    body           = Column(Text, nullable=False)
+    created_at     = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+__all__ = ["SupportMessage", "SupportTicket"]

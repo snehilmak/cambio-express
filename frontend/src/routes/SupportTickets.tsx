@@ -3,6 +3,7 @@ import { Navigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 
 import { createTicket, TICKET_STATUS_TONES, useMyTickets, type TicketRow } from "../api/support";
+import { TicketThread } from "../components/TicketThread";
 import { fmtDateTime } from "../lib/formatters";
 import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
@@ -180,15 +181,7 @@ function TicketRowView({ ticket: t }: { ticket: TicketRow }) {
       {expanded && (
         <tr>
           <td colSpan={4} className={styles.expandedBody}>
-            <p className={styles.ticketBody}>{t.body}</p>
-            {t.admin_reply && (
-              <div className={styles.replyBox}>
-                <div className={styles.replyMeta}>
-                  Reply from {t.replied_by} · {t.replied_at ? fmtDateTime(t.replied_at) : ""}
-                </div>
-                <p className={styles.replyBody}>{t.admin_reply}</p>
-              </div>
-            )}
+            <TicketThread ticket={t} viewerKind="user" />
           </td>
         </tr>
       )}
