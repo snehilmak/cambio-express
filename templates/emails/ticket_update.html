@@ -1,0 +1,65 @@
+{% extends "emails/_base.html" %}
+{% from "emails/_base.html" import cta %}
+{% block title %}{{ heading }} — ticket #{{ ticket_id }}{% endblock %}
+
+{% block content %}
+<h1 style="font-family:'Space Grotesk','Inter','Segoe UI',Arial,sans-serif;font-size:22px;font-weight:700;color:#0a0a0a;margin:0 0 8px;letter-spacing:-0.02em;">
+  {{ heading }}
+</h1>
+<p style="margin:0 0 18px;color:#6b7280;font-size:13.5px;">
+  Ticket #{{ ticket_id }}{% if store_name %} &middot; {{ store_name }}{% endif %}
+</p>
+
+<p style="margin:0 0 14px;">
+  Hi{% if name %} {{ name }}{% endif %},
+</p>
+<p style="margin:0 0 16px;">
+  {{ event_line }} &mdash;
+  <strong style="color:#0a0a0a;">{{ subject }}</strong>.
+</p>
+
+{% if detail %}
+{# The new message / status detail — quoted so it reads as part of
+   the conversation, not as our own words. #}
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 18px;">
+  <tr>
+    <td style="padding:12px 16px;background:#f9fafb;border-left:3px solid #0a0a0a;border-radius:0 8px 8px 0;font-size:14px;color:#374151;line-height:1.55;white-space:pre-line;">{{ detail }}</td>
+  </tr>
+</table>
+{% endif %}
+
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 22px;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;">
+  <tr>
+    <td style="padding:12px 16px;background:#f9fafb;border-bottom:1px solid #e5e7eb;font-size:13px;color:#6b7280;letter-spacing:0.04em;text-transform:uppercase;font-weight:600;">
+      Status
+    </td>
+    <td align="right" style="padding:12px 16px;background:#f9fafb;border-bottom:1px solid #e5e7eb;font-family:'JetBrains Mono','Menlo','Consolas',monospace;font-size:14px;font-weight:600;color:#0a0a0a;text-transform:capitalize;">
+      {{ status }}
+    </td>
+  </tr>
+  <tr>
+    <td style="padding:12px 16px;font-size:13px;color:#6b7280;letter-spacing:0.04em;text-transform:uppercase;font-weight:600;">
+      Priority
+    </td>
+    <td align="right" style="padding:12px 16px;font-family:'JetBrains Mono','Menlo','Consolas',monospace;font-size:14px;font-weight:600;color:#0a0a0a;text-transform:capitalize;">
+      {{ priority }}
+    </td>
+  </tr>
+</table>
+
+{{ cta(view_url, cta_label) }}
+
+<p style="margin:22px 0 6px;color:#6b7280;font-size:13.5px;">
+  Or paste this into your browser:<br/>
+  <a href="{{ view_url }}" style="color:#0a0a0a;word-break:break-all;">{{ view_url }}</a>
+</p>
+{% endblock %}
+
+{% block footer_extra %}
+{% if notifications_url %}
+<p style="margin:0 0 8px;font-size:11.5px;color:#9ca3af;">
+  Don't want ticket updates? Turn them off on your
+  <a href="{{ notifications_url }}" style="color:#6b7280;">notifications page</a>.
+</p>
+{% endif %}
+{% endblock %}

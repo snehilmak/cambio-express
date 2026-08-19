@@ -856,6 +856,8 @@ def update_notifications_route(
         notify_high_variance_push=body.notify_high_variance_push,
         notify_store_offline=body.notify_store_offline,
         notify_store_offline_push=body.notify_store_offline_push,
+        notify_ticket_updates=body.notify_ticket_updates,
+        notify_ticket_updates_push=body.notify_ticket_updates_push,
     )
     db.commit()
     return NotificationsResponse(**get_notifications_payload(db, user))

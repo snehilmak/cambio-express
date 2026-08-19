@@ -242,6 +242,12 @@ class User(Base):
     notify_announcement_push       = Column(Boolean, default=True)
     notify_locked_day_digest_push  = Column(Boolean, default=True)
     notify_daily_summary_push      = Column(Boolean, default=True)
+    # Support-ticket updates: staff replied / status changed on a
+    # ticket this user created. Applies to every role (anyone can
+    # file a ticket). Opt-out (default True) — a support answer is
+    # exactly the email people expect to get.
+    notify_ticket_updates          = Column(Boolean, default=True)
+    notify_ticket_updates_push     = Column(Boolean, default=True)
     notify_high_variance           = Column(Boolean, default=False)
     notify_high_variance_push      = Column(Boolean, default=False)
     notify_store_offline           = Column(Boolean, default=False)

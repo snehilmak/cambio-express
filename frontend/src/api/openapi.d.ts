@@ -7567,6 +7567,16 @@ export interface components {
              * @default false
              */
             notify_store_offline_push: boolean;
+            /**
+             * Notify Ticket Updates
+             * @default true
+             */
+            notify_ticket_updates: boolean;
+            /**
+             * Notify Ticket Updates Push
+             * @default true
+             */
+            notify_ticket_updates_push: boolean;
             /** Notify Trial Reminders */
             notify_trial_reminders: boolean;
             /** Notify Trial Reminders Push */
@@ -7578,6 +7588,11 @@ export interface components {
              * @default false
              */
             store_offline_applies: boolean;
+            /**
+             * Ticket Updates Applies
+             * @default true
+             */
+            ticket_updates_applies: boolean;
             /** Trial Toggle Applies */
             trial_toggle_applies: boolean;
         };
@@ -7607,6 +7622,10 @@ export interface components {
             notify_store_offline?: boolean | null;
             /** Notify Store Offline Push */
             notify_store_offline_push?: boolean | null;
+            /** Notify Ticket Updates */
+            notify_ticket_updates?: boolean | null;
+            /** Notify Ticket Updates Push */
+            notify_ticket_updates_push?: boolean | null;
             /** Notify Trial Reminders */
             notify_trial_reminders?: boolean | null;
             /** Notify Trial Reminders Push */

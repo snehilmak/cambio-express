@@ -62,6 +62,15 @@ def get_notifications_payload(db: Session, user: User) -> dict[str, Any]:
         "notify_daily_summary_push":     bool(
             getattr(user, "notify_daily_summary_push", True),
         ),
+        # Support-ticket updates apply to every role — anyone can
+        # file a ticket, so the toggle is always interactive.
+        "notify_ticket_updates":      bool(
+            getattr(user, "notify_ticket_updates", True),
+        ),
+        "notify_ticket_updates_push": bool(
+            getattr(user, "notify_ticket_updates_push", True),
+        ),
+        "ticket_updates_applies":     True,
         "trial_toggle_applies":      trial_toggle_applies(db, user),
         "locked_day_digest_applies": locked_day_digest_applies(user),
         "daily_summary_applies":     daily_summary_applies(user),
@@ -97,6 +106,8 @@ def update_notifications(
     notify_high_variance_push:     Optional[bool] = None,
     notify_store_offline:          Optional[bool] = None,
     notify_store_offline_push:     Optional[bool] = None,
+    notify_ticket_updates:         Optional[bool] = None,
+    notify_ticket_updates_push:    Optional[bool] = None,
 ) -> None:
     """Apply changes. None = don't touch. Caller commits.
 
@@ -127,4 +138,8 @@ def update_notifications(
         setattr(user, "notify_store_offline", bool(notify_store_offline))
     if notify_store_offline_push is not None:
         setattr(user, "notify_store_offline_push", bool(notify_store_offline_push))
+    if notify_ticket_updates is not None:
+        setattr(user, "notify_ticket_updates", bool(notify_ticket_updates))
+    if notify_ticket_updates_push is not None:
+        setattr(user, "notify_ticket_updates_push", bool(notify_ticket_updates_push))
     db.flush()

@@ -38,11 +38,16 @@ class NotificationsResponse(BaseModel):
     notify_high_variance_push:      bool = False
     notify_store_offline:           bool = False
     notify_store_offline_push:      bool = False
+    # Support-ticket update notifications (staff replied / status
+    # changed).  Applies to every role — anyone can file a ticket.
+    notify_ticket_updates:          bool = True
+    notify_ticket_updates_push:     bool = True
     trial_toggle_applies:          bool
     locked_day_digest_applies:     bool
     daily_summary_applies:         bool
     high_variance_applies:         bool = False
     store_offline_applies:         bool = False
+    ticket_updates_applies:        bool = True
     role:                          str
 
 
@@ -64,3 +69,5 @@ class NotificationsUpdateRequest(BaseModel):
     notify_high_variance_push:     Optional[bool] = None
     notify_store_offline:          Optional[bool] = None
     notify_store_offline_push:     Optional[bool] = None
+    notify_ticket_updates:         Optional[bool] = None
+    notify_ticket_updates_push:    Optional[bool] = None

@@ -46,6 +46,27 @@ from api.Core.Clock import utc_now
 router = APIRouter()
 
 
+def _notify(fn: Any, *args: Any) -> None:
+    """Fire a ticket notification through the job queue (D5 pattern
+    — sync fallback when Redis isn't configured). Best-effort by
+    contract: a notification failure must never fail the ticket
+    mutation, so callers invoke this AFTER commit and we swallow.
+    Args are primitives only (worker reloads state itself)."""
+    from api.Core.Jobs import enqueue
+    try:
+        enqueue(fn, *args)
+    except Exception:  # pragma: no cover — best-effort delivery
+        import logging
+        logging.getLogger(__name__).exception(
+            "ticket notification failed: %s", getattr(fn, "__name__", fn),
+        )
+
+
+def _snippet(text: str, limit: int = 300) -> str:
+    text = (text or "").strip()
+    return text if len(text) <= limit else text[: limit - 1] + "…"
+
+
 def _to_row(t: SupportTicket, store_name: str | None = None) -> TicketRow:
     return TicketRow(
         id=t.id,
@@ -92,6 +113,13 @@ def create_ticket(
     db.add(ticket)
     db.commit()
     db.refresh(ticket)
+    from api.Modules.Notifications.Services.ticket_updates import (
+        send_ticket_event_to_platform,
+    )
+    _notify(
+        send_ticket_event_to_platform, int(ticket.id), "created",
+        _snippet(ticket.body or ""), ticket.submitted_by or "",
+    )
     return TicketResponse(ticket=_to_row(ticket))
 
 
@@ -307,6 +335,20 @@ def create_ticket_message(
     )
     db.commit()
     db.refresh(ticket)
+    from api.Modules.Notifications.Services.ticket_updates import (
+        send_ticket_event_to_platform,
+        send_ticket_update_to_user,
+    )
+    if is_staff:
+        _notify(
+            send_ticket_update_to_user, int(ticket.id),
+            "staff_reply", _snippet(text),
+        )
+    else:
+        _notify(
+            send_ticket_event_to_platform, int(ticket.id),
+            "user_reply", _snippet(text), author_name,
+        )
     return TicketResponse(ticket=_to_row(ticket))
 
 
@@ -331,6 +373,20 @@ def reopen_ticket(
     )
     db.commit()
     db.refresh(ticket)
+    from api.Modules.Notifications.Services.ticket_updates import (
+        send_ticket_event_to_platform,
+        send_ticket_update_to_user,
+    )
+    if claims.get("role") == "superadmin":
+        _notify(
+            send_ticket_update_to_user, int(ticket.id),
+            "status_change", "Reopened",
+        )
+    else:
+        _notify(
+            send_ticket_event_to_platform, int(ticket.id), "reopened",
+            "", claims.get("name") or claims.get("username") or "",
+        )
     return TicketResponse(ticket=_to_row(ticket))
 
 
@@ -354,6 +410,7 @@ def update_ticket(
         sid = resolve_store_scope(claims)
         if ticket.store_id != sid:
             raise HTTPException(404, "Ticket not found")
+    old_status = ticket.status or "open"
     if body.status is not None:
         if body.status not in TICKET_STATUSES:
             raise HTTPException(422, f"Invalid status: {body.status}")
@@ -415,4 +472,23 @@ def update_ticket(
         )
     db.commit()
     db.refresh(ticket)
+    # Staff acted → tell the person who filed the ticket. One
+    # notification per PUT: a reply wins over a bare status flip
+    # (the reply email already shows the current status).
+    if role == "superadmin":
+        from api.Modules.Notifications.Services.ticket_updates import (
+            send_ticket_update_to_user,
+        )
+        new_reply = (body.admin_reply or "").strip()
+        if new_reply:
+            _notify(
+                send_ticket_update_to_user, int(ticket.id),
+                "staff_reply", _snippet(new_reply),
+            )
+        elif (ticket.status or "open") != old_status:
+            _notify(
+                send_ticket_update_to_user, int(ticket.id),
+                "status_change",
+                (ticket.status or "open").replace("_", " ").capitalize(),
+            )
     return TicketResponse(ticket=_to_row(ticket))

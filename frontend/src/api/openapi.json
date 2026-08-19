@@ -4607,6 +4607,16 @@
             "title": "Notify Store Offline Push",
             "type": "boolean"
           },
+          "notify_ticket_updates": {
+            "default": true,
+            "title": "Notify Ticket Updates",
+            "type": "boolean"
+          },
+          "notify_ticket_updates_push": {
+            "default": true,
+            "title": "Notify Ticket Updates Push",
+            "type": "boolean"
+          },
           "notify_trial_reminders": {
             "title": "Notify Trial Reminders",
             "type": "boolean"
@@ -4622,6 +4632,11 @@
           "store_offline_applies": {
             "default": false,
             "title": "Store Offline Applies",
+            "type": "boolean"
+          },
+          "ticket_updates_applies": {
+            "default": true,
+            "title": "Ticket Updates Applies",
             "type": "boolean"
           },
           "trial_toggle_applies": {
@@ -4759,6 +4774,28 @@
               }
             ],
             "title": "Notify Store Offline Push"
+          },
+          "notify_ticket_updates": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notify Ticket Updates"
+          },
+          "notify_ticket_updates_push": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notify Ticket Updates Push"
           },
           "notify_trial_reminders": {
             "anyOf": [

@@ -56,6 +56,7 @@ _PUSH_KIND_COLUMN: dict[str, str] = {
     "announcement":      "notify_announcement_push",
     "locked_day_digest": "notify_locked_day_digest_push",
     "daily_summary":     "notify_daily_summary_push",
+    "ticket_update":     "notify_ticket_updates_push",
 }
 
 
