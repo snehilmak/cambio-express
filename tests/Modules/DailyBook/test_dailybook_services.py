@@ -299,3 +299,83 @@ def test_update_honors_seed_on_first_day(test_store_id):
         s = summarize_report(db.session, test_store_id, d)
     assert s.forward_balance == 750.0
     assert s.forward_balance_auto is False
+
+
+# ── Over/Short is derived (cash reconciliation) ─────────────
+
+
+def test_over_short_auto_computed_on_save(test_store_id):
+    """Over/Short is derived, never typed. Reproduces the operator's
+    master spreadsheet (Dinero Express #8, Aug 6):
+
+        In  = 13 + 11 + 6749.15(MT) + 195.59(ccf) + 81277(fwd) + 12000(bank)
+            = 100,245.74
+        Out(cash) + safe = drops 6749 + checks_deposit 19973.77
+                         + safe 73523 = 100,245.77
+        Over/Short = 100,245.77 − 100,245.74 = +0.03  (a hair OVER)
+    """
+    from tests._app import db
+    from api.Modules.DailyBook.Services import (
+        summarize_report, update_daily_report,
+    )
+    d = date(2026, 3, 2)
+    with db_session():
+        # money_transfer + line-item-derived fields aren't in the PUT
+        # body — seed them straight onto the row, then save the
+        # operator-editable fields.
+        _seed_report(
+            test_store_id, d,
+            money_transfer=6749.15, from_bank=12000.0,
+            outside_cash_drops=6749.0, checks_deposit=19973.77,
+        )
+        update_daily_report(
+            db.session, store_id=test_store_id, report_date=d,
+            fields={
+                "taxable_sales": 13.0, "non_taxable": 11.0,
+                "check_cashing_fees": 195.59,
+                "forward_balance": 81277.0, "safe_balance": 73523.0,
+            },
+        )
+        db.session.commit()
+        s = summarize_report(db.session, test_store_id, d)
+    assert round(s.over_short, 2) == 0.03
+
+
+def test_over_short_short_is_negative(test_store_id):
+    """A day that opened with cash which then vanished with nothing
+    recorded reads as SHORT (negative) — the operator's signal that
+    something was miscounted or mis-entered."""
+    from tests._app import db
+    from api.Modules.DailyBook.Services import (
+        summarize_report, update_daily_report,
+    )
+    d = date(2026, 3, 2)
+    with db_session():
+        # In = 1000 (forward) but nothing paid out and nothing kept in
+        # the safe → the books say 1000 is gone unaccounted.
+        update_daily_report(
+            db.session, store_id=test_store_id, report_date=d,
+            fields={"forward_balance": 1000.0, "safe_balance": 0.0},
+        )
+        db.session.commit()
+        s = summarize_report(db.session, test_store_id, d)
+    # over_short = out(0) − checks(0) + safe(0) − in(1000) = −1000 SHORT
+    assert round(s.over_short, 2) == -1000.0
+
+
+def test_over_short_excludes_check_purchases_and_expense(test_store_id):
+    """Check purchases / expenses are paid by check, not cash, so they
+    must NOT move the cash-drawer reconciliation."""
+    from tests._app import db
+    from api.Modules.DailyBook.Services import summarize_report
+    d = date(2026, 3, 2)
+    with db_session():
+        _seed_report(
+            test_store_id, d,
+            forward_balance=1000.0, safe_balance=1000.0,
+            check_purchases=250.0, check_expense=75.0,
+        )
+        s = summarize_report(db.session, test_store_id, d)
+    # over_short = total_disb(325) − check_purch(250) − check_exp(75)
+    #            + safe(1000) − receipts(1000) = 0  (checks cancel out)
+    assert round(s.over_short, 2) == 0.0

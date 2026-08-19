@@ -6508,8 +6508,6 @@ export interface components {
              * @default
              */
             notes: string;
-            /** Over Short */
-            over_short?: number | null;
             /** Payroll Expense */
             payroll_expense?: number | null;
             /** Phone Recargas */

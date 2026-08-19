@@ -91,6 +91,36 @@ class DailyReport(Base):
             self.checks_deposit, self.payroll_expense, self.other_cash_out,
         ]))
 
+    @property
+    def computed_over_short(self) -> float:
+        """The day's cash-drawer reconciliation — the ``over_short``
+        column is populated from this, never typed by the operator.
+
+        Mirrors the master spreadsheet's "Over All Over-(Short)" =
+        Total Payouts − Total Receipts, expressed as a pure CASH
+        reconciliation:
+
+            over_short = total_disbursements
+                       − check_purchases − check_expense   (non-cash)
+                       + safe_balance                       (cash kept)
+                       − total_receipts
+
+        Check purchases / expenses are paid by check, so they don't
+        move the cash drawer and are excluded. ``safe_balance`` is
+        cash retained overnight, so it counts as "paid out" for the
+        reconciliation (it becomes tomorrow's opening ``forward_balance``
+        via ``carry_forward_from``). Positive = OVER (surplus cash),
+        negative = SHORT (a miscount or data-entry error — the books
+        say more cash should be on hand than there is). See
+        ``INVARIANTS.md`` → "Over/Short is derived".
+        """
+        return float(
+            self.total_disbursements
+            - (self.check_purchases or 0) - (self.check_expense or 0)
+            + (self.safe_balance or 0)
+            - self.total_receipts
+        )
+
 
 class DailyDrop(Base):
     """Individual "Outside Cash & Drop" entry — logged as they happen

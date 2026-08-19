@@ -172,6 +172,57 @@ monthly P&L module (`api/Modules/Monthly/`), which sums these into
 monthly totals.
 
 
+## Over/Short is DERIVED — never typed
+
+`DailyReport.over_short` is the day's **cash-drawer reconciliation**,
+computed server-side, **not** an operator-editable field. It mirrors
+the master spreadsheet's "Over All Over-(Short)" (Total Payouts −
+Total Receipts), expressed as a pure *cash* reconciliation:
+
+```
+over_short = total_disbursements
+           - check_purchases - check_expense    # paid by check → not cash
+           + safe_balance                        # cash retained overnight
+           - total_receipts
+```
+
+- **Positive = OVER** (a little surplus cash — the normal, healthy
+  state). **Negative = SHORT** — the books say more cash should be on
+  hand than there is → a miscount or data-entry error. Operators
+  reconcile by entering the counted `safe_balance`; O/S then falls out.
+- Check purchases / expenses are **excluded** (they move a check, not
+  the cash drawer). `safe_balance` is **included** as a payout because
+  it's cash kept back — and it becomes tomorrow's opening
+  `forward_balance` via `carry_forward_from`.
+- **Single source of truth:** `DailyReport.computed_over_short`
+  (Models). The stored `over_short` column is repopulated from it on
+  every mutation path that can change an input:
+  `update_daily_report` (report PUT), `recompute_line_items_total`
+  (line-item add/edit/delete), and `replace_mt_breakdown`
+  (money-transfer changes). `_summarize` recomputes it at read time
+  from the carry-adjusted totals so the displayed value tracks a
+  prior-day edit before this day is re-saved — same treatment as
+  `net`.
+- **`over_short` is NOT in `EDITABLE_REPORT_FIELDS` and NOT on
+  `DailyReportUpdateRequest`.** Sending it in the PUT is a 422 (see
+  the 422-trap parametrize in `test_dailybook_controllers.py`). The
+  frontend never sends it — it reads the value off the report row and
+  shows it read-only.
+- **`net` in the digests is `receipts − disbursements`, NOT
+  `+ over_short`.** The daily-summary email and locked-day digest show
+  Over/Short as its own line; adding it into `net` would double-count
+  (over_short already folds in safe balance + payouts vs receipts).
+- Downstream consumers that read the stored column (owner over/short
+  charts + `period_over_short` sum, superadmin big-over-short
+  anomalies, the tax-pack export) keep working unchanged — the column
+  is still there, just always the correct reconciliation now.
+
+**If you change this formula** (e.g. the app grows the field set to
+match more of the spreadsheet), update `computed_over_short`, the
+`_summarize` mirror, the `test_over_short_*` cases, and this section
+together.
+
+
 ## Forward-balance carry
 
 `forward_balance` is the opening cash a day starts with. It is

@@ -315,6 +315,9 @@ def test_put_rejects_extra_fields(client, test_store_id):
     "outside_cash_drops",
     "checks_deposit",
     "from_bank",
+    # over_short is a derived cash reconciliation — computed
+    # server-side, never typed (INVARIANTS "Over/Short is derived").
+    "over_short",
 ])
 def test_put_rejects_every_derived_field(client, test_store_id, derived_field):
     today_iso = date.today().isoformat()

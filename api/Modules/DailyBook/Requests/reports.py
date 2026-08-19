@@ -260,5 +260,7 @@ class DailyReportUpdateRequest(BaseModel):
     cash_deposit:            float | None = None
     safe_balance:            float | None = None
     payroll_expense:         float | None = None
-    over_short:              float | None = None
+    # NB: no `over_short` — it's a derived cash reconciliation computed
+    # server-side (DailyReport.computed_over_short), never sent by the
+    # client. `extra="forbid"` above means a stray over_short → 422.
     notes:                   str = ""

@@ -20,7 +20,8 @@ export interface FormState {
   cash_deposit: number;
   safe_balance: number;
   payroll_expense: number;
-  over_short: number;
+  // NB: no `over_short` — it's a derived cash reconciliation, computed
+  // here (computeTotals) + server-side, never an editable form field.
   notes: string;
 }
 
@@ -63,7 +64,25 @@ export function computeTotals(
     (report?.other_cash_out ?? 0);
   const disbursements = disbursementsEditable + disbursementsDerived;
 
-  const overShort = form?.over_short ?? 0;
-  const net = receipts - disbursements + overShort;
-  return { receipts, disbursements, net };
+  // Net = the day's cash position, matching the server
+  // (`total_receipts - total_disbursements`) and the calendar/period
+  // views. Over/Short is a SEPARATE derived reconciliation (below) —
+  // it is NOT folded into net.
+  const net = receipts - disbursements;
+
+  // Over/Short — the cash-drawer reconciliation. Mirrors the server's
+  // DailyReport.computed_over_short (see DailyBook/INVARIANTS.md):
+  //   (cash paid out + safe balance) - cash taken in
+  // Check purchases/expenses are non-cash so they're excluded; safe
+  // balance is cash retained, so it counts as paid out. `disbursements`
+  // above already excludes safe_balance and includes the check items,
+  // so we back the checks out and add the safe in here. Positive =
+  // over (surplus), negative = short (a miscount / data-entry error).
+  const checkPurchases = report?.check_purchases ?? 0;
+  const checkExpense = report?.check_expense ?? 0;
+  const safeBalance = form?.safe_balance ?? 0;
+  const overShort =
+    disbursements - checkPurchases - checkExpense + safeBalance - receipts;
+
+  return { receipts, disbursements, net, overShort };
 }
