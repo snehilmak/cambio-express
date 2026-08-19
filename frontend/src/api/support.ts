@@ -86,3 +86,50 @@ export async function updateTicket(
     json: body,
   });
 }
+
+// ── Conversation thread ──────────────────────────────────────
+
+/** One reply in a ticket's thread. `author_kind` is "user" (store
+ *  side) or "staff" (platform side) — drives the bubble side. */
+export interface TicketMessageRow {
+  id: number;
+  ticket_id: number;
+  author_name: string;
+  author_kind: string;
+  body: string;
+  created_at: string;
+}
+
+interface MessageListResponse {
+  messages: TicketMessageRow[];
+  total: number;
+}
+
+/** The ticket's thread, oldest first. `enabled` gates the fetch so
+ *  collapsed rows don't fan out requests. */
+export function useTicketMessages(ticketId: number, enabled: boolean) {
+  return useQuery<MessageListResponse>({
+    enabled,
+    queryKey: ["tickets", "thread", ticketId],
+    queryFn: () =>
+      api<MessageListResponse>(`/api/v2/tickets/${ticketId}/messages`),
+  });
+}
+
+/** Reply into the thread. Returns the ticket — a store-side reply to
+ *  a resolved ticket auto-reopens it, so the status may have changed. */
+export async function postTicketMessage(
+  id: number, body: string,
+): Promise<TicketResponse> {
+  return api<TicketResponse>(`/api/v2/tickets/${id}/messages`, {
+    method: "POST",
+    json: { body },
+  });
+}
+
+/** Reopen a CLOSED ticket (409 otherwise). */
+export async function reopenTicket(id: number): Promise<TicketResponse> {
+  return api<TicketResponse>(`/api/v2/tickets/${id}/reopen`, {
+    method: "POST",
+  });
+}

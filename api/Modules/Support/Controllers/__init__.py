@@ -1,13 +1,23 @@
 """Support module — Controllers (FastAPI router).
 
 User-facing:
-  POST /tickets          — submit a new ticket
-  GET  /tickets          — list my tickets (scoped to store)
-  GET  /tickets/{id}     — ticket detail
+  POST /tickets                — submit a new ticket
+  GET  /tickets                — list my tickets (scoped to store)
+  GET  /tickets/{id}           — ticket detail
+  GET  /tickets/{id}/messages  — the conversation thread
+  POST /tickets/{id}/messages  — reply into the thread
+  POST /tickets/{id}/reopen    — reopen a closed ticket
 
 Superadmin:
   GET  /tickets/all      — every ticket across all stores
   PUT  /tickets/{id}     — update status / priority / reply
+
+Thread rules (see the ticket-status lifecycle):
+  - Replies are allowed while the ticket is open / in_progress /
+    resolved. A CLOSED ticket returns 409 — the store side gets a
+    "Reopen" action instead.
+  - A store-side reply to a RESOLVED ticket auto-reopens it to
+    "open" (replying means it wasn't actually resolved).
 """
 from typing import Any
 
@@ -17,9 +27,12 @@ from sqlalchemy.orm import Session
 from api.Core.Database import get_db
 from api.Modules.Auth.Controllers import get_principal
 from api.Modules.Auth.Services import resolve_store_scope
-from api.Modules.Support.Models import SupportTicket
+from api.Modules.Support.Models import SupportMessage, SupportTicket
 from api.Modules.Support.Requests import (
+    CreateMessageRequest,
     CreateTicketRequest,
+    MessageListResponse,
+    MessageRow,
     TICKET_CATEGORIES,
     TICKET_PRIORITIES,
     TICKET_STATUSES,
@@ -156,6 +169,171 @@ def get_ticket(
     return TicketResponse(ticket=_to_row(ticket))
 
 
+# ── Conversation thread ──────────────────────────────────────
+
+
+def _message_row(m: SupportMessage) -> MessageRow:
+    return MessageRow(
+        id=m.id,
+        ticket_id=m.ticket_id,
+        author_name=m.author_name or "",
+        author_kind=m.author_kind or "user",
+        body=m.body or "",
+        created_at=m.created_at.isoformat() if m.created_at else "",
+    )
+
+
+def _load_scoped_ticket(
+    db: Session, claims: dict[str, Any], ticket_id: int,
+) -> SupportTicket:
+    """Ticket by id, with the same opaque-404 tenancy scoping as
+    ``get_ticket``: store principals only reach their own store's
+    tickets; superadmin reaches any."""
+    ticket = db.get(SupportTicket, ticket_id)
+    if ticket is None:
+        raise HTTPException(404, "Ticket not found")
+    if claims.get("role") != "superadmin":
+        sid = resolve_store_scope(claims)
+        if ticket.store_id != sid:
+            raise HTTPException(404, "Ticket not found")
+    return ticket
+
+
+def _audit_ticket_action(
+    db: Session, claims: dict[str, Any], ticket: SupportTicket,
+    *, action: str, summary: str,
+) -> None:
+    """Audit a ticket mutation into the right sink for the caller
+    (invariant #7): superadmin → superadmin log, store principal →
+    that store's operator log."""
+    if claims.get("role") == "superadmin":
+        from api.Core.Audit import audit_superadmin
+        from api.Modules.Tenancy.Models import User
+        sa_user = db.get(User, int(claims["sub"]))
+        if sa_user is not None:
+            audit_superadmin(
+                db, sa_user, action=action,
+                target_type="support_ticket", target_id=str(ticket.id),
+                details=f"{summary} store_id={ticket.store_id}",
+            )
+    else:
+        from api.Core.Audit import audit_operator
+        audit_operator(
+            db, claims, action=action,
+            target_type="support_ticket", target_id=str(ticket.id),
+            target_label=(ticket.subject or "")[:160],
+            summary=summary, store_id=ticket.store_id,
+        )
+
+
+@router.get("/{ticket_id}/messages", response_model=MessageListResponse)
+def list_ticket_messages(
+    ticket_id: int = Path(..., ge=1),
+    db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
+) -> MessageListResponse:
+    """The ticket's conversation thread, oldest first. Same scoping
+    as the ticket detail."""
+    ticket = _load_scoped_ticket(db, claims, ticket_id)
+    rows = (
+        db.query(SupportMessage)
+          .filter(SupportMessage.ticket_id == ticket.id)
+          .order_by(SupportMessage.created_at.asc(), SupportMessage.id.asc())
+          .all()
+    )
+    return MessageListResponse(
+        messages=[_message_row(m) for m in rows],
+        total=len(rows),
+    )
+
+
+@router.post(
+    "/{ticket_id}/messages",
+    response_model=TicketResponse, status_code=201,
+)
+def create_ticket_message(
+    ticket_id: int = Path(..., ge=1),
+    body: CreateMessageRequest = Body(...),
+    db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
+) -> TicketResponse:
+    """Reply into the thread. Any principal in the ticket's store
+    (or superadmin). Closed tickets are read-only — 409, the UI
+    offers Reopen instead. A store-side reply to a resolved ticket
+    auto-reopens it (replying means it wasn't resolved). Returns the
+    ticket so the client sees any status flip without a second
+    fetch."""
+    ticket = _load_scoped_ticket(db, claims, ticket_id)
+    if (ticket.status or "open") == "closed":
+        raise HTTPException(
+            409, "Ticket is closed — reopen it to continue the conversation.",
+        )
+    is_staff = claims.get("role") == "superadmin"
+    author_name = claims.get("name") or claims.get("username") or ""
+    text = body.body.strip()[:5000]
+    if not text:
+        raise HTTPException(422, "Message cannot be empty.")
+    msg = SupportMessage(
+        ticket_id=ticket.id,
+        store_id=ticket.store_id,
+        author_user_id=int(claims["sub"]),
+        author_name=author_name,
+        author_kind="staff" if is_staff else "user",
+        body=text,
+        created_at=utc_now(),
+    )
+    db.add(msg)
+    reopened = False
+    if not is_staff and (ticket.status or "") == "resolved":
+        # The user is telling us it isn't actually resolved.
+        ticket.status = "open"
+        ticket.closed_at = None
+        reopened = True
+    if is_staff:
+        # Dual-write the legacy single-reply column so anything still
+        # reading it (older clients, exports) sees the latest staff
+        # reply. The thread is the source of truth.
+        ticket.admin_reply = text
+        ticket.replied_at = utc_now()
+        ticket.replied_by = author_name
+    ticket.updated_at = utc_now()
+    _audit_ticket_action(
+        db, claims, ticket,
+        action="reply_support_ticket",
+        summary=(
+            f"reply ({'staff' if is_staff else 'user'})"
+            + (" auto-reopened" if reopened else "")
+        ),
+    )
+    db.commit()
+    db.refresh(ticket)
+    return TicketResponse(ticket=_to_row(ticket))
+
+
+@router.post("/{ticket_id}/reopen", response_model=TicketResponse)
+def reopen_ticket(
+    ticket_id: int = Path(..., ge=1),
+    db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
+) -> TicketResponse:
+    """Reopen a CLOSED ticket (the store side's one action on a
+    closed ticket — e.g. the issue came back). Open/in-progress/
+    resolved tickets don't need this: 409."""
+    ticket = _load_scoped_ticket(db, claims, ticket_id)
+    if (ticket.status or "open") != "closed":
+        raise HTTPException(409, "Ticket is not closed.")
+    ticket.status = "open"
+    ticket.closed_at = None
+    ticket.updated_at = utc_now()
+    _audit_ticket_action(
+        db, claims, ticket,
+        action="reopen_support_ticket", summary="reopened",
+    )
+    db.commit()
+    db.refresh(ticket)
+    return TicketResponse(ticket=_to_row(ticket))
+
+
 @router.put("/{ticket_id}", response_model=TicketResponse)
 def update_ticket(
     ticket_id: int = Path(..., ge=1),
@@ -189,11 +367,24 @@ def update_ticket(
             raise HTTPException(422, f"Invalid priority: {body.priority}")
         ticket.priority = body.priority
     if body.admin_reply is not None:
-        ticket.admin_reply = body.admin_reply.strip()[:5000]
+        reply_text = body.admin_reply.strip()[:5000]
+        replier = claims.get("name") or claims.get("username") or ""
+        ticket.admin_reply = reply_text
         ticket.replied_at = utc_now()
-        ticket.replied_by = (
-            claims.get("name") or claims.get("username") or ""
-        )
+        ticket.replied_by = replier
+        # The thread is the source of truth — a legacy single-reply
+        # write also lands there as a staff message (only when it
+        # actually says something; clearing the field appends nothing).
+        if reply_text:
+            db.add(SupportMessage(
+                ticket_id=ticket.id,
+                store_id=ticket.store_id,
+                author_user_id=int(claims["sub"]),
+                author_name=replier,
+                author_kind="staff" if role == "superadmin" else "user",
+                body=reply_text,
+                created_at=utc_now(),
+            ))
     ticket.updated_at = utc_now()
     # CLAUDE.md invariant #7 — every admin/superadmin mutation records
     # an audit row. Superadmin edits any store's ticket and carries no

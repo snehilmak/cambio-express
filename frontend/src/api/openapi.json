@@ -2009,6 +2009,23 @@
         "title": "CountryRow",
         "type": "object"
       },
+      "CreateMessageRequest": {
+        "additionalProperties": false,
+        "description": "One reply into a ticket's conversation thread.",
+        "properties": {
+          "body": {
+            "maxLength": 5000,
+            "minLength": 1,
+            "title": "Body",
+            "type": "string"
+          }
+        },
+        "required": [
+          "body"
+        ],
+        "title": "CreateMessageRequest",
+        "type": "object"
+      },
       "CreateTicketRequest": {
         "additionalProperties": false,
         "properties": {
@@ -3765,6 +3782,67 @@
           "name"
         ],
         "title": "MTCompanyEntry",
+        "type": "object"
+      },
+      "MessageListResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "messages": {
+            "items": {
+              "$ref": "#/components/schemas/MessageRow"
+            },
+            "title": "Messages",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "messages",
+          "total"
+        ],
+        "title": "MessageListResponse",
+        "type": "object"
+      },
+      "MessageRow": {
+        "additionalProperties": false,
+        "properties": {
+          "author_kind": {
+            "title": "Author Kind",
+            "type": "string"
+          },
+          "author_name": {
+            "title": "Author Name",
+            "type": "string"
+          },
+          "body": {
+            "title": "Body",
+            "type": "string"
+          },
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "ticket_id": {
+            "title": "Ticket Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "ticket_id",
+          "author_name",
+          "author_kind",
+          "body",
+          "created_at"
+        ],
+        "title": "MessageRow",
         "type": "object"
       },
       "MonthLogged": {
@@ -28124,6 +28202,242 @@
           }
         },
         "summary": "Update Ticket",
+        "tags": [
+          "support"
+        ]
+      }
+    },
+    "/tickets/{ticket_id}/messages": {
+      "get": {
+        "description": "The ticket's conversation thread, oldest first. Same scoping\nas the ticket detail.",
+        "operationId": "list_ticket_messages_tickets__ticket_id__messages_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "ticket_id",
+            "required": true,
+            "schema": {
+              "minimum": 1,
+              "title": "Ticket Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Ticket Messages",
+        "tags": [
+          "support"
+        ]
+      },
+      "post": {
+        "description": "Reply into the thread. Any principal in the ticket's store\n(or superadmin). Closed tickets are read-only \u2014 409, the UI\noffers Reopen instead. A store-side reply to a resolved ticket\nauto-reopens it (replying means it wasn't resolved). Returns the\nticket so the client sees any status flip without a second\nfetch.",
+        "operationId": "create_ticket_message_tickets__ticket_id__messages_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "ticket_id",
+            "required": true,
+            "schema": {
+              "minimum": 1,
+              "title": "Ticket Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateMessageRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TicketResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Ticket Message",
+        "tags": [
+          "support"
+        ]
+      }
+    },
+    "/tickets/{ticket_id}/reopen": {
+      "post": {
+        "description": "Reopen a CLOSED ticket (the store side's one action on a\nclosed ticket \u2014 e.g. the issue came back). Open/in-progress/\nresolved tickets don't need this: 409.",
+        "operationId": "reopen_ticket_tickets__ticket_id__reopen_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "ticket_id",
+            "required": true,
+            "schema": {
+              "minimum": 1,
+              "title": "Ticket Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TicketResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Reopen Ticket",
         "tags": [
           "support"
         ]
