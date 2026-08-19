@@ -11,6 +11,7 @@ import {
   usePasskeys,
   useProfile,
   useStoreInfo,
+  type MTCompanyEntry,
   type ProfileUpdateBody,
   type StoreHourEntry,
 } from "../api/account";
@@ -606,6 +607,11 @@ function StoreInfoCard() {
   const [timezone, setTimezone] = useState("");
   const [hours, setHours] = useState<StoreHourEntry[]>(() => defaultHours());
   const [enforceHours, setEnforceHours] = useState(false);
+  // Money-transfer company roster (name + enabled toggle). Saved
+  // with the rest of the tab; `newCompany` is the transient add-row
+  // input and deliberately NOT part of the dirty snapshot.
+  const [mtCompanies, setMtCompanies] = useState<MTCompanyEntry[]>([]);
+  const [newCompany, setNewCompany] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   // Last-saved snapshot (JSON) — the form is dirty when it drifts.
@@ -614,10 +620,12 @@ function StoreInfoCard() {
 
   // Serialize every editable field into one comparable snapshot. Same
   // key order here + at hydrate so the dirty compare is stable.
-  const snapshot = (h: StoreHourEntry[], enforce: boolean) => JSON.stringify({
+  const snapshot = (
+    h: StoreHourEntry[], enforce: boolean, companies: MTCompanyEntry[],
+  ) => JSON.stringify({
     name, email, phone, address, legalName, ein, businessAddress,
     taxRatePct, salesTaxPct, receiptLogoUrl, receiptFooter, receiptTaxId,
-    timezone, hours: h, enforceHours: enforce,
+    timezone, hours: h, enforceHours: enforce, mtCompanies: companies,
   });
 
   // Hydrate the form from the read-side row when it arrives.
@@ -632,6 +640,7 @@ function StoreInfoCard() {
     const taxPct = ((data.store.federal_tax_rate || 0) * 100).toFixed(2);
     const salesPct = ((data.store.sales_tax_rate || 0) * 100).toFixed(2);
     const enforce = Boolean(data.store.enforce_business_hours);
+    const companies = (data.store.mt_companies ?? []).map((c) => ({ ...c }));
     // eslint-disable-next-line react-hooks/set-state-in-effect -- hydrate local editable store-settings fields + dirty baseline from server-fetched row (federal_tax_rate gets a decimal->percent conversion for display)
     setName(data.store.name);
     setEmail(data.store.email);
@@ -648,6 +657,7 @@ function StoreInfoCard() {
     setTimezone(data.store.timezone);
     setHours(hydratedHours);
     setEnforceHours(enforce);
+    setMtCompanies(companies);
     // Baseline mirrors the snapshot() shape exactly (same key order).
     setBaseline(JSON.stringify({
       name: data.store.name, email: data.store.email,
@@ -660,6 +670,7 @@ function StoreInfoCard() {
       receiptTaxId: data.store.receipt_tax_id,
       timezone: data.store.timezone,
       hours: hydratedHours, enforceHours: enforce,
+      mtCompanies: companies,
     }));
   }, [data]);
 
@@ -668,9 +679,25 @@ function StoreInfoCard() {
     identity?.role === "owner" ||
     identity?.role === "superadmin";
 
-  const isDirty = baseline !== "" && snapshot(hours, enforceHours) !== baseline;
+  const isDirty =
+    baseline !== "" && snapshot(hours, enforceHours, mtCompanies) !== baseline;
   // Arm the browser "leave site?" prompt while there are unsaved edits.
   useUnsavedChangesGuard(isDirty && !busy && canEdit);
+
+  function addCompany() {
+    const trimmed = newCompany.trim();
+    if (!trimmed) return;
+    if (trimmed.includes(",")) {
+      toast({ message: "Company names can’t contain commas.", tone: "info" });
+      return;
+    }
+    if (mtCompanies.some((c) => c.name.toLowerCase() === trimmed.toLowerCase())) {
+      toast({ message: `${trimmed} is already on the roster.`, tone: "info" });
+      return;
+    }
+    setMtCompanies((list) => [...list, { name: trimmed, enabled: true }]);
+    setNewCompany("");
+  }
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -690,12 +717,13 @@ function StoreInfoCard() {
         timezone,
         store_hours: hours,
         enforce_business_hours:     enforceHours,
+        mt_companies: mtCompanies,
       });
       await queryClient.invalidateQueries({
         queryKey: ["admin", "store-info"],
       });
       // Edits are now the saved state — clear the dirty flag.
-      setBaseline(snapshot(hours, enforceHours));
+      setBaseline(snapshot(hours, enforceHours, mtCompanies));
       toast({ message: "Store info saved.", tone: "success" });
     } catch (e) {
       setErr(e instanceof ApiError ? e.message : "Could not save.");
@@ -846,6 +874,89 @@ function StoreInfoCard() {
               </Button>
             </div>
           </Field>
+        </div>
+      </Card>
+
+      {/* Money-transfer company roster. Toggle OFF hides a company
+          from the daily book + transfer form without deleting it
+          (historical days keep showing its data); Remove drops it
+          from the roster entirely. Saved with the rest of the tab. */}
+      <Card>
+        <SectionTitle>Money transfer companies</SectionTitle>
+        <p className={styles.helpText}>
+          The companies available in the daily book&apos;s money-transfer
+          breakdown and the transfer form. Toggle one off to hide it
+          without losing its history; remove it to take it off the
+          roster entirely.
+        </p>
+        <div style={{ display: "flex", flexDirection: "column", gap: space.sm }}>
+          {mtCompanies.map((c, i) => (
+            <div
+              key={c.name}
+              style={{ display: "flex", alignItems: "center", gap: space.md }}
+            >
+              <Switch
+                checked={c.enabled}
+                disabled={!canEdit}
+                onChange={(next) =>
+                  setMtCompanies((list) =>
+                    list.map((row, j) =>
+                      j === i ? { ...row, enabled: next } : row,
+                    ),
+                  )
+                }
+              >
+                {c.name}
+              </Switch>
+              {!c.enabled && (
+                <Pill tone="neutral">Hidden</Pill>
+              )}
+              <Button
+                type="button"
+                tone="ghost"
+                size="sm"
+                disabled={!canEdit || mtCompanies.length <= 1}
+                onClick={() =>
+                  setMtCompanies((list) => list.filter((_, j) => j !== i))
+                }
+                style={{ marginLeft: "auto" }}
+              >
+                Remove
+              </Button>
+            </div>
+          ))}
+        </div>
+        <div
+          style={{
+            display: "flex", gap: space.sm, alignItems: "center",
+            marginTop: space.md, maxWidth: "26rem",
+          }}
+        >
+          <Input
+            type="text"
+            value={newCompany}
+            onChange={(e) => setNewCompany(e.target.value)}
+            placeholder="Add a company (e.g. Ria)"
+            maxLength={40}
+            disabled={!canEdit}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                // Enter adds the company instead of submitting the
+                // whole settings form.
+                e.preventDefault();
+                addCompany();
+              }
+            }}
+          />
+          <Button
+            type="button"
+            tone="secondary"
+            size="sm"
+            disabled={!canEdit || !newCompany.trim()}
+            onClick={addCompany}
+          >
+            Add
+          </Button>
         </div>
       </Card>
 

@@ -177,6 +177,15 @@ export interface StoreInfoRow {
   legal_name:       string;
   ein:              string;
   business_address: string;
+  mt_companies:     MTCompanyEntry[];
+}
+
+/** One money-transfer company on the store roster. `enabled: false`
+ *  hides it from the daily book + transfer form without deleting
+ *  the name (historical data keeps referencing it). */
+export interface MTCompanyEntry {
+  name:    string;
+  enabled: boolean;
 }
 
 export interface StoreHourEntry {
@@ -208,6 +217,7 @@ export interface StoreInfoUpdateBody {
   legal_name?:       string;
   ein?:              string;
   business_address?: string;
+  mt_companies?:     MTCompanyEntry[];
 }
 
 // Allowed values for the per-user theme toggle. Dark is the

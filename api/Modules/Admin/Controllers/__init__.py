@@ -74,6 +74,8 @@ def _to_row(s) -> StoreInfoRow:
     # at module-load time.
     from api.Modules.Admin.Services.store_info import ALLOWED_TIMEZONES
     from api.Modules.Admin.Services.store_hours import parse_stored_hours
+    from api.Modules.Admin.Requests import MTCompanyEntry
+    from api.Modules.Transfers.Services import store_mt_company_roster
     return StoreInfoRow(
         id=s.id,
         name=s.name or "",
@@ -113,6 +115,10 @@ def _to_row(s) -> StoreInfoRow:
         legal_name=getattr(s, "legal_name", "") or "",
         ein=getattr(s, "ein", "") or "",
         business_address=getattr(s, "business_address", "") or "",
+        mt_companies=[
+            MTCompanyEntry(name=name, enabled=enabled)
+            for name, enabled in store_mt_company_roster(s)
+        ],
     )
 
 

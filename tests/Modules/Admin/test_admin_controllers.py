@@ -742,3 +742,74 @@ def test_put_store_info_persists_enforce_business_hours(
     )
     assert resp.status_code == 200
     assert resp.get_json()["store"]["enforce_business_hours"] is False
+
+
+# ── PUT /admin/store-info · mt_companies roster ─────────────
+
+
+def test_put_store_info_saves_company_roster(client, test_store_id):
+    """The Settings section replaces the whole roster in one save;
+    the read side echoes it back with the enabled flags, and the
+    toggled-off company disappears from the ACTIVE list the daily
+    book consumes."""
+    token = _login(client, test_store_id)
+    resp = client.put(
+        "/api/v2/admin/store-info",
+        json={"mt_companies": [
+            {"name": "Intermex", "enabled": True},
+            {"name": "Maxi",     "enabled": False},
+            {"name": "Sigue",    "enabled": True},
+        ]},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 200
+    roster = resp.get_json()["store"]["mt_companies"]
+    assert roster == [
+        {"name": "Intermex", "enabled": True},
+        {"name": "Maxi",     "enabled": False},
+        {"name": "Sigue",    "enabled": True},
+    ]
+    # The active list (what the daily book + transfer form see)
+    # excludes the toggled-off company.
+    from tests._app import db
+    from api.Modules.Tenancy.Models import Store
+    from api.Modules.Transfers.Services import store_mt_companies
+    store = db.session.get(Store, test_store_id)
+    assert store_mt_companies(store) == ["Intermex", "Sigue"]
+
+
+def test_put_store_info_rejects_duplicate_companies(client, test_store_id):
+    token = _login(client, test_store_id)
+    resp = client.put(
+        "/api/v2/admin/store-info",
+        json={"mt_companies": [
+            {"name": "Maxi", "enabled": True},
+            {"name": "maxi", "enabled": True},
+        ]},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 422
+
+
+def test_put_store_info_rejects_empty_roster(client, test_store_id):
+    token = _login(client, test_store_id)
+    resp = client.put(
+        "/api/v2/admin/store-info",
+        json={"mt_companies": []},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 422
+
+
+def test_get_store_info_defaults_company_roster(client, test_store_id):
+    """A store that never configured companies reads back the
+    canonical three, all enabled."""
+    token = _login(client, test_store_id)
+    resp = client.get(
+        "/api/v2/admin/store-info",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 200
+    roster = resp.get_json()["store"]["mt_companies"]
+    assert {r["name"] for r in roster} >= {"Intermex", "Maxi", "Barri"}
+    assert all(r["enabled"] for r in roster)

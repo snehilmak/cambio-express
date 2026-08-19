@@ -3746,6 +3746,27 @@
         "title": "MTBreakdownWriteRow",
         "type": "object"
       },
+      "MTCompanyEntry": {
+        "additionalProperties": false,
+        "description": "One money-transfer company on the store's roster. ``enabled``\nFalse hides it from the daily book + transfer form without\nlosing the name (historical MT-summary rows keep referencing\nit). Deep validation (dedupe, caps, no commas) lives in\n``Transfers.Services.encode_mt_companies``.",
+        "properties": {
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "name": {
+            "maxLength": 80,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "MTCompanyEntry",
+        "type": "object"
+      },
       "MonthLogged": {
         "additionalProperties": false,
         "description": "One (year, month) entry the store has logged.",
@@ -7143,6 +7164,14 @@
             "title": "Legal Name",
             "type": "string"
           },
+          "mt_companies": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/MTCompanyEntry"
+            },
+            "title": "Mt Companies",
+            "type": "array"
+          },
           "name": {
             "title": "Name",
             "type": "string"
@@ -7340,6 +7369,20 @@
               }
             ],
             "title": "Legal Name"
+          },
+          "mt_companies": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/MTCompanyEntry"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mt Companies"
           },
           "name": {
             "anyOf": [

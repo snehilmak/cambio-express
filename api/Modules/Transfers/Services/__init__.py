@@ -13,7 +13,11 @@ from api.Modules.Transfers.Services.audit import (
 )
 from api.Modules.Transfers.Services.companies import (
     DEFAULT_MT_COMPANIES,
+    MAX_MT_COMPANIES,
+    MAX_MT_COMPANY_NAME_LEN,
+    encode_mt_companies,
     store_mt_companies,
+    store_mt_company_roster,
 )
 from api.Modules.Transfers.Services.form_inputs import (
     active_roster,
@@ -57,7 +61,11 @@ __all__ = [
     "parse_dob",
     "pick_employee",
     "record_transfer_audit",
+    "MAX_MT_COMPANIES",
+    "MAX_MT_COMPANY_NAME_LEN",
+    "encode_mt_companies",
     "store_mt_companies",
+    "store_mt_company_roster",
     "summarize_transfer_changes",
     "transfer_snapshot",
     "update_transfer",

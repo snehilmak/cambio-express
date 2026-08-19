@@ -14,6 +14,7 @@ from api.Modules.Admin.Requests.referrals import (
     ReferralRedemptionRow,
 )
 from api.Modules.Admin.Requests.store_info import (
+    MTCompanyEntry,
     StoreInfoResponse,
     StoreInfoRow,
     StoreInfoUpdateRequest,
@@ -49,6 +50,7 @@ __all__ = [
     "AdminUserUpdateRequest",
     "ReferralCodeResponse",
     "ReferralRedemptionRow",
+    "MTCompanyEntry",
     "StoreInfoResponse",
     "StoreInfoRow",
     "StoreInfoUpdateRequest",

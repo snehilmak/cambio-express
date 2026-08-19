@@ -86,6 +86,11 @@ class Store(Base):
     # with. Empty string falls through to DEFAULT_MT_COMPANIES. Resolve
     # via store_mt_companies(store) — never read this column directly.
     companies     = Column(String(500), default="")
+    # CSV subset of `companies` that's toggled OFF in Settings → the
+    # company stays on the roster (and in historical data) but is
+    # hidden from the daily book + transfer form. Always resolve via
+    # store_mt_companies / store_mt_company_roster — never read raw.
+    companies_disabled = Column(String(500), default="")
     # Federal tax rate (decimal — 0.01 = 1%) applied to every transfer at
     # save time. The transfer form treats Federal Tax as read-only and the
     # server always recomputes from send_amount × this rate, so employees

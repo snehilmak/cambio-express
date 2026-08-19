@@ -53,6 +53,12 @@ EDITABLE_STORE_FIELDS: tuple[str, ...] = (
     "legal_name",
     "ein",
     "business_address",
+    # Money-transfer company roster + per-company enable toggle.
+    # Virtual field: the payload is a list of {name, enabled} rows
+    # encoded into the ``companies`` + ``companies_disabled`` CSV
+    # columns via ``encode_mt_companies`` (Transfers Services) —
+    # there is no ``mt_companies`` column on Store.
+    "mt_companies",
 )
 
 
@@ -94,6 +100,17 @@ def update_store_info(
             # bad payload coming from a non-SPA caller (CLI,
             # scripts) still hits the same guard.
             v = validate_hours_payload(v)
+        if k == "mt_companies":
+            # Virtual field — encode the {name, enabled} rows into
+            # the two CSV columns. ValueError propagates to the
+            # controller's 422 like every other validation here.
+            from api.Modules.Transfers.Services import encode_mt_companies
+            companies_csv, disabled_csv = encode_mt_companies(v)
+            # setattr dodges the SQLAlchemy 1.x Column[str] typing
+            # trap (same pattern as the loop's setattr below).
+            setattr(store, "companies", companies_csv)
+            setattr(store, "companies_disabled", disabled_csv)
+            continue
         if k == "enforce_business_hours":
             # Coerce truthy values so a CLI / curl POST with "1"
             # or "true" still writes a Boolean column cleanly.

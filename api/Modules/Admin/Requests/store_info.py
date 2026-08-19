@@ -22,6 +22,19 @@ class StoreHourEntry(BaseModel):
     closed: bool = False
 
 
+class MTCompanyEntry(BaseModel):
+    """One money-transfer company on the store's roster. ``enabled``
+    False hides it from the daily book + transfer form without
+    losing the name (historical MT-summary rows keep referencing
+    it). Deep validation (dedupe, caps, no commas) lives in
+    ``Transfers.Services.encode_mt_companies``."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name:    str  = Field(..., max_length=80)
+    enabled: bool = True
+
+
 class StoreInfoRow(BaseModel):
     """Read shape — fields the SPA's settings page renders.
     Slug / plan / billing fields are read-only here; the
@@ -62,6 +75,10 @@ class StoreInfoRow(BaseModel):
     legal_name:       str = ""
     ein:              str = ""
     business_address: str = ""
+    # Full MT-company roster (enabled + disabled) for the Settings
+    # section. The daily book / transfer form consume only the
+    # enabled subset via store_mt_companies().
+    mt_companies: list[MTCompanyEntry] = []
 
 
 class StoreInfoResponse(BaseModel):
@@ -102,3 +119,6 @@ class StoreInfoUpdateRequest(BaseModel):
     legal_name:       str | None = Field(None, max_length=200)
     ein:              str | None = Field(None, max_length=20)
     business_address: str | None = Field(None, max_length=500)
+    # Replaces the whole roster in one save (same all-fields-at-once
+    # posture as the rest of the Settings form). None = untouched.
+    mt_companies: list[MTCompanyEntry] | None = None
