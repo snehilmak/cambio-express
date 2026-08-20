@@ -87,6 +87,7 @@ The mapping is canonical in
 | `cash_expenses`      | `cash_expense`       | Cash paid for expenses (singular on DailyReport — historic) |
 | `check_expenses`     | `check_expense`      | Checks written for expenses |
 | `cash_payroll`       | `payroll_expense`    | Cash paid for payroll |
+| `check_payroll`      | `payroll_check`      | Payroll paid by check (skips the daily book's totals by design) |
 | `check_cashing_fees` | `check_cashing_fees` | Fee revenue from check cashing |
 
 **These fields are NOT writable via the monthly PUT.** They get
@@ -158,6 +159,7 @@ these fields, or the request 422s:
 - `cash_expenses` (Category 2 — daily-derived)
 - `check_expenses` (Category 2 — daily-derived)
 - `cash_payroll` (Category 2 — daily-derived)
+- `check_payroll` (Category 2 — daily-derived)
 - `check_cashing_fees` (Category 2 — daily-derived)
 - `return_check_gl` (Category 3 — return-check workflow)
 - `bank_charges_210` (legacy split, no longer rendered)
@@ -190,6 +192,7 @@ total_income = taxable_sales + non_taxable
 ```
 total_expenses = cash_purchases + check_purchases
                + cash_expenses + check_expenses + cash_payroll
+               + check_payroll
                + bank_charges_total + credit_card_fees
                + money_order_rent + emaginenet_tech
                + irs_payroll_tax + texas_workforce + other_taxes

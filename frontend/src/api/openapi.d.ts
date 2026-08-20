@@ -6563,6 +6563,11 @@ export interface components {
              */
             over_short: number;
             /**
+             * Payroll Check
+             * @default 0
+             */
+            payroll_check: number;
+            /**
              * Payroll Expense
              * @default 0
              */
@@ -6639,8 +6644,6 @@ export interface components {
              * @default
              */
             notes: string;
-            /** Payroll Expense */
-            payroll_expense?: number | null;
             /** Phone Recargas */
             phone_recargas?: number | null;
             /** Rebates Commissions */
@@ -7297,6 +7300,11 @@ export interface components {
              * @default 0
              */
             check_expenses: number;
+            /**
+             * Check Payroll
+             * @default 0
+             */
+            check_payroll: number;
             /**
              * Check Purchases
              * @default 0

@@ -77,6 +77,7 @@ def _to_row(s: DailyReportSummary) -> DailyReportRow:
         other_cash_in=s.other_cash_in,
         cash_deposit=s.cash_deposit, safe_balance=s.safe_balance,
         payroll_expense=s.payroll_expense,
+        payroll_check=s.payroll_check,
         cash_purchases=s.cash_purchases, cash_expense=s.cash_expense,
         check_purchases=s.check_purchases, check_expense=s.check_expense,
         outside_cash_drops=s.outside_cash_drops,

@@ -2482,6 +2482,11 @@
             "title": "Over Short",
             "type": "number"
           },
+          "payroll_check": {
+            "default": 0.0,
+            "title": "Payroll Check",
+            "type": "number"
+          },
           "payroll_expense": {
             "default": 0.0,
             "title": "Payroll Expense",
@@ -2635,17 +2640,6 @@
             "default": "",
             "title": "Notes",
             "type": "string"
-          },
-          "payroll_expense": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Payroll Expense"
           },
           "phone_recargas": {
             "anyOf": [
@@ -3925,6 +3919,11 @@
           "check_expenses": {
             "default": 0.0,
             "title": "Check Expenses",
+            "type": "number"
+          },
+          "check_payroll": {
+            "default": 0.0,
+            "title": "Check Payroll",
             "type": "number"
           },
           "check_purchases": {

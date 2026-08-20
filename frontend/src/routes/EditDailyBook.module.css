@@ -348,6 +348,10 @@
   display: flex;
   gap: 0.65rem;
   flex-wrap: wrap;
+  /* Bottom-align every cell so the label-less +Add button sits on
+     the same baseline as the inputs (it used to float against the
+     row top on some widths). */
+  align-items: flex-end;
 }
 
 .addRowTime {
@@ -365,6 +369,9 @@
 
 .addRowEnd {
   align-self: flex-end;
+  /* Optical alignment: input boxes are ~2.4rem tall, the sm button
+     2rem — a hair of bottom padding centers it against the input. */
+  padding-bottom: 0.2rem;
 }
 
 .widgetTable {

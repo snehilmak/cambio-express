@@ -57,6 +57,7 @@ _DAILY_DERIVED_FIELDS: dict[str, str] = {
     "cash_expenses":      "cash_expense",     # singular on DailyReport
     "check_expenses":     "check_expense",
     "cash_payroll":       "payroll_expense",
+    "check_payroll":      "payroll_check",
     "check_cashing_fees": "check_cashing_fees",
 }
 

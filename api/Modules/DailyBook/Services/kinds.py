@@ -47,6 +47,14 @@ LINE_ITEM_KINDS: dict[str, tuple[str, str, str]] = {
     # line items. Was a single operator-typed `money_order` total;
     # existing values were backfilled to one line item.
     "money_order":    ("money_order",              "money order",          "entries"),
+    # Payroll paid out. Cash payroll moves real drawer cash so it
+    # rolls into `payroll_expense` (a daily disbursement, as the
+    # typed field always did). CHECK payroll deliberately does NOT
+    # touch the daily book's numbers — `payroll_check` is excluded
+    # from total_disbursements/over_short and exists only to feed
+    # the monthly P&L's check-payroll line.
+    "payroll_cash":   ("payroll_expense",          "cash payroll",         "entries"),
+    "payroll_check":  ("payroll_check",            "check payroll",        "entries"),
     # Outside-cash drops (ATM drops, safe drops). Originally lived
     # in its own `DailyDrop` table + bespoke routes/IIFE —
     # collapsed into the generic kind system after the data

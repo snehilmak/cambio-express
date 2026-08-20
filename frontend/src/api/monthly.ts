@@ -27,6 +27,7 @@ export interface MonthlyRow {
   cash_expenses: number;
   check_expenses: number;
   cash_payroll: number;
+  check_payroll: number;
   bank_charges_total: number;
   credit_card_fees: number;
   money_order_rent: number;

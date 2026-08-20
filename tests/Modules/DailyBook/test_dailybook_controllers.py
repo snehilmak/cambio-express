@@ -316,6 +316,8 @@ def test_put_rejects_extra_fields(client, test_store_id):
     "checks_deposit",
     "from_bank",
     "money_order",
+    "payroll_expense",
+    "payroll_check",
     # over_short is a derived cash reconciliation — computed
     # server-side, never typed (INVARIANTS "Over/Short is derived").
     "over_short",

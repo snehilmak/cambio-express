@@ -20,7 +20,9 @@ export interface FormState {
   rebates_commissions: number;
   cash_deposit: number;
   safe_balance: number;
-  payroll_expense: number;
+  // NB: no `payroll_expense` — line-item-derived (payroll_cash kind),
+  // read off the report row. `payroll_check` never enters the daily
+  // totals at all (monthly P&L only).
   // NB: no `over_short` — it's a derived cash reconciliation, computed
   // here (computeTotals) + server-side, never an editable form field.
   notes: string;
@@ -57,9 +59,10 @@ export function computeTotals(
   // "Out" and understated the day's position, so the editor disagreed
   // with the calendar/period views (which use the server's net).
   const disbursementsEditable = form ? (
-    form.cash_deposit + form.payroll_expense
+    form.cash_deposit
   ) : 0;
   const disbursementsDerived =
+    (report?.payroll_expense ?? 0) +
     (report?.cash_purchases ?? 0) + (report?.cash_expense ?? 0) +
     (report?.check_purchases ?? 0) + (report?.check_expense ?? 0) +
     (report?.outside_cash_drops ?? 0) + (report?.checks_deposit ?? 0) +

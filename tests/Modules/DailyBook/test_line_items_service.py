@@ -337,3 +337,47 @@ def test_money_order_line_items_roll_up_to_field(test_store_id):
         assert rpt.money_order == 100.0
         # Still a receipt: rolls into total_receipts.
         assert rpt.total_receipts == 100.0
+
+
+def test_payroll_kinds_roll_up_to_their_fields(test_store_id):
+    """payroll_cash rolls into payroll_expense (a real daily
+    disbursement); payroll_check rolls into payroll_check, which the
+    daily totals deliberately IGNORE — a payroll check doesn't move
+    drawer cash. It exists to feed the monthly P&L only."""
+    from api.Modules.DailyBook.Models import DailyReport
+    from tests._app import db
+    from api.Modules.DailyBook.Services import (
+        add_line_item, recompute_line_items_total,
+    )
+    today = date.today()
+    with db_session():
+        add_line_item(
+            db.session, store_id=test_store_id, report_date=today,
+            kind="payroll_cash", at_time=None, amount=500.0,
+        )
+        add_line_item(
+            db.session, store_id=test_store_id, report_date=today,
+            kind="payroll_check", at_time=None, amount=1200.0,
+        )
+        db.session.commit()
+        recompute_line_items_total(
+            db.session, test_store_id, today,
+            kind="payroll_cash", daily_report_field="payroll_expense",
+        )
+        recompute_line_items_total(
+            db.session, test_store_id, today,
+            kind="payroll_check", daily_report_field="payroll_check",
+        )
+        db.session.commit()
+        rpt = (
+            db.session.query(DailyReport)
+              .filter_by(store_id=test_store_id, report_date=today)
+              .first()
+        )
+        assert rpt is not None
+        assert rpt.payroll_expense == 500.0
+        assert rpt.payroll_check == 1200.0
+        # Cash payroll is a disbursement; check payroll is invisible
+        # to the daily totals AND to over/short.
+        assert rpt.total_disbursements == 500.0
+        assert rpt.computed_over_short == rpt.total_disbursements - 0.0

@@ -33,6 +33,7 @@ class MonthlyRow(BaseModel):
     cash_expenses:          float = 0.0
     check_expenses:         float = 0.0
     cash_payroll:           float = 0.0
+    check_payroll:          float = 0.0
     bank_charges_total:     float = 0.0
     credit_card_fees:       float = 0.0
     money_order_rent:       float = 0.0
