@@ -58,6 +58,33 @@ describe("<Modal>", () => {
     expect(onClose).not.toHaveBeenCalled();
   });
 
+  it("traps Tab focus inside the dialog and hides the page behind it", async () => {
+    const user = userEvent.setup();
+    const { container } = render(
+      <>
+        <button>Outside</button>
+        <Modal open onClose={() => {}} title="Trap test">
+          <button>First</button>
+          <button>Second</button>
+        </Modal>
+      </>,
+    );
+    // Radix marks everything behind the overlay aria-hidden —
+    // the page is gone from the accessibility tree while the
+    // dialog is open.
+    const outside = container.querySelector("button");
+    expect(outside).toHaveTextContent("Outside");
+    expect(outside?.closest("[aria-hidden='true']")).not.toBeNull();
+    // Tab repeatedly — focus must cycle through the dialog's
+    // controls and never land on the button behind the overlay.
+    for (let i = 0; i < 5; i++) {
+      await user.tab();
+      expect(outside).not.toHaveFocus();
+      const dialog = screen.getByRole("dialog");
+      expect(dialog.contains(document.activeElement)).toBe(true);
+    }
+  });
+
   it("renders the actions row when actions prop is provided", () => {
     render(
       <Modal

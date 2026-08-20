@@ -1,5 +1,5 @@
-import { useState, type ReactNode } from "react";
-import { createPortal } from "react-dom";
+import { useState, type CSSProperties, type ReactNode } from "react";
+import * as Dialog from "@radix-ui/react-dialog";
 
 import { Button, type ButtonTone } from "./Button";
 import styles from "./RowActions.module.css";
@@ -83,40 +83,61 @@ export function RowActions({
         </Button>
       </div>
 
-      {open && createPortal(
-        <div
-          className={styles.sheetBackdrop}
-          onClick={() => setOpen(false)}
-        >
-          <div
-            className={styles.sheetCard}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className={styles.sheetGrip} />
-            {title && (
-              <div className={styles.sheetHeader}>{title}</div>
-            )}
-            {visible.map((a) => (
-              <button
-                key={a.label}
-                type="button"
-                className={`${styles.sheetItem} ${_sheetToneClass(a.tone)}`}
-                disabled={a.disabled || a.busy}
-                onClick={() => {
-                  setOpen(false);
-                  void a.onClick();
-                }}
-              >
-                {a.busy ? `${a.label}…` : a.label}
-              </button>
-            ))}
-          </div>
-        </div>,
-        document.body,
-      )}
+      {/* Bottom sheet = a Radix Dialog, so it gets real dialog
+          semantics for free: focus trap, focus-return to the
+          trigger, Escape + outside-click dismissal, body-scroll
+          lock, aria-modal. The Content nests inside the Overlay
+          so the existing align-to-bottom CSS keeps working. */}
+      <Dialog.Root open={open} onOpenChange={setOpen}>
+        <Dialog.Portal>
+          <Dialog.Overlay className={styles.sheetBackdrop}>
+            <Dialog.Content
+              className={styles.sheetCard}
+              aria-describedby={undefined}
+            >
+              <div className={styles.sheetGrip} />
+              <Dialog.Title asChild>
+                {title ? (
+                  <div className={styles.sheetHeader}>{title}</div>
+                ) : (
+                  // Dialogs must have an accessible name even when
+                  // the sheet has no visible header.
+                  <span style={visuallyHidden}>{label}</span>
+                )}
+              </Dialog.Title>
+              {visible.map((a) => (
+                <button
+                  key={a.label}
+                  type="button"
+                  className={`${styles.sheetItem} ${_sheetToneClass(a.tone)}`}
+                  disabled={a.disabled || a.busy}
+                  onClick={() => {
+                    setOpen(false);
+                    void a.onClick();
+                  }}
+                >
+                  {a.busy ? `${a.label}…` : a.label}
+                </button>
+              ))}
+            </Dialog.Content>
+          </Dialog.Overlay>
+        </Dialog.Portal>
+      </Dialog.Root>
     </>
   );
 }
+
+const visuallyHidden: CSSProperties = {
+  position: "absolute",
+  width: 1,
+  height: 1,
+  padding: 0,
+  margin: -1,
+  overflow: "hidden",
+  clip: "rect(0 0 0 0)",
+  whiteSpace: "nowrap",
+  border: 0,
+};
 
 
 function _desktopTone(tone?: RowActionTone): ButtonTone {
