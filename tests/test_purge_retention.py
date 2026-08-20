@@ -313,3 +313,58 @@ def test_purge_handles_multiple_expired_stores_in_one_run(client):
         assert "doomed-1" not in remaining
         assert "doomed-2" not in remaining
         assert "safe-1" in remaining
+
+
+# ── Sweep-found gaps: StoreFeatureOverride + ReturnCheckPayment ────────────
+
+def test_purge_wipes_store_feature_overrides(client):
+    """StoreFeatureOverride is a per-store row (store_id FK NOT NULL,
+    updated_by FK to user) — it must purge with the store or the rows
+    orphan (and on Postgres the User delete would FK-violate when
+    updated_by is set)."""
+    from api.Modules.Billing.Models import StoreFeatureOverride
+    from tests._app import purge_expired_stores
+    with db_session():
+        s = _make_inactive_store_due(slug="override-purge-store")
+        db.session.add(StoreFeatureOverride(
+            store_id=s.id, flag_key="bank_sync", enabled=False,
+        ))
+        db.session.commit()
+        sid = s.id
+        assert purge_expired_stores() == 1
+        db.session.expire_all()
+        left = (
+            db.session.query(StoreFeatureOverride)
+            .filter_by(store_id=sid).count()
+        )
+        assert left == 0
+
+
+def test_purge_wipes_return_check_payments_before_checks(client):
+    """ReturnCheckPayment has no store_id of its own — it FKs to
+    ReturnCheck. The explicit pre-walk must delete the installments
+    before the registry deletes the parent checks, or Postgres
+    FK-violates and the store's purge transaction aborts."""
+    from api.Modules.ReturnChecks.Models import ReturnCheck, ReturnCheckPayment
+    from tests._app import purge_expired_stores
+    with db_session():
+        s = _make_inactive_store_due(slug="payment-purge-store")
+        chk = ReturnCheck(
+            store_id=s.id, customer_name="Bouncer",
+            amount=1000.0, bounced_on=date(2026, 1, 5),
+        )
+        db.session.add(chk)
+        db.session.flush()
+        db.session.add(ReturnCheckPayment(
+            return_check_id=chk.id, amount=300.0,
+            paid_on=date(2026, 1, 20), payment_method="cash",
+        ))
+        db.session.commit()
+        chk_id = chk.id
+        assert purge_expired_stores() == 1
+        db.session.expire_all()
+        assert (
+            db.session.query(ReturnCheckPayment)
+            .filter_by(return_check_id=chk_id).count()
+        ) == 0
+        assert db.session.get(ReturnCheck, chk_id) is None

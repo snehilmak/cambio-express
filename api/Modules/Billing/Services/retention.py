@@ -56,6 +56,9 @@ STORE_OWNED_MODELS: list[str] = [
     "StoreEmployeePasskey",
     "StoreEmployee", "Customer",
     "ReferralCode", "ReferralRedemption",
+    # Per-store feature-flag overrides. Must purge before User —
+    # ``updated_by`` FKs to user.id.
+    "StoreFeatureOverride",
     "TVDisplay",
     # SupportMessage FKs to SupportTicket — purge child first.
     "SupportMessage",
@@ -84,7 +87,9 @@ def _store_owned_models() -> list[tuple[type, str]]:
         BankRule, BankTransaction, StripeBankAccount,
     )
     from api.Modules.Batches.Models import ACHBatch
-    from api.Modules.Billing.Models import ReferralCode, ReferralRedemption
+    from api.Modules.Billing.Models import (
+        ReferralCode, ReferralRedemption, StoreFeatureOverride,
+    )
     from api.Modules.Customers.Models import Customer
     from api.Modules.DailyBook.Models import (
         CheckDeposit, DailyDrop, DailyLineItem, DailyReport,
@@ -134,6 +139,8 @@ def _store_owned_models() -> list[tuple[type, str]]:
         # Referral tables key on a different column.
         (ReferralCode, "owner_store_id"),
         (ReferralRedemption, "referee_store_id"),
+        # Feature-flag overrides — before User (updated_by FK).
+        (StoreFeatureOverride, "store_id"),
         # TVDisplay (store-keyed) — children handled by the explicit
         # chain in the purge function. Listing it here covers the
         # parent row itself.
@@ -304,6 +311,28 @@ def _purge_tv_display_chain(db: Session, store_id: int) -> None:
     )
 
 
+def _purge_return_check_payments(db: Session, store_id: int) -> None:
+    """Wipe repayment installments before their parent ReturnCheck
+    rows die in the generic loop. ``ReturnCheckPayment`` carries no
+    ``store_id`` of its own (keyed by ``return_check_id``), so the
+    registry can't reach it — on Postgres the ReturnCheck delete
+    would FK-violate and abort the store's purge transaction.
+    Same child-before-parent story as SupportMessage/SupportTicket,
+    just via an explicit pre-walk because of the missing store key."""
+    from api.Modules.ReturnChecks.Models import ReturnCheck, ReturnCheckPayment
+    check_ids = [
+        cid for (cid,) in
+        db.query(ReturnCheck.id).filter_by(store_id=store_id).all()
+    ]
+    if not check_ids:
+        return
+    (
+        db.query(ReturnCheckPayment)
+          .filter(ReturnCheckPayment.return_check_id.in_(check_ids))
+          .delete(synchronize_session=False)
+    )
+
+
 def _purge_store_owned_rows(db: Session, store_id: int) -> None:
     """Loop the static ``STORE_OWNED_MODELS`` registry, wiping every
     row owned by this store. The registry holds (model, fk_column)
@@ -416,6 +445,7 @@ def purge_expired_stores(db: Session) -> int:
     for store in expired:
         _purge_user_scoped_rows(db, store.id)
         _purge_tv_display_chain(db, store.id)
+        _purge_return_check_payments(db, store.id)
         _purge_store_owned_rows(db, store.id)
         db.delete(store)
         purged += 1
