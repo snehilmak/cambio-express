@@ -28,9 +28,9 @@ import { addDaysIso } from "../lib/datetime";
 import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
 import {
-  Breadcrumbs, Button, Card, ConfirmDialog, EmptyState, Field, Input,
-  Loading, Modal, MoneyInput, PageHeader, PageShell, Pill, RowActions,
-  TabsBar, TabsButton, Textarea,
+  Breadcrumbs, Button, Card, ConfirmDialog, EmptyState, Field, InfoTip,
+  Input, Loading, Modal, MoneyInput, PageHeader, PageShell, Pill,
+  RowActions, TabsBar, TabsButton, Textarea,
 } from "../components/ui";
 import { useUnsavedGuard } from "../lib/useUnsavedGuard";
 import { computeTotals, type FormState } from "./editDailyBook.totals";
@@ -126,8 +126,9 @@ interface LineItemFieldDef {
 
 // taxable_sales / non_taxable / sales_tax are edited together in the
 // <SalesWidget> modal (see the "In" tab), not as plain inputs here.
-// money_order_fees / check_cashing_fees / return_check_hold_fees are
-// grouped in the <FeesWidget> modal for the same reason.
+// money_order_fees / check_cashing_fees / return_check_hold_fees /
+// rebates_commissions are grouped in the <FeesWidget> modal for the
+// same reason.
 // forward_balance is also NOT in this list — it renders through the
 // dedicated <ForwardBalanceInput> because it's auto-carried from the
 // prior day (read-only) on every day but the store's first.
@@ -136,7 +137,6 @@ const RECEIPT_INPUTS: InputFieldDef[] = [
   { key: "phone_recargas",         label: "Phone recargas" },
   { key: "boost_mobile",           label: "Boost Mobile" },
   { key: "money_order",            label: "Money order" },
-  { key: "rebates_commissions",    label: "Rebates / commissions" },
 ];
 
 const RECEIPT_LINE_ITEMS: LineItemFieldDef[] = [
@@ -784,10 +784,10 @@ function ReceiptsPanel(
 
       <div className={styles.panelDivider} />
 
-      <PanelTitle>Auto-summed entries</PanelTitle>
-      <p className={styles.subText}>
-        Total updates as you add or delete entries — no manual entry needed.
-      </p>
+      <PanelTitle>
+        Auto-summed entries
+        <InfoTip text="Totals update as you add or delete entries — no manual entry needed." />
+      </PanelTitle>
       <div className={styles.widgetGrid}>
         {RECEIPT_LINE_ITEMS.map((f) => (
           <LineItemWidget
@@ -825,10 +825,10 @@ function DisbursementsPanel(props: PanelProps) {
 
       <div className={styles.panelDivider} />
 
-      <PanelTitle>Logged entries</PanelTitle>
-      <p className={styles.subText}>
-        Tap a row to add a timestamped entry — totals roll up automatically.
-      </p>
+      <PanelTitle>
+        Logged entries
+        <InfoTip text="Tap a row to add a timestamped entry — totals roll up automatically." />
+      </PanelTitle>
       <div className={styles.widgetGrid}>
         {DISBURSEMENT_LINE_ITEMS.map((f) => (
           <LineItemWidget
@@ -1022,9 +1022,10 @@ function SalesWidget({
 }
 
 // Fees box — groups the store's fee-revenue receipt lines
-// (money-order fee, check-cashing fee, return-check hold fee) behind
-// one tile + modal, mirroring <SalesWidget>. Same modelling: all
-// three are Category-1 report fields (in EDITABLE_KEYS), so the modal
+// (money-order fee, check-cashing fee, return-check hold fee,
+// rebates/commissions) behind one tile + modal, mirroring
+// <SalesWidget>. Same modelling: all
+// four are Category-1 report fields (in EDITABLE_KEYS), so the modal
 // edits shared form state and its Save persists through the normal
 // daily-report PUT. Grouping keeps the "Other receipts" grid short and
 // puts the fee lines that used to be loose tiles in one place.
@@ -1043,7 +1044,8 @@ function FeesWidget({
   const total =
     (form.money_order_fees || 0) +
     (form.check_cashing_fees || 0) +
-    (form.return_check_hold_fees || 0);
+    (form.return_check_hold_fees || 0) +
+    (form.rebates_commissions || 0);
 
   async function onSave() {
     if (busy || locked) return;
@@ -1071,7 +1073,7 @@ function FeesWidget({
           <span className={styles.widgetTotal}>{fmtMoney2(total)}</span>
         </span>
         <span className={styles.widgetCount}>
-          Money order · Check cashing · Return check hold
+          Money order · Check cashing · Return check · Rebates
         </span>
       </button>
 
@@ -1103,6 +1105,14 @@ function FeesWidget({
                 label="Return check hold fees"
                 value={form.return_check_hold_fees}
                 onChange={(v) => set("return_check_hold_fees", v)}
+                disabled={locked}
+              />
+            </div>
+            <div className={styles.addRowAmount}>
+              <MoneyInput
+                label="Rebates / commissions"
+                value={form.rebates_commissions}
+                onChange={(v) => set("rebates_commissions", v)}
                 disabled={locked}
               />
             </div>
@@ -1822,10 +1832,17 @@ function ForwardBalanceInput({
 }) {
   return (
     <MoneyInput
-      label="Forward balance"
-      hint={auto
-        ? "Auto: yesterday's cash drops + safe balance"
-        : "Opening balance — set once; it carries forward automatically."}
+      label={(
+        <>
+          Forward balance
+          <InfoTip
+            label="About forward balance"
+            text={auto
+              ? "Auto-carried: yesterday's cash drops + safe balance. Edit yesterday to change it."
+              : "Opening balance — set once on your first day; it carries forward automatically after that."}
+          />
+        </>
+      )}
       value={Number.isFinite(value) ? value : 0}
       onChange={onChange}
       disabled={disabled || auto}
