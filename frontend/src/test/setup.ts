@@ -18,3 +18,16 @@ import { cleanup } from "@testing-library/react";
 afterEach(() => {
   cleanup();
 });
+
+// jsdom has no ResizeObserver; Radix's popper positioning
+// (Tooltip) observes the trigger for size changes. A no-op stub
+// is enough — tests assert presence/content, not pixel position.
+if (typeof globalThis.ResizeObserver === "undefined") {
+  class ResizeObserverStub {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  }
+  globalThis.ResizeObserver =
+    ResizeObserverStub as unknown as typeof ResizeObserver;
+}

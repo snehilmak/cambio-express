@@ -1,37 +1,38 @@
-import {
-  useEffect, useId, useRef, type CSSProperties, type ReactNode,
-} from "react";
-import { createPortal } from "react-dom";
+import { type CSSProperties, type ReactNode } from "react";
+import * as Dialog from "@radix-ui/react-dialog";
 
 import { Button, type ButtonTone } from "./Button";
 
 import styles from "./Modal.module.css";
 
-/** Kit modal primitive.
+/** Kit modal primitive — Radix Dialog under the hood, same API.
  *
  *  Replaces the hand-rolled `.modalBackdrop` + `.modalCard`
  *  blocks scattered across Customers / AdminTimeClock / TVDisplay
  *  and the bare `window.confirm()` / `window.alert()` calls in
- *  the rest of the SPA.  Centralises:
+ *  the rest of the SPA.  Radix supplies the hard parts we used to
+ *  hand-roll (and the one we never had):
  *
- *  - `createPortal` to body so `position: fixed` pins to the
- *    viewport (a `.ds-page` entry animation otherwise establishes
- *    a containing block and traps the modal inside the page flow).
+ *  - Portal to body so `position: fixed` pins to the viewport
+ *    (a `.ds-page` entry animation otherwise establishes a
+ *    containing block and traps the modal inside the page flow).
  *  - `role="dialog"` + `aria-modal="true"` + `aria-labelledby`
  *    wired to the title for screen readers.
- *  - Escape-key dismissal + click-outside dismissal (both gated
- *    by `disabled` so a busy save doesn't get torn out).
- *  - Body-scroll lock while open — the page underneath shouldn't
- *    scroll when the user pulls down on the backdrop.
- *  - Focus management: focus lands on the modal card on open, the
- *    previously-focused element is restored on close.
+ *  - A REAL focus trap: Tab / Shift-Tab cycle inside the dialog
+ *    instead of escaping into the page behind it. Focus lands in
+ *    the card on open and returns to the trigger on close.
+ *  - Escape-key + click-outside dismissal (both gated by
+ *    `disabled` so a busy save doesn't get torn out).
+ *  - Body-scroll lock while open.
  *  - Reduced-motion: the global `@media (prefers-reduced-motion:
  *    reduce)` rule in `src/styles.css` strips the fade-scale
  *    keyframes for users who asked for it.
  *
- *  When `open` is false the component renders nothing — the
- *  portal node + key listeners only exist while the modal is
- *  visible. */
+ *  The Content nests inside the Overlay (the Radix "scrollable
+ *  overlay" pattern) so the existing flex-centering CSS keeps
+ *  working unchanged.
+ *
+ *  When `open` is false the component renders nothing. */
 export function Modal({
   open, onClose, title, children, actions, size = "md",
   closeOnBackdrop = true, closeOnEscape = true, disabled = false,
@@ -62,62 +63,40 @@ export function Modal({
    *  network round-trip. */
   disabled?: boolean;
 }) {
-  const titleId = useId();
-  const cardRef = useRef<HTMLDivElement>(null);
-
-  // Focus + body-scroll lock: open the modal → grab focus +
-  // freeze body scroll; close → restore focus + unfreeze.
-  // The cleanup function handles unmount-while-open too.
-  useEffect(() => {
-    if (!open) return;
-    const previousFocus = document.activeElement as HTMLElement | null;
-    cardRef.current?.focus();
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      previousFocus?.focus?.();
-    };
-  }, [open]);
-
-  // Escape dismissal — separate effect so toggling `closeOnEscape`
-  // doesn't tear down focus / body-scroll.
-  useEffect(() => {
-    if (!open || !closeOnEscape) return;
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape" && !disabled) {
-        e.stopPropagation();
-        onClose();
-      }
-    }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, closeOnEscape, disabled, onClose]);
-
-  if (!open) return null;
-
-  return createPortal(
-    <div
-      className={styles.backdrop}
-      onClick={(e) => {
-        if (!closeOnBackdrop || disabled) return;
-        if (e.target === e.currentTarget) onClose();
+  return (
+    <Dialog.Root
+      open={open}
+      onOpenChange={(next) => {
+        if (!next && !disabled) onClose();
       }}
     >
-      <div
-        ref={cardRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        tabIndex={-1}
-        className={`${styles.card} ${sizeClass(size)}`}
-      >
-        <h2 id={titleId} className={styles.title}>{title}</h2>
-        <div className={styles.body}>{children}</div>
-        {actions && <div className={styles.actions}>{actions}</div>}
-      </div>
-    </div>,
-    document.body,
+      <Dialog.Portal>
+        <Dialog.Overlay className={styles.backdrop}>
+          <Dialog.Content
+            className={`${styles.card} ${sizeClass(size)}`}
+            // The body is free-form content, not a single
+            // description — suppress Radix's aria-describedby
+            // wiring (and its dev warning) explicitly.
+            aria-describedby={undefined}
+            onEscapeKeyDown={(e) => {
+              if (!closeOnEscape || disabled) e.preventDefault();
+            }}
+            onPointerDownOutside={(e) => {
+              if (!closeOnBackdrop || disabled) e.preventDefault();
+            }}
+            onInteractOutside={(e) => {
+              if (!closeOnBackdrop || disabled) e.preventDefault();
+            }}
+          >
+            <Dialog.Title asChild>
+              <h2 className={styles.title}>{title}</h2>
+            </Dialog.Title>
+            <div className={styles.body}>{children}</div>
+            {actions && <div className={styles.actions}>{actions}</div>}
+          </Dialog.Content>
+        </Dialog.Overlay>
+      </Dialog.Portal>
+    </Dialog.Root>
   );
 }
 
