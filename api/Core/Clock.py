@@ -47,3 +47,22 @@ TIMEZONE_CHOICES: tuple[str, ...] = (
     "Asia/Karachi",
     "UTC",
 )
+
+
+def iso(dt: "datetime | None") -> str:
+    """ISO-8601 string for a nullable datetime — "" when None.
+    The response-serialization twin of ``utc_now()``: four
+    controllers used to declare an identical private ``_iso``;
+    this is the single shared copy."""
+    return dt.isoformat() if dt else ""
+
+
+def iso_or_none(dt: object) -> str | None:
+    """Like ``iso`` but None-preserving, and tolerant of values
+    that are already strings (some export paths carry mixed
+    types). Used where the JSON field is nullable."""
+    if dt is None:
+        return None
+    if hasattr(dt, "isoformat"):
+        return dt.isoformat()  # type: ignore[attr-defined]
+    return str(dt)

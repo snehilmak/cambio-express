@@ -76,8 +76,7 @@ def _require_tv_store(claims: dict[str, Any], db: Session):
     return store
 
 
-def _iso(dt) -> str:
-    return dt.isoformat() if dt else ""
+from api.Core.Clock import iso as _iso
 
 
 def _csv_split(s: str) -> list[str]:
