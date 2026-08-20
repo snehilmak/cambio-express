@@ -111,9 +111,11 @@ def test_rows_sorted_in_fixed_display_order():
 # ── recovered amount sourcing ────────────────────────────
 
 
-def test_recovered_only_set_for_recovered_status():
-    """`recovered` field on a non-recovered bucket stays 0 even
-    if the row has payment rows attached (those don't apply)."""
+def test_recovered_counts_payments_on_pending_rows():
+    """`recovered` reflects real money back on EVERY status —
+    a pending check with installments already paid must show those
+    dollars, not $0 (user-reported bug: full payback + fee showed
+    Recovered $0.00 while the row still sat in pending)."""
     from tests._app import db
     from api.Modules.Reports.Services import returned_check_status
     with db_session():
@@ -125,12 +127,41 @@ def test_recovered_only_set_for_recovered_status():
                      status="pending", amount=100.0)
         _add_payment(db.session, rc.id, amount=30.0,
                      paid_on=date(2026, 5, 10))
-        rows, _ = returned_check_status(
+        rows, totals = returned_check_status(
             db.session, [s.id],
             date(2026, 5, 1), date(2026, 5, 31),
         )
         pending = next(r for r in rows if r["status_key"] == "pending")
-        assert pending["recovered"] == 0.0
+        assert pending["recovered"] == 30.0
+        assert totals["recovered"] == 30.0
+        assert totals["net_gl"] == 30.0
+
+
+def test_recovered_includes_bounce_fee_payments():
+    """Payments pay down face amount + the bounce fee (total_due),
+    so a fully-collected check shows amount + fee as recovered —
+    the user's case: $1,000 check + $35 fee → $1,035 back."""
+    from tests._app import db
+    from api.Modules.Reports.Services import returned_check_status
+    with db_session():
+        db.session.query(ReturnCheck).delete()
+        db.session.commit()
+        s = _add_store(db.session, slug="rc-rec-fee")
+        rc = _add_rc(db.session, s.id,
+                     bounced_on=date(2026, 6, 5),
+                     status="pending", amount=1000.0)
+        rc.return_check_fee = 35.0
+        _add_payment(db.session, rc.id, amount=1000.0,
+                     paid_on=date(2026, 6, 10))
+        _add_payment(db.session, rc.id, amount=35.0,
+                     paid_on=date(2026, 6, 12))
+        rows, totals = returned_check_status(
+            db.session, [s.id],
+            date(2026, 6, 1), date(2026, 6, 30),
+        )
+        pending = next(r for r in rows if r["status_key"] == "pending")
+        assert pending["recovered"] == 1035.0
+        assert totals["recovered"] == 1035.0
 
 
 def test_recovered_sums_payment_rows_for_recovered_status():
