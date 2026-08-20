@@ -293,6 +293,9 @@ export interface NotificationsResponse {
   notify_high_variance_push:     boolean;
   notify_store_offline:          boolean;
   notify_store_offline_push:     boolean;
+  notify_ticket_updates:         boolean;
+  notify_ticket_updates_push:    boolean;
+  ticket_updates_applies:        boolean;
   trial_toggle_applies:          boolean;
   locked_day_digest_applies:     boolean;
   daily_summary_applies:         boolean;
@@ -314,6 +317,8 @@ export interface NotificationsUpdateBody {
   notify_high_variance_push?:     boolean;
   notify_store_offline?:          boolean;
   notify_store_offline_push?:     boolean;
+  notify_ticket_updates?:         boolean;
+  notify_ticket_updates_push?:    boolean;
 }
 
 export function useNotifications() {

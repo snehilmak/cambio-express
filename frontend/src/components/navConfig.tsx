@@ -216,6 +216,7 @@ export const NAV: NavGroup[] = [
     items: [
       { to: "/superadmin/stores",        label: "Stores",        icon: iconPlatform(),  desc: "Every store on the platform." },
       { to: "/superadmin/users",         label: "Users",         icon: iconCustomers(), desc: "All accounts across stores." },
+      { to: "/superadmin/tickets",       label: "Tickets",       icon: iconSupport(),   desc: "Support tickets from stores." },
       { to: "/superadmin/announcements", label: "Announcements", icon: iconBanner(),    desc: "Broadcast banners and emails." },
       { to: "/superadmin/billing",       label: "Billing",       icon: iconBank(),      desc: "Subscriptions and account credit." },
     ],

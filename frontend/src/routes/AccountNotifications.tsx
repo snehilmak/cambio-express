@@ -58,6 +58,8 @@ export default function AccountNotifications() {
       notify_high_variance_push:     data.notify_high_variance_push,
       notify_store_offline:          data.notify_store_offline,
       notify_store_offline_push:     data.notify_store_offline_push,
+      notify_ticket_updates:         data.notify_ticket_updates,
+      notify_ticket_updates_push:    data.notify_ticket_updates_push,
     });
   }, [data]);
 
@@ -215,6 +217,20 @@ export default function AccountNotifications() {
                 )}
               </PrefKindRow>
 
+              <PrefKindRow
+                id="ticket-updates"
+                title="Support-ticket updates"
+                disabled={busy}
+                emailChecked={draft.notify_ticket_updates ?? false}
+                emailOnChange={(v) => set("notify_ticket_updates", v)}
+                pushChecked={draft.notify_ticket_updates_push ?? false}
+                pushOnChange={(v) => set("notify_ticket_updates_push", v)}
+              >
+                A notification when support replies to a ticket you
+                filed or changes its status — so you don't have to
+                keep checking the ticket page for an answer.
+              </PrefKindRow>
+
               {data.high_variance_applies && (
                 <PrefKindRow
                   id="high-variance"
@@ -299,6 +315,11 @@ export default function AccountNotifications() {
                 <Row
                   channel="Email"
                   what="Daily summary (nightly per-store, admins + linked owners)"
+                  control="Toggle above."
+                />
+                <Row
+                  channel="Email + push"
+                  what="Support-ticket updates (reply or status change on your ticket)"
                   control="Toggle above."
                 />
                 <Row
