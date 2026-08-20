@@ -29,3 +29,19 @@ def get_store_names_map(
         int(s.id): str(s.name or "")
         for s in db.query(Store).filter(Store.id.in_(list(store_ids))).all()
     }
+
+
+def list_stores_by_ids(
+    db: Session, store_ids: list[int],
+) -> list[Store]:
+    """Bulk fetch Store rows for a set of ids, name-ordered — the
+    umbrella views render these as store cards / P&L columns.
+    Returns ``[]`` for an empty input so callers don't guard."""
+    if not store_ids:
+        return []
+    return (
+        db.query(Store)
+          .filter(Store.id.in_(store_ids))
+          .order_by(Store.name)
+          .all()
+    )

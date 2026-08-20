@@ -384,8 +384,9 @@ def list_users_route(
 ) -> dict[str, Any]:
     """List all users across all stores with search + filters."""
     _require_superadmin(claims)
+    from api.Modules.Superadmin.Repositories import list_users_with_store_query
     from api.Modules.Tenancy.Models import Store, User
-    query = db.query(User).outerjoin(Store, User.store_id == Store.id)
+    query = list_users_with_store_query(db)
     if q:
         needle = f"%{q}%"
         query = query.filter(
@@ -400,8 +401,6 @@ def list_users_route(
     total = query.count()
     users = (
         query
-        .add_columns(Store.name.label("store_name"))
-        .order_by(User.created_at.desc())
         .offset((page - 1) * per_page)
         .limit(per_page)
         .all()
