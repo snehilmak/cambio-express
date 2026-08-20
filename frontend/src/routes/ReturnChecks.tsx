@@ -39,7 +39,7 @@ export default function ReturnChecks() {
   if (identity?.store_id == null) {
     return (
       <PageShell>
-        <PageHeader title="Return checks" />
+        <PageHeader title="Returned checks" />
         <Empty>Sign in as a store admin to view return checks.</Empty>
       </PageShell>
     );
@@ -49,7 +49,7 @@ export default function ReturnChecks() {
     <PageShell>
 
       <PageHeader
-        title="Return checks"
+        title="Returned checks"
         subtitle={data
           ? `${data.rows.length.toLocaleString()} ${
               status || "total"

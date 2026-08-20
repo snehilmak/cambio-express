@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useState } from "react";
+
+import { useUrlFilterState } from "../lib/useUrlFilterState";
 
 import {
   mergeCustomers,
@@ -32,24 +33,10 @@ import styles from "./Customers.module.css";
 // preserve state, just like the transfers list.
 export default function Customers() {
   const identity = getCurrentIdentity();
-  const [searchParams, setSearchParams] = useSearchParams();
-  const q = searchParams.get("q") ?? "";
-
-  const [draft, setDraft] = useState(q);
-  // 300ms debounce + 2-char minimum (CLAUDE.md "Table search UX").
-  useEffect(() => {
-    if (draft === q) return;
-    const id = window.setTimeout(() => {
-      const next = draft.length === 0 || draft.length >= 2 ? draft : q;
-      const params = new URLSearchParams(searchParams);
-      if (next) params.set("q", next);
-      else params.delete("q");
-      setSearchParams(params, { replace: true });
-    }, 300);
-    return () => window.clearTimeout(id);
-  }, [draft, q, searchParams, setSearchParams]);
-  // eslint-disable-next-line react-hooks/set-state-in-effect -- mirror URL search param into local debounced input when URL changes externally (browser back, link arrival)
-  useEffect(() => { setDraft(q); }, [q]);
+  // 300ms debounce + 2-char minimum via the shared URL-filter hook
+  // (CLAUDE.md "Table search UX") — same wiring as Transfers.
+  const filters = useUrlFilterState({ q: "" });
+  const q = filters.params.q;
 
   const { data, isFetching, isError, error, refetch } = useCustomerSearch(q);
 
@@ -227,8 +214,8 @@ export default function Customers() {
         <Field label="Search">
           <Input
             type="search"
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
+            value={filters.draft.q ?? q}
+            onChange={(e) => filters.debounced("q", e.target.value)}
             placeholder="Name, phone, …"
           />
         </Field>

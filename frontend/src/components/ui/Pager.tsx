@@ -33,7 +33,7 @@ export function Pager({
           onClick={() => onPage(page - 1)}
           disabled={page <= 1}
         >
-          ← Prev
+          ← Previous
         </Button>
         <span style={{ color: tokens.textMuted, fontSize: "0.85rem" }}>
           {page} / {totalPages}

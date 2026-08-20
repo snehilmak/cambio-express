@@ -171,7 +171,7 @@ export default function BatchForm() {
                 {COMPANIES.map((c) => <option key={c} value={c}>{c}</option>)}
               </Select>
             </Field>
-            <Field label="Batch ref" highlight={field === "batch_ref"}>
+            <Field label="Batch reference" highlight={field === "batch_ref"}>
               <Input type="text" required
                 value={form.batch_ref}
                 onChange={(e) => set("batch_ref", e.target.value)}

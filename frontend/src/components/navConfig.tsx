@@ -71,7 +71,7 @@ export const NAV: NavGroup[] = [
         desc: "Cash ledger and daily close-out.",
       },
       {
-        to: "/return-checks", label: "Return checks",
+        to: "/return-checks", label: "Returned checks",
         roles: ["admin", "employee"],
         perm: "return_checks.read",
         icon: iconReturnChecks(),
@@ -97,7 +97,7 @@ export const NAV: NavGroup[] = [
     // are admin-only management surfaces.  The group disappears
     // entirely for owners / superadmins since `filterNavForRole`
     // drops groups whose every item gets filtered out.
-    title: "HR",
+    title: "Team",
     icon: iconHR(),
     items: [
       {
@@ -170,7 +170,7 @@ export const NAV: NavGroup[] = [
     items: [
       { to: "/batches",            label: "ACH batches", perm: "batches.read",    icon: iconBatches(), desc: "Group transfers into ACH runs." },
       { to: "/bank",               label: "Bank sync",   perm: "bank_sync.read", icon: iconBank(),    desc: "Connect and reconcile accounts." },
-      { to: "/bank-transactions",  label: "Bank txns",   perm: "bank_sync.read", icon: iconBank(),    desc: "Categorize imported transactions." },
+      { to: "/bank-transactions",  label: "Bank transactions",   perm: "bank_sync.read", icon: iconBank(),    desc: "Categorize imported transactions." },
     ],
   },
   {
@@ -181,7 +181,7 @@ export const NAV: NavGroup[] = [
       { to: "/owner/locations",             label: "Locations",             icon: iconOwner(),     desc: "Stores under your umbrella." },
       { to: "/owner/connect",               label: "Connect",               icon: iconBanner(),    desc: "Link a store via invite code." },
       { to: "/owner/users",                 label: "Team users",            icon: iconCustomers(), desc: "People across all locations." },
-      { to: "/owner/bulk-add-user",         label: "Bulk add user",         icon: iconOwner(),     desc: "Add one user to many stores." },
+      { to: "/owner/bulk-add-user",         label: "Add user to stores",         icon: iconOwner(),     desc: "Add one user to many stores." },
       { to: "/owner/cross-store-defaults",  label: "Cross-store defaults",  icon: iconRollup(),    desc: "Shared settings for every store." },
       { to: "/owner/activity",              label: "Activity stream",       icon: iconReports(),   desc: "Recent actions across stores." },
       { to: "/owner/bulk-permissions",      label: "Bulk permissions",      icon: iconSettings(),  desc: "Set roles across all stores." },
@@ -235,7 +235,7 @@ export const NAV: NavGroup[] = [
     ],
   },
   {
-    title: "Config",
+    title: "Platform",
     roles: ["superadmin"],
     icon: iconSettings(),
     items: [

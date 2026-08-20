@@ -5,7 +5,7 @@ import type { MyActivityRow } from "../api/account";
 import { formatTimestamp } from "../lib/datetime";
 import {
   Breadcrumbs,
-  Button, Card, Field, PageHeader, PageShell,
+  Button, Card, Field, InfoTip, PageHeader, PageShell,
   Pager, Select, space, Table, TableStates, tdStyle, thStyle,
 } from "../components/ui";
 import { AuditActionBadge } from "../components/AuditActionBadge";
@@ -45,7 +45,15 @@ export default function AccountActivity() {
 
       <Breadcrumbs crumbs={[{ label: "Account", to: "/settings" }, { label: "Activity" }]} />
 
-      <PageHeader title="My activity" subtitle="Your recent page visits and actions." />
+      <PageHeader
+        title={
+          <>
+            My activity
+            <InfoTip text="Covers your transfer creates, edits, status changes and deletes, daily-report locks and unlocks, and ACH batch creates and updates across every store you've touched." />
+          </>
+        }
+        subtitle="Your recent page visits and actions."
+      />
 
       <Card style={{ marginBottom: space.lg }}>
         <div className={styles.cardHeader}>
@@ -124,11 +132,6 @@ export default function AccountActivity() {
         )}
       </Card>
 
-      <p className={styles.fine}>
-        Covers your transfer creates / edits / status changes /
-        deletes, daily-report locks / unlocks, and ACH batch
-        creates / updates across every store you've touched.
-      </p>
     </PageShell>
   );
 }
@@ -145,7 +148,7 @@ function ActivityTable({
     <Table>
       <thead>
         <tr>
-          {["When", "Store", "Action", "Target", "Detail"].map((h) => (
+          {["When", "Store", "Action", "Target", "Details"].map((h) => (
             <th key={h} style={thStyle}>{h}</th>
           ))}
         </tr>

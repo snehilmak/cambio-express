@@ -143,16 +143,16 @@ export function ImportReportModal({
           )}
 
           <div className={styles.sectionTitle}>
-            Money transfers (Giros) · {result.giros.length}
+            Money transfers · {result.giros.length}
           </div>
           <div className={styles.tableWrap}>
             <table className={styles.table}>
               <thead>
                 <tr>
-                  <th>Giro #</th>
+                  <th>Transfer #</th>
                   <th className={styles.num}>Send</th>
                   <th className={styles.num}>Fee</th>
-                  <th className={styles.num}>Fed. tax</th>
+                  <th className={styles.num}>Federal tax</th>
                   <th className={styles.num}>Total</th>
                   <th>Cashier</th>
                   <th>Status</th>

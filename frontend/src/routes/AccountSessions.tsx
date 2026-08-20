@@ -10,8 +10,9 @@ import {
 import { ApiError } from "../lib/api";
 import {
   Breadcrumbs,
-  Alert, Button, Card, ConfirmDialog, ErrorState, Loading, PageHeader,
-  PageShell, Section, space, Table, tdStyle, thStyle, tokens, useToast,
+  Alert, Button, Card, ConfirmDialog, ErrorState, InfoTip, Loading,
+  PageHeader, PageShell, Section, space, Table, tdStyle, thStyle, tokens,
+  useToast,
 } from "../components/ui";
 import styles from "./AccountSessions.module.css";
 
@@ -130,7 +131,14 @@ export default function AccountSessions() {
         </div>
       )}
 
-      <Section title="Signed-in devices">
+      <Section
+        title={
+          <>
+            Signed-in devices
+            <InfoTip text="A session is one browser on one device. Signing out of a session ends every API call from that browser; the next action there will redirect to login." />
+          </>
+        }
+      >
         <Card>
           <Table>
             <thead>
@@ -156,11 +164,6 @@ export default function AccountSessions() {
         </Card>
       </Section>
 
-      <p className={styles.fine}>
-        A session is one browser on one device. Signing out of a
-        session ends every API call from that browser; the next
-        action there will redirect to login.
-      </p>
 
       <ConfirmDialog
         open={confirmingRevokeOthers}

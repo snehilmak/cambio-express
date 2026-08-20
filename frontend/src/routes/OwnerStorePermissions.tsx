@@ -31,7 +31,7 @@ const RESOURCE_LABELS: Record<string, string> = {
   settings: "Settings",
   users: "Users / Team",
   time_clock: "Time clock",
-  return_checks: "Return checks",
+  return_checks: "Returned checks",
 };
 
 const ROLE_LABELS: Record<string, string> = {

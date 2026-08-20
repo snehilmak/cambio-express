@@ -104,7 +104,7 @@ function UserTable({
     <Table>
       <thead>
         <tr>
-          {["Username", "Full Name", "Role", "Status", "Created", ""].map((h) => (
+          {["Username", "Full name", "Role", "Status", "Created", ""].map((h) => (
             <th key={h} style={thStyle}>{h}</th>
           ))}
         </tr>

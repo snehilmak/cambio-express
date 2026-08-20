@@ -12,7 +12,8 @@ import { ApiError } from "../lib/api";
 import { formatTimestamp } from "../lib/datetime";
 import {
   Breadcrumbs,
-  Alert, Button, Card, ConfirmDialog, DateInput, EmptyState, ErrorState, Field, Input,
+  Alert, Button, Card, ConfirmDialog, DateInput, EmptyState, ErrorState,
+  Field, InfoTip, Input,
   Loading, Modal, PageHeader, PageShell, Pill, RowActions, Select, space, Table,
   TableSkeleton, Textarea, tdStyle, thStyle, useToast,
 } from "../components/ui";
@@ -463,8 +464,8 @@ function LateThresholdSetting({ current }: { current: number }) {
     <Card>
       <div className={styles.lateRuleRow}>
         <Field
-          label="Mark clock-ins late after (minutes)"
-          hint="Only clock-ins later than this past the planned shift start show the 'Late' pill below. 0–240."
+          label={<>Mark clock-ins late after (minutes)<InfoTip text="Only clock-ins later than this past the planned shift start show the 'Late' pill below." /></>}
+          hint="0–240"
         >
           <Input
             type="number" min="0" max="240" step="1"
@@ -650,9 +651,8 @@ function EntryModal({
           </Field>
           {isEdit && (
             <Field
-              label="Status"
+              label={<>Status<InfoTip text="Only approved hours count toward payroll totals." /></>}
               style={{ gridColumn: "1 / -1" }}
-              hint="Only approved hours count toward payroll totals."
             >
               <Select
                 value={status}

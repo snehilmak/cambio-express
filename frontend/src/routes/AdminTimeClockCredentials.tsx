@@ -102,7 +102,7 @@ export default function AdminTimeClockCredentials() {
   return (
     <PageShell maxWidth="56rem">
 
-      <Breadcrumbs crumbs={[{ label: "HR" }, { label: "Time-clock credentials" }]} />
+      <Breadcrumbs crumbs={[{ label: "Team" }, { label: "Time-clock credentials" }]} />
 
       <PageHeader
         title="Time-clock credentials"
@@ -127,9 +127,9 @@ export default function AdminTimeClockCredentials() {
 
       {!gateOn && (
         <p className={styles.intro}>
-          The passkey gate is currently <strong>off</strong>. Enrolling
-          passkeys here is no-op-friendly: punches still work without a
-          passkey until you flip the gate on.
+          The passkey requirement is currently <strong>off</strong> —
+          punches work without a passkey until you turn it on. You can
+          still enroll passkeys now so everyone is ready.
         </p>
       )}
 

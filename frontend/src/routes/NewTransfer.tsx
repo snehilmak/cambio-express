@@ -14,10 +14,12 @@ import {
   DateInput,
   Field,
   FormActions,
+  InfoTip,
   Input,
   MoneyInput,
   PageHeader,
   PageShell,
+  Pill,
   Section,
   Select,
   space,
@@ -187,8 +189,7 @@ export default function NewTransfer() {
       <PageShell>
         <PageHeader title="New transfer" />
         <p style={{ color: tokens.textMuted, textAlign: "center", padding: "1.5rem 0" }}>
-          Sign in as a store admin to create transfers. Owners + the
-          store-picker land in a follow-up PR.
+          Sign in as a store admin to create transfers.
         </p>
       </PageShell>
     );
@@ -304,13 +305,9 @@ export default function NewTransfer() {
               </Field>
             </Grid>
             {customerId != null && (
-              <p style={{
-                margin: "0.5rem 0 0",
-                fontSize: "0.85rem",
-                color: tokens.textMuted,
-              }}>
-                Linked to customer #{customerId} — edits sync back to
-                the customer directory.
+              <p style={{ margin: "0.5rem 0 0" }}>
+                <Pill tone="info">Linked to customer #{customerId}</Pill>
+                <InfoTip text="This sender is linked to the customer directory — edits to their details here sync back to their customer record." />
               </p>
             )}
           </Section>
@@ -393,7 +390,7 @@ export default function NewTransfer() {
                 country={country ?? ""}
                 rate={storeInfo.data?.store.federal_tax_rate ?? 0}
               />
-              <Field label="Confirm #">
+              <Field label="Confirmation #">
                 <Input type="text" {...register("confirm_number")} />
               </Field>
             </Grid>
@@ -443,7 +440,7 @@ export default function NewTransfer() {
                   color: tokens.textMuted,
                 }}>
                   No active employees on this store's roster yet. Add
-                  them via Settings → Team on the legacy admin page.
+                  them under Settings → Team.
                 </p>
               )}
           </Section>

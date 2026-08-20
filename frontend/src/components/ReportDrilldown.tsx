@@ -147,8 +147,7 @@ export function ReportDrilldown({
 
       {storeIds.length === 0 && (
         <p className={styles.muted}>
-          Sign in to a store to see this report. (Owner-umbrella multi-store
-          rollup ships in a follow-up.)
+          Sign in to a store to see this report.
         </p>
       )}
 

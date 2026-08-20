@@ -23,7 +23,7 @@ export default function AchVolume() {
         { label: "Company",     field: "company" },
         { label: "Batch Count", field: r => Number(r.count).toLocaleString(),  align: "right", mono: true },
         { label: "Total ACH",   field: r => fmtMoney2(Number(r.amount)),        align: "right", mono: true },
-        { label: "Avg / Batch", field: r => fmtMoney2(Number(r.avg)),           align: "right", mono: true },
+        { label: "Average per batch", field: r => fmtMoney2(Number(r.avg)),           align: "right", mono: true },
       ]}
     />
   );

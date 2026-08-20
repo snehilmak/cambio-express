@@ -25,7 +25,7 @@ import styles from "./Batches.module.css";
 const COLUMNS: Array<{ slug: BatchSort; label: string; align?: "right" }> = [
   { slug: "ach_date",   label: "Date" },
   { slug: "company",    label: "Company" },
-  { slug: "batch_ref",  label: "Ref" },
+  { slug: "batch_ref",  label: "Reference" },
   { slug: "ach_amount", label: "ACH amount", align: "right" },
   { slug: "",           label: "Transfers"   },
   { slug: "",           label: "Variance" },

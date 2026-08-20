@@ -40,7 +40,9 @@ export function Modal({
   /** Called when the user dismisses via Escape / backdrop click.
    *  Wrap your own close-button handler in this too. */
   onClose: () => void;
-  title: string;
+  /** Heading text — a ReactNode so callers can append an
+   *  `<InfoTip>` per the contextual-help standard. */
+  title: ReactNode;
   children: ReactNode;
   /** Optional row of buttons rendered in a flex-end strip below
    *  the body.  Use `<Button>` from the kit so the focus ring +

@@ -204,7 +204,7 @@ export default function Bank() {
                   disabled={busy !== null}
                   onClick={() => { void handleConnect(); }}
                 >
-                  {busy === "connect" ? "Opening Stripe…" : "＋ Connect another"}
+                  {busy === "connect" ? "Opening Stripe…" : "+ Connect another"}
                 </Button>
               )}
             </div>
@@ -232,7 +232,7 @@ export default function Bank() {
               onClick={() => { void handleConnect(); }}
               style={{ marginTop: space.lg }}
             >
-              {busy === "connect" ? "Opening Stripe…" : "Connect Bank via Stripe →"}
+              {busy === "connect" ? "Opening Stripe…" : "Connect bank via Stripe →"}
             </Button>
           </div>
         )}

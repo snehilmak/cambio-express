@@ -52,7 +52,7 @@ export default function TimeClockPaystub() {
     return (
       <PageShell>
         <ErrorState
-          message="Paystub URL needs ?from=YYYY-MM-DD&to=YYYY-MM-DD query params."
+          message="This paystub link is missing its pay period. Open it from the Payroll page."
           onRetry={() => { void refetch(); }}
         />
       </PageShell>
@@ -80,7 +80,7 @@ export default function TimeClockPaystub() {
   return (
     <PageShell maxWidth="48rem">
       <Breadcrumbs crumbs={[
-        { label: "HR", to: "/admin/timeclock" },
+        { label: "Team", to: "/admin/timeclock" },
         { label: "Paystub" },
       ]} />
       <div className={styles.printbar}>

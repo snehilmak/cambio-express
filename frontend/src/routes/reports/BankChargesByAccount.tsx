@@ -24,7 +24,7 @@ export default function BankChargesByAccount() {
           `${r.account}${r.last4 ? ` ••${r.last4}` : ""}` },
         { label: "Count",   field: r => Number(r.count).toLocaleString(), align: "right", mono: true },
         { label: "Amount",  field: r => fmtMoney2(Number(r.amount)),       align: "right", mono: true },
-        { label: "Avg",     field: r => fmtMoney2(Number(r.avg)),          align: "right", mono: true },
+        { label: "Average",     field: r => fmtMoney2(Number(r.avg)),          align: "right", mono: true },
       ]}
     />
   );

@@ -130,7 +130,7 @@ export default function TVDisplayCountry() {
             />
           </Field>
           <Field
-            label="MT companies (comma-separated slugs)"
+            label="Money transfer companies (comma-separated)"
             hint="These become the column headers in the public board's rate grid. Order is preserved."
           >
             <Input

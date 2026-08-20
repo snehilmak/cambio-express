@@ -8,7 +8,7 @@ import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
 import {
   Breadcrumbs,
-  Alert, Button, Card, Empty, ErrorState, Field, Input, Loading,
+  Alert, Button, Card, Empty, ErrorState, Field, InfoTip, Input, Loading,
   PageHeader, PageShell, Pill, Section, Table, tdStyle, thStyle,
 } from "../components/ui";
 import styles from "./OwnerBulkAddUser.module.css";
@@ -136,8 +136,8 @@ export default function OwnerBulkAddUser() {
                   />
                 </Field>
                 <Field
-                  label="Password"
-                  hint="Min 8 chars. Operator can rotate per-store later from each store's user list."
+                  label={<>Password<InfoTip text="An admin can rotate it per-store later from each store's user list." /></>}
+                  hint="Minimum 8 characters"
                 >
                   <Input
                     type="password" required minLength={8} maxLength={200}

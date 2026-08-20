@@ -10,7 +10,7 @@ import { formatTimestamp } from "../lib/datetime";
 import { getCurrentIdentity } from "../lib/auth";
 import {
   Breadcrumbs,
-  Button, Card, Empty, Field, PageHeader, PageShell,
+  Button, Card, Empty, Field, InfoTip, PageHeader, PageShell,
   Pager, Select, space, Table, TableStates, tdStyle, thStyle,
 } from "../components/ui";
 import { AuditActionBadge } from "../components/AuditActionBadge";
@@ -47,7 +47,7 @@ export default function AdminAuditLog() {
   if (identity?.role !== "admin" && identity?.role !== "owner") {
     return (
       <PageShell>
-        <PageHeader title="Activity Log" />
+        <PageHeader title="Audit log" />
         <Empty>You need a store-admin sign-in to see the activity log.</Empty>
       </PageShell>
     );
@@ -60,7 +60,15 @@ export default function AdminAuditLog() {
 
       <Breadcrumbs crumbs={[{ label: "Finance" }, { label: "Activity log" }]} />
 
-      <PageHeader title="Activity Log" subtitle="Every admin action across the store, newest first." />
+      <PageHeader
+        title={
+          <>
+            Audit log
+            <InfoTip text="Covers transfer creates, edits, status changes and deletes, daily-report locks and unlocks, and ACH batch creates and updates. Routine daily-report auto-saves aren't logged — the lock event captures who closed the day." />
+          </>
+        }
+        subtitle="Every admin action across the store, newest first."
+      />
 
       <Card style={{ marginBottom: space.lg }}>
         <div className={styles.cardHeader}>
@@ -156,13 +164,6 @@ export default function AdminAuditLog() {
         )}
       </Card>
 
-      <p className={styles.fine}>
-        Audit covers transfer creates / edits / status changes /
-        deletes, daily-report locks / unlocks, and ACH batch creates
-        / updates. Saving daily-report fields generates many
-        auto-saves and isn't logged here — the lock event captures
-        who closed the day.
-      </p>
     </PageShell>
   );
 }
@@ -179,7 +180,7 @@ function AuditTable({
     <Table>
       <thead>
         <tr>
-          {["When", "Who", "Action", "Target", "Detail"].map((h) => (
+          {["When", "Actor", "Action", "Target", "Details"].map((h) => (
             <th key={h} style={thStyle}>{h}</th>
           ))}
         </tr>

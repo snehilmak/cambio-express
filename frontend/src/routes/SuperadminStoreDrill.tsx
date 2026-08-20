@@ -216,7 +216,7 @@ export default function SuperadminStoreDrill() {
                   <InfoRow label="Trial ends" value={data.store.trial_ends_at.slice(0, 10)} />
                 )}
                 {data.store.canceled_at && (
-                  <InfoRow label="Canceled" value={data.store.canceled_at.slice(0, 10)} />
+                  <InfoRow label="Cancelled" value={data.store.canceled_at.slice(0, 10)} />
                 )}
                 {data.store.stripe_customer_id && (
                   <InfoRow label="Stripe customer" value={data.store.stripe_customer_id} />
@@ -526,7 +526,7 @@ const RESOURCE_LABELS: Record<string, string> = {
   transfers: "Transfers", customers: "Customers", daily_book: "Daily book",
   monthly: "Monthly P&L", batches: "ACH batches", bank_sync: "Bank sync",
   reports: "Reports", settings: "Settings", users: "Users / Team",
-  time_clock: "Time clock", return_checks: "Return checks",
+  time_clock: "Time clock", return_checks: "Returned checks",
 };
 
 function StorePermissionsPanel({ storeId, storeName }: { storeId: number; storeName: string }) {
