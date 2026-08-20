@@ -26,7 +26,6 @@ separate toggle if/when operators ask for it.
 from __future__ import annotations
 
 import logging
-import os
 from datetime import date, datetime, time, timedelta
 from typing import Any, Optional
 
@@ -205,11 +204,8 @@ def run(
     from api.Modules.Notifications.Services.smtp import send_email
     from api.Modules.Tenancy.Models import Store
 
-    base_url = (
-        base_url
-        or os.environ.get("APP_BASE_URL")
-        or "https://dinerobook.com"
-    ).rstrip("/")
+    from api.Core.Urls import get_base_url
+    base_url = (base_url or get_base_url()).rstrip("/")
 
     stores = (
         db.query(Store)

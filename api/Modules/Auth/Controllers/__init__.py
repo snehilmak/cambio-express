@@ -1433,7 +1433,8 @@ def send_password_reset_email(
         render_email_template,
     )
 
-    base_url = os.environ.get("APP_BASE_URL", "https://dinerobook.com")
+    from api.Core.Urls import get_base_url
+    base_url = get_base_url()
     reset_url = f"{base_url}/app/reset-password?token={raw_token}"
     body = (
         "Hi,\n\n"

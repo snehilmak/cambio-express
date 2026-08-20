@@ -25,7 +25,6 @@ fail the ticket mutation that triggered it.
 from __future__ import annotations
 
 import logging
-import os
 
 from sqlalchemy.orm import Session
 
@@ -80,9 +79,8 @@ Status: {status} · Priority: {priority}
 
 
 def _base_url() -> str:
-    return (
-        os.environ.get("APP_BASE_URL") or "https://dinerobook.com"
-    ).rstrip("/")
+    from api.Core.Urls import get_base_url
+    return get_base_url()
 
 
 def _render_html(
@@ -216,14 +214,16 @@ def send_ticket_update_to_user(
 
 def platform_recipients(db: Session) -> list[object]:
     """Active platform users who should hear about store-side ticket
-    activity: superadmins + the tickets-only "support" role."""
+    activity: superadmins + the tickets-only "support" role
+    (the shared ``PLATFORM_STAFF_ROLES`` tuple)."""
+    from api.Modules.Support.Services import PLATFORM_STAFF_ROLES
     from api.Modules.Tenancy.Models import User
 
     return (
         db.query(User)
           .filter(
               User.is_active == True,  # noqa: E712 — SQLAlchemy boolean
-              User.role.in_(("superadmin", "support")),
+              User.role.in_(PLATFORM_STAFF_ROLES),
               User.email != "",
               User.notify_ticket_updates == True,  # noqa: E712
               User.email_bounced_at.is_(None),

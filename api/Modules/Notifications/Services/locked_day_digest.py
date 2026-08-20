@@ -24,7 +24,6 @@ only fires once per click).
 from __future__ import annotations
 
 import logging
-import os
 
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
@@ -119,11 +118,8 @@ def run(session: Session, report: Any, base_url: str | None = None) -> int:
     store = session.get(Store, report.store_id)
     if store is None:
         return 0
-    base_url = (
-        base_url
-        or os.environ.get("APP_BASE_URL")
-        or "https://dinerobook.com"
-    ).rstrip("/")
+    from api.Core.Urls import get_base_url
+    base_url = (base_url or get_base_url()).rstrip("/")
     date_iso = report.report_date.isoformat() if report.report_date else ""
     date_human = (
         report.report_date.strftime("%B %d, %Y")
