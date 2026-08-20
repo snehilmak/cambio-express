@@ -311,3 +311,26 @@ def test_filters_by_bounced_on_window():
 # ── legacy wrapper ───────────────────────────────────────
 
 
+def test_writeoff_nets_out_partial_recoveries():
+    """A written-off check that had partial paybacks must not
+    double-count them: the payments land in `recovered`, and the
+    loss side counts only the UNRECOVERED remainder (mirrors
+    Owners/Services/return_checks.writeoff_total)."""
+    from tests._app import db
+    from api.Modules.Reports.Services import returned_check_status
+    with db_session():
+        db.session.query(ReturnCheck).delete()
+        db.session.commit()
+        s = _add_store(db.session, slug="rc-writeoff-net")
+        rc = _add_rc(db.session, s.id,
+                     bounced_on=date(2026, 7, 5),
+                     status="loss", amount=1000.0)
+        _add_payment(db.session, rc.id, amount=400.0,
+                     paid_on=date(2026, 7, 10))
+        rows, totals = returned_check_status(
+            db.session, [s.id],
+            date(2026, 7, 1), date(2026, 7, 31),
+        )
+        assert totals["recovered"] == 400.0
+        assert totals["loss_fraud"] == 600.0   # 1000 − 400, not 1000
+        assert totals["net_gl"] == -200.0      # 400 − 600

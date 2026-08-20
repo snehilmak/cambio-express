@@ -1,9 +1,17 @@
 """Daily aggregate report services.
 
-`DailyDrop` and `CheckDeposit` aggregate identically — group by
+Drops and check deposits aggregate identically — group by
 `report_date`, sum amount + count, sort newest-first, plus an
 average-per-day total. Sharing a helper keeps the two services
 behaviourally locked.
+
+Both read `DailyLineItem` by kind — the ONLY write path since the
+legacy `DailyDrop` / `CheckDeposit` tables were retired (DailyBook
+INVARIANTS "Data model"). History is covered too:
+`Bootstrap.migrate_legacy_line_item_tables()` copied every legacy
+row into `daily_line_item` at boot, so querying the line items
+alone is complete — and UNIONing the legacy tables back in would
+double-count all pre-conversion rows.
 
 Pure DB read — no commits, no side-effects.
 """
@@ -14,27 +22,30 @@ from sqlalchemy.orm import Session
 from typing import Any
 
 
-def _by_report_date(
+def _line_items_by_report_date(
     db: Session,
-    model: Any,
+    kind: str,
     store_ids: list[int],
     d_from: date,
     d_to: date,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    """Group `model` rows by `report_date` and sum amount + count.
-    `model` must expose `store_id`, `report_date`, `id`, `amount`."""
+    """Group `DailyLineItem` rows of one `kind` by `report_date` and
+    sum amount + count."""
+    from api.Modules.DailyBook.Models import DailyLineItem
+
     rows_q = (
         db.query(
-            model.report_date,
-            func.count(model.id),
-            func.coalesce(func.sum(model.amount), 0.0),
+            DailyLineItem.report_date,
+            func.count(DailyLineItem.id),
+            func.coalesce(func.sum(DailyLineItem.amount), 0.0),
         )
         .filter(
-            model.store_id.in_(store_ids),
-            model.report_date >= d_from,
-            model.report_date <= d_to,
+            DailyLineItem.store_id.in_(store_ids),
+            DailyLineItem.kind == kind,
+            DailyLineItem.report_date >= d_from,
+            DailyLineItem.report_date <= d_to,
         )
-        .group_by(model.report_date)
+        .group_by(DailyLineItem.report_date)
         .all()
     )
     rows = [
@@ -62,9 +73,9 @@ def daily_drops(
     d_from: date,
     d_to: date,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    """Aggregate `DailyDrop` rows in the period, grouped by date."""
-    from api.Modules.DailyBook.Models import DailyDrop
-    return _by_report_date(db, DailyDrop, store_ids, d_from, d_to)
+    """Aggregate drop line items (`kind='drop'`) in the period,
+    grouped by date."""
+    return _line_items_by_report_date(db, "drop", store_ids, d_from, d_to)
 
 
 def check_deposits(
@@ -73,6 +84,8 @@ def check_deposits(
     d_from: date,
     d_to: date,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    """Aggregate `CheckDeposit` rows in the period, grouped by date."""
-    from api.Modules.DailyBook.Models import CheckDeposit
-    return _by_report_date(db, CheckDeposit, store_ids, d_from, d_to)
+    """Aggregate check-deposit line items (`kind='check_deposit'`)
+    in the period, grouped by date."""
+    return _line_items_by_report_date(
+        db, "check_deposit", store_ids, d_from, d_to,
+    )

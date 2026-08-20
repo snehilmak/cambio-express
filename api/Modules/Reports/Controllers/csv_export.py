@@ -82,7 +82,7 @@ def _parse_compare_dates(args: dict[str, str | None]) -> dict[str, date | None]:
             "compare_to":   _parse("compare_to")}
 
 
-def _parse_threshold(args: dict[str, str | None], default: float = 3000.0) -> float:
+def _parse_threshold(args: dict[str, str | None], default: float = 1000.0) -> float:
     try:
         v = float(args.get("threshold") or default)
     except (ValueError, TypeError):
