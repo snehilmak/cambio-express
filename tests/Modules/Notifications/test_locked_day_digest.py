@@ -143,3 +143,24 @@ def test_recipients_dedup_owner_admin_overlap():
 
         recipients = locked_day_digest_recipients(db.session, s)
     assert len(recipients) == 1
+
+
+def test_recipients_skip_hard_bounced_addresses():
+    """A user whose address hard-bounced (email_bounced_at set by the
+    Resend webhook) must not receive the digest — same suppression
+    every other sender applies."""
+    from datetime import datetime
+    from tests._app import db
+    from api.Modules.Notifications.Services import (
+        locked_day_digest_recipients,
+    )
+    with db_session():
+        s = _add_store(db.session, slug="locked-test-bounced")
+        bounced = _add_user(db.session, store_id=s.id, role="admin",
+                            username="bounced", email="bounced@x.com")
+        bounced.email_bounced_at = datetime(2026, 1, 1)
+        _add_user(db.session, store_id=s.id, role="admin",
+                  username="deliverable", email="ok@x.com")
+        db.session.commit()
+        recipients = locked_day_digest_recipients(db.session, s)
+    assert {u.username for u in recipients} == {"deliverable"}

@@ -295,3 +295,30 @@ def test_body_template_has_named_placeholders():
 # in Final step 2 — ``send_trial_reminders`` now calls
 # ``eligible_recipients`` directly with a ``SessionLocal()``
 # session. Its delegation test went with it.
+
+
+def test_recipients_excludes_hard_bounced_addresses():
+    """email_bounced_at set (Resend hard-bounce webhook) suppresses the
+    trial reminder — same filter every other sender applies."""
+    from datetime import datetime
+    from tests._app import db
+    from api.Modules.Notifications.Services import eligible_recipients
+    with db_session():
+        db.session.query(Store).delete()
+        db.session.query(User).delete()
+        db.session.query(StoreOwnerLink).delete()
+        db.session.commit()
+        s = _add_store(db.session, slug="bounce-1")
+        bounced = _add_user(
+            db.session, store_id=s.id, role="admin",
+            username="bounced@test.com", email="bounced@test.com",
+        )
+        bounced.email_bounced_at = datetime(2026, 1, 1)
+        ok = _add_user(
+            db.session, store_id=s.id, role="admin",
+            username="ok@test.com", email="ok@test.com",
+        )
+        db.session.commit()
+        result = eligible_recipients(db.session, s)
+        assert ok in result
+        assert bounced not in result

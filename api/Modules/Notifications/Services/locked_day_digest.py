@@ -90,6 +90,9 @@ def eligible_recipients(db: Session, store: Any) -> list[Any]:
               User.role.in_(("admin", "owner")),
               User.email != "",
               User.notify_locked_day_digest == True,  # noqa: E712
+              # Hard-bounce suppression — same filter every other
+              # sender applies; Resend told us the address is dead.
+              User.email_bounced_at.is_(None),
               or_(*conds),
           )
           .all()
