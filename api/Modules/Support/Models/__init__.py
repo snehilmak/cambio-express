@@ -43,6 +43,14 @@ class SupportTicket(Base):
     # pattern as ``submitted_by``); the FK is the authority.
     assigned_to_user_id = Column(Integer, ForeignKey("user.id"), nullable=True)
     assigned_to_name    = Column(String(120), nullable=True)
+    # Per-SIDE read receipts for the in-app unread badge. Each side
+    # (store users vs platform staff) shares one marker — the read
+    # state is per conversation side, not per person, matching the
+    # shared-inbox scoping of the list endpoints. NULL = that side
+    # has never opened the thread since the feature shipped, so every
+    # opposite-side message counts as unread.
+    user_last_seen_at  = Column(DateTime, nullable=True)
+    staff_last_seen_at = Column(DateTime, nullable=True)
     created_at  = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at  = Column(DateTime, default=datetime.utcnow,
                           onupdate=datetime.utcnow, nullable=False)

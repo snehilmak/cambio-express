@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
 import { useProfile, useSessionStatus, useStoreInfo } from "../api/account";
+import { useTicketsUnread } from "../api/support";
 import { clearAccessToken, getCurrentIdentity } from "../lib/auth";
 import StoreGate from "./StoreGate";
 import { clearVisits, recordVisit } from "../lib/recency";
@@ -55,6 +56,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   // cache for first paint; this catches the case where the user
   // toggled the theme on another device. Server wins.
   const { data: profile } = useProfile();
+  // Unread ticket replies — the phone-style badge on the Support
+  // nav button (polls every minute + refetch-on-focus).
+  const ticketsUnread = useTicketsUnread();
   useEffect(() => {
     reconcileTheme(profile?.theme_preference);
   }, [profile?.theme_preference]);
@@ -117,7 +121,12 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const groups = filterNavForRole(role, perms);
   return (
     <div className="app-shell">
-      <SlimSidebar groups={groups} drawerOpen={drawerOpen} supportLink={SUPPORT_LINK} />
+      <SlimSidebar
+        groups={groups}
+        drawerOpen={drawerOpen}
+        supportLink={SUPPORT_LINK}
+        supportBadge={ticketsUnread.data?.unread ?? 0}
+      />
       <Topbar
         identity={identity}
         onSignOut={onSignOut}

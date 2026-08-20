@@ -77,6 +77,19 @@ class TicketRow(BaseModel):
     # the ticket (None = unclaimed).
     assigned_to_user_id: int | None = None
     assigned_to_name: str | None = None
+    # Replies from the OTHER side that this viewer hasn't opened
+    # yet (per-side read receipt). Populated on the list endpoints;
+    # 0 elsewhere.
+    unread_count: int = 0
+
+
+class UnreadCountResponse(BaseModel):
+    """Nav-badge payload: total unread replies for the caller's
+    conversation side (store side vs platform staff)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    unread: int
 
 
 class TicketListResponse(BaseModel):

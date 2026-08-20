@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
 import {
@@ -28,6 +28,19 @@ export function TicketThread({
 }) {
   const qc = useQueryClient();
   const thread = useTicketMessages(ticket.id, true);
+
+  // Fetching the thread stamps this side's read receipt on the
+  // server, so once it loads, refresh the badge + list counts.
+  // Targeted keys only — invalidating the ["tickets"] prefix here
+  // would refetch this very thread and loop.
+  const threadLoaded = thread.isSuccess;
+  useEffect(() => {
+    if (!threadLoaded) return;
+    void qc.invalidateQueries({ queryKey: ["tickets", "unread"] });
+    void qc.invalidateQueries({ queryKey: ["tickets", "mine"] });
+    void qc.invalidateQueries({ queryKey: ["tickets", "all"] });
+  }, [threadLoaded, qc]);
+
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
