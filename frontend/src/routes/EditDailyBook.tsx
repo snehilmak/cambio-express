@@ -152,11 +152,10 @@ const DISBURSEMENT_INPUTS: InputFieldDef[] = [
   { key: "safe_balance",     label: "Safe balance" },
 ];
 
+// Purchases and expenses render through <MethodSplitWidget> (one
+// Cash|Check tile each, like Payroll) — only the single-kind rows
+// stay in this list.
 const DISBURSEMENT_LINE_ITEMS: LineItemFieldDef[] = [
-  { key: "cash_purchases",     label: "Cash purchases",       kind: "cash_purchase" },
-  { key: "cash_expense",       label: "Cash expense",         kind: "cash_expense" },
-  { key: "check_purchases",    label: "Check purchases",      kind: "check_purchase" },
-  { key: "check_expense",      label: "Check expense",        kind: "check_expense" },
   { key: "outside_cash_drops", label: "Outside cash & drops", kind: "drop" },
   { key: "checks_deposit",     label: "Check deposits",       kind: "check_deposit" },
   { key: "other_cash_out",     label: "Other cash out",       kind: "other_cash_out" },
@@ -844,11 +843,52 @@ function DisbursementsPanel(props: PanelProps) {
         <InfoTip text="Tap a row to add a timestamped entry — totals roll up automatically." />
       </PanelTitle>
       <div className={styles.widgetGrid}>
-        <PayrollWidget
+        <MethodSplitWidget
+          title="Payroll"
+          cashKind="payroll_cash"
+          checkKind="payroll_check"
           cashTotal={Number(props.report?.payroll_expense ?? 0)}
           checkTotal={Number(props.report?.payroll_check ?? 0)}
+          tileTotal="cash"
+          checkTag="P&L only"
+          cashNote="Cash payroll comes out of the drawer — it counts toward today's Out total."
+          checkNote="Check payroll never touches the daily book's numbers — it flows straight into the monthly P&L's Check payroll line."
           items={props.lineItems.filter(
             (li) => li.kind === "payroll_cash" || li.kind === "payroll_check",
+          )}
+          storeId={props.storeId}
+          date={props.date}
+          locked={props.locked}
+          onChange={props.onLineItemChange}
+        />
+        <MethodSplitWidget
+          title="Purchases"
+          cashKind="cash_purchase"
+          checkKind="check_purchase"
+          cashTotal={Number(props.report?.cash_purchases ?? 0)}
+          checkTotal={Number(props.report?.check_purchases ?? 0)}
+          tileTotal="combined"
+          cashNote="Cash purchases come out of the drawer — they count toward Out and the over/short reconciliation."
+          checkNote="Check purchases count toward today's Out total, but not the over/short — a check doesn't move drawer cash."
+          items={props.lineItems.filter(
+            (li) => li.kind === "cash_purchase" || li.kind === "check_purchase",
+          )}
+          storeId={props.storeId}
+          date={props.date}
+          locked={props.locked}
+          onChange={props.onLineItemChange}
+        />
+        <MethodSplitWidget
+          title="Expenses"
+          cashKind="cash_expense"
+          checkKind="check_expense"
+          cashTotal={Number(props.report?.cash_expense ?? 0)}
+          checkTotal={Number(props.report?.check_expense ?? 0)}
+          tileTotal="combined"
+          cashNote="Cash expenses come out of the drawer — they count toward Out and the over/short reconciliation."
+          checkNote="Check expenses count toward today's Out total, but not the over/short — a check doesn't move drawer cash."
+          items={props.lineItems.filter(
+            (li) => li.kind === "cash_expense" || li.kind === "check_expense",
           )}
           storeId={props.storeId}
           date={props.date}
@@ -1526,16 +1566,33 @@ function LineItemWidget({
   );
 }
 
-// Payroll — one tile, one modal, TWO kinds. Cash payroll moves real
-// drawer cash (rolls into payroll_expense, a daily disbursement);
-// CHECK payroll deliberately does NOT touch the daily book's numbers
-// — it feeds the monthly P&L's check-payroll line only. The modal
-// tabs between the two entry lists so both are logged in one place.
-function PayrollWidget({
-  cashTotal, checkTotal, items, storeId, date, locked, onChange,
+// Cash | Check split widget — one tile, one modal, TWO line-item
+// kinds behind Cash/Check tabs. Born as the Payroll widget; now the
+// standard for every disbursement family the store pays both ways
+// (payroll, purchases, expenses) — user feedback: "reduces space
+// used and cleaner UI".
+//
+// `tileTotal` controls the big number on the tile:
+//   - "combined": cash + check (purchases/expenses — both count in
+//     the daily Out total; checks are only excluded from the
+//     over/short CASH reconciliation, server-side).
+//   - "cash": cash only (payroll — check payroll never touches the
+//     daily book's numbers, it feeds the monthly P&L alone).
+function MethodSplitWidget({
+  title, cashKind, checkKind, cashTotal, checkTotal,
+  tileTotal, cashNote, checkNote, checkTag,
+  items, storeId, date, locked, onChange,
 }: {
+  title: string;
+  cashKind: string;
+  checkKind: string;
   cashTotal: number;
   checkTotal: number;
+  tileTotal: "combined" | "cash";
+  cashNote: string;
+  checkNote: string;
+  /** Short suffix after the check total on the tile (e.g. "P&L only"). */
+  checkTag?: string;
   items: LineItemRow[];
   storeId: number;
   date: string;
@@ -1543,11 +1600,11 @@ function PayrollWidget({
   onChange: () => void;
 }) {
   const [open, setOpen] = useState(false);
-  const [method, setMethod] = useState<"payroll_cash" | "payroll_check">(
-    "payroll_cash",
-  );
-  const cashItems = items.filter((li) => li.kind === "payroll_cash");
-  const checkItems = items.filter((li) => li.kind === "payroll_check");
+  const [method, setMethod] = useState<"cash" | "check">("cash");
+  const cashItems = items.filter((li) => li.kind === cashKind);
+  const checkItems = items.filter((li) => li.kind === checkKind);
+  const bigTotal =
+    tileTotal === "combined" ? cashTotal + checkTotal : cashTotal;
 
   return (
     <>
@@ -1557,47 +1614,44 @@ function PayrollWidget({
         className={styles.widgetCard}
       >
         <span className={styles.widgetCardTop}>
-          <span className={styles.widgetLabel}>Payroll</span>
-          <span className={styles.widgetTotal}>{fmtMoney2(cashTotal)}</span>
+          <span className={styles.widgetLabel}>{title}</span>
+          <span className={styles.widgetTotal}>{fmtMoney2(bigTotal)}</span>
         </span>
         <span className={styles.widgetCount}>
-          Cash {cashItems.length}{" "}
-          {cashItems.length === 1 ? "entry" : "entries"} · Check{" "}
-          {fmtMoney2(checkTotal)} (P&L only)
+          Cash {fmtMoney2(cashTotal)} · Check {fmtMoney2(checkTotal)}
+          {checkTag ? ` (${checkTag})` : ""}
         </span>
       </button>
 
       <Modal
         open={open}
-        title="Payroll"
+        title={title}
         size="lg"
         onClose={() => setOpen(false)}
       >
         <div className={styles.lineModalBody}>
           <TabsBar>
             <TabsButton
-              active={method === "payroll_cash"}
-              onClick={() => setMethod("payroll_cash")}
+              active={method === "cash"}
+              onClick={() => setMethod("cash")}
             >
               Cash · {fmtMoney2(cashTotal)}
             </TabsButton>
             <TabsButton
-              active={method === "payroll_check"}
-              onClick={() => setMethod("payroll_check")}
+              active={method === "check"}
+              onClick={() => setMethod("check")}
             >
               Check · {fmtMoney2(checkTotal)}
             </TabsButton>
           </TabsBar>
           <p className={styles.subText}>
-            {method === "payroll_cash"
-              ? "Cash payroll comes out of the drawer — it counts toward today's Out total."
-              : "Check payroll never touches the daily book's numbers — it flows straight into the monthly P&L's Check payroll line."}
+            {method === "cash" ? cashNote : checkNote}
           </p>
           <LineItemEntriesEditor
             key={method}
-            kind={method}
+            kind={method === "cash" ? cashKind : checkKind}
             readOnly={locked}
-            items={method === "payroll_cash" ? cashItems : checkItems}
+            items={method === "cash" ? cashItems : checkItems}
             storeId={storeId}
             date={date}
             onChange={onChange}
