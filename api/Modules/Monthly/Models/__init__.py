@@ -39,6 +39,10 @@ class MonthlyFinancial(Base):
     cash_expenses         = Column(Float, default=0.0)
     check_expenses        = Column(Float, default=0.0)
     cash_payroll          = Column(Float, default=0.0)
+    # Payroll paid by CHECK — daily-derived from
+    # DailyReport.payroll_check (which the daily book's own totals
+    # deliberately ignore; checks don't move drawer cash).
+    check_payroll         = Column(Float, default=0.0)
     bank_charges_210      = Column(Float, default=0.0)
     bank_charges_230      = Column(Float, default=0.0)
     # Single consolidated bank-charges line, fed by the bank-sync
@@ -84,6 +88,7 @@ class MonthlyFinancial(Base):
     def total_expenses(self) -> float:
         return float(sum([
             self.cash_expenses, self.check_expenses, self.cash_payroll,
+            self.check_payroll,
             self.bank_charges_210, self.bank_charges_230,
             self.credit_card_fees, self.money_order_rent,
             self.emaginenet_tech, self.irs_payroll_tax,

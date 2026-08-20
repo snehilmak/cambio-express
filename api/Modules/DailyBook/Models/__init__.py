@@ -58,6 +58,11 @@ class DailyReport(Base):
     checks_deposit        = Column(Float, default=0.0)
     safe_balance          = Column(Float, default=0.0)
     payroll_expense       = Column(Float, default=0.0)
+    # Check payroll — line-item-derived (kind='payroll_check').
+    # Deliberately NOT in total_disbursements or over_short: a
+    # payroll check doesn't move drawer cash. Exists to feed the
+    # monthly P&L's check-payroll line only.
+    payroll_check         = Column(Float, default=0.0)
     other_cash_out        = Column(Float, default=0.0)
     over_short            = Column(Float, default=0.0)
     notes                 = Column(Text, default="")

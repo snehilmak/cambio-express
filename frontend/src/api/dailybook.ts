@@ -49,6 +49,7 @@ export interface DailyReportRow {
   cash_deposit: number;
   safe_balance: number;
   payroll_expense: number;
+  payroll_check: number;
   // Disbursements — line-item derived (read-only)
   cash_purchases: number;
   cash_expense: number;
@@ -87,7 +88,6 @@ export interface DailyReportUpdateBody {
   rebates_commissions?: number;
   cash_deposit?: number;
   safe_balance?: number;
-  payroll_expense?: number;
   over_short?: number;
   notes?: string;
 }

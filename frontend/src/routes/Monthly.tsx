@@ -62,6 +62,7 @@ const EXPENSE_FIELDS: Array<{ key: keyof MonthlyRow; label: string }> = [
   { key: "cash_expenses",       label: "Cash expenses" },
   { key: "check_expenses",      label: "Check expenses" },
   { key: "cash_payroll",        label: "Cash payroll" },
+  { key: "check_payroll",       label: "Check payroll" },
   { key: "bank_charges_total",  label: "Bank charges" },
   { key: "credit_card_fees",    label: "Credit card fees" },
   { key: "money_order_rent",    label: "Money order rent" },

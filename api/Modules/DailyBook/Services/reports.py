@@ -67,6 +67,9 @@ class DailyReportSummary:
     cash_deposit: float
     safe_balance: float
     payroll_expense: float
+    # Check payroll — line-item derived, NOT part of the daily
+    # totals (feeds the monthly P&L only).
+    payroll_check: float
     # Disbursements (line-item derived)
     cash_purchases: float
     cash_expense: float
@@ -147,6 +150,7 @@ def _summarize(
         cash_deposit=float(r.cash_deposit or 0),
         safe_balance=float(r.safe_balance or 0),
         payroll_expense=float(r.payroll_expense or 0),
+        payroll_check=float(getattr(r, "payroll_check", 0) or 0),
         cash_purchases=float(r.cash_purchases or 0),
         cash_expense=float(r.cash_expense or 0),
         check_purchases=float(r.check_purchases or 0),
@@ -195,6 +199,7 @@ def _carry_only_summary(
         from_bank=0.0, rebates_commissions=0.0,
         return_check_paid_back=0.0, other_cash_in=0.0,
         cash_deposit=0.0, safe_balance=0.0, payroll_expense=0.0,
+        payroll_check=0.0,
         cash_purchases=0.0, cash_expense=0.0, check_purchases=0.0,
         check_expense=0.0, outside_cash_drops=0.0, checks_deposit=0.0,
         other_cash_out=0.0, over_short=0.0,
@@ -281,7 +286,7 @@ EDITABLE_REPORT_FIELDS: tuple[str, ...] = (
     "money_order_fees",
     "check_cashing_fees", "return_check_hold_fees",
     "forward_balance", "rebates_commissions",
-    "cash_deposit", "safe_balance", "payroll_expense",
+    "cash_deposit", "safe_balance",
 )
 
 

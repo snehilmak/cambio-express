@@ -62,7 +62,7 @@ bill_payment_charge, phone_recargas, boost_mobile,
 money_order_fees, check_cashing_fees,
 return_check_hold_fees,
 forward_balance, rebates_commissions,
-cash_deposit, safe_balance, payroll_expense
+cash_deposit, safe_balance
 ```
 
 Plus `notes` (text, separate parameter).
@@ -92,6 +92,8 @@ matching `kind`. The mapping is canonical in
 | `checks_deposit` | `check_deposit` | Trip to the bank with checks |
 | `from_bank` | `from_bank` | Cash pulled from the bank into the drawer (multiple bank runs per day) |
 | `money_order` | `money_order` | Money orders sold — one aggregate entry per day or one entry per money order, operator's choice |
+| `payroll_expense` | `payroll_cash` | Payroll paid in CASH — a real daily disbursement |
+| `payroll_check` | `payroll_check` | Payroll paid by CHECK — **excluded from total_disbursements and over_short** (a check doesn't move drawer cash); exists only to feed the monthly P&L's `check_payroll` line |
 
 **These fields are NOT writable via the daily-report PUT.** They get
 recomputed by `_recompute_line_items_total` on every line-item
@@ -130,6 +132,8 @@ these fields, or the request 422s:
 - `checks_deposit` (Category 2 — check_deposit kind)
 - `from_bank` (Category 2 — from_bank kind)
 - `money_order` (Category 2 — money_order kind)
+- `payroll_expense` (Category 2 — payroll_cash kind)
+- `payroll_check` (Category 2 — payroll_check kind)
 
 Plus the database-managed fields (id, store_id, report_date,
 locked_at, locked_by, updated_at) and the computed properties
@@ -157,6 +161,11 @@ total_disbursements = cash_purchases + cash_expense
                     + cash_deposit + checks_deposit
                     + payroll_expense + other_cash_out
 ```
+
+`payroll_check` is deliberately absent from BOTH formulas and from
+`computed_over_short` — payroll paid by check doesn't move drawer
+cash. It flows only into `MonthlyFinancial.check_payroll` (see
+Monthly/INVARIANTS.md).
 
 `DailyReport.net` (in the read response):
 ```

@@ -16,7 +16,7 @@ function makeForm(over: Partial<FormState> = {}): FormState {
     money_order_fees: 0,
     check_cashing_fees: 0, return_check_hold_fees: 0,
     forward_balance: 0, rebates_commissions: 0,
-    cash_deposit: 0, safe_balance: 0, payroll_expense: 0,
+    cash_deposit: 0, safe_balance: 0,
     notes: "",
     ...over,
   };
@@ -27,6 +27,7 @@ function makeReport(over: Partial<DailyReportRow> = {}): DailyReportRow {
   // rest can be zero-filled.
   return {
     money_transfer: 0, money_order: 0, from_bank: 0, other_cash_in: 0,
+    payroll_expense: 0, payroll_check: 0,
     return_check_paid_back: 0,
     cash_purchases: 0, cash_expense: 0, check_purchases: 0,
     check_expense: 0, outside_cash_drops: 0, checks_deposit: 0,
@@ -39,17 +40,20 @@ describe("computeTotals", () => {
   it("excludes safe_balance from disbursements", () => {
     const form = makeForm({
       cash_deposit: 100,
-      payroll_expense: 50,
       safe_balance: 2000, // retained cash — must not count as Out
     });
-    const { disbursements } = computeTotals(form, makeReport());
-    // Only cash_deposit + payroll_expense — NOT safe_balance.
+    const { disbursements } = computeTotals(
+      form, makeReport({ payroll_expense: 50 }),
+    );
+    // cash_deposit + report payroll — NOT safe_balance.
     expect(disbursements).toBe(150);
   });
 
   it("keeps other editable + derived disbursements", () => {
-    const form = makeForm({ cash_deposit: 100, payroll_expense: 50 });
-    const report = makeReport({ cash_purchases: 30, outside_cash_drops: 20 });
+    const form = makeForm({ cash_deposit: 100 });
+    const report = makeReport({
+      payroll_expense: 50, cash_purchases: 30, outside_cash_drops: 20,
+    });
     const { disbursements } = computeTotals(form, report);
     expect(disbursements).toBe(200); // 100 + 50 + 30 + 20
   });

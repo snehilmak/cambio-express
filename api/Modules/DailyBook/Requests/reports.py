@@ -43,6 +43,7 @@ class DailyReportRow(BaseModel):
     cash_deposit: float = 0.0
     safe_balance: float = 0.0
     payroll_expense: float = 0.0
+    payroll_check: float = 0.0
     # Disbursements (line-item derived — read-only in editor)
     cash_purchases: float = 0.0
     cash_expense: float = 0.0
@@ -258,7 +259,6 @@ class DailyReportUpdateRequest(BaseModel):
     rebates_commissions:     float | None = None
     cash_deposit:            float | None = None
     safe_balance:            float | None = None
-    payroll_expense:         float | None = None
     # NB: no `over_short` — it's a derived cash reconciliation computed
     # server-side (DailyReport.computed_over_short), never sent by the
     # client. `extra="forbid"` above means a stray over_short → 422.

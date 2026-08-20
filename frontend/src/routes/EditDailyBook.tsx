@@ -85,7 +85,9 @@ const EDITABLE_KEYS = [
   // like from_bank. Sending it in the PUT is a 422.
   "money_order_fees", "check_cashing_fees", "return_check_hold_fees",
   "forward_balance", "rebates_commissions",
-  "cash_deposit", "safe_balance", "payroll_expense",
+  "cash_deposit", "safe_balance",
+  // payroll_expense removed — now line-item-derived (payroll_cash /
+  // payroll_check kinds via the Payroll widget); PUTting it is a 422.
   // over_short removed — it's a derived cash reconciliation computed
   // by the server + computeTotals, never sent in the PUT body.
 ] as const;
@@ -148,7 +150,6 @@ const RECEIPT_LINE_ITEMS: LineItemFieldDef[] = [
 const DISBURSEMENT_INPUTS: InputFieldDef[] = [
   { key: "cash_deposit",     label: "Cash deposit" },
   { key: "safe_balance",     label: "Safe balance" },
-  { key: "payroll_expense",  label: "Payroll expense" },
 ];
 
 const DISBURSEMENT_LINE_ITEMS: LineItemFieldDef[] = [
@@ -843,6 +844,17 @@ function DisbursementsPanel(props: PanelProps) {
         <InfoTip text="Tap a row to add a timestamped entry — totals roll up automatically." />
       </PanelTitle>
       <div className={styles.widgetGrid}>
+        <PayrollWidget
+          cashTotal={Number(props.report?.payroll_expense ?? 0)}
+          checkTotal={Number(props.report?.payroll_check ?? 0)}
+          items={props.lineItems.filter(
+            (li) => li.kind === "payroll_cash" || li.kind === "payroll_check",
+          )}
+          storeId={props.storeId}
+          date={props.date}
+          locked={props.locked}
+          onChange={props.onLineItemChange}
+        />
         {DISBURSEMENT_LINE_ITEMS.map((f) => (
           <LineItemWidget
             key={f.kind}
@@ -1474,6 +1486,141 @@ function LineItemWidget({
   onChange: () => void;
 }) {
   const [open, setOpen] = useState(false);
+  const count = items.length;
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className={styles.widgetCard}
+      >
+        <span className={styles.widgetCardTop}>
+          <span className={styles.widgetLabel}>
+            {label}
+            {readOnly && <Pill tone="info">Auto</Pill>}
+          </span>
+          <span className={styles.widgetTotal}>{fmtMoney2(total)}</span>
+        </span>
+        <span className={styles.widgetCount}>
+          {count} {count === 1 ? "entry" : "entries"}
+        </span>
+      </button>
+
+      <Modal
+        open={open}
+        title={label}
+        size="lg"
+        onClose={() => setOpen(false)}
+      >
+        <LineItemEntriesEditor
+          kind={kind}
+          readOnly={readOnly}
+          items={items}
+          storeId={storeId}
+          date={date}
+          onChange={onChange}
+        />
+      </Modal>
+    </>
+  );
+}
+
+// Payroll — one tile, one modal, TWO kinds. Cash payroll moves real
+// drawer cash (rolls into payroll_expense, a daily disbursement);
+// CHECK payroll deliberately does NOT touch the daily book's numbers
+// — it feeds the monthly P&L's check-payroll line only. The modal
+// tabs between the two entry lists so both are logged in one place.
+function PayrollWidget({
+  cashTotal, checkTotal, items, storeId, date, locked, onChange,
+}: {
+  cashTotal: number;
+  checkTotal: number;
+  items: LineItemRow[];
+  storeId: number;
+  date: string;
+  locked: boolean;
+  onChange: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [method, setMethod] = useState<"payroll_cash" | "payroll_check">(
+    "payroll_cash",
+  );
+  const cashItems = items.filter((li) => li.kind === "payroll_cash");
+  const checkItems = items.filter((li) => li.kind === "payroll_check");
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className={styles.widgetCard}
+      >
+        <span className={styles.widgetCardTop}>
+          <span className={styles.widgetLabel}>Payroll</span>
+          <span className={styles.widgetTotal}>{fmtMoney2(cashTotal)}</span>
+        </span>
+        <span className={styles.widgetCount}>
+          Cash {cashItems.length}{" "}
+          {cashItems.length === 1 ? "entry" : "entries"} · Check{" "}
+          {fmtMoney2(checkTotal)} (P&L only)
+        </span>
+      </button>
+
+      <Modal
+        open={open}
+        title="Payroll"
+        size="lg"
+        onClose={() => setOpen(false)}
+      >
+        <div className={styles.lineModalBody}>
+          <TabsBar>
+            <TabsButton
+              active={method === "payroll_cash"}
+              onClick={() => setMethod("payroll_cash")}
+            >
+              Cash · {fmtMoney2(cashTotal)}
+            </TabsButton>
+            <TabsButton
+              active={method === "payroll_check"}
+              onClick={() => setMethod("payroll_check")}
+            >
+              Check · {fmtMoney2(checkTotal)}
+            </TabsButton>
+          </TabsBar>
+          <p className={styles.subText}>
+            {method === "payroll_cash"
+              ? "Cash payroll comes out of the drawer — it counts toward today's Out total."
+              : "Check payroll never touches the daily book's numbers — it flows straight into the monthly P&L's Check payroll line."}
+          </p>
+          <LineItemEntriesEditor
+            key={method}
+            kind={method}
+            readOnly={locked}
+            items={method === "payroll_cash" ? cashItems : checkItems}
+            storeId={storeId}
+            date={date}
+            onChange={onChange}
+          />
+        </div>
+      </Modal>
+    </>
+  );
+}
+
+// The add-row + entries table shared by every line-item modal
+// (single-kind widgets AND the two-kind Payroll modal). Owns the
+// add / inline-edit / delete state so callers stay presentational.
+function LineItemEntriesEditor({
+  kind, readOnly, items, storeId, date, onChange,
+}: {
+  kind: string;
+  readOnly: boolean;
+  items: LineItemRow[];
+  storeId: number;
+  date: string;
+  onChange: () => void;
+}) {
   const [time, setTime] = useState("");
   const [amount, setAmount] = useState(0);
   const [note, setNote] = useState("");
@@ -1560,195 +1707,167 @@ function LineItemWidget({
     }
   }
 
-  const count = items.length;
-
   return (
-    <>
-      <button
-        type="button"
-        onClick={() => { setOpen(true); setErr(null); }}
-        className={styles.widgetCard}
-      >
-        <span className={styles.widgetCardTop}>
-          <span className={styles.widgetLabel}>
-            {label}
-            {readOnly && <Pill tone="info">Auto</Pill>}
-          </span>
-          <span className={styles.widgetTotal}>{fmtMoney2(total)}</span>
-        </span>
-        <span className={styles.widgetCount}>
-          {count} {count === 1 ? "entry" : "entries"}
-        </span>
-      </button>
-
-      <Modal
-        open={open}
-        title={label}
-        size="lg"
-        onClose={() => { setOpen(false); cancelEdit(); setErr(null); }}
-      >
-        <div className={styles.lineModalBody}>
-          {!readOnly && (
-            <div className={styles.widgetAddRow}>
-              <div className={styles.addRowTime}>
-                <Field label="Time">
-                  <Input
-                    type="time"
-                    value={time}
-                    onChange={(e) => setTime(e.target.value)}
-                    disabled={busy}
-                  />
-                </Field>
-              </div>
-              <div className={styles.addRowAmount}>
-                <MoneyInput
-                  label="Amount"
-                  value={amount}
-                  onChange={setAmount}
-                  disabled={busy}
-                />
-              </div>
-              <div className={styles.addRowNote}>
-                <Field label="Note (optional)">
-                  <Input
-                    type="text"
-                    maxLength={120}
-                    value={note}
-                    onChange={(e) => setNote(e.target.value)}
-                    disabled={busy}
-                    placeholder="optional"
-                  />
-                </Field>
-              </div>
-              <div className={styles.addRowEnd}>
-                <Button
-                  type="button"
-                  tone="primary"
-                  size="sm"
-                  busy={busy}
-                  onClick={add}
-                  disabled={busy}
-                >
-                  + Add
-                </Button>
-              </div>
-            </div>
-          )}
-
-          {err && <ErrorRow message={err} />}
-
-          {items.length === 0 ? (
-            <p className={styles.emptyEntries}>
-              {readOnly
-                ? "No entries logged for this day yet."
-                : "No entries yet — add one above."}
-            </p>
-          ) : (
-            <div style={{ overflowX: "auto" }}>
-              <table className={styles.widgetTable}>
-                <thead>
-                  <tr>
-                    <th className={styles.widgetTh}>Time</th>
-                    <th className={styles.widgetTh}>Amount</th>
-                    <th className={styles.widgetTh}>Note</th>
-                    {!readOnly && <th className={styles.widgetTh} aria-label="actions" />}
-                  </tr>
-                </thead>
-                <tbody>
-                  {items.map((item) => {
-                    const isEditing = editingId === item.id;
-                    const fromReturnCheck = item.return_check_id != null;
-                    if (isEditing) {
-                      // Inline edit row — three inputs replace the
-                      // static cells, with Save / Cancel buttons in
-                      // the actions column.  Validation errors flash
-                      // above the table via the shared `err` state.
-                      return (
-                        <tr key={item.id}>
-                          <td className={styles.widgetTd}>
-                            <Input
-                              type="time"
-                              value={editTime}
-                              onChange={(e) => setEditTime(e.target.value)}
-                              disabled={busy}
-                            />
-                          </td>
-                          <td className={styles.widgetTd}>
-                            <MoneyInput
-                              value={editAmount}
-                              onChange={setEditAmount}
-                              disabled={busy}
-                            />
-                          </td>
-                          <td className={styles.widgetTd}>
-                            <Input
-                              type="text"
-                              maxLength={120}
-                              value={editNote}
-                              onChange={(e) => setEditNote(e.target.value)}
-                              disabled={busy}
-                              placeholder="optional"
-                            />
-                          </td>
-                          <td className={styles.widgetTd}>
-                            <div className={styles.editRowActions}>
-                              <Button
-                                type="button" tone="primary" size="sm"
-                                busy={busy} disabled={busy}
-                                onClick={() => { void saveEdit(); }}
-                              >
-                                Save
-                              </Button>
-                              <Button
-                                type="button" tone="secondary" size="sm"
-                                disabled={busy} onClick={cancelEdit}
-                              >
-                                Cancel
-                              </Button>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    }
-                    return (
-                      <tr key={item.id}>
-                        <td className={styles.widgetTdMono}>{item.at_time || "—"}</td>
-                        <td className={styles.widgetTdMono}>{fmtMoney2(item.amount)}</td>
-                        <td className={styles.widgetTd}>{item.note || "—"}</td>
-                        {!readOnly && (
-                          <td className={styles.widgetTd}>
-                            {fromReturnCheck ? (
-                              <span className={styles.widgetTdSmall}>
-                                from return check
-                              </span>
-                            ) : (
-                              <RowActions
-                                label="Actions"
-                                actions={[
-                                  {
-                                    label: "Edit",
-                                    onClick: () => startEdit(item),
-                                  },
-                                  {
-                                    label: "Remove",
-                                    tone: "danger",
-                                    onClick: () => { void remove(item.id); },
-                                  },
-                                ]}
-                              />
-                            )}
-                          </td>
-                        )}
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
+  <div className={styles.lineModalBody}>
+    {!readOnly && (
+      <div className={styles.widgetAddRow}>
+        <div className={styles.addRowTime}>
+          <Field label="Time">
+            <Input
+              type="time"
+              value={time}
+              onChange={(e) => setTime(e.target.value)}
+              disabled={busy}
+            />
+          </Field>
         </div>
-      </Modal>
-    </>
+        <div className={styles.addRowAmount}>
+          <MoneyInput
+            label="Amount"
+            value={amount}
+            onChange={setAmount}
+            disabled={busy}
+          />
+        </div>
+        <div className={styles.addRowNote}>
+          <Field label="Note (optional)">
+            <Input
+              type="text"
+              maxLength={120}
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              disabled={busy}
+              placeholder="optional"
+            />
+          </Field>
+        </div>
+        <div className={styles.addRowEnd}>
+          <Button
+            type="button"
+            tone="primary"
+            size="sm"
+            busy={busy}
+            onClick={add}
+            disabled={busy}
+          >
+            + Add
+          </Button>
+        </div>
+      </div>
+    )}
+
+    {err && <ErrorRow message={err} />}
+
+    {items.length === 0 ? (
+      <p className={styles.emptyEntries}>
+        {readOnly
+          ? "No entries logged for this day yet."
+          : "No entries yet — add one above."}
+      </p>
+    ) : (
+      <div style={{ overflowX: "auto" }}>
+        <table className={styles.widgetTable}>
+          <thead>
+            <tr>
+              <th className={styles.widgetTh}>Time</th>
+              <th className={styles.widgetTh}>Amount</th>
+              <th className={styles.widgetTh}>Note</th>
+              {!readOnly && <th className={styles.widgetTh} aria-label="actions" />}
+            </tr>
+          </thead>
+          <tbody>
+            {items.map((item) => {
+              const isEditing = editingId === item.id;
+              const fromReturnCheck = item.return_check_id != null;
+              if (isEditing) {
+                // Inline edit row — three inputs replace the
+                // static cells, with Save / Cancel buttons in
+                // the actions column.  Validation errors flash
+                // above the table via the shared `err` state.
+                return (
+                  <tr key={item.id}>
+                    <td className={styles.widgetTd}>
+                      <Input
+                        type="time"
+                        value={editTime}
+                        onChange={(e) => setEditTime(e.target.value)}
+                        disabled={busy}
+                      />
+                    </td>
+                    <td className={styles.widgetTd}>
+                      <MoneyInput
+                        value={editAmount}
+                        onChange={setEditAmount}
+                        disabled={busy}
+                      />
+                    </td>
+                    <td className={styles.widgetTd}>
+                      <Input
+                        type="text"
+                        maxLength={120}
+                        value={editNote}
+                        onChange={(e) => setEditNote(e.target.value)}
+                        disabled={busy}
+                        placeholder="optional"
+                      />
+                    </td>
+                    <td className={styles.widgetTd}>
+                      <div className={styles.editRowActions}>
+                        <Button
+                          type="button" tone="primary" size="sm"
+                          busy={busy} disabled={busy}
+                          onClick={() => { void saveEdit(); }}
+                        >
+                          Save
+                        </Button>
+                        <Button
+                          type="button" tone="secondary" size="sm"
+                          disabled={busy} onClick={cancelEdit}
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              }
+              return (
+                <tr key={item.id}>
+                  <td className={styles.widgetTdMono}>{item.at_time || "—"}</td>
+                  <td className={styles.widgetTdMono}>{fmtMoney2(item.amount)}</td>
+                  <td className={styles.widgetTd}>{item.note || "—"}</td>
+                  {!readOnly && (
+                    <td className={styles.widgetTd}>
+                      {fromReturnCheck ? (
+                        <span className={styles.widgetTdSmall}>
+                          from return check
+                        </span>
+                      ) : (
+                        <RowActions
+                          label="Actions"
+                          actions={[
+                            {
+                              label: "Edit",
+                              onClick: () => startEdit(item),
+                            },
+                            {
+                              label: "Remove",
+                              tone: "danger",
+                              onClick: () => { void remove(item.id); },
+                            },
+                          ]}
+                        />
+                      )}
+                    </td>
+                  )}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    )}
+  </div>
   );
 }
 
@@ -1888,7 +2007,6 @@ function buildInitialForm(r: DailyReportRow | null | undefined): FormState {
     rebates_commissions:     r?.rebates_commissions     ?? 0,
     cash_deposit:            r?.cash_deposit            ?? 0,
     safe_balance:            r?.safe_balance            ?? 0,
-    payroll_expense:         r?.payroll_expense         ?? 0,
     notes:                   r?.notes                   ?? "",
   };
 }

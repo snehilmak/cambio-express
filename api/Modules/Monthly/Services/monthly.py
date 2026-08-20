@@ -25,6 +25,7 @@ INCOME_FIELDS: tuple[str, ...] = (
 EXPENSE_FIELDS: tuple[str, ...] = (
     "cash_purchases", "check_purchases",
     "cash_expenses", "check_expenses", "cash_payroll",
+    "check_payroll",
     "bank_charges_total", "credit_card_fees",
     "money_order_rent", "emaginenet_tech",
     "irs_payroll_tax", "texas_workforce", "other_taxes",
