@@ -1,7 +1,11 @@
 import { useState, type FormEvent } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
-import { TICKET_STATUS_TONES, updateTicket, useAllTickets, type TicketRow } from "../api/support";
+import {
+  claimTicket, releaseTicket, TICKET_STATUS_TONES, updateTicket,
+  useAllTickets, type TicketRow,
+} from "../api/support";
+import { getCurrentIdentity } from "../lib/auth";
 import { TicketThread } from "../components/TicketThread";
 import { fmtDateTime } from "../lib/formatters";
 import { ApiError } from "../lib/api";
@@ -92,6 +96,29 @@ function TicketCard({ ticket: t }: { ticket: TicketRow }) {
   const [newPriority, setNewPriority] = useState(t.priority || "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const identity = getCurrentIdentity();
+  const claimedByMe =
+    t.assigned_to_user_id != null &&
+    t.assigned_to_user_id === identity?.user_id;
+
+  async function onClaimToggle() {
+    setBusy(true);
+    setError(null);
+    try {
+      if (claimedByMe) {
+        await releaseTicket(t.id);
+        toast({ message: "Claim released.", tone: "success" });
+      } else {
+        await claimTicket(t.id);
+        toast({ message: "Ticket claimed - it's yours.", tone: "success" });
+      }
+      void qc.invalidateQueries({ queryKey: ["tickets"] });
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not update the claim.");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function onSave(e: FormEvent) {
     e.preventDefault();
@@ -128,6 +155,11 @@ function TicketCard({ ticket: t }: { ticket: TicketRow }) {
                   {t.priority}
                 </Pill>
               )}
+              {t.assigned_to_name && (
+                <Pill tone={claimedByMe ? "success" : "info"}>
+                  {claimedByMe ? "Yours" : t.assigned_to_name}
+                </Pill>
+              )}
             </div>
             <div className={styles.meta}>
               {t.submitted_by} · {t.store_name || `Store #${t.store_id}`} · {fmtDateTime(t.created_at)}
@@ -135,9 +167,21 @@ function TicketCard({ ticket: t }: { ticket: TicketRow }) {
               <span className={styles.metaCat}>{t.category}</span>
             </div>
           </div>
-          <Button tone="secondary" size="sm" onClick={() => setExpanded((v) => !v)}>
-            {expanded ? "Collapse" : "Open conversation"}
-          </Button>
+          <div className={styles.headerActions}>
+            {/* Claim = "I'm working this" - visible to the whole
+                platform team so nobody double-handles a ticket. */}
+            {(t.assigned_to_user_id == null || claimedByMe) && (
+              <Button
+                tone="secondary" size="sm" busy={busy} disabled={busy}
+                onClick={() => { void onClaimToggle(); }}
+              >
+                {claimedByMe ? "Release" : "Claim"}
+              </Button>
+            )}
+            <Button tone="secondary" size="sm" onClick={() => setExpanded((v) => !v)}>
+              {expanded ? "Collapse" : "Open conversation"}
+            </Button>
+          </div>
         </div>
 
         {!expanded && <p className={styles.body}>{t.body}</p>}

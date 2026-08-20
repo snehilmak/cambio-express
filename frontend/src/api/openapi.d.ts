@@ -3831,6 +3831,35 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/superadmin/platform-users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Platform User Route
+         * @description Create a store-less platform login with the tickets-only
+         *     ``support`` role. Superadmin only; the role is fixed server-
+         *     side. Support signs in with password only (no TOTP) but its
+         *     refresh chain hard-expires 7 days after login — see
+         *     ``refresh_ttl_for_role``.
+         *
+         *     Username must be unique across the WHOLE platform (not just
+         *     among platform users): the cross-store login lookup is
+         *     first-match-by-username, so a collision with any store user
+         *     would shadow one of the two accounts.
+         */
+        post: operations["create_platform_user_route_superadmin_platform_users_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/superadmin/reports": {
         parameters: {
             query?: never;
@@ -4411,7 +4440,7 @@ export interface paths {
         /**
          * List My Tickets
          * @description List tickets submitted by users in the caller's store.
-         *     Superadmin sees all tickets (same as /all) since they have no store.
+         *     Platform staff see all tickets (same as /all) since they have no store.
          */
         get: operations["list_my_tickets_tickets_get"];
         put?: never;
@@ -4435,7 +4464,7 @@ export interface paths {
         };
         /**
          * List All Tickets
-         * @description Superadmin: list every ticket across all stores.
+         * @description Platform staff: list every ticket across all stores.
          */
         get: operations["list_all_tickets_tickets_all_get"];
         put?: never;
@@ -4456,7 +4485,7 @@ export interface paths {
         /**
          * Get Ticket
          * @description View a single ticket. Scoped: user sees own store's
-         *     tickets; superadmin sees any.
+         *     tickets; platform staff sees any.
          */
         get: operations["get_ticket_tickets__ticket_id__get"];
         /**
@@ -4467,6 +4496,29 @@ export interface paths {
          */
         put: operations["update_ticket_tickets__ticket_id__put"];
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tickets/{ticket_id}/claim": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Claim Ticket
+         * @description Platform staff claims a ticket — marks who is working it so
+         *     the rest of the support team sees it's taken. A support person
+         *     can't take over someone else's claim (409); superadmin can
+         *     reassign to themselves.
+         */
+        post: operations["claim_ticket_tickets__ticket_id__claim_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4497,6 +4549,27 @@ export interface paths {
          *     fetch.
          */
         post: operations["create_ticket_message_tickets__ticket_id__messages_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tickets/{ticket_id}/release": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Release Ticket
+         * @description Release a claim. Support can release only their own claim;
+         *     superadmin can release anyone's.
+         */
+        post: operations["release_ticket_tickets__ticket_id__release_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -8026,6 +8099,28 @@ export interface components {
             total_receipts: number;
         };
         /**
+         * PlatformUserCreateRequest
+         * @description POST /superadmin/platform-users — create a store-less
+         *     platform login. v1 mints only the tickets-only ``support``
+         *     role; the role is fixed server-side, not caller-supplied.
+         */
+        PlatformUserCreateRequest: {
+            /**
+             * Email
+             * @default
+             */
+            email: string;
+            /**
+             * Full Name
+             * @default
+             */
+            full_name: string;
+            /** Password */
+            password: string;
+            /** Username */
+            username: string;
+        };
+        /**
          * ProfileResponse
          * @description Full payload for the /app/account/profile page on first
          *     paint. Includes editable fields, read-only metadata, and the
@@ -9665,6 +9760,10 @@ export interface components {
         TicketRow: {
             /** Admin Reply */
             admin_reply: string | null;
+            /** Assigned To Name */
+            assigned_to_name?: string | null;
+            /** Assigned To User Id */
+            assigned_to_user_id?: number | null;
             /** Body */
             body: string;
             /** Category */
@@ -17332,6 +17431,45 @@ export interface operations {
             };
         };
     };
+    create_platform_user_route_superadmin_platform_users_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlatformUserCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_reports_route_superadmin_reports_get: {
         parameters: {
             query?: never;
@@ -18502,6 +18640,41 @@ export interface operations {
             };
         };
     };
+    claim_ticket_tickets__ticket_id__claim_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                ticket_id: number;
+            };
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TicketResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_ticket_messages_tickets__ticket_id__messages_get: {
         parameters: {
             query?: never;
@@ -18558,6 +18731,41 @@ export interface operations {
         responses: {
             /** @description Successful Response */
             201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TicketResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    release_ticket_tickets__ticket_id__release_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                ticket_id: number;
+            };
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };

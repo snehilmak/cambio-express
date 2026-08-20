@@ -297,10 +297,15 @@ def _to_login_response(
     access_token = result.access_token
     if response is not None and db is not None:
         from api.Modules.Auth.Services.refresh import (
-            DEFAULT_REFRESH_TOKEN_TTL_SECONDS, issue as _issue_refresh,
+            issue as _issue_refresh, refresh_ttl_for_role,
         )
+        # Role-scoped chain lifetime: the support role gets a hard
+        # 7-day login window (reuse() never extends expires_at, so
+        # this TTL is the absolute expiry).
+        _refresh_ttl = refresh_ttl_for_role(result.role)
         issued = _issue_refresh(
             db, user_id=result.user_id,
+            ttl_seconds=_refresh_ttl,
             user_agent=_client_user_agent(request),
             ip_address=_client_ip_address(request),
         )
@@ -322,7 +327,7 @@ def _to_login_response(
         _set_access_token_cookie(response, access_token)
         _set_refresh_token_cookie(
             response, issued.jti,
-            max_age_seconds=DEFAULT_REFRESH_TOKEN_TTL_SECONDS,
+            max_age_seconds=_refresh_ttl,
         )
     elif response is not None:
         _set_access_token_cookie(response, access_token)
@@ -699,10 +704,16 @@ def refresh_route(
     ))
     _set_access_token_cookie(response, new_access)
     # Re-set the same refresh cookie to extend its max-age so
-    # active users never see a login screen.
+    # active users never see a login screen — but never past the
+    # row's own expiry: ``reuse()`` doesn't extend ``expires_at``,
+    # so the chain has an absolute end (7 days for the support
+    # role) and the cookie shouldn't outlive it.
+    _remaining = int((row.expires_at - utc_now()).total_seconds())
     _set_refresh_token_cookie(
         response, row.jti,
-        max_age_seconds=DEFAULT_REFRESH_TOKEN_TTL_SECONDS,
+        max_age_seconds=max(
+            60, min(DEFAULT_REFRESH_TOKEN_TTL_SECONDS, _remaining),
+        ),
     )
     db.commit()
     _refresh_log.info(

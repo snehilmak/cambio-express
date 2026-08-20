@@ -216,16 +216,14 @@ def send_ticket_update_to_user(
 
 def platform_recipients(db: Session) -> list[object]:
     """Active platform users who should hear about store-side ticket
-    activity. Superadmins today; the planned "support" platform role
-    joins this query when it lands (PR4) — widen the ``role.in_``
-    here and nowhere else."""
+    activity: superadmins + the tickets-only "support" role."""
     from api.Modules.Tenancy.Models import User
 
     return (
         db.query(User)
           .filter(
               User.is_active == True,  # noqa: E712 — SQLAlchemy boolean
-              User.role.in_(("superadmin",)),
+              User.role.in_(("superadmin", "support")),
               User.email != "",
               User.notify_ticket_updates == True,  # noqa: E712
               User.email_bounced_at.is_(None),

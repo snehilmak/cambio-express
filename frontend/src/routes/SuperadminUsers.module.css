@@ -45,3 +45,23 @@
   color: var(--db-text-muted, #888);
   margin-bottom: 0.25rem;
 }
+
+.addSupportRow {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 0.75rem;
+}
+
+.addSupportLead {
+  margin: 0 0 1rem;
+  color: var(--db-text-muted, var(--text-muted));
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.addSupportGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: 0.75rem 1rem;
+  margin-bottom: 1rem;
+}

@@ -101,7 +101,8 @@ export function useDashboardSummary() {
   // we gate the fetch here too. Belt-and-suspenders against the
   // Rules of Hooks ordering.
   const identity = getCurrentIdentity();
-  const enabled = identity != null && identity.role !== "owner";
+  const enabled =
+    identity != null && !["owner", "support"].includes(identity.role);
   return useQuery<DashboardSummary>({
     enabled,
     queryKey: ["dashboard", "summary"],

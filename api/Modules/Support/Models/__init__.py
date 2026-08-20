@@ -38,6 +38,11 @@ class SupportTicket(Base):
     admin_reply = Column(Text, nullable=True)
     replied_at  = Column(DateTime, nullable=True)
     replied_by  = Column(String(120), nullable=True)
+    # Claim/assignment — which platform-staff person is working the
+    # ticket. ``assigned_to_name`` is a display snapshot (same
+    # pattern as ``submitted_by``); the FK is the authority.
+    assigned_to_user_id = Column(Integer, ForeignKey("user.id"), nullable=True)
+    assigned_to_name    = Column(String(120), nullable=True)
     created_at  = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at  = Column(DateTime, default=datetime.utcnow,
                           onupdate=datetime.utcnow, nullable=False)

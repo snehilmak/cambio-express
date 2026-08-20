@@ -65,6 +65,11 @@ export default function Dashboard() {
     return <Navigate to="/superadmin/dashboard" replace />;
   }
 
+  if (identity?.role === "support") {
+    // Tickets-only platform role — the ticket queue IS its home.
+    return <Navigate to="/superadmin/tickets" replace />;
+  }
+
   const title =
     identity?.role === "superadmin"
       ? "Platform Dashboard"
