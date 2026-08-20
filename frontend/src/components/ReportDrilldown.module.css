@@ -14,7 +14,15 @@
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
-  align-items: center;
+  /* The date fields are label-above-input columns; centering left
+     the label-less buttons floating off the input baseline.
+     Bottom-align everything instead. */
+  align-items: flex-end;
+}
+
+.actionRow > button {
+  /* Optical alignment against the taller date inputs. */
+  margin-bottom: 0.1rem;
 }
 
 .dateForm {

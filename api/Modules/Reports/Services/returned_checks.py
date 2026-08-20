@@ -1,9 +1,11 @@
 """Returned-check status report aggregator.
 
 Groups `ReturnCheck` rows that bounced in the period by status.
-Each bucket exposes count + total amount + total recovered_amount
-(only meaningful for status='recovered'). Plus a derived net G/L
-line: `recovered - (loss + fraud)`.
+Each bucket exposes count + total amount + total recovered — the
+sum of installment payments received so far, for EVERY status:
+a still-pending check with money already paid back (principal
+and/or the bounce fee) must show those dollars, not $0. Plus a
+derived net G/L line: `recovered - (loss + fraud)`.
 
 Pure DB read — no commits, no side-effects.
 """
@@ -52,8 +54,11 @@ def returned_check_status(
         )
         b["count"]  += 1
         b["amount"] += float(rc.amount or 0)
-        if rc.status == "recovered":
-            b["recovered"] += float(rc.recovered_total or 0)
+        # recovered_total sums the installment payments (which pay
+        # down face amount + the bounce fee) — real money back,
+        # whatever the status. Gating this on status='recovered'
+        # hid partial and even full paybacks on pending rows.
+        b["recovered"] += float(rc.recovered_total or 0)
 
     display_order = ["pending", "recovered", "loss", "fraud"]
     rows: list[dict[str, Any]] = []
@@ -73,7 +78,7 @@ def returned_check_status(
     totals = {
         "count":      sum(b["count"]  for b in buckets.values()),
         "amount":     sum(b["amount"] for b in buckets.values()),
-        "recovered":  buckets.get("recovered", {}).get("recovered", 0.0),
+        "recovered":  sum(b["recovered"] for b in buckets.values()),
         "loss_fraud": (
             buckets.get("loss",  {}).get("amount", 0.0)
             + buckets.get("fraud", {}).get("amount", 0.0)
