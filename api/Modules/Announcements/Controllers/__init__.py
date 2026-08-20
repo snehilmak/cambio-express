@@ -60,8 +60,7 @@ def _audit(db: Session, user: User, action: str, *,
     )
 
 
-def _iso(dt) -> str:
-    return dt.isoformat() if dt else ""
+from api.Core.Clock import iso as _iso
 
 
 def _is_visible(a) -> bool:

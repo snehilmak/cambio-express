@@ -107,8 +107,7 @@ def _audit_and_commit(db: Session, user: User, action: str,
     db.commit()
 
 
-def _iso(dt) -> str:
-    return dt.isoformat() if dt else ""
+from api.Core.Clock import iso as _iso
 
 
 def _normalize_slug(raw: str) -> str:

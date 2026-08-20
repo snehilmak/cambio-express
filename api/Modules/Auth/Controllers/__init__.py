@@ -896,12 +896,7 @@ def export_my_data_route(
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
 
-    def _iso(dt: Any) -> str | None:
-        if dt is None:
-            return None
-        if hasattr(dt, "isoformat"):
-            return dt.isoformat()
-        return str(dt)
+    from api.Core.Clock import iso_or_none as _iso
 
     profile = {
         "user_id": user.id,
