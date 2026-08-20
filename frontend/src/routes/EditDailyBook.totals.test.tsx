@@ -13,7 +13,7 @@ function makeForm(over: Partial<FormState> = {}): FormState {
   return {
     taxable_sales: 0, non_taxable: 0, sales_tax: 0,
     bill_payment_charge: 0, phone_recargas: 0, boost_mobile: 0,
-    money_order: 0, money_order_fees: 0,
+    money_order_fees: 0,
     check_cashing_fees: 0, return_check_hold_fees: 0,
     forward_balance: 0, rebates_commissions: 0,
     cash_deposit: 0, safe_balance: 0, payroll_expense: 0,
@@ -26,7 +26,7 @@ function makeReport(over: Partial<DailyReportRow> = {}): DailyReportRow {
   // Only the report-derived fields computeTotals reads matter here; the
   // rest can be zero-filled.
   return {
-    money_transfer: 0, from_bank: 0, other_cash_in: 0,
+    money_transfer: 0, money_order: 0, from_bank: 0, other_cash_in: 0,
     return_check_paid_back: 0,
     cash_purchases: 0, cash_expense: 0, check_purchases: 0,
     check_expense: 0, outside_cash_drops: 0, checks_deposit: 0,
@@ -90,5 +90,16 @@ describe("computeTotals", () => {
       makeReport(),
     );
     expect(short.overShort).toBe(-1000);
+  });
+});
+
+
+describe("money_order as a derived receipt", () => {
+  it("reads money_order off the report row, not the form", () => {
+    const { receipts } = computeTotals(
+      makeForm(),
+      makeReport({ money_order: 125 }),
+    );
+    expect(receipts).toBe(125);
   });
 });

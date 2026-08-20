@@ -11,7 +11,8 @@ export interface FormState {
   bill_payment_charge: number;
   phone_recargas: number;
   boost_mobile: number;
-  money_order: number;
+  // NB: no `money_order` — line-item-derived (kind='money_order'),
+  // read off the report row like from_bank.
   money_order_fees: number;
   check_cashing_fees: number;
   return_check_hold_fees: number;
@@ -32,7 +33,7 @@ export function computeTotals(
   const receiptsEditable = form ? (
     form.taxable_sales + form.non_taxable + form.sales_tax +
     form.bill_payment_charge + form.phone_recargas + form.boost_mobile +
-    form.money_order + form.money_order_fees +
+    form.money_order_fees +
     form.check_cashing_fees + form.return_check_hold_fees +
     form.forward_balance + form.rebates_commissions
   ) : 0;
@@ -42,7 +43,8 @@ export function computeTotals(
   // keeps Money In in sync with the saved breakdown instead of an
   // unpersisted input.
   const receiptsDerived =
-    (report?.money_transfer ?? 0) + (report?.from_bank ?? 0) +
+    (report?.money_transfer ?? 0) + (report?.money_order ?? 0) +
+    (report?.from_bank ?? 0) +
     (report?.other_cash_in ?? 0) + (report?.return_check_paid_back ?? 0);
   const receipts = receiptsEditable + receiptsDerived;
 

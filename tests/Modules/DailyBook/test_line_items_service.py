@@ -302,3 +302,38 @@ def test_recompute_creates_report_if_missing(test_store_id):
               .first()
         )
         assert rpt is not None
+
+
+def test_money_order_line_items_roll_up_to_field(test_store_id):
+    """money_order is now a multi-entry kind (one aggregate entry OR
+    one entry per money order sold) — its line items sum into
+    DailyReport.money_order, which still feeds total_receipts."""
+    from api.Modules.DailyBook.Models import DailyReport
+    from tests._app import db
+    from api.Modules.DailyBook.Services import (
+        add_line_item, recompute_line_items_total,
+    )
+    today = date.today()
+    with db_session():
+        for amt in (75.0, 20.0, 5.0):  # three separate money orders
+            add_line_item(
+                db.session,
+                store_id=test_store_id, report_date=today,
+                kind="money_order", at_time=None, amount=amt,
+            )
+        db.session.commit()
+        total = recompute_line_items_total(
+            db.session, test_store_id, today,
+            kind="money_order", daily_report_field="money_order",
+        )
+        db.session.commit()
+        assert total == 100.0
+        rpt = (
+            db.session.query(DailyReport)
+              .filter_by(store_id=test_store_id, report_date=today)
+              .first()
+        )
+        assert rpt is not None
+        assert rpt.money_order == 100.0
+        # Still a receipt: rolls into total_receipts.
+        assert rpt.total_receipts == 100.0

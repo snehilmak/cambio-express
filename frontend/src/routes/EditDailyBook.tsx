@@ -81,7 +81,8 @@ import { ImportReportModal } from "./ImportReportModal";
 const EDITABLE_KEYS = [
   "taxable_sales", "non_taxable", "sales_tax",
   "bill_payment_charge", "phone_recargas", "boost_mobile",
-  "money_order",
+  // money_order removed — now line-item-derived (kind='money_order'),
+  // like from_bank. Sending it in the PUT is a 422.
   "money_order_fees", "check_cashing_fees", "return_check_hold_fees",
   "forward_balance", "rebates_commissions",
   "cash_deposit", "safe_balance", "payroll_expense",
@@ -136,7 +137,6 @@ const RECEIPT_INPUTS: InputFieldDef[] = [
   { key: "bill_payment_charge",    label: "Bill payment charge" },
   { key: "phone_recargas",         label: "Phone recargas" },
   { key: "boost_mobile",           label: "Boost Mobile" },
-  { key: "money_order",            label: "Money order" },
 ];
 
 const RECEIPT_LINE_ITEMS: LineItemFieldDef[] = [
@@ -737,6 +737,19 @@ function ReceiptsPanel(
           storeId={props.storeId}
           date={props.date}
           locked={props.locked}
+          onChange={props.onLineItemChange}
+        />
+        {/* Money orders sold — multi-entry like the Fees modal's
+            siblings: one aggregate entry for the day or one entry
+            per money order, whichever the operator prefers. */}
+        <LineItemWidget
+          kind="money_order"
+          label="Money order"
+          readOnly={props.locked}
+          total={Number(props.report?.money_order ?? 0)}
+          items={props.lineItems.filter((li) => li.kind === "money_order")}
+          storeId={props.storeId}
+          date={props.date}
           onChange={props.onLineItemChange}
         />
       </div>
@@ -1868,7 +1881,6 @@ function buildInitialForm(r: DailyReportRow | null | undefined): FormState {
     bill_payment_charge:     r?.bill_payment_charge     ?? 0,
     phone_recargas:          r?.phone_recargas          ?? 0,
     boost_mobile:            r?.boost_mobile            ?? 0,
-    money_order:             r?.money_order             ?? 0,
     money_order_fees:        r?.money_order_fees        ?? 0,
     check_cashing_fees:      r?.check_cashing_fees      ?? 0,
     return_check_hold_fees:  r?.return_check_hold_fees  ?? 0,

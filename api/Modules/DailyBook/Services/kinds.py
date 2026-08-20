@@ -42,6 +42,11 @@ LINE_ITEM_KINDS: dict[str, tuple[str, str, str]] = {
     # drops — was a single operator-typed `from_bank` total before the
     # conversion; existing values were backfilled to one line item.
     "from_bank":      ("from_bank",               "cash from bank",       "entries"),
+    # Money orders sold. Some operators enter one aggregate total for
+    # the day, others log each money order separately — both work as
+    # line items. Was a single operator-typed `money_order` total;
+    # existing values were backfilled to one line item.
+    "money_order":    ("money_order",              "money order",          "entries"),
     # Outside-cash drops (ATM drops, safe drops). Originally lived
     # in its own `DailyDrop` table + bespoke routes/IIFE —
     # collapsed into the generic kind system after the data
