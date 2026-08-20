@@ -251,7 +251,6 @@ class DailyReportUpdateRequest(BaseModel):
     bill_payment_charge:     float | None = None
     phone_recargas:          float | None = None
     boost_mobile:            float | None = None
-    money_order:             float | None = None
     money_order_fees:        float | None = None
     check_cashing_fees:      float | None = None
     return_check_hold_fees:  float | None = None

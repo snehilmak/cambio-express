@@ -80,7 +80,6 @@ export interface DailyReportUpdateBody {
   bill_payment_charge?: number;
   phone_recargas?: number;
   boost_mobile?: number;
-  money_order?: number;
   money_order_fees?: number;
   check_cashing_fees?: number;
   return_check_hold_fees?: number;

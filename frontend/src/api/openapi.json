@@ -2609,17 +2609,6 @@
             ],
             "title": "Forward Balance"
           },
-          "money_order": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Money Order"
-          },
           "money_order_fees": {
             "anyOf": [
               {

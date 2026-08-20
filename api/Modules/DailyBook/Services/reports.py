@@ -278,7 +278,7 @@ def ensure_daily_report(
 EDITABLE_REPORT_FIELDS: tuple[str, ...] = (
     "taxable_sales", "non_taxable", "sales_tax",
     "bill_payment_charge", "phone_recargas", "boost_mobile",
-    "money_order", "money_order_fees",
+    "money_order_fees",
     "check_cashing_fees", "return_check_hold_fees",
     "forward_balance", "rebates_commissions",
     "cash_deposit", "safe_balance", "payroll_expense",
