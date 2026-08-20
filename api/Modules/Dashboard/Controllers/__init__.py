@@ -33,6 +33,7 @@ def _admin_summary(db: Session, store_id: int) -> dict[str, Any]:
     from api.Modules.DailyBook.Models import DailyReport
     from api.Modules.Monthly.Models import MonthlyFinancial
     from api.Modules.Tenancy.Models import Store
+    from api.Modules.Owners.Services import OWNER_TRANSFER_EXCLUDED
     from api.Modules.Transfers.Models import Transfer
     from api.Modules.Transfers.Services import store_mt_companies
     today = date.today()
@@ -72,7 +73,7 @@ def _admin_summary(db: Session, store_id: int) -> dict[str, Any]:
     ).filter(
         Transfer.store_id == store_id,
         Transfer.send_date >= month_start,
-        Transfer.status.notin_(["Canceled", "Rejected"]),
+        Transfer.status.notin_(OWNER_TRANSFER_EXCLUDED),
     ).group_by(Transfer.company).all())
     co_by_name = {co: (int(c or 0), float(t or 0), float(f or 0))
                   for co, c, t, f in co_q}

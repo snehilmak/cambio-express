@@ -829,6 +829,7 @@ def store_drill_route(
     from datetime import timedelta
     from api.Modules.Billing.Services.trial import get_trial_status
     from api.Modules.Tenancy.Models import Store, StoreEmployee
+    from api.Modules.Owners.Services import OWNER_TRANSFER_EXCLUDED
     from api.Modules.Transfers.Models import Transfer
 
     store = db.get(Store, store_id)
@@ -886,7 +887,7 @@ def store_drill_route(
         .filter(
             Transfer.store_id == store_id,
             Transfer.created_at >= now - timedelta(days=30),
-            Transfer.status.notin_(["Canceled", "Rejected"]),
+            Transfer.status.notin_(OWNER_TRANSFER_EXCLUDED),
         )
         .first()
     )

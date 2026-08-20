@@ -61,6 +61,7 @@ def superadmin_dashboard_context(db: Session) -> dict[str, Any]:
     """
     from api.Modules.Billing.Models import ReferralCode
     from api.Modules.Tenancy.Models import Store
+    from api.Modules.Owners.Services import OWNER_TRANSFER_EXCLUDED
     from api.Modules.Transfers.Models import Transfer
 
     now = utc_now()
@@ -223,7 +224,7 @@ def superadmin_dashboard_context(db: Session) -> dict[str, Any]:
         )
         .filter(
             Transfer.created_at >= d30_ago,
-            Transfer.status.notin_(["Canceled", "Rejected"]),
+            Transfer.status.notin_(OWNER_TRANSFER_EXCLUDED),
         )
         .group_by(Transfer.company)
         .order_by(

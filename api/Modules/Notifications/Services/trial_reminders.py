@@ -16,7 +16,6 @@ Per CLAUDE.md the trial-reminder dedup flag is
 sending; the cancellation Service clears it on resubscribe so a
 second trial (post-reactivation) gets its own fresh reminder.
 """
-import os
 from datetime import datetime
 from typing import Any
 
@@ -141,7 +140,8 @@ def run(
     if now is None:
         now = utc_now()
     if base_url is None:
-        base_url = os.environ.get("APP_BASE_URL", "https://dinerobook.com")
+        from api.Core.Urls import get_base_url
+        base_url = get_base_url()
 
     sent = 0
     for store in stores_due_for_reminder(session, now):

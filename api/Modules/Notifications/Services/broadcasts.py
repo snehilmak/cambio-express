@@ -14,7 +14,6 @@ Per CLAUDE.md the broadcast is idempotent on
 no-ops on second call; subsequent calls (re-run, manual replay,
 etc.) return 0.
 """
-import os
 from typing import Any
 
 from sqlalchemy.orm import Session
@@ -109,9 +108,8 @@ def run(
     stamp lands), but never closes the session.
     """
     from api.Modules.Announcements.Models import Announcement
-    base_url = base_url or os.environ.get(
-        "APP_BASE_URL", "https://dinerobook.com",
-    )
+    from api.Core.Urls import get_base_url
+    base_url = base_url or get_base_url()
 
     ann = session.get(Announcement, announcement_id)
     if ann is None:

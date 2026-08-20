@@ -28,6 +28,9 @@ from api.Core.Database import get_db
 from api.Modules.Auth.Controllers import get_principal
 from api.Modules.Auth.Services import resolve_store_scope
 from api.Modules.Support.Models import SupportMessage, SupportTicket
+# Canonical platform-staff tuple lives in Support/Services (shared
+# with the Notifications recipient query).
+from api.Modules.Support.Services import PLATFORM_STAFF_ROLES
 from api.Modules.Support.Requests import (
     CreateMessageRequest,
     CreateTicketRequest,
@@ -65,14 +68,6 @@ def _notify(fn: Any, *args: Any) -> None:
 def _snippet(text: str, limit: int = 300) -> str:
     text = (text or "").strip()
     return text if len(text) <= limit else text[: limit - 1] + "…"
-
-
-# Platform-staff roles: full cross-store ticket access, "staff"
-# chat bubbles, and the superadmin audit sink. ``support`` is the
-# tickets-only platform role — it passes HERE and nowhere else
-# (never ``_require_superadmin`` / ``resolve_superadmin_user``,
-# never the Casbin superadmin bypass).
-PLATFORM_STAFF_ROLES = ("superadmin", "support")
 
 
 def _is_platform_staff(claims: dict[str, Any]) -> bool:

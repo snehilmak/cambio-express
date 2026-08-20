@@ -18,7 +18,6 @@ Auth: requires JWT principal with role ∈ {`admin`, `owner`,
 `superadmin`} — same gate as legacy `/admin/subscription/*`.
 """
 import logging
-import os
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -70,9 +69,8 @@ def _absolute_url(path: str) -> str:
     builds without the env var still hit a real URL Stripe will
     accept.
     """
-    base = (
-        os.environ.get("APP_BASE_URL") or "https://dinerobook.com"
-    ).rstrip("/")
+    from api.Core.Urls import get_base_url
+    base = get_base_url()
     if not path.startswith("/"):
         path = "/" + path
     return f"{base}{path}"

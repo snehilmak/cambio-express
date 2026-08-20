@@ -27,7 +27,6 @@ is skipped — nothing to summarize.
 from __future__ import annotations
 
 import logging
-import os
 from dataclasses import dataclass
 from datetime import date, timedelta
 from typing import Any, Optional
@@ -219,11 +218,8 @@ def run(
 
     if on_date is None:
         on_date = date.today() - timedelta(days=1)
-    base_url = (
-        base_url
-        or os.environ.get("APP_BASE_URL")
-        or "https://dinerobook.com"
-    ).rstrip("/")
+    from api.Core.Urls import get_base_url
+    base_url = (base_url or get_base_url()).rstrip("/")
 
     sent_total = 0
     stores = stores_with_activity(session, on_date)
