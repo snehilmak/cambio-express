@@ -25,7 +25,7 @@ import { tokens } from "./tokens";
  *  the user is just sweeping their cursor past the trigger.
  */
 export function Tooltip({
-  label, children, placement = "top", delayMs = 250,
+  label, children, placement = "top", delayMs = 250, multiline = false,
 }: {
   /** Description text.  Pass a plain string; use the global
    *  Toast primitive instead if you need a multi-line callout
@@ -36,6 +36,10 @@ export function Tooltip({
   children: ReactElement;
   placement?: "top" | "bottom";
   delayMs?: number;
+  /** Wrap long descriptions instead of forcing one line. Use for
+   *  sentence-length tips (e.g. the InfoTip primitive); keep the
+   *  default single-line treatment for short action hints. */
+  multiline?: boolean;
 }) {
   const tipId = useId();
   const [open, setOpen] = useState(false);
@@ -74,7 +78,7 @@ export function Tooltip({
         <span
           id={tipId}
           role="tooltip"
-          style={tipStyle(placement)}
+          style={tipStyle(placement, multiline)}
         >
           {label}
         </span>
@@ -101,7 +105,9 @@ function ChildWithDescribedBy({
   } as unknown as ReactNode;
 }
 
-function tipStyle(placement: "top" | "bottom"): CSSProperties {
+function tipStyle(
+  placement: "top" | "bottom", multiline = false,
+): CSSProperties {
   // Small offset for the slide-from-direction effect — the tip
   // starts shifted toward the trigger then settles into place,
   // matching the shadcn / sonner motion vocabulary.
@@ -117,7 +123,9 @@ function tipStyle(placement: "top" | "bottom"): CSSProperties {
     padding: "0.35rem 0.55rem",
     fontSize: "0.78rem",
     lineHeight: 1.35,
-    whiteSpace: "nowrap",
+    ...(multiline
+      ? { whiteSpace: "normal" as const, width: "max-content", maxWidth: "16rem" }
+      : { whiteSpace: "nowrap" as const }),
     boxShadow: "0 8px 20px rgba(0, 0, 0, 0.35)",
     pointerEvents: "none",
     zIndex: 200,
