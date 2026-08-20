@@ -147,6 +147,11 @@ function TicketCard({ ticket: t }: { ticket: TicketRow }) {
           <div className={styles.headerLeft}>
             <div className={styles.titleRow}>
               <span className={styles.subject}>{t.subject}</span>
+              {t.unread_count > 0 && (
+                <Pill tone="negative" dot>
+                  {t.unread_count} new
+                </Pill>
+              )}
               <Pill tone={TICKET_STATUS_TONES[t.status] ?? "neutral"}>
                 {t.status.replace("_", " ")}
               </Pill>

@@ -51,11 +51,15 @@ export interface NavGroup {
  *  rules for backwards compat with the existing transitions). */
 export function SlimSidebar({
   groups, drawerOpen, brandName = "DineroBook", supportLink,
+  supportBadge = 0,
 }: {
   groups: NavGroup[];
   drawerOpen: boolean;
   brandName?: string;
   supportLink?: NavItem;
+  /** Unread count rendered as a phone-style badge circle on the
+   *  support button. 0 hides the badge. */
+  supportBadge?: number;
 }) {
   const location = useLocation();
   const [openGroup, setOpenGroup] = useState<string | null>(null);
@@ -145,10 +149,15 @@ export function SlimSidebar({
               `${styles.supportBtn}${isActive ? " " + styles.isActive : ""}`
             }
             title={supportLink.label}
-            aria-label={supportLink.label}
+            aria-label={
+              supportBadge > 0
+                ? `${supportLink.label} — ${supportBadge} unread`
+                : supportLink.label
+            }
           >
             <span className={styles.groupIcon}>{supportLink.icon}</span>
             <span className={styles.groupLabel}>{supportLink.label}</span>
+            <UnreadBadge count={supportBadge} />
           </NavLink>
         )}
       </div>
@@ -266,10 +275,27 @@ export function SlimSidebar({
             >
               <span className={styles.itemIcon}>{supportLink.icon}</span>
               <span>{supportLink.label}</span>
+              <UnreadBadge count={supportBadge} inline />
             </NavLink>
           </div>
         )}
       </div>
     </aside>
+  );
+}
+
+/** Phone-style red notification circle. Hidden at 0; caps the
+ *  display at 99+ so the circle never stretches. `inline` renders
+ *  it in the row flow (mobile drawer) instead of pinned to the
+ *  icon corner (desktop slim column). */
+function UnreadBadge({ count, inline }: { count: number; inline?: boolean }) {
+  if (count <= 0) return null;
+  return (
+    <span
+      className={inline ? styles.badgeInline : styles.badge}
+      aria-hidden="true"
+    >
+      {count > 99 ? "99+" : count}
+    </span>
   );
 }

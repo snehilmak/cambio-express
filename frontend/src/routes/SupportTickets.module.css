@@ -46,3 +46,28 @@
   cursor: pointer;
   border-bottom: 1px solid var(--db-border, #262626);
 }
+
+/* Unread-reply marker on a ticket row: bold subject + a small
+   phone-style count circle (matches the sidebar badge). */
+.unreadSubject {
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.unreadBadge {
+  background: var(--db-negative, #ff4d6d);
+  color: #fff;
+  font-size: 0.62rem;
+  font-weight: 700;
+  line-height: 1;
+  min-width: 1.05rem;
+  height: 1.05rem;
+  padding: 0 0.25rem;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-variant-numeric: tabular-nums;
+}

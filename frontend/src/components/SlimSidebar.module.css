@@ -182,6 +182,41 @@
   transform: scale(0.97);
 }
 
+/* Phone-style unread circle pinned to the button's top-right —
+   the button is the positioning context. Negative state color
+   (not the neon accent) so it reads as "needs attention". */
+.supportBtn {
+  position: relative;
+}
+
+.badge,
+.badgeInline {
+  background: var(--db-negative, #ff4d6d);
+  color: #fff;
+  font-size: 0.62rem;
+  font-weight: 700;
+  line-height: 1;
+  min-width: 1.05rem;
+  height: 1.05rem;
+  padding: 0 0.25rem;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.badge {
+  position: absolute;
+  top: 0.2rem;
+  right: 0.45rem;
+  box-shadow: 0 0 0 2px var(--db-bg, #0a0a0a);
+}
+
+.badgeInline {
+  margin-left: auto;
+}
+
 /* ── Fly-out panel (desktop) ──────────────────────────── */
 
 .flyoutBackdrop {

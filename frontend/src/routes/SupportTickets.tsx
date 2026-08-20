@@ -169,7 +169,21 @@ function TicketRowView({ ticket: t }: { ticket: TicketRow }) {
         onClick={() => setExpanded((v) => !v)}
         className={styles.clickableRow}
       >
-        <td style={tdStyle}>{t.subject}</td>
+        <td style={tdStyle}>
+          {t.unread_count > 0 ? (
+            <span className={styles.unreadSubject}>
+              {t.subject}
+              <span
+                className={styles.unreadBadge}
+                title={`${t.unread_count} new ${t.unread_count === 1 ? "reply" : "replies"}`}
+              >
+                {t.unread_count}
+              </span>
+            </span>
+          ) : (
+            t.subject
+          )}
+        </td>
         <td style={tdStyle}>{CATEGORIES.find((c) => c.value === t.category)?.label ?? t.category}</td>
         <td style={tdStyle}>
           <Pill tone={TICKET_STATUS_TONES[t.status] ?? "neutral"}>

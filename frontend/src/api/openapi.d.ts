@@ -4475,6 +4475,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/tickets/unread": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Unread Count
+         * @description Total unread ticket replies for the caller's side — drives
+         *     the phone-style badge on the Support nav button. Store side
+         *     counts unopened staff replies on its store's tickets; platform
+         *     staff counts unopened user replies across every store.
+         *
+         *     NOTE: registered before ``/{ticket_id}`` so the literal path
+         *     wins over the int matcher (same reason ``/all`` sits up here).
+         */
+        get: operations["unread_count_tickets_unread_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/tickets/{ticket_id}": {
         parameters: {
             query?: never;
@@ -4536,6 +4562,10 @@ export interface paths {
          * List Ticket Messages
          * @description The ticket's conversation thread, oldest first. Same scoping
          *     as the ticket detail.
+         *
+         *     Side effect: stamps the caller's side's read receipt
+         *     (``user_last_seen_at`` / ``staff_last_seen_at``) — opening the
+         *     thread is what clears the unread badge for that side.
          */
         get: operations["list_ticket_messages_tickets__ticket_id__messages_get"];
         put?: never;
@@ -9796,6 +9826,11 @@ export interface components {
             subject: string;
             /** Submitted By */
             submitted_by: string;
+            /**
+             * Unread Count
+             * @default 0
+             */
+            unread_count: number;
             /** Updated At */
             updated_at: string;
             /** User Id */
@@ -10191,6 +10226,15 @@ export interface components {
             companies: string[];
             /** Grand Total */
             grand_total: number;
+        };
+        /**
+         * UnreadCountResponse
+         * @description Nav-badge payload: total unread replies for the caller's
+         *     conversation side (store side vs platform staff).
+         */
+        UnreadCountResponse: {
+            /** Unread */
+            unread: number;
         };
         /** UpdateTicketRequest */
         UpdateTicketRequest: {
@@ -18559,6 +18603,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TicketListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    unread_count_tickets_unread_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UnreadCountResponse"];
                 };
             };
             /** @description Validation Error */

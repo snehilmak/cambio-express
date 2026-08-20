@@ -42,6 +42,7 @@ from api.Modules.Support.Requests import (
     TicketListResponse,
     TicketResponse,
     TicketRow,
+    UnreadCountResponse,
     UpdateTicketRequest,
 )
 from api.Core.Clock import utc_now
@@ -74,7 +75,15 @@ def _is_platform_staff(claims: dict[str, Any]) -> bool:
     return claims.get("role") in PLATFORM_STAFF_ROLES
 
 
-def _to_row(t: SupportTicket, store_name: str | None = None) -> TicketRow:
+def _viewer_kind(claims: dict[str, Any]) -> str:
+    """Which conversation side the caller reads as — drives the
+    per-side read receipts and unread counts."""
+    return "staff" if _is_platform_staff(claims) else "user"
+
+
+def _to_row(
+    t: SupportTicket, store_name: str | None = None, unread: int = 0,
+) -> TicketRow:
     return TicketRow(
         id=t.id,
         store_id=t.store_id,
@@ -94,6 +103,7 @@ def _to_row(t: SupportTicket, store_name: str | None = None) -> TicketRow:
         store_name=store_name,
         assigned_to_user_id=t.assigned_to_user_id,
         assigned_to_name=t.assigned_to_name,
+        unread_count=unread,
     )
 
 
@@ -150,8 +160,10 @@ def list_my_tickets(
         q = q.filter(SupportTicket.status == status)
     q = q.order_by(SupportTicket.created_at.desc())
     rows = q.all()
+    from api.Modules.Support.Services import unread_message_counts
+    unread = unread_message_counts(db, [t.id for t in rows], "user")
     return TicketListResponse(
-        tickets=[_to_row(t) for t in rows],
+        tickets=[_to_row(t, unread=unread.get(t.id, 0)) for t in rows],
         total=len(rows),
     )
 
@@ -182,9 +194,37 @@ def list_all_tickets(
             Store.id.in_(store_ids),
         ).all()
         store_names = {s.id: s.name or "" for s in stores}
+    from api.Modules.Support.Services import unread_message_counts
+    unread = unread_message_counts(db, [t.id for t in rows], "staff")
     return TicketListResponse(
-        tickets=[_to_row(t, store_names.get(t.store_id)) for t in rows],
+        tickets=[
+            _to_row(t, store_names.get(t.store_id), unread.get(t.id, 0))
+            for t in rows
+        ],
         total=len(rows),
+    )
+
+
+@router.get("/unread", response_model=UnreadCountResponse)
+def unread_count(
+    db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
+) -> UnreadCountResponse:
+    """Total unread ticket replies for the caller's side — drives
+    the phone-style badge on the Support nav button. Store side
+    counts unopened staff replies on its store's tickets; platform
+    staff counts unopened user replies across every store.
+
+    NOTE: registered before ``/{ticket_id}`` so the literal path
+    wins over the int matcher (same reason ``/all`` sits up here).
+    """
+    from api.Modules.Support.Services import unread_total
+
+    if _is_platform_staff(claims):
+        return UnreadCountResponse(unread=unread_total(db, "staff"))
+    sid = resolve_store_scope(claims)
+    return UnreadCountResponse(
+        unread=unread_total(db, "user", store_id=sid),
     )
 
 
@@ -271,7 +311,12 @@ def list_ticket_messages(
     claims: dict[str, Any] = Depends(get_principal),
 ) -> MessageListResponse:
     """The ticket's conversation thread, oldest first. Same scoping
-    as the ticket detail."""
+    as the ticket detail.
+
+    Side effect: stamps the caller's side's read receipt
+    (``user_last_seen_at`` / ``staff_last_seen_at``) — opening the
+    thread is what clears the unread badge for that side.
+    """
     ticket = _load_scoped_ticket(db, claims, ticket_id)
     rows = (
         db.query(SupportMessage)
@@ -279,6 +324,11 @@ def list_ticket_messages(
           .order_by(SupportMessage.created_at.asc(), SupportMessage.id.asc())
           .all()
     )
+    if _viewer_kind(claims) == "staff":
+        ticket.staff_last_seen_at = utc_now()
+    else:
+        ticket.user_last_seen_at = utc_now()
+    db.commit()
     return MessageListResponse(
         messages=[_message_row(m) for m in rows],
         total=len(rows),

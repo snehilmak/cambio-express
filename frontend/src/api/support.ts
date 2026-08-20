@@ -30,6 +30,8 @@ export interface TicketRow {
   store_name: string | null;
   assigned_to_user_id: number | null;
   assigned_to_name: string | null;
+  /** Replies from the other side this viewer hasn't opened yet. */
+  unread_count: number;
 }
 
 interface TicketListResponse {
@@ -39,6 +41,20 @@ interface TicketListResponse {
 
 interface TicketResponse {
   ticket: TicketRow;
+}
+
+/** Total unread ticket replies for the signed-in side — drives the
+ *  phone-style badge on the Support nav button. Polls once a minute
+ *  (plus the standard refetch-on-focus) so the badge stays live
+ *  without a websocket. */
+export function useTicketsUnread() {
+  const identity = getCurrentIdentity();
+  return useQuery<{ unread: number }>({
+    enabled: identity != null,
+    queryKey: ["tickets", "unread"],
+    queryFn: () => api<{ unread: number }>("/api/v2/tickets/unread"),
+    refetchInterval: 60_000,
+  });
 }
 
 export function useMyTickets(status?: string) {

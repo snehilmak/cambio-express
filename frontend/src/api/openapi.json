@@ -9167,6 +9167,11 @@
             "title": "Submitted By",
             "type": "string"
           },
+          "unread_count": {
+            "default": 0,
+            "title": "Unread Count",
+            "type": "integer"
+          },
           "updated_at": {
             "title": "Updated At",
             "type": "string"
@@ -9886,6 +9891,21 @@
           "grand_total"
         ],
         "title": "TransfersSummaryResponse",
+        "type": "object"
+      },
+      "UnreadCountResponse": {
+        "additionalProperties": false,
+        "description": "Nav-badge payload: total unread replies for the caller's\nconversation side (store side vs platform staff).",
+        "properties": {
+          "unread": {
+            "title": "Unread",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "unread"
+        ],
+        "title": "UnreadCountResponse",
         "type": "object"
       },
       "UpdateTicketRequest": {
@@ -28208,6 +28228,72 @@
         ]
       }
     },
+    "/tickets/unread": {
+      "get": {
+        "description": "Total unread ticket replies for the caller's side \u2014 drives\nthe phone-style badge on the Support nav button. Store side\ncounts unopened staff replies on its store's tickets; platform\nstaff counts unopened user replies across every store.\n\nNOTE: registered before ``/{ticket_id}`` so the literal path\nwins over the int matcher (same reason ``/all`` sits up here).",
+        "operationId": "unread_count_tickets_unread_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnreadCountResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Unread Count",
+        "tags": [
+          "support"
+        ]
+      }
+    },
     "/tickets/{ticket_id}": {
       "get": {
         "description": "View a single ticket. Scoped: user sees own store's\ntickets; platform staff sees any.",
@@ -28446,7 +28532,7 @@
     },
     "/tickets/{ticket_id}/messages": {
       "get": {
-        "description": "The ticket's conversation thread, oldest first. Same scoping\nas the ticket detail.",
+        "description": "The ticket's conversation thread, oldest first. Same scoping\nas the ticket detail.\n\nSide effect: stamps the caller's side's read receipt\n(``user_last_seen_at`` / ``staff_last_seen_at``) \u2014 opening the\nthread is what clears the unread badge for that side.",
         "operationId": "list_ticket_messages_tickets__ticket_id__messages_get",
         "parameters": [
           {
