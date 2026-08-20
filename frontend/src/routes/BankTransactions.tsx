@@ -14,7 +14,7 @@ import {
   type BankTransactionRow,
 } from "../api/bankSync";
 import {
-  Breadcrumbs, Button, ButtonLink,
+  Alert, Breadcrumbs, Button, ButtonLink,
   Card, DateInput, Empty, Field, Input, KpiCard, KpiGrid,
   monoStyle, PageHeader, PageShell, Pager, Select, Table, TableStates,
   tdStyle, thStyle,
@@ -93,7 +93,7 @@ export default function BankTransactions() {
         title="Bank transactions"
         subtitle={
           txns.data
-            ? `${txns.data.total.toLocaleString()} txns · ` +
+            ? `${txns.data.total.toLocaleString()} transactions · ` +
               `${txns.data.uncategorized_count.toLocaleString()} uncategorized`
             : "—"
         }
@@ -129,15 +129,7 @@ export default function BankTransactions() {
         }
       />
 
-      {syncMsg && (
-        <div style={{
-          fontSize: "0.82rem",
-          color: "var(--db-text-muted)",
-          padding: "0.4rem 0",
-        }}>
-          {syncMsg}
-        </div>
-      )}
+      {syncMsg && <Alert tone="success">{syncMsg}</Alert>}
 
       {accounts.data && accounts.data.rows.length > 0 && (
         <BalanceCards accounts={accounts.data.rows} />
@@ -272,7 +264,7 @@ function TxnTable({ rows }: { rows: BankTransactionRow[] }) {
             <td style={tdStyle}>{r.description || "—"}</td>
             <td style={tdStyle}>
               <span className={styles.accountCell}>
-                {r.account_label || `acct ${r.account_id}`}
+                {r.account_label || `Account ${r.account_id}`}
               </span>
             </td>
             <td style={tdStyle}>

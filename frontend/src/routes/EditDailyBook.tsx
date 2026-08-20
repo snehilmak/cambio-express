@@ -612,15 +612,11 @@ function OverShortReadout({
   negative: boolean;
 }) {
   return (
-    <div
-      className={styles.osReadout}
-      title={
-        "Over / Short — auto-computed cash reconciliation " +
-        "(cash out + safe balance − cash in). A short (red, negative) " +
-        "value means cash was miscounted or a figure was mis-entered."
-      }
-    >
-      <span className={styles.osReadoutLabel}>Over / Short</span>
+    <div className={styles.osReadout}>
+      <span className={styles.osReadoutLabel}>
+        Over / Short
+        <InfoTip text="Auto-computed cash reconciliation (cash out + safe balance − cash in). A short (red, negative) value means cash was miscounted or a figure was mis-entered." />
+      </span>
       <span
         className={styles.osReadoutValue}
         style={{
@@ -1318,16 +1314,15 @@ function MoneyTransferWidget({
       <Modal
         open={open}
         size="lg"
-        title="Money transfer — per-company breakdown"
+        title={
+          <>
+            Money transfer — per-company breakdown
+            <InfoTip text="Enter each company's amount, fees, federal tax, and commission. The grand total saves to this day's Money transfer line and flows into Money In." />
+          </>
+        }
         onClose={() => { setOpen(false); setErr(null); }}
       >
         <div className={styles.lineModalBody}>
-          <p className={styles.subText}>
-            Enter each company's amount, fees, federal tax, and
-            commission. The grand total saves to this day's
-            <em> Money transfer</em> line and flows into Money In.
-          </p>
-
           {isLoading ? (
             <Loading />
           ) : rows.length === 0 ? (
@@ -1342,7 +1337,7 @@ function MoneyTransferWidget({
                     <th className={styles.mtTh}>Company</th>
                     <th className={`${styles.mtTh} ${styles.mtThNum}`}>Amount</th>
                     <th className={`${styles.mtTh} ${styles.mtThNum}`}>Fees</th>
-                    <th className={`${styles.mtTh} ${styles.mtThNum}`}>Fed. tax</th>
+                    <th className={`${styles.mtTh} ${styles.mtThNum}`}>Federal tax</th>
                     <th className={`${styles.mtTh} ${styles.mtThNum}`}>Commission</th>
                     <th className={`${styles.mtTh} ${styles.mtThNum}`}>Total</th>
                   </tr>
@@ -1630,23 +1625,26 @@ function MethodSplitWidget({
         onClose={() => setOpen(false)}
       >
         <div className={styles.lineModalBody}>
-          <TabsBar>
-            <TabsButton
-              active={method === "cash"}
-              onClick={() => setMethod("cash")}
-            >
-              Cash · {fmtMoney2(cashTotal)}
-            </TabsButton>
-            <TabsButton
-              active={method === "check"}
-              onClick={() => setMethod("check")}
-            >
-              Check · {fmtMoney2(checkTotal)}
-            </TabsButton>
-          </TabsBar>
-          <p className={styles.subText}>
-            {method === "cash" ? cashNote : checkNote}
-          </p>
+          <div className={styles.tabsTipRow}>
+            <TabsBar>
+              <TabsButton
+                active={method === "cash"}
+                onClick={() => setMethod("cash")}
+              >
+                Cash · {fmtMoney2(cashTotal)}
+              </TabsButton>
+              <TabsButton
+                active={method === "check"}
+                onClick={() => setMethod("check")}
+              >
+                Check · {fmtMoney2(checkTotal)}
+              </TabsButton>
+            </TabsBar>
+            <InfoTip
+              text={method === "cash" ? cashNote : checkNote}
+              label={`About ${method} ${title.toLowerCase()}`}
+            />
+          </div>
           <LineItemEntriesEditor
             key={method}
             kind={method === "cash" ? cashKind : checkKind}

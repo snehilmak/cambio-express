@@ -17,7 +17,7 @@ export default function CashierProductivity() {
       kpis={[
         { label: "Total Sent",     tone: "primary", value: t => fmtMoney2(Number(t.sent ?? 0)) },
         { label: "Total Fees",     tone: "neon",    value: t => fmtMoney2(Number(t.fees ?? 0)) },
-        { label: "Total Fed Tax",  tone: "muted",   value: t => fmtMoney2(Number(t.tax ?? 0)) },
+        { label: "Total federal tax",  tone: "muted",   value: t => fmtMoney2(Number(t.tax ?? 0)) },
         { label: "Transfer Count", tone: "muted",   value: t => Number(t.count ?? 0).toLocaleString() },
       ]}
       columns={[
@@ -42,7 +42,7 @@ export default function CashierProductivity() {
         { label: "Total Sent",  field: r => fmtMoney2(Number(r.sent)), align: "right", mono: true },
         { label: "Fees",        field: r => fmtMoney2(Number(r.fees)), align: "right", mono: true },
         { label: "Federal Tax", field: r => fmtMoney2(Number(r.tax)),  align: "right", mono: true },
-        { label: "Avg",         field: r => fmtMoney2(Number(r.avg)),  align: "right", mono: true },
+        { label: "Average",         field: r => fmtMoney2(Number(r.avg)),  align: "right", mono: true },
       ]}
     />
   );

@@ -137,9 +137,9 @@ function AdminPanel({ d }: { d: AdminDashboard }) {
   return (
     <>
       <KpiGrid>
-        <KpiCard label="Total Transfers" value={d.kpis.total_transfers.toLocaleString()} sub="All time" />
+        <KpiCard label="Total transfers" value={d.kpis.total_transfers.toLocaleString()} sub="All time" />
         <KpiCard
-          label="Today's Transfers"
+          label="Today's transfers"
           value={d.kpis.today_transfers.toLocaleString()}
           sub={fmtShortDate(d.today)}
           tone="positive"
@@ -151,7 +151,7 @@ function AdminPanel({ d }: { d: AdminDashboard }) {
           tone={d.kpis.pending_ach > 0 ? "negative" : "positive"}
         />
         <KpiCard
-          label="Today's Daily Book"
+          label="Today's daily book"
           value={d.kpis.today_report_entered ? "Entered" : "Pending"}
           sub={
             <Link
@@ -165,7 +165,7 @@ function AdminPanel({ d }: { d: AdminDashboard }) {
           tone={d.kpis.today_report_entered ? "positive" : "warning"}
         />
         <KpiCard
-          label="Bank Sync"
+          label="Bank sync"
           value={
             d.stripe_accounts.length > 0
               ? `Stripe · ${d.stripe_accounts.length}`
@@ -188,7 +188,7 @@ function AdminPanel({ d }: { d: AdminDashboard }) {
         />
         {d.kpis.net_income_month != null && (
           <KpiCard
-            label={`Net Income (${monthName})`}
+            label={`Net income (${monthName})`}
             value={`$${Math.round(d.kpis.net_income_month).toLocaleString()}`}
             sub={
               <Link to="/monthly" className="ds-link" style={{ color: tokens.accent }}>
@@ -200,7 +200,7 @@ function AdminPanel({ d }: { d: AdminDashboard }) {
         )}
       </KpiGrid>
 
-      <Section title="This Month by Company">
+      <Section title="This month by company">
         <div
           style={{
             display: "grid",
@@ -262,12 +262,12 @@ function AdminPanel({ d }: { d: AdminDashboard }) {
             }}
           >
             <span style={{ fontWeight: 600 }}>Recent Transfers</span>
-            <ButtonLink href="/transfers" tone="secondary" size="sm">View All</ButtonLink>
+            <ButtonLink href="/transfers" tone="secondary" size="sm">View all</ButtonLink>
           </header>
           <Table>
             <thead>
               <tr>
-                {["Date", "Sender", "Co.", "Amount", "Status"].map((h) => (
+                {["Date", "Sender", "Company", "Amount", "Status"].map((h) => (
                   <th key={h} style={dashThStyle}>
                     {h}
                   </th>
@@ -279,7 +279,7 @@ function AdminPanel({ d }: { d: AdminDashboard }) {
                 <tr key={t.id}>
                   <td style={dashTdStyle}>{shortDate(t.send_date)}</td>
                   <td style={dashTdStyle}>{t.sender_name}</td>
-                  <td style={dashTdStyle}>{t.company.slice(0, 5)}</td>
+                  <td style={dashTdStyle}>{t.company}</td>
                   <td style={{ ...dashTdStyle, fontFamily: tokens.fontMono }}>
                     ${t.send_amount.toFixed(2)}
                   </td>
@@ -317,12 +317,12 @@ function AdminPanel({ d }: { d: AdminDashboard }) {
               }}
             >
               <span style={{ fontWeight: 600 }}>Recent ACH Batches</span>
-              <ButtonLink href="/batches" tone="secondary" size="sm">View All</ButtonLink>
+              <ButtonLink href="/batches" tone="secondary" size="sm">View all</ButtonLink>
             </header>
             <Table>
               <thead>
                 <tr>
-                  {["Date", "Co.", "ACH Amt", "Variance", "Status"].map((h) => (
+                  {["Date", "Company", "ACH amount", "Variance", "Status"].map((h) => (
                     <th key={h} style={dashThStyle}>
                       {h}
                     </th>
@@ -333,7 +333,7 @@ function AdminPanel({ d }: { d: AdminDashboard }) {
                 {d.recent_batches.map((b) => (
                   <tr key={b.id}>
                     <td style={dashTdStyle}>{shortDate(b.ach_date)}</td>
-                    <td style={dashTdStyle}>{b.company.slice(0, 5)}</td>
+                    <td style={dashTdStyle}>{b.company}</td>
                     <td style={{ ...dashTdStyle, fontFamily: tokens.fontMono }}>
                       ${b.ach_amount.toFixed(2)}
                     </td>
@@ -373,7 +373,7 @@ function AdminPanel({ d }: { d: AdminDashboard }) {
               }}
             >
               <span style={{ fontWeight: 600 }}>Bank Accounts</span>
-              <ButtonLink href="/bank" tone="secondary" size="sm">Full View</ButtonLink>
+              <ButtonLink href="/bank" tone="secondary" size="sm">View all</ButtonLink>
             </header>
             {d.stripe_accounts.length === 0 ? (
               <p style={{ color: tokens.textMuted, margin: 0 }}>
@@ -425,17 +425,17 @@ function EmployeePanel({ d }: { d: EmployeeDashboard }) {
     <>
       <KpiGrid>
         <KpiCard
-          label="Today's Transfers"
+          label="Today's transfers"
           value={d.totals.count.toLocaleString()}
           sub={fmtShortDate(d.today)}
         />
       </KpiGrid>
 
       <Section
-        title="Today's Transfers"
+        title="Today's transfers"
         actions={
           <ButtonLink href="/transfers/new" tone="primary" size="sm">
-            ＋ Log New Transfer
+            + New transfer
           </ButtonLink>
         }
       >
@@ -451,7 +451,7 @@ function EmployeePanel({ d }: { d: EmployeeDashboard }) {
                   "Fee",
                   "Recipient",
                   "Country",
-                  "Confirm #",
+                  "Confirmation #",
                   "Status",
                   "",
                 ].map((h) => (
@@ -590,7 +590,7 @@ function SuperadminPanel({ d }: { d: SuperadminContextLite & { role: string } })
           value={typeof d.arr_total === "number" ? `$${d.arr_total.toLocaleString()}` : "—"}
           tone="positive"
         />
-        <KpiCard label="New (30d)" value={fmtNumber(d.new_stores_30d)} tone="positive" />
+        <KpiCard label="New (last 30 days)" value={fmtNumber(d.new_stores_30d)} tone="positive" />
         <KpiCard
           label="Cancellations (30d)"
           value={fmtNumber(d.cancellations_30d)}
@@ -611,7 +611,7 @@ function SuperadminPanel({ d }: { d: SuperadminContextLite & { role: string } })
           }}
         >
           <QuickLink to="/superadmin/stores" title="Stores" desc="Browse, edit, impersonate." />
-          <QuickLink to="/superadmin/audit-log" title="Audit Log" desc="Every superadmin mutation." />
+          <QuickLink to="/superadmin/audit-log" title="Audit log" desc="Every platform admin action." />
           <QuickLink to="/superadmin/announcements" title="Announcements" desc="Global banners + push." />
           <QuickLink to="/superadmin/reports" title="Platform Reports" desc="MRR/ARR, churn, adoption." />
         </div>
@@ -637,7 +637,7 @@ function StatusPill({ value }: { value: string }) {
   const tone =
     ["Sent", "Cleared"].includes(value) ? "accent"
       : ["Pending"].includes(value) ? "warning"
-        : ["Canceled", "Rejected", "Returned", "Disputed"].includes(value) ? "negative"
+        : ["Cancelled", "Rejected", "Returned", "Disputed"].includes(value) ? "negative"
           : ["Refunded", "Partial"].includes(value) ? "warning"
             : "neutral";
   return <Pill tone={tone as "accent" | "warning" | "negative" | "neutral"}>{value}</Pill>;

@@ -108,7 +108,7 @@ export default function TransferDetail() {
       <Section title="Status & references">
         <Card padding="1.25rem 1.5rem">
           <DetailRow label="Status" value={t.status} />
-          <DetailRow label="Confirm #" value={t.confirm_number || "—"} mono />
+          <DetailRow label="Confirmation #" value={t.confirm_number || "—"} mono />
           <DetailRow label="Batch ID"  value={t.batch_id || "—"} mono />
           <DetailRow label="Employee"  value={t.employee_name || "—"} />
         </Card>

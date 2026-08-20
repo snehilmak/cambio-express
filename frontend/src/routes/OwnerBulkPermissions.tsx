@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { api, ApiError } from "../lib/api";
 import { useOwnerLocations } from "../api/owner";
 import {
-  Alert, Breadcrumbs, Button, Card, Checkbox, Loading,
+  Alert, Breadcrumbs, Button, Card, Checkbox, InfoTip, Loading,
   PageHeader, PageShell, Pill, SectionTitle, Table, useToast,
 } from "../components/ui";
 
@@ -22,7 +22,7 @@ const RESOURCE_LABELS: Record<string, string> = {
   transfers: "Transfers", customers: "Customers", daily_book: "Daily book",
   monthly: "Monthly P&L", batches: "ACH batches", bank_sync: "Bank sync",
   reports: "Reports", settings: "Settings", users: "Users / Team",
-  time_clock: "Time clock", return_checks: "Return checks",
+  time_clock: "Time clock", return_checks: "Returned checks",
 };
 
 export default function OwnerBulkPermissions() {
@@ -110,10 +110,10 @@ export default function OwnerBulkPermissions() {
       {error && <Alert tone="error">{error}</Alert>}
 
       <Card>
-        <SectionTitle>1. Choose a source store</SectionTitle>
-        <p style={{ fontSize: "0.85rem", color: "var(--db-text-muted)", margin: "0 0 0.5rem" }}>
-          Pick the store whose employee permissions you want to replicate.
-        </p>
+        <SectionTitle>
+          1. Choose a source store
+          <InfoTip text="Pick the store whose employee permissions you want to replicate." />
+        </SectionTitle>
         <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
           {locations?.rows.map((s) => (
             <button
@@ -165,10 +165,10 @@ export default function OwnerBulkPermissions() {
       )}
 
       <Card>
-        <SectionTitle>2. Select target stores</SectionTitle>
-        <p style={{ fontSize: "0.85rem", color: "var(--db-text-muted)", margin: "0 0 0.5rem" }}>
-          These stores will receive the source store's employee permissions.
-        </p>
+        <SectionTitle>
+          2. Select target stores
+          <InfoTip text="These stores will receive the source store's employee permissions." />
+        </SectionTitle>
         <div style={{ marginBottom: "0.5rem" }}>
           <Button size="sm" tone="secondary" onClick={selectAll} type="button">
             {selectedStores.size === (locations?.rows.length ?? 0) ? "Clear all" : "Select all"}

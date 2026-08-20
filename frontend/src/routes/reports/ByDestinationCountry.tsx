@@ -26,7 +26,7 @@ export default function ByDestinationCountry() {
         { label: "Total Sent",  field: r => fmtMoney2(Number(r.sent)),         align: "right", mono: true },
         { label: "Fees",        field: r => fmtMoney2(Number(r.fees)),         align: "right", mono: true },
         { label: "Federal Tax", field: r => fmtMoney2(Number(r.tax)),          align: "right", mono: true },
-        { label: "Avg",         field: r => fmtMoney2(Number(r.avg)),          align: "right", mono: true },
+        { label: "Average",         field: r => fmtMoney2(Number(r.avg)),          align: "right", mono: true },
       ]}
     />
   );

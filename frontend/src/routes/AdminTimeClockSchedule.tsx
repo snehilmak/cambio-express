@@ -75,7 +75,7 @@ export default function AdminTimeClockSchedule() {
   return (
     <PageShell>
 
-      <Breadcrumbs crumbs={[{ label: "HR" }, { label: "Schedule" }]} />
+      <Breadcrumbs crumbs={[{ label: "Team" }, { label: "Schedule" }]} />
 
       <PageHeader
         title="Schedule"
@@ -88,7 +88,7 @@ export default function AdminTimeClockSchedule() {
             type="button" tone="secondary"
             onClick={() => setWeekStart(addDays(weekStart, -7))}
           >
-            ← Prev week
+            ← Previous week
           </Button>
           <div className={styles.weekLabel}>
             {formatWeekRange(weekStart, weekEnd)}

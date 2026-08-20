@@ -197,7 +197,7 @@ function HistoryTable({ rows }: { rows: ReferralRedemptionRow[] }) {
     <Table>
       <thead>
         <tr>
-          {["Date", "Referred store", "Your $", "Their $"].map((h) => (
+          {["Date", "Referred store", "Your credit", "Their credit"].map((h) => (
             <th key={h} style={thStyle}>{h}</th>
           ))}
         </tr>

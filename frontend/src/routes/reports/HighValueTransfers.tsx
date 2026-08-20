@@ -77,7 +77,7 @@ export default function HighValueTransfers() {
           { label: "Send Amount", field: r => fmtMoney2(Number(r.amount)), align: "right", mono: true },
           { label: "Fee",         field: r => fmtMoney2(Number(r.fee)),    align: "right", mono: true },
           { label: "Federal Tax", field: r => fmtMoney2(Number(r.tax)),    align: "right", mono: true },
-          { label: "Confirm #",   field: "confirm", mono: true },
+          { label: "Confirmation #",   field: "confirm", mono: true },
         ]}
       />
     </>

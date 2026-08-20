@@ -8,8 +8,8 @@ import SenderAutocomplete from "../components/SenderAutocomplete";
 import RecipientSuggestions from "../components/RecipientSuggestions";
 import {
   Alert, Breadcrumbs, Button, Card, ConfirmDialog, DateInput, ErrorState,
-  Field, FormActions, Input, Loading, MoneyInput, PageHeader, PageShell,
-  Pill, Section, Select,
+  Field, FormActions, InfoTip, Input, Loading, MoneyInput, PageHeader,
+  PageShell, Pill, Section, Select,
 } from "../components/ui";
 import { useUnsavedGuard } from "../lib/useUnsavedGuard";
 import {
@@ -314,8 +314,8 @@ export default function EditTransfer() {
             </div>
             {customerId != null && (
               <p className={styles.note}>
-                Linked to customer #{customerId} — edits sync
-                back to the customer directory.
+                <Pill tone="info">Linked to customer #{customerId}</Pill>
+                <InfoTip text="This sender is linked to the customer directory — edits to their details here sync back to their customer record." />
               </p>
             )}
           </Section>
@@ -403,7 +403,7 @@ export default function EditTransfer() {
                   className={styles.taxPreview}
                 />
               </Field>
-              <Field label="Confirm #">
+              <Field label="Confirmation #">
                 <Input type="text" {...register("confirm_number")} />
               </Field>
             </div>

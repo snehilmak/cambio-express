@@ -17,7 +17,7 @@ export default function CancelledTransfers() {
       kpis={[
         { label: "Total",        tone: "primary",
           value: t => Number(t.count ?? 0).toLocaleString() },
-        { label: "Canceled",     tone: "muted",
+        { label: "Cancelled",     tone: "muted",
           value: t => Number(t.canceled ?? 0).toLocaleString() },
         { label: "Rejected",     tone: "muted",
           value: t => Number(t.rejected ?? 0).toLocaleString() },
@@ -33,7 +33,7 @@ export default function CancelledTransfers() {
         { label: "Status",      field: "status" },
         { label: "Send Amount", field: r => fmtMoney2(Number(r.amount)), align: "right", mono: true },
         { label: "Notes",       field: "status_notes" },
-        { label: "Confirm #",   field: "confirm", mono: true },
+        { label: "Confirmation #",   field: "confirm", mono: true },
       ]}
     />
   );

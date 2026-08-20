@@ -145,7 +145,7 @@ export default function TransferReceipt() {
           <span className={styles.meta}>
             {transfer.send_date}
             {transfer.confirm_number && (
-              <> · Confirm #{transfer.confirm_number}</>
+              <> · Confirmation #{transfer.confirm_number}</>
             )}
             <> · {transfer.status}</>
           </span>

@@ -57,6 +57,6 @@ describe("filterNavForRole → section-hub resolution", () => {
     expect(daily).toBeDefined();
     const labels = daily!.items.map((i) => i.label);
     expect(labels).toContain("Dashboard");
-    expect(labels).toContain("Return checks");
+    expect(labels).toContain("Returned checks");
   });
 });

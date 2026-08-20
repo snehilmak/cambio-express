@@ -83,7 +83,7 @@ export default function DailyBook() {
     <PageShell gap="1.5rem">
 
       <PageHeader
-        title="Daily Book"
+        title="Daily book"
         subtitle={`${MONTH_NAMES[month]} ${year}`}
         actions={(
           <div className={styles.navRow}>

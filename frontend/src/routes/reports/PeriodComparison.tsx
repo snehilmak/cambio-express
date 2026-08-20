@@ -26,7 +26,7 @@ export default function PeriodComparison() {
         { label: "Metric",     field: "label" },
         { label: "Current",    field: r => fmtCell(r), align: "right", mono: true },
         { label: "Prior",      field: r => fmtCell(r, "prior"), align: "right", mono: true },
-        { label: "Δ",          field: r => fmtCell(r, "delta"),
+        { label: "Change",          field: r => fmtCell(r, "delta"),
           align: "right", mono: true },
         { label: "% Change",   field: r => `${(Number(r.pct ?? 0) * 100).toFixed(1)}%`,
           align: "right", mono: true },

@@ -16,7 +16,7 @@ import { getCurrentCoordinates } from "../lib/geolocation";
 import { passkeysSupported, performPasskeyAssert } from "../lib/webauthn";
 import {
   Breadcrumbs,
-  Alert, Button, Card, EmptyState, Empty, ErrorState, Field, Input,
+  Alert, Button, Card, EmptyState, Empty, ErrorState, Field, InfoTip, Input,
   Loading, PageHeader, PageShell, Select, Table, tdStyle, thStyle,
 } from "../components/ui";
 import styles from "./TimeClock.module.css";
@@ -200,8 +200,7 @@ export default function TimeClock() {
               </Select>
             </Field>
             <Field
-              label="Notes (optional)"
-              hint="Anything that explains the shift — covered for someone, came in late, etc."
+              label={<>Notes (optional)<InfoTip text="Anything that explains the shift — covered for someone, came in late, etc." /></>}
             >
               <Input
                 type="text" maxLength={500}

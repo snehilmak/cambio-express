@@ -269,6 +269,19 @@
   font-weight: 600;
 }
 
+/* Tab strip + its contextual (i) tip on one row — the tip explains
+   the ACTIVE tab, so it sits right beside the buttons. */
+.tabsTipRow {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.tabsTipRow > :first-child {
+  flex: 1;
+  min-width: 0;
+}
+
 .subText {
   margin: 0 0 1rem;
   color: var(--db-text-muted, #a3a3a3);

@@ -24,8 +24,8 @@ import { passkeysSupported } from "../lib/webauthn";
 import { useUnsavedChangesGuard } from "../lib/useUnsavedChangesGuard";
 import {
   Alert, Button, ButtonLink, Card, Checkbox, ConfirmDialog, ErrorState, Field,
-  Input, Loading, PageHeader, PageShell, Pill, SectionTitle, Select, space,
-  Switch, TabsBar, TabsLink, useToast,
+  InfoTip, Input, Loading, PageHeader, PageShell, Pill, SectionTitle, Select,
+  space, Switch, TabsBar, TabsLink, useToast,
 } from "../components/ui";
 import styles from "./Settings.module.css";
 
@@ -131,11 +131,10 @@ function DataExportCard() {
   }
   return (
     <Card>
-      <SectionTitle>Download your data</SectionTitle>
-      <p style={{ fontSize: "0.88rem", color: "var(--db-text-muted)", margin: "0.25rem 0 0.75rem" }}>
-        Export a JSON file containing your profile, notification preferences,
-        session history, registered passkeys, and audit log entries.
-      </p>
+      <SectionTitle>
+        Download your data
+        <InfoTip text="Exports a JSON file with your profile, notification preferences, session history, registered passkeys, and audit log entries." />
+      </SectionTitle>
       <Button onClick={() => { void handleExport(); }} busy={busy} type="button">
         Download my data (JSON)
       </Button>
@@ -314,9 +313,8 @@ function ProfileCard() {
             across the whole team. */}
 
         <Field
-          label="Appearance"
+          label={<>Appearance<InfoTip text="Follows you to every browser you sign in on. The topbar toggle is a quicker shortcut for the same setting." /></>}
           error={fieldErrors.theme_preference}
-          hint="Follows you to every browser you sign in on. The topbar toggle is a quicker shortcut for the same setting."
         >
           <Select
             value={draft.theme_preference ?? "dark"}
@@ -834,8 +832,7 @@ function StoreInfoCard() {
               disabled={!canEdit} />
           </Field>
           <Field
-            label="Timezone"
-            hint="Used for every date / time across the store — reports, audit trails, receipts. Set it once here; “Detect from address” suggests it from the address above."
+            label={<>Timezone<InfoTip text="Used for every date and time across the store — reports, audit trails, receipts. Set it once here; “Detect from address” suggests it from the address above." /></>}
           >
             <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
               <Select
@@ -882,13 +879,10 @@ function StoreInfoCard() {
           (historical days keep showing its data); Remove drops it
           from the roster entirely. Saved with the rest of the tab. */}
       <Card>
-        <SectionTitle>Money transfer companies</SectionTitle>
-        <p className={styles.helpText}>
-          The companies available in the daily book&apos;s money-transfer
-          breakdown and the transfer form. Toggle one off to hide it
-          without losing its history; remove it to take it off the
-          roster entirely.
-        </p>
+        <SectionTitle>
+          Money transfer companies
+          <InfoTip text="The companies available in the daily book's money-transfer breakdown and the transfer form. Toggle one off to hide it without losing its history; remove it to take it off the roster entirely." />
+        </SectionTitle>
         <div style={{ display: "flex", flexDirection: "column", gap: space.sm }}>
           {mtCompanies.map((c, i) => (
             <div
@@ -965,24 +959,23 @@ function StoreInfoCard() {
           fields above. (It used to be a bare <SectionTitle> dropped
           mid-grid, which rendered as a stray one-column cell.) */}
       <Card>
-        <SectionTitle>Business / Legal</SectionTitle>
-        <p className={styles.helpText}>
-          Compliance identity + tax rates — used on tax exports and
-          filings. Leave blank if they match the store info above.
-        </p>
+        <SectionTitle>
+          Business / Legal
+          <InfoTip text="Compliance identity and tax rates — used on tax exports and filings. Leave blank if they match the store info above." />
+        </SectionTitle>
         <div className={styles.storeGrid}>
-          <Field label="Legal name" hint="Official business name for compliance filings">
+          <Field label={<>Legal name<InfoTip text="Official business name for compliance filings." /></>}>
             <Input type="text" value={legalName}
               onChange={(e) => setLegalName(e.target.value)}
               disabled={!canEdit} />
           </Field>
-          <Field label="EIN" hint="Federal employer identification number">
+          <Field label={<>EIN<InfoTip text="Federal employer identification number." /></>}>
             <Input type="text" value={ein} placeholder="XX-XXXXXXX"
               maxLength={20}
               onChange={(e) => setEin(e.target.value)}
               disabled={!canEdit} />
           </Field>
-          <Field label="Business address" hint="Legal address (if different from store address)">
+          <Field label={<>Business address<InfoTip text="Legal address, if different from the store address." /></>}>
             <Input type="text" value={businessAddress}
               onChange={(e) => setBusinessAddress(e.target.value)}
               disabled={!canEdit} />
@@ -994,8 +987,7 @@ function StoreInfoCard() {
               disabled={!canEdit} />
           </Field>
           <Field
-            label="Sales tax rate (%)"
-            hint="Applied to a day's Taxable Sales in the daily book. When set, Sales Tax auto-calculates and can't be edited by hand. Leave at 0 to enter Sales Tax manually."
+            label={<>Sales tax rate (%)<InfoTip text="Applied to a day's Taxable Sales in the daily book. When set, Sales Tax auto-calculates and can't be edited by hand. Leave at 0 to enter Sales Tax manually." /></>}
           >
             <Input type="number" step="0.01" min="0" max="100"
               value={salesTaxPct}
@@ -1013,13 +1005,10 @@ function StoreInfoCard() {
       </Card>
 
       <Card>
-        <SectionTitle>Business hours</SectionTitle>
-        <p className={styles.helpText}>
-          One row per day (Monday-first). Toggle "Closed" to mark
-          the day off; open / close times use 24-hour
-          <code> HH:MM</code> format. Saving with no edits keeps
-          the default Mon-Sat 9-6 / Sun closed template.
-        </p>
+        <SectionTitle>
+          Business hours
+          <InfoTip text='One row per day (Monday-first). Toggle "Closed" to mark the day off; open and close times use 24-hour HH:MM format. Saving with no edits keeps the default Mon-Sat 9-6 / Sun closed template.' />
+        </SectionTitle>
         <StoreHoursEditor
           hours={hours}
           onChange={setHours}
@@ -1231,10 +1220,10 @@ function OwnerAccessCard() {
 
   return (
     <Card>
-      <SectionTitle>Owner access</SectionTitle>
-      <p style={{ fontSize: "0.88rem", color: "var(--db-text-muted)", margin: "0.25rem 0 0.75rem" }}>
-        If a multi-store owner gave you a connect code, enter it here to link this store to their umbrella.
-      </p>
+      <SectionTitle>
+        Owner access
+        <InfoTip text="If a multi-store owner gave you a connect code, enter it here to link this store to their umbrella." />
+      </SectionTitle>
       {linked && (
         <Alert tone="success">
           Linked to owner: <strong>{linked}</strong>

@@ -19,8 +19,8 @@ import {
 } from "../lib/push";
 import {
   Breadcrumbs,
-  Alert, Button, Card, ErrorState, Loading, PageHeader, PageShell, Section,
-  Table, tdStyle, thStyle, tokens, useToast,
+  Alert, Button, Card, ErrorState, InfoTip, Loading, PageHeader, PageShell,
+  Section, Table, tdStyle, thStyle, tokens, useToast,
 } from "../components/ui";
 import styles from "./AccountNotifications.module.css";
 
@@ -276,14 +276,15 @@ export default function AccountNotifications() {
           <BrowserPushCard />
         </Section>
 
-        <Section title="What DineroBook sends you">
+        <Section
+          title={
+            <>
+              What DineroBook sends you
+              <InfoTip text="We send as little as possible. This is the complete list — anything user-controllable has a toggle on the left; the rest is essential (like password reset)." />
+            </>
+          }
+        >
           <Card>
-            <p className={styles.lead}>
-              We send as little as possible. Here's the complete list —
-              anything user-controllable has a toggle on the left; the
-              rest is either essential (password reset) or not yet
-              implemented.
-            </p>
             <Table>
               <thead>
                 <tr>
@@ -335,11 +336,6 @@ export default function AccountNotifications() {
                 />
               </tbody>
             </Table>
-            <p className={styles.fine}>
-              We don't ship controls for imaginary notifications —
-              every toggle on this page has a real sender behind it.
-              New senders land here alongside their toggle.
-            </p>
           </Card>
         </Section>
       </div>

@@ -197,7 +197,7 @@ function TransfersTable({ rows }: { rows: TransferRow[] }) {
     <Table>
       <thead>
         <tr>
-          {["Date", "Company", "Sender", "Recipient", "Country", "Confirm #", "Status", "Total"]
+          {["Date", "Company", "Sender", "Recipient", "Country", "Confirmation #", "Status", "Total"]
             .map((h, i, a) => (
               <th
                 key={h}

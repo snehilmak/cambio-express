@@ -131,7 +131,7 @@ export default function SuperadminControls() {
           <QuickLink
             to="/superadmin/audit-log"
             title="Audit Log"
-            desc="Every superadmin mutation. Filter by actor / target / action."
+            desc="Every platform admin action. Filter by actor / target / action."
           />
           <QuickLink
             to="/superadmin/announcements"
@@ -155,7 +155,7 @@ export default function SuperadminControls() {
           />
           <ComingSoon
             title="TV Catalogs"
-            desc="Curate the company / bank picker for TV displays. POST endpoints stay on Flask; SPA UI lands in a follow-up."
+            desc="Curate the company and bank pickers shown on TV displays."
           />
         </div>
       </Section>

@@ -65,7 +65,7 @@ export default function SuperadminMaintenance() {
   return (
     <PageShell maxWidth="48rem" gap="1.25rem">
       <Breadcrumbs crumbs={[
-        { label: "Config" },
+        { label: "Platform" },
         { label: "Maintenance mode" },
       ]} />
 

@@ -164,7 +164,7 @@ export default function Landing() {
             </div>
             <ul className={styles.featureList}>
               <li><span className={styles.tick}>✓</span>Revenue split by service</li>
-              <li><span className={styles.tick}>✓</span>YoY comparison</li>
+              <li><span className={styles.tick}>✓</span>Year-over-year comparison</li>
               <li><span className={styles.tick}>✓</span>CSV / PDF export for your accountant</li>
             </ul>
           </div>

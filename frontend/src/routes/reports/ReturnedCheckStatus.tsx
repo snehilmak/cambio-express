@@ -20,7 +20,7 @@ export default function ReturnedCheckStatus() {
           value: t => fmtMoney2(Number(t.amount ?? 0)) },
         { label: "Recovered",     tone: "muted",
           value: t => fmtMoney2(Number(t.recovered ?? 0)) },
-        { label: "Net G/L",       tone: "muted",
+        { label: "Net gain/loss",       tone: "muted",
           value: t => fmtMoney2(Number(t.net_gl ?? 0)) },
       ]}
       columns={[

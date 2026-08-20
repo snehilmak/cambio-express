@@ -185,8 +185,8 @@ export default function ReturnCheckForm() {
   if (identity?.store_id == null) {
     return (
       <PageShell maxWidth="62rem">
-        <PageHeader title={isEdit ? "Edit return check" : "New return check"} />
-        <p>Sign in as a store admin to manage return checks.</p>
+        <PageHeader title={isEdit ? "Edit returned check" : "New returned check"} />
+        <p>Sign in as a store admin to manage returned checks.</p>
       </PageShell>
     );
   }
@@ -205,10 +205,10 @@ export default function ReturnCheckForm() {
   return (
     <PageShell maxWidth="62rem">
 
-      <Breadcrumbs crumbs={[{ label: "Return checks", to: "/return-checks" }, { label: isEdit ? "Edit return check" : "New return check" }]} />
+      <Breadcrumbs crumbs={[{ label: "Returned checks", to: "/return-checks" }, { label: isEdit ? "Edit returned check" : "New returned check" }]} />
 
       <PageHeader
-        title={isEdit ? `Return check #${rcId}` : "New return check"}
+        title={isEdit ? `Returned check #${rcId}` : "New returned check"}
         subtitle="Track a bounced check from a customer and any partial recovery."
       />
 

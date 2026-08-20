@@ -19,7 +19,7 @@ export default function DailyDrops() {
           value: t => fmtMoney2(Number(t.amount ?? 0)) },
         { label: "Drop Count",    tone: "neon",
           value: t => Number(t.count ?? 0).toLocaleString() },
-        { label: "Avg / Day",     tone: "muted",
+        { label: "Average per day",     tone: "muted",
           value: t => fmtMoney2(Number(t.avg_per_day ?? 0)) },
       ]}
       columns={[
