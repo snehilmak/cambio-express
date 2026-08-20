@@ -18,6 +18,7 @@ from api.Modules.Owners.Repositories.store_links import find_link, store_ids_for
 from api.Modules.Owners.Repositories.stores import (
     get_store,
     get_store_names_map,
+    list_stores_by_ids,
 )
 from api.Modules.Owners.Repositories.users import users_in_stores_query
 
@@ -28,6 +29,7 @@ __all__ = [
     "get_store_names_for_codes",
     "get_store_names_map",
     "list_codes_for_owner",
+    "list_stores_by_ids",
     "store_ids_for_owner",
     "users_in_stores_query",
 ]

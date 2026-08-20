@@ -38,66 +38,6 @@ from typing import Any
 from api.Core.Clock import utc_now
 
 
-# Permissions per role. Embedded as JWT claims so subsequent
-# requests can authorize without re-hitting the DB.
-# Legacy coarse-grained permissions — still emitted alongside the
-# granular resource.action permissions so existing JWT checks don't
-# break during the incremental migration.
-_LEGACY_ROLE_PERMISSIONS: dict[str, list[str]] = {
-    "superadmin": [
-        "platform.admin",
-        "store.admin",
-        "store.employee",
-        "owner.read",
-    ],
-    "owner": [
-        "owner.read",
-        "owner.admin",
-    ],
-    "admin": [
-        "store.admin",
-        "store.employee",
-    ],
-    "employee": [
-        "store.employee",
-    ],
-}
-
-# Granular RBAC resources and actions. Superadmin edits these via
-# /app/superadmin/permissions. Each (role, resource, action) tuple
-# stored in the role_permission table means "allowed".
-RBAC_RESOURCES = [
-    "transfers", "customers", "daily_book", "monthly",
-    "batches", "bank_sync", "reports", "settings",
-    "users", "time_clock", "return_checks",
-]
-RBAC_ACTIONS = ["create", "read", "update", "delete"]
-
-# Default grants seeded on first boot. Superadmin gets everything
-# implicitly (not stored). Owner gets read on most store resources.
-RBAC_DEFAULTS: dict[str, list[str]] = {
-    "admin": [
-        f"{r}.{a}" for r in RBAC_RESOURCES for a in RBAC_ACTIONS
-    ],
-    "employee": [
-        "transfers.create", "transfers.read", "transfers.update",
-        "customers.create", "customers.read", "customers.update",
-        "daily_book.read",
-        "time_clock.create", "time_clock.read",
-        "return_checks.read",
-    ],
-    "owner": [
-        f"{r}.read" for r in RBAC_RESOURCES
-    ] + [
-        "settings.create",
-        "settings.update",
-        "settings.delete",
-        "users.create",
-    ],
-}
-
-
-
 def permissions_for(role: str, db: "Session | None" = None, store_id: "int | None" = None) -> list[str]:
     """Permission claim list for a role. Delegates to Casbin.
     The ``db`` param is accepted for backward compat but unused."""

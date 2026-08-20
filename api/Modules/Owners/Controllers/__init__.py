@@ -147,11 +147,8 @@ def owner_pl_rollup_route(
     from api.Modules.Tenancy.Models import Store
     sids = owner_store_ids(db, user)
 
-    stores = (
-        db.query(Store).filter(Store.id.in_(sids))
-          .order_by(Store.name).all()
-        if sids else []
-    )
+    from api.Modules.Owners.Repositories import list_stores_by_ids
+    stores = list_stores_by_ids(db, sids)
     pl_rows = (
         db.query(MonthlyFinancial)
           .filter(

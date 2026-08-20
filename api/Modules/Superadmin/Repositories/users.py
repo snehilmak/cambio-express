@@ -65,5 +65,5 @@ def list_users_with_store_query(db: Session) -> Any:
     return (
         db.query(User, Store.name)
           .outerjoin(Store, User.store_id == Store.id)
-          .order_by(User.id.desc())
+          .order_by(User.created_at.desc())
     )
