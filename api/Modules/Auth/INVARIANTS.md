@@ -63,6 +63,7 @@ of truth has two layers:
 
    ```python
    "superadmin": ["platform.admin", "store.admin", "store.employee", "owner.read"]
+   "support":    ["platform.support"]
    "owner":      ["owner.read", "owner.admin"]
    "admin":      ["store.admin", "store.employee"]
    "employee":   ["store.employee"]
@@ -112,6 +113,38 @@ tuple and only this tuple.
 The current set is `("superadmin",)` — pinned by
 `test_totp_required_roles_is_superadmin_only` in
 `test_auth_invariants.py`.
+
+**The `support` platform role is deliberately NOT in this
+tuple** (product decision, Aug 2026): support logins are
+password-only, and the trade-off is a HARD 7-day login window —
+`refresh_ttl_for_role("support")` issues the refresh chain with
+a 7-day TTL, and `reuse()` never extends `expires_at`, so the
+session dies 7 days after login no matter how active it is
+(everyone else gets the 14-day default). See
+`api/Modules/Auth/Services/refresh.py`.
+
+
+## The `support` platform role — tickets-only scope
+
+A store-less (`store_id IS NULL`) platform login minted ONLY by
+`POST /superadmin/platform-users` (superadmin-gated, audited).
+Scope rules, all pinned by `tests/Modules/Support/
+test_support_role.py`:
+
+- Passes `PLATFORM_STAFF_ROLES` in the **Support module only**
+  (full cross-store ticket access, "staff" chat bubbles, the
+  superadmin audit sink for per-person attribution, ticket
+  claim/release).
+- **Never** passes `_require_superadmin` /
+  `resolve_superadmin_user`, and is **never** added to the
+  Casbin superadmin bypasses in `check_permission` /
+  `require_permission` / `permissions_for`.
+- Usernames are globally unique across the platform — the
+  cross-store login lookup is first-match-by-username, so a
+  collision would shadow an account.
+- `change-role` refuses support targets (a store role needs a
+  `store_id` the row doesn't have). Deactivate + recreate
+  instead.
 
 
 ## The login flow — what's actually wired today

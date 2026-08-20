@@ -73,6 +73,10 @@ class TicketRow(BaseModel):
     updated_at: str
     closed_at: str | None
     store_name: str | None = None
+    # Claim/assignment — which platform-staff person is working
+    # the ticket (None = unclaimed).
+    assigned_to_user_id: int | None = None
+    assigned_to_name: str | None = None
 
 
 class TicketListResponse(BaseModel):

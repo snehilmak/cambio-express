@@ -90,3 +90,10 @@
   display: flex;
   justify-content: flex-end;
 }
+
+.headerActions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+  flex-shrink: 0;
+}

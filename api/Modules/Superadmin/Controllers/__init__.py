@@ -24,6 +24,7 @@ from api.Modules.Auth.Models import User
 from api.Modules.Auth.Services import resolve_superadmin_user
 from api.Modules.Superadmin.Requests import (
     DiscountCodeListResponse,
+    PlatformUserCreateRequest,
     DiscountCodeResponse,
     DiscountCodeRow,
     DiscountCodeToggleRequest,
@@ -443,6 +444,11 @@ def change_user_role_route(
         raise HTTPException(status_code=404, detail="User not found")
     if user.role == "superadmin":
         raise HTTPException(status_code=403, detail="Cannot change superadmin role")
+    if user.role == "support":
+        # Store-less platform login — converting it to a store role
+        # would leave store_id=NULL on a role that requires one.
+        # Deactivate + recreate instead.
+        raise HTTPException(status_code=403, detail="Cannot change support role")
     new_role = body.get("role", "")
     if new_role not in ("admin", "employee", "owner"):
         raise HTTPException(status_code=422, detail=f"Invalid role: {new_role}")
@@ -456,6 +462,59 @@ def change_user_role_route(
         details=f"User {user.username}: {old_role} → {new_role}",
     )
     return {"ok": True, "role": new_role}
+
+
+@router.post("/platform-users", status_code=201)
+def create_platform_user_route(
+    body: PlatformUserCreateRequest,
+    db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
+) -> dict[str, Any]:
+    """Create a store-less platform login with the tickets-only
+    ``support`` role. Superadmin only; the role is fixed server-
+    side. Support signs in with password only (no TOTP) but its
+    refresh chain hard-expires 7 days after login — see
+    ``refresh_ttl_for_role``.
+
+    Username must be unique across the WHOLE platform (not just
+    among platform users): the cross-store login lookup is
+    first-match-by-username, so a collision with any store user
+    would shadow one of the two accounts."""
+    _require_superadmin(claims)
+    sa = resolve_superadmin_user(db, claims)
+    from api.Modules.Tenancy.Models import User
+    username = body.username.strip()
+    if db.query(User).filter(User.username == username).first() is not None:
+        raise HTTPException(
+            status_code=409, detail="Username is already taken.",
+        )
+    user = User(
+        username=username,
+        full_name=body.full_name.strip(),
+        email=body.email.strip(),
+        role="support",
+        store_id=None,
+        is_active=True,
+    )
+    user.set_password(body.password)
+    db.add(user)
+    db.flush()
+    _audit_and_commit(
+        db, sa,
+        "create_platform_user",
+        target_id=str(user.id),
+        details=f"Support login {user.username!r} created",
+    )
+    return {
+        "ok": True,
+        "user": {
+            "id": user.id,
+            "username": user.username,
+            "full_name": user.full_name or "",
+            "email": user.email or "",
+            "role": user.role,
+        },
+    }
 
 
 @router.post("/users/{user_id}/toggle-active")

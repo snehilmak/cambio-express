@@ -5681,6 +5681,42 @@
         "title": "PeriodSummaryResponse",
         "type": "object"
       },
+      "PlatformUserCreateRequest": {
+        "additionalProperties": false,
+        "description": "POST /superadmin/platform-users \u2014 create a store-less\nplatform login. v1 mints only the tickets-only ``support``\nrole; the role is fixed server-side, not caller-supplied.",
+        "properties": {
+          "email": {
+            "default": "",
+            "maxLength": 255,
+            "title": "Email",
+            "type": "string"
+          },
+          "full_name": {
+            "default": "",
+            "maxLength": 120,
+            "title": "Full Name",
+            "type": "string"
+          },
+          "password": {
+            "maxLength": 200,
+            "minLength": 8,
+            "title": "Password",
+            "type": "string"
+          },
+          "username": {
+            "maxLength": 80,
+            "minLength": 3,
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "username",
+          "password"
+        ],
+        "title": "PlatformUserCreateRequest",
+        "type": "object"
+      },
       "ProfileResponse": {
         "additionalProperties": false,
         "description": "Full payload for the /app/account/profile page on first\npaint. Includes editable fields, read-only metadata, and the\ncanonical timezone list so the SPA doesn't have to ship its\nown copy.",
@@ -9033,6 +9069,28 @@
               }
             ],
             "title": "Admin Reply"
+          },
+          "assigned_to_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assigned To Name"
+          },
+          "assigned_to_user_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assigned To User Id"
           },
           "body": {
             "title": "Body",
@@ -25661,6 +25719,84 @@
         ]
       }
     },
+    "/superadmin/platform-users": {
+      "post": {
+        "description": "Create a store-less platform login with the tickets-only\n``support`` role. Superadmin only; the role is fixed server-\nside. Support signs in with password only (no TOTP) but its\nrefresh chain hard-expires 7 days after login \u2014 see\n``refresh_ttl_for_role``.\n\nUsername must be unique across the WHOLE platform (not just\namong platform users): the cross-store login lookup is\nfirst-match-by-username, so a collision with any store user\nwould shadow one of the two accounts.",
+        "operationId": "create_platform_user_route_superadmin_platform_users_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlatformUserCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Create Platform User Route Superadmin Platform Users Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Platform User Route",
+        "tags": [
+          "superadmin"
+        ]
+      }
+    },
     "/superadmin/reports": {
       "get": {
         "description": "Platform-wide report-center categories (Platform Health,\nRevenue, Stripe, Trial Funnel, Feature Adoption, Support / Audit).\nEach report carries a Flask drilldown URL \u2014 the individual\nreport templates haven't migrated yet, so the SPA links straight\nback into the legacy render path on click. As each report\nmigrates, its URL will start pointing at /app/superadmin/reports/<slug>.\n\nThe same registry that backs the legacy Jinja page is reused\nhere (canonical home: ``api.Modules.Reports.Services.categories``)\nso categories never drift between the two surfaces.",
@@ -27832,7 +27968,7 @@
     },
     "/tickets": {
       "get": {
-        "description": "List tickets submitted by users in the caller's store.\nSuperadmin sees all tickets (same as /all) since they have no store.",
+        "description": "List tickets submitted by users in the caller's store.\nPlatform staff see all tickets (same as /all) since they have no store.",
         "operationId": "list_my_tickets_tickets_get",
         "parameters": [
           {
@@ -27988,7 +28124,7 @@
     },
     "/tickets/all": {
       "get": {
-        "description": "Superadmin: list every ticket across all stores.",
+        "description": "Platform staff: list every ticket across all stores.",
         "operationId": "list_all_tickets_tickets_all_get",
         "parameters": [
           {
@@ -28086,7 +28222,7 @@
     },
     "/tickets/{ticket_id}": {
       "get": {
-        "description": "View a single ticket. Scoped: user sees own store's\ntickets; superadmin sees any.",
+        "description": "View a single ticket. Scoped: user sees own store's\ntickets; platform staff sees any.",
         "operationId": "get_ticket_tickets__ticket_id__get",
         "parameters": [
           {
@@ -28239,6 +28375,82 @@
           }
         },
         "summary": "Update Ticket",
+        "tags": [
+          "support"
+        ]
+      }
+    },
+    "/tickets/{ticket_id}/claim": {
+      "post": {
+        "description": "Platform staff claims a ticket \u2014 marks who is working it so\nthe rest of the support team sees it's taken. A support person\ncan't take over someone else's claim (409); superadmin can\nreassign to themselves.",
+        "operationId": "claim_ticket_tickets__ticket_id__claim_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "ticket_id",
+            "required": true,
+            "schema": {
+              "minimum": 1,
+              "title": "Ticket Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TicketResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Claim Ticket",
         "tags": [
           "support"
         ]
@@ -28399,6 +28611,82 @@
           }
         },
         "summary": "Create Ticket Message",
+        "tags": [
+          "support"
+        ]
+      }
+    },
+    "/tickets/{ticket_id}/release": {
+      "post": {
+        "description": "Release a claim. Support can release only their own claim;\nsuperadmin can release anyone's.",
+        "operationId": "release_ticket_tickets__ticket_id__release_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "ticket_id",
+            "required": true,
+            "schema": {
+              "minimum": 1,
+              "title": "Ticket Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TicketResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Release Ticket",
         "tags": [
           "support"
         ]

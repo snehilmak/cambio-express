@@ -315,6 +315,21 @@ export function useSuperadminUsers(opts: {
   });
 }
 
+export async function createPlatformUser(body: {
+  username: string;
+  full_name: string;
+  email: string;
+  password: string;
+}) {
+  return api<{
+    ok: boolean;
+    user: {
+      id: number; username: string; full_name: string;
+      email: string; role: string;
+    };
+  }>("/api/v2/superadmin/platform-users", { method: "POST", json: body });
+}
+
 export async function changeUserRole(userId: number, role: string) {
   return api<{ ok: boolean; role: string }>(
     `/api/v2/superadmin/users/${userId}/change-role`,

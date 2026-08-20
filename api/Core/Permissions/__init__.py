@@ -55,6 +55,11 @@ RBAC_DEFAULTS: dict[str, list[str]] = {
 
 LEGACY_ROLE_PERMISSIONS: dict[str, list[str]] = {
     "superadmin": ["platform.admin", "store.admin", "store.employee", "owner.read"],
+    # Tickets-only platform role. Deliberately NOT in the
+    # superadmin bypasses in check_permission / require_permission /
+    # permissions_for — support's whole surface is the Support
+    # module, gated by PLATFORM_STAFF_ROLES there.
+    "support": ["platform.support"],
     "owner": ["owner.read", "owner.admin"],
     "admin": ["store.admin", "store.employee"],
     "employee": ["store.employee"],

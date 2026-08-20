@@ -1,5 +1,5 @@
 """Superadmin — Pydantic request/response schemas."""
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from api.Modules.Superadmin.Requests.discounts import (
     DiscountCodeListResponse,
@@ -17,6 +17,18 @@ from api.Modules.Superadmin.Requests.stores import (
     SuperadminStoreFreezeResponse,
     SuperadminStoreUpdateRequest,
 )
+
+
+class PlatformUserCreateRequest(BaseModel):
+    """POST /superadmin/platform-users — create a store-less
+    platform login. v1 mints only the tickets-only ``support``
+    role; the role is fixed server-side, not caller-supplied."""
+    model_config = ConfigDict(extra="forbid")
+
+    username: str = Field(..., min_length=3, max_length=80)
+    full_name: str = Field("", max_length=120)
+    email: str = Field("", max_length=255)
+    password: str = Field(..., min_length=8, max_length=200)
 
 
 class SuperadminStoreRow(BaseModel):

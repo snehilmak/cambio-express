@@ -313,7 +313,7 @@ export default function App() {
           <Route path="superadmin/stores/:id/edit" element={<RequireRole roles={["superadmin"]}><SuperadminStoreForm /></RequireRole>} />
           <Route path="superadmin/audit-log"     element={<RequireRole roles={["superadmin"]}><SuperadminAuditLog /></RequireRole>} />
           <Route path="superadmin/announcements" element={<RequireRole roles={["superadmin"]}><SuperadminAnnouncements /></RequireRole>} />
-          <Route path="superadmin/tickets"       element={<RequireRole roles={["superadmin"]}><SuperadminTickets /></RequireRole>} />
+          <Route path="superadmin/tickets"       element={<RequireRole roles={["superadmin", "support"]}><SuperadminTickets /></RequireRole>} />
           <Route path="superadmin/controls"      element={<RequireRole roles={["superadmin"]}><SuperadminControls /></RequireRole>} />
           <Route path="superadmin/feature-flags" element={<RequireRole roles={["superadmin"]}><SuperadminFeatureFlags /></RequireRole>} />
           <Route path="superadmin/discounts"     element={<RequireRole roles={["superadmin"]}><SuperadminDiscounts /></RequireRole>} />

@@ -210,15 +210,18 @@ export const NAV: NavGroup[] = [
     ],
   },
   {
+    // Visible to the tickets-only "support" platform role too —
+    // per-item roles below keep everything except Tickets
+    // superadmin-only, and filterNavForRole drops the rest.
     title: "Manage",
-    roles: ["superadmin"],
+    roles: ["superadmin", "support"],
     icon: iconPlatform(),
     items: [
-      { to: "/superadmin/stores",        label: "Stores",        icon: iconPlatform(),  desc: "Every store on the platform." },
-      { to: "/superadmin/users",         label: "Users",         icon: iconCustomers(), desc: "All accounts across stores." },
-      { to: "/superadmin/tickets",       label: "Tickets",       icon: iconSupport(),   desc: "Support tickets from stores." },
-      { to: "/superadmin/announcements", label: "Announcements", icon: iconBanner(),    desc: "Broadcast banners and emails." },
-      { to: "/superadmin/billing",       label: "Billing",       icon: iconBank(),      desc: "Subscriptions and account credit." },
+      { to: "/superadmin/stores",        label: "Stores",        icon: iconPlatform(),  desc: "Every store on the platform.",   roles: ["superadmin"] },
+      { to: "/superadmin/users",         label: "Users",         icon: iconCustomers(), desc: "All accounts across stores.",    roles: ["superadmin"] },
+      { to: "/superadmin/tickets",       label: "Tickets",       icon: iconSupport(),   desc: "Support tickets from stores.",   roles: ["superadmin", "support"] },
+      { to: "/superadmin/announcements", label: "Announcements", icon: iconBanner(),    desc: "Broadcast banners and emails.",  roles: ["superadmin"] },
+      { to: "/superadmin/billing",       label: "Billing",       icon: iconBank(),      desc: "Subscriptions and account credit.", roles: ["superadmin"] },
     ],
   },
   {

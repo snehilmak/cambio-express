@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 
 import {
   changeUserRole,
+  createPlatformUser,
   forcePasswordReset,
   impersonateUser,
   resetUser2FA,
@@ -17,8 +18,10 @@ import { setAccessToken, setCurrentIdentity } from "../lib/auth";
 import {
   Alert,
   Breadcrumbs,
+  Button,
   Card,
   ConfirmDialog,
+  Field,
   Input,
   Pager,
   PageHeader,
@@ -40,6 +43,7 @@ const ROLES = [
   { value: "employee", label: "Employee" },
   { value: "owner", label: "Owner" },
   { value: "superadmin", label: "Superadmin" },
+  { value: "support", label: "Support" },
 ];
 
 export default function SuperadminUsers() {
@@ -56,6 +60,7 @@ export default function SuperadminUsers() {
   const [confirmAction, setConfirmAction] = useState<{
     userId: number; username: string; action: "toggle" | "reset2fa" | "resetpw" | "impersonate" | "revokesessions";
   } | null>(null);
+  const [showAddSupport, setShowAddSupport] = useState(false);
   const [roleChange, setRoleChange] = useState<{
     userId: number; username: string; currentRole: string;
   } | null>(null);
@@ -171,6 +176,24 @@ export default function SuperadminUsers() {
       />
 
       {error && <Alert tone="error">{error}</Alert>}
+
+      <div className={styles.addSupportRow}>
+        <Button
+          tone="secondary"
+          onClick={() => setShowAddSupport((v) => !v)}
+        >
+          {showAddSupport ? "Cancel" : "Add support login"}
+        </Button>
+      </div>
+
+      {showAddSupport && (
+        <AddSupportLoginCard
+          onCreated={() => {
+            setShowAddSupport(false);
+            refresh();
+          }}
+        />
+      )}
 
       {tempPw && (
         <Alert tone="success">
@@ -391,8 +414,91 @@ function UserRow({
 
 function RolePill({ role }: { role: string }) {
   const tone = role === "superadmin" ? "negative"
+    : role === "support" ? "warning"
     : role === "admin" ? "accent"
     : role === "owner" ? "info"
     : "neutral";
   return <Pill tone={tone}>{role}</Pill>;
+}
+
+/** Inline create form for a store-less "support" platform login —
+ *  tickets-only role, password sign-in with a 7-day login window.
+ *  The role is fixed server-side (POST /superadmin/platform-users
+ *  only mints support). */
+function AddSupportLoginCard({ onCreated }: { onCreated: () => void }) {
+  const toast = useToast();
+  const [username, setUsername] = useState("");
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      await createPlatformUser({
+        username: username.trim(),
+        full_name: fullName.trim(),
+        email: email.trim(),
+        password,
+      });
+      toast({
+        message: `Support login "${username.trim()}" created.`,
+        tone: "success",
+      });
+      onCreated();
+    } catch (err) {
+      setError(
+        err instanceof ApiError ? err.message : "Could not create the login.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Card>
+      <form onSubmit={onSubmit} autoComplete="off">
+        <p className={styles.addSupportLead}>
+          Support logins can only work the ticket queue - no store
+          data, no platform controls. They sign in with a password
+          and are logged out automatically 7 days after each login.
+        </p>
+        {error && <Alert tone="error">{error}</Alert>}
+        <div className={styles.addSupportGrid}>
+          <Field label="Username">
+            <Input
+              value={username} required minLength={3} maxLength={80}
+              onChange={(e) => setUsername(e.target.value)}
+            />
+          </Field>
+          <Field label="Full name">
+            <Input
+              value={fullName} maxLength={120}
+              onChange={(e) => setFullName(e.target.value)}
+            />
+          </Field>
+          <Field label="Email" hint="Ticket-update emails go here.">
+            <Input
+              type="email" value={email} maxLength={255}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+          </Field>
+          <Field label="Password" hint="At least 8 characters.">
+            <Input
+              type="password" value={password} required
+              minLength={8} maxLength={200}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+          </Field>
+        </div>
+        <Button type="submit" busy={busy} disabled={busy}>
+          {busy ? "Creating\u2026" : "Create support login"}
+        </Button>
+      </form>
+    </Card>
+  );
 }

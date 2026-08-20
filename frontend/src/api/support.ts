@@ -28,6 +28,8 @@ export interface TicketRow {
   updated_at: string;
   closed_at: string | null;
   store_name: string | null;
+  assigned_to_user_id: number | null;
+  assigned_to_name: string | null;
 }
 
 interface TicketListResponse {
@@ -56,7 +58,9 @@ export function useAllTickets(status?: string, category?: string) {
   if (category) params.set("category", category);
   const qs = params.toString() ? `?${params}` : "";
   return useQuery<TicketListResponse>({
-    enabled: identity?.role === "superadmin",
+    enabled:
+      identity != null &&
+      ["superadmin", "support"].includes(identity.role),
     queryKey: ["tickets", "all", status, category],
     queryFn: () => api<TicketListResponse>(`/api/v2/tickets/all${qs}`),
   });
@@ -130,6 +134,21 @@ export async function postTicketMessage(
 /** Reopen a CLOSED ticket (409 otherwise). */
 export async function reopenTicket(id: number): Promise<TicketResponse> {
   return api<TicketResponse>(`/api/v2/tickets/${id}/reopen`, {
+    method: "POST",
+  });
+}
+
+/** Claim a ticket (platform staff): marks who is working it. 409 when
+ *  a support person tries to take over someone else's claim. */
+export async function claimTicket(id: number): Promise<TicketResponse> {
+  return api<TicketResponse>(`/api/v2/tickets/${id}/claim`, {
+    method: "POST",
+  });
+}
+
+/** Release a claim (own claim for support; any for superadmin). */
+export async function releaseTicket(id: number): Promise<TicketResponse> {
+  return api<TicketResponse>(`/api/v2/tickets/${id}/release`, {
     method: "POST",
   });
 }

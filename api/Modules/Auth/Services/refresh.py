@@ -46,6 +46,21 @@ from api.Core.Clock import utc_now
 # stops working before the original user is likely to notice.
 DEFAULT_REFRESH_TOKEN_TTL_SECONDS = 14 * 24 * 60 * 60
 
+# The "support" platform role trades TOTP for a hard 7-day login
+# window (product decision): password-only sign-in, but the refresh
+# chain dies 7 days after login no matter how active the session
+# is. ``reuse()`` never extends ``expires_at``, so the TTL passed
+# at ``issue()`` IS the absolute expiry — no extra bookkeeping.
+SUPPORT_REFRESH_TOKEN_TTL_SECONDS = 7 * 24 * 60 * 60
+
+
+def refresh_ttl_for_role(role: str | None) -> int:
+    """Per-role refresh-chain lifetime. Support gets the 7-day
+    absolute window; everyone else keeps the default."""
+    if role == "support":
+        return SUPPORT_REFRESH_TOKEN_TTL_SECONDS
+    return DEFAULT_REFRESH_TOKEN_TTL_SECONDS
+
 
 @dataclass(frozen=True)
 class IssuedRefreshToken:
@@ -273,6 +288,8 @@ def revoke(session: Session, *, jti: str) -> bool:
 
 __all__ = [
     "DEFAULT_REFRESH_TOKEN_TTL_SECONDS",
+    "SUPPORT_REFRESH_TOKEN_TTL_SECONDS",
+    "refresh_ttl_for_role",
     "IssuedRefreshToken",
     "RefreshTokenExpired",
     "RefreshTokenInvalid",

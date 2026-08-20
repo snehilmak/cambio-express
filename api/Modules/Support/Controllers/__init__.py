@@ -67,6 +67,18 @@ def _snippet(text: str, limit: int = 300) -> str:
     return text if len(text) <= limit else text[: limit - 1] + "…"
 
 
+# Platform-staff roles: full cross-store ticket access, "staff"
+# chat bubbles, and the superadmin audit sink. ``support`` is the
+# tickets-only platform role — it passes HERE and nowhere else
+# (never ``_require_superadmin`` / ``resolve_superadmin_user``,
+# never the Casbin superadmin bypass).
+PLATFORM_STAFF_ROLES = ("superadmin", "support")
+
+
+def _is_platform_staff(claims: dict[str, Any]) -> bool:
+    return claims.get("role") in PLATFORM_STAFF_ROLES
+
+
 def _to_row(t: SupportTicket, store_name: str | None = None) -> TicketRow:
     return TicketRow(
         id=t.id,
@@ -85,6 +97,8 @@ def _to_row(t: SupportTicket, store_name: str | None = None) -> TicketRow:
         updated_at=t.updated_at.isoformat() if t.updated_at else "",
         closed_at=t.closed_at.isoformat() if t.closed_at else None,
         store_name=store_name,
+        assigned_to_user_id=t.assigned_to_user_id,
+        assigned_to_name=t.assigned_to_name,
     )
 
 
@@ -130,8 +144,8 @@ def list_my_tickets(
     claims: dict[str, Any] = Depends(get_principal),
 ) -> TicketListResponse:
     """List tickets submitted by users in the caller's store.
-    Superadmin sees all tickets (same as /all) since they have no store."""
-    if claims.get("role") == "superadmin":
+    Platform staff see all tickets (same as /all) since they have no store."""
+    if _is_platform_staff(claims):
         return list_all_tickets(status=status, category=None, db=db, claims=claims)
     sid = resolve_store_scope(claims)
     q = db.query(SupportTicket).filter(
@@ -154,8 +168,8 @@ def list_all_tickets(
     db: Session = Depends(get_db),
     claims: dict[str, Any] = Depends(get_principal),
 ) -> TicketListResponse:
-    """Superadmin: list every ticket across all stores."""
-    if claims.get("role") != "superadmin":
+    """Platform staff: list every ticket across all stores."""
+    if not _is_platform_staff(claims):
         raise HTTPException(403, "Superadmin only")
     q = db.query(SupportTicket)
     if status:
@@ -186,11 +200,11 @@ def get_ticket(
     claims: dict[str, Any] = Depends(get_principal),
 ) -> TicketResponse:
     """View a single ticket. Scoped: user sees own store's
-    tickets; superadmin sees any."""
+    tickets; platform staff sees any."""
     ticket = db.get(SupportTicket, ticket_id)
     if ticket is None:
         raise HTTPException(404, "Ticket not found")
-    if claims.get("role") != "superadmin":
+    if not _is_platform_staff(claims):
         sid = resolve_store_scope(claims)
         if ticket.store_id != sid:
             raise HTTPException(404, "Ticket not found")
@@ -216,11 +230,11 @@ def _load_scoped_ticket(
 ) -> SupportTicket:
     """Ticket by id, with the same opaque-404 tenancy scoping as
     ``get_ticket``: store principals only reach their own store's
-    tickets; superadmin reaches any."""
+    tickets; platform staff reaches any."""
     ticket = db.get(SupportTicket, ticket_id)
     if ticket is None:
         raise HTTPException(404, "Ticket not found")
-    if claims.get("role") != "superadmin":
+    if not _is_platform_staff(claims):
         sid = resolve_store_scope(claims)
         if ticket.store_id != sid:
             raise HTTPException(404, "Ticket not found")
@@ -232,9 +246,10 @@ def _audit_ticket_action(
     *, action: str, summary: str,
 ) -> None:
     """Audit a ticket mutation into the right sink for the caller
-    (invariant #7): superadmin → superadmin log, store principal →
-    that store's operator log."""
-    if claims.get("role") == "superadmin":
+    (invariant #7): platform staff (superadmin + support) → the
+    superadmin log (per-person via admin_id/admin_name), store
+    principal → that store's operator log."""
+    if _is_platform_staff(claims):
         from api.Core.Audit import audit_superadmin
         from api.Modules.Tenancy.Models import User
         sa_user = db.get(User, int(claims["sub"]))
@@ -296,7 +311,7 @@ def create_ticket_message(
         raise HTTPException(
             409, "Ticket is closed — reopen it to continue the conversation.",
         )
-    is_staff = claims.get("role") == "superadmin"
+    is_staff = _is_platform_staff(claims)
     author_name = claims.get("name") or claims.get("username") or ""
     text = body.body.strip()[:5000]
     if not text:
@@ -377,7 +392,7 @@ def reopen_ticket(
         send_ticket_event_to_platform,
         send_ticket_update_to_user,
     )
-    if claims.get("role") == "superadmin":
+    if _is_platform_staff(claims):
         _notify(
             send_ticket_update_to_user, int(ticket.id),
             "status_change", "Reopened",
@@ -387,6 +402,79 @@ def reopen_ticket(
             send_ticket_event_to_platform, int(ticket.id), "reopened",
             "", claims.get("name") or claims.get("username") or "",
         )
+    return TicketResponse(ticket=_to_row(ticket))
+
+
+@router.post("/{ticket_id}/claim", response_model=TicketResponse)
+def claim_ticket(
+    ticket_id: int = Path(..., ge=1),
+    db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
+) -> TicketResponse:
+    """Platform staff claims a ticket — marks who is working it so
+    the rest of the support team sees it's taken. A support person
+    can't take over someone else's claim (409); superadmin can
+    reassign to themselves."""
+    if not _is_platform_staff(claims):
+        raise HTTPException(403, "Platform staff only")
+    ticket = db.get(SupportTicket, ticket_id)
+    if ticket is None:
+        raise HTTPException(404, "Ticket not found")
+    me = int(claims["sub"])
+    if (
+        ticket.assigned_to_user_id is not None
+        and ticket.assigned_to_user_id != me
+        and claims.get("role") != "superadmin"
+    ):
+        raise HTTPException(
+            409, f"Already claimed by {ticket.assigned_to_name or 'someone else'}.",
+        )
+    ticket.assigned_to_user_id = me
+    ticket.assigned_to_name = (
+        claims.get("name") or claims.get("username") or ""
+    )
+    ticket.updated_at = utc_now()
+    _audit_ticket_action(
+        db, claims, ticket,
+        action="claim_support_ticket",
+        summary=f"claimed by {ticket.assigned_to_name}",
+    )
+    db.commit()
+    db.refresh(ticket)
+    return TicketResponse(ticket=_to_row(ticket))
+
+
+@router.post("/{ticket_id}/release", response_model=TicketResponse)
+def release_ticket(
+    ticket_id: int = Path(..., ge=1),
+    db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
+) -> TicketResponse:
+    """Release a claim. Support can release only their own claim;
+    superadmin can release anyone's."""
+    if not _is_platform_staff(claims):
+        raise HTTPException(403, "Platform staff only")
+    ticket = db.get(SupportTicket, ticket_id)
+    if ticket is None:
+        raise HTTPException(404, "Ticket not found")
+    if ticket.assigned_to_user_id is None:
+        raise HTTPException(409, "Ticket is not claimed.")
+    me = int(claims["sub"])
+    if ticket.assigned_to_user_id != me and claims.get("role") != "superadmin":
+        raise HTTPException(
+            409, f"Claimed by {ticket.assigned_to_name or 'someone else'}.",
+        )
+    released_from = ticket.assigned_to_name or ""
+    ticket.assigned_to_user_id = None
+    ticket.assigned_to_name = None
+    ticket.updated_at = utc_now()
+    _audit_ticket_action(
+        db, claims, ticket,
+        action="release_support_ticket",
+        summary=f"released claim (was {released_from})",
+    )
+    db.commit()
+    db.refresh(ticket)
     return TicketResponse(ticket=_to_row(ticket))
 
 
@@ -401,12 +489,12 @@ def update_ticket(
     Admin role required (store admin for own store, superadmin
     for any)."""
     role = claims.get("role", "")
-    if role not in ("admin", "owner", "superadmin"):
+    if role not in ("admin", "owner") and not _is_platform_staff(claims):
         raise HTTPException(403, "Admin role required")
     ticket = db.get(SupportTicket, ticket_id)
     if ticket is None:
         raise HTTPException(404, "Ticket not found")
-    if role != "superadmin":
+    if not _is_platform_staff(claims):
         sid = resolve_store_scope(claims)
         if ticket.store_id != sid:
             raise HTTPException(404, "Ticket not found")
@@ -438,7 +526,7 @@ def update_ticket(
                 store_id=ticket.store_id,
                 author_user_id=int(claims["sub"]),
                 author_name=replier,
-                author_kind="staff" if role == "superadmin" else "user",
+                author_kind="staff" if _is_platform_staff(claims) else "user",
                 body=reply_text,
                 created_at=utc_now(),
             ))
@@ -452,7 +540,7 @@ def update_ticket(
         f"status={ticket.status} priority={ticket.priority} "
         f"reply={'yes' if body.admin_reply is not None else 'no'}"
     )
-    if role == "superadmin":
+    if _is_platform_staff(claims):
         from api.Core.Audit import audit_superadmin
         from api.Modules.Tenancy.Models import User
         sa_user = db.get(User, int(claims["sub"]))
@@ -475,7 +563,7 @@ def update_ticket(
     # Staff acted → tell the person who filed the ticket. One
     # notification per PUT: a reply wins over a bare status flip
     # (the reply email already shows the current status).
-    if role == "superadmin":
+    if _is_platform_staff(claims):
         from api.Modules.Notifications.Services.ticket_updates import (
             send_ticket_update_to_user,
         )
