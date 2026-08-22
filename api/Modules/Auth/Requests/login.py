@@ -76,6 +76,13 @@ class SignupRequest(BaseModel):
     password:   str = Field(..., min_length=8, max_length=200)
     phone:      str = Field("", max_length=40)
     ref_code:   str = Field("", max_length=64)
+    # What kind of business this is — drives which product modules
+    # the new store starts with (BUSINESS_TYPES in Tenancy Models).
+    # Defaults to the primary target market post-pivot.
+    business_type: str = Field(
+        "cstore",
+        pattern="^(cstore|gas_station|grocery|msb_hybrid)$",
+    )
 
 
 class SignupResponse(BaseModel):

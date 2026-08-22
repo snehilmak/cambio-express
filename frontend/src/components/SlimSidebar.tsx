@@ -12,6 +12,9 @@ export interface NavItem {
   roles?: string[];
   /** Required permission as "resource.action". Hidden when missing. */
   perm?: string;
+  /** Module flag that must be ON for this store (business-type
+   *  bundles — e.g. "module_money_services"). Hidden when off. */
+  flag?: string;
   /** One-line description shown under the label on the section-hub
    *  tile grid. Optional — tiles without one render label-only. */
   desc?: string;

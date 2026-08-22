@@ -20,6 +20,46 @@ from api.Modules.Billing.Models import (
 from api.Modules.Billing.Services.store_state import store_addon_keys
 
 
+# ── Business-type module bundles (the pivot, HANDOFF.md §2) ────────
+#
+# ``module_*`` flags gate whole PRODUCT MODULES per business type —
+# a convenience store shouldn't see the money-transfer ledger it
+# never uses, while the original MSB profile keeps everything. The
+# resolution order in ``store_feature_enabled`` slots the bundle
+# BETWEEN the per-store override and the global default, so:
+#   • superadmin can still flip any module per store (override wins),
+#   • non-module flags behave exactly as before,
+#   • an unknown business_type falls through to the old behavior
+#     (fail-open — same spirit as CLAUDE.md invariant #6).
+#
+# NOTE: module flags are a product/UX boundary, not a security
+# boundary — routes stay store-scoped regardless. When modules
+# become billing-tiered, add backend enforcement at that point.
+MODULE_FLAG_KEYS = ("module_money_services",)
+
+_BUSINESS_TYPE_MODULE_DEFAULTS: dict[str, dict[str, bool]] = {
+    # module_money_services: money-transfer ledger + ACH batches +
+    # sender directory. Check cashing / returned checks are NOT in
+    # this bundle — plenty of c-stores cash checks, so those
+    # surfaces stay available to every type.
+    "cstore":      {"module_money_services": False},
+    "gas_station": {"module_money_services": False},
+    "grocery":     {"module_money_services": False},
+    "msb_hybrid":  {"module_money_services": True},
+}
+
+
+def module_bundle_default(
+    business_type: str | None, flag_key: str,
+) -> bool | None:
+    """The business-type bundle's answer for a module flag, or None
+    when the bundle has no opinion (non-module flag, or unknown
+    type)."""
+    if business_type is None:
+        return None
+    return _BUSINESS_TYPE_MODULE_DEFAULTS.get(business_type, {}).get(flag_key)
+
+
 def store_feature_enabled(
     db: Session, store: Store | None, flag_key: str,
 ) -> bool:
@@ -28,12 +68,14 @@ def store_feature_enabled(
     Lookup priority:
       1. per-store override (StoreFeatureOverride row) — if present,
          that value wins regardless of the global default.
-      2. global default (FeatureFlag.enabled_by_default).
-      3. fail-open: undeclared flag → True (CLAUDE.md invariant #6).
+      2. business-type module bundle (``module_*`` flags only) —
+         which modules this kind of business gets by default.
+      3. global default (FeatureFlag.enabled_by_default).
+      4. fail-open: undeclared flag → True (CLAUDE.md invariant #6).
 
     Reads the same DB the legacy helper does; the only difference is
     the explicit `db` parameter so the Service can be exercised from
-    any caller (Flask, FastAPI, CLI, tests).
+    any caller (FastAPI, CLI, tests).
     """
     if store is not None:
         override = (
@@ -43,12 +85,30 @@ def store_feature_enabled(
         )
         if override is not None:
             return bool(override.enabled)
+        bundled = module_bundle_default(
+            getattr(store, "business_type", None), flag_key,
+        )
+        if bundled is not None:
+            return bundled
     flag = db.query(FeatureFlag).filter_by(key=flag_key).first()
     if flag is None:
         # Unknown flag = allow by default (fail-open for undeclared
         # features). See CLAUDE.md invariant #6.
         return True
     return bool(flag.enabled_by_default)
+
+
+def enabled_module_flags(db: Session, store: Store | None) -> list[str]:
+    """The module flags currently ON for this store — the SPA reads
+    this off /auth/session-status to decide which nav sections and
+    routes to show. ``store=None`` (superadmin / owner without store
+    scope) enables everything: platform operators see all modules."""
+    if store is None:
+        return list(MODULE_FLAG_KEYS)
+    return [
+        key for key in MODULE_FLAG_KEYS
+        if store_feature_enabled(db, store, key)
+    ]
 
 
 def store_has_addon(store: Store | None, addon_key: str) -> bool:

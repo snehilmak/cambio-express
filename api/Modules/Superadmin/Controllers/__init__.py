@@ -126,6 +126,7 @@ def _adapt_detail(s) -> SuperadminStoreDetailRow:
         phone=s.phone or "",
         address=s.address or "",
         plan=s.plan or "trial",
+        business_type=s.business_type or "msb_hybrid",
         billing_cycle=s.billing_cycle or "",
         is_active=bool(s.is_active),
         federal_tax_rate=float(s.federal_tax_rate or 0.0),
@@ -1100,6 +1101,7 @@ def create_store_route(
         phone=body.phone.strip(),
         address=body.address.strip(),
         plan=body.plan,
+        business_type=body.business_type,
     )
     db.add(s)
     db.flush()
@@ -1190,6 +1192,12 @@ def update_store_route(
     if body.plan is not None and body.plan != (s.plan or ""):
         s.plan = body.plan
         changed.append("plan")
+    if (
+        body.business_type is not None
+        and body.business_type != (s.business_type or "msb_hybrid")
+    ):
+        s.business_type = body.business_type
+        changed.append("business_type")
     if (
         body.federal_tax_rate is not None
         and float(body.federal_tax_rate) != float(s.federal_tax_rate or 0.0)

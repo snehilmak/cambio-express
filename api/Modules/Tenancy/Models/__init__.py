@@ -31,11 +31,27 @@ from api.Core.PasswordHash import check_password_hash, generate_password_hash
 from api.Core.Database import Base
 
 
+# What kind of business a Store is — drives which product modules
+# are on by default (see Billing/Services/feature_flags.py bundle
+# map). "msb_hybrid" = the original money-service-business profile
+# (all money-services modules on); it is ALSO the safe fallback for
+# every pre-pivot store, which is why the column defaults to it.
+BUSINESS_TYPES = ("cstore", "gas_station", "grocery", "msb_hybrid")
+
+BUSINESS_TYPE_LABELS = {
+    "cstore":      "Convenience store",
+    "gas_station": "Gas station",
+    "grocery":     "Grocery store",
+    "msb_hybrid":  "Money services / hybrid",
+}
+
+
 class Store(Base):
     __tablename__ = "store"
     id            = Column(Integer, primary_key=True)
     name          = Column(String(120), nullable=False)
     slug          = Column(String(60), unique=True, nullable=False)
+    business_type = Column(String(20), default="msb_hybrid", nullable=False)
     email         = Column(String(120), default="")
     phone         = Column(String(40), default="")
     address       = Column(String(255), default="")

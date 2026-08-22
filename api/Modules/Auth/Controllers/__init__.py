@@ -767,8 +767,17 @@ def session_status_route(
       * ``store_name`` — shown on the gate screen.
 
     A superadmin (no ``store_id``) is never gated — they operate the
-    platform, not a store."""
+    platform, not a store.
+
+    Also carries the store's ``business_type`` and the module flags
+    currently ON (``features``) so the shell can decide which nav
+    sections and routes to render — a convenience store doesn't see
+    the money-transfer ledger it never uses. Store-less principals
+    (superadmin, owner) get every module."""
     from api.Modules.Billing.Services import store_gate_status
+    from api.Modules.Billing.Services.feature_flags import (
+        enabled_module_flags,
+    )
     from api.Modules.Tenancy.Models import Store
     store_id = claims.get("store_id")
     store = db.get(Store, int(store_id)) if store_id is not None else None
@@ -778,6 +787,11 @@ def session_status_route(
         "reason": str(status["reason"]),
         "plan": (store.plan or "") if store is not None else "",
         "store_name": (store.name or "") if store is not None else "",
+        "business_type": (
+            (store.business_type or "msb_hybrid")
+            if store is not None else ""
+        ),
+        "features": enabled_module_flags(db, store),
     }
 
 
@@ -1217,6 +1231,7 @@ def signup_route(
             password=body.password,
             phone=(body.phone or "").strip(),
             referred_by_code_id=referred_by_code_id,
+            business_type=body.business_type,
         )
     except SignupConflictError as exc:
         raise HTTPException(

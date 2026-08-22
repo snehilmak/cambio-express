@@ -60,3 +60,43 @@ describe("filterNavForRole → section-hub resolution", () => {
     expect(labels).toContain("Returned checks");
   });
 });
+
+describe("module-flag gating (business-type bundles)", () => {
+  const perms = [
+    "transfers.read", "customers.read", "batches.read",
+    "daily_book.read", "return_checks.read",
+  ];
+
+  it("hides money-services items when the module flag is off", () => {
+    const groups = filterNavForRole("admin", perms, []);
+    const labels = groups.flatMap((g) => g.items.map((i) => i.label));
+    expect(labels).not.toContain("Transfers");
+    expect(labels).not.toContain("Customers");
+    expect(labels).not.toContain("ACH batches");
+    // Non-module surfaces stay: check cashing is for everyone.
+    expect(labels).toContain("Returned checks");
+    expect(labels).toContain("Daily book");
+  });
+
+  it("shows them when module_money_services is on", () => {
+    const groups = filterNavForRole(
+      "admin", perms, ["module_money_services"],
+    );
+    const labels = groups.flatMap((g) => g.items.map((i) => i.label));
+    expect(labels).toContain("Transfers");
+    expect(labels).toContain("ACH batches");
+  });
+
+  it("shows everything while features are still loading (undefined)", () => {
+    const groups = filterNavForRole("admin", perms, undefined);
+    const labels = groups.flatMap((g) => g.items.map((i) => i.label));
+    expect(labels).toContain("Transfers");
+  });
+
+  it("superadmin nav is identical with or without module flags", () => {
+    const withFlags = filterNavForRole("superadmin", [], []);
+    const without = filterNavForRole("superadmin", [], undefined);
+    expect(withFlags.map((g) => g.items.map((i) => i.label)))
+      .toEqual(without.map((g) => g.items.map((i) => i.label)));
+  });
+});

@@ -1398,6 +1398,12 @@ export interface paths {
          *
          *     A superadmin (no ``store_id``) is never gated — they operate the
          *     platform, not a store.
+         *
+         *     Also carries the store's ``business_type`` and the module flags
+         *     currently ON (``features``) so the shell can decide which nav
+         *     sections and routes to render — a convenience store doesn't see
+         *     the money-transfer ledger it never uses. Store-less principals
+         *     (superadmin, owner) get every module.
          */
         get: operations["session_status_route_auth_session_status_get"];
         put?: never;
@@ -8863,6 +8869,11 @@ export interface components {
          *     login round-trip.
          */
         SignupRequest: {
+            /**
+             * Business Type
+             * @default cstore
+             */
+            business_type: string;
             /** Email */
             email: string;
             /** Password */
@@ -9331,6 +9342,11 @@ export interface components {
              */
             admin_username: string;
             /**
+             * Business Type
+             * @default cstore
+             */
+            business_type: string;
+            /**
              * Email
              * @default
              */
@@ -9406,6 +9422,8 @@ export interface components {
             address: string;
             /** Billing Cycle */
             billing_cycle: string;
+            /** Business Type */
+            business_type: string;
             /** Created At */
             created_at: string;
             /** Data Retention Until */
@@ -9526,6 +9544,8 @@ export interface components {
         SuperadminStoreUpdateRequest: {
             /** Address */
             address?: string | null;
+            /** Business Type */
+            business_type?: string | null;
             /** Email */
             email?: string | null;
             /** Federal Tax Rate */

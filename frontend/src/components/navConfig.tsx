@@ -51,6 +51,7 @@ export const NAV: NavGroup[] = [
       },
       {
         to: "/transfers", label: "Transfers",
+        flag: "module_money_services",
         roles: ["admin", "employee"],
         perm: "transfers.read",
         icon: iconTransfers(),
@@ -58,6 +59,7 @@ export const NAV: NavGroup[] = [
       },
       {
         to: "/customers", label: "Customers",
+        flag: "module_money_services",
         roles: ["admin", "employee"],
         perm: "customers.read",
         icon: iconCustomers(),
@@ -168,7 +170,7 @@ export const NAV: NavGroup[] = [
     roles: ["admin"],
     icon: iconBank(),
     items: [
-      { to: "/batches",            label: "ACH batches", perm: "batches.read",    icon: iconBatches(), desc: "Group transfers into ACH runs." },
+      { to: "/batches",            label: "ACH batches", flag: "module_money_services", perm: "batches.read",    icon: iconBatches(), desc: "Group transfers into ACH runs." },
       { to: "/bank",               label: "Bank sync",   perm: "bank_sync.read", icon: iconBank(),    desc: "Connect and reconcile accounts." },
       { to: "/bank-transactions",  label: "Bank transactions",   perm: "bank_sync.read", icon: iconBank(),    desc: "Categorize imported transactions." },
     ],
@@ -294,12 +296,20 @@ export const SUPPORT_LINK: NavItem = {
 export function filterNavForRole(
   role: string,
   permissions: string[] = [],
+  // Module flags ON for this store (from /auth/session-status
+  // `features`). `undefined` = not loaded yet → show everything,
+  // matching the shell's no-flash-while-loading posture for the
+  // store gate. Superadmin always sees every module.
+  features?: string[],
 ): NavGroup[] {
   const hasPerm = (p: string) =>
     role === "superadmin" || permissions.includes(p);
+  const hasModule = (f: string) =>
+    role === "superadmin" || features === undefined || features.includes(f);
   const visible = (i: NavItem) => {
     if (i.roles && !i.roles.includes(role)) return false;
     if (i.perm && !hasPerm(i.perm)) return false;
+    if (i.flag && !hasModule(i.flag)) return false;
     return true;
   };
   return NAV

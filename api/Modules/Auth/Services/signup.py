@@ -106,6 +106,7 @@ def create_store_and_admin(
     referred_by_code_id: int | None = None,
     trial_days: int = DEFAULT_TRIAL_DAYS,
     grace_days: int = DEFAULT_GRACE_DAYS,
+    business_type: str = "msb_hybrid",
 ) -> SignupResult:
     """Create a fresh Store + admin User pair.
 
@@ -141,6 +142,7 @@ def create_store_and_admin(
     store = Store(
         name=store_name, slug=slug, email=email,
         phone=phone, plan="trial",
+        business_type=business_type,
         trial_ends_at=trial_end, grace_ends_at=grace_end,
     )
     if referred_by_code_id is not None:

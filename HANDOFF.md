@@ -7,7 +7,8 @@
 > current: when a "Next up" item ships, move it to "Shipped" with its PR
 > number.
 
-_Last updated: 2026-07-28 (pre-beta, targeting end-of-month beta launch)._
+_Last updated: 2026-08-22 (STRATEGIC PIVOT — see §2; read it before
+picking up any roadmap work)._
 
 ---
 
@@ -91,30 +92,66 @@ doubt, write it here rather than leaving it in chat.
 
 ---
 
-## 2. Roadmap — "Next up" (NOT yet started)
+## 2. STRATEGIC PIVOT (2026-08-22) + Roadmap
 
-> ⚠️ **Numbering caveat.** In earlier planning chats these were referred
-> to as "#2 / #3 / #5 / #6", but those are **survey/checklist item
-> numbers, not GitHub issue numbers.** GitHub issues #2/#3/#5/#6 are
-> unrelated old closed PRs (init_db fix, dark-mode toggle, mobile layout,
-> dinerobook rebrand). Do NOT map these features to those issue numbers.
-> If you want durable references, open fresh GitHub issues (see the
-> checklist at the bottom).
+> **The product is pivoting from "bookkeeping for MSBs" to "modern
+> back office for independent convenience retail"** (convenience
+> stores / gas stations / grocery). Rationale: MSBs are declining
+> since the 1% federal remittance-tax; c-stores still run check
+> cashing / money orders where it fits, so the money-services
+> modules SURVIVE as one differentiator module among many. Direct
+> competitors: **Modisoft** and **Cronysoft** (POS + back-office
+> incumbents with dated UX). Our wedge: modern UX, agility,
+> API-first integrations, migration tooling, better support.
+>
+> Key strategic decisions (owner-approved):
+> - **POS: integrate-first, don't build.** "Keep your register, get
+>   a modern back office." Ingest POS day-close data (the Intermex
+>   ReportImport pattern is the architectural precedent). A
+>   first-party POS is a later product on the same API.
+> - **Card processing: never build, capture margin in stages.**
+>   Stripe Terminal first; payfac-as-a-service (Tilled/Payrix) when
+>   volume justifies. Card data NEVER touches our servers
+>   (tokenization/P2PE) so PCI scope stays questionnaire-level.
+> - **Hosting: stay on Render for now; make the app portable
+>   (Dockerfile, 12-factor) rather than migrating.** Move triggers:
+>   infra bill > ~$1k/mo, VPC/PCI needs, multi-region. Object
+>   storage when needed = Cloudflare R2 (zero egress).
+> - **DB robustness beats hosting choice**: Postgres-in-dev (kill
+>   the SQLite/Postgres split), money → integer cents, composite
+>   (store_id, date) indexes, tz-aware timestamps via the
+>   `utc_now()` flip point.
 
-> ✅ **PR B (#777) and PR D (#778) have shipped** — see §1. PR C is the
-> only remaining roadmap item.
+**Phase 0 — Foundations** (each its own PR):
+1. `business_type` on Store (cstore / gas_station / grocery /
+   msb_hybrid) driving module visibility through the existing
+   feature-flag system + per-type onboarding.
+2. Postgres-in-dev (docker-compose) + Dockerfile portability.
+3. Float→cents money migration (staged, dual-write — the careful
+   one; do BEFORE the price book multiplies money fields).
+4. Generalize MSB-specific copy; product name config-driven
+   (rebrand-ready — "DineroBook" reads MSB-flavored).
+5. Activate the Redis job queue already staged in render.yaml.
 
-**PR C — Superadmin controls Phase 3** (next up):
-- **Store freeze** — a superadmin write-gate that suspends a store's
-  activity (distinct from trial-expired and from retention-pause; decide
-  interaction with `get_trial_status` and `_TRIAL_EXEMPT`).
-- **Webhook replay** — re-deliver / replay a stored Stripe (or Resend)
-  webhook event from the superadmin panel for recovery/debugging
-  (touches `api/Modules/Webhooks`).
+**Phase 1 — The wedge (c-store back-office core):**
+6. Lottery management — games, pack activation, shift counts,
+   settlement vs. state report (modeled on daily-book
+   architecture; the #1 c-store daily pain).
+7. Generalized day-close — register/shift totals + department
+   sales alongside the existing cash ledger.
+8. Accounting export — journal-entry CSV first, QuickBooks Online
+   OAuth after.
+9. POS day-close import v1 — generic CSV + one real POS format
+   (reuse the ReportImport parse→review→commit pattern).
 
-_These descriptions are from planning conversation, not a written spec.
-Confirm scope before implementing — the first step of PR C should be to
-re-derive the exact requirements._
+**Phase 2+ (not yet scoped in detail):** price book + vendors +
+purchase invoices with AI-assisted scanning; inventory basics;
+fuel module (needs a gas-station design partner first);
+Modisoft/Cronysoft migration importers; public API/webhooks GA;
+loyalty / scan-data rebates; POS; payments.
+
+_Superadmin "PR C" (store freeze + webhook replay) from the old
+roadmap shipped long ago; see git history._
 
 ---
 

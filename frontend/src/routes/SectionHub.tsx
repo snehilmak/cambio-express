@@ -3,6 +3,7 @@ import { Link, Navigate, useParams } from "react-router-dom";
 import { PageHeader, PageShell } from "../components/ui";
 import { Card } from "../components/ui";
 import { filterNavForRole, sectionSlug } from "../components/navConfig";
+import { useSessionStatus } from "../api/account";
 import { getCurrentIdentity } from "../lib/auth";
 import styles from "./SectionHub.module.css";
 
@@ -24,8 +25,9 @@ export default function SectionHub() {
   const identity = getCurrentIdentity();
   const role = identity?.role ?? "";
   const perms = identity?.permissions ?? [];
+  const { data: sessionStatus } = useSessionStatus();
 
-  const groups = filterNavForRole(role, perms);
+  const groups = filterNavForRole(role, perms, sessionStatus?.features);
   const group = groups.find((g) => sectionSlug(g.title) === key);
 
   // Unknown / empty section (bad slug, or every item filtered out

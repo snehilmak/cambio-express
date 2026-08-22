@@ -118,7 +118,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   const role = identity?.role ?? "";
   const perms = identity?.permissions ?? [];
-  const groups = filterNavForRole(role, perms);
+  const groups = filterNavForRole(role, perms, sessionStatus?.features);
   return (
     <div className="app-shell">
       <SlimSidebar
