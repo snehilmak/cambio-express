@@ -73,6 +73,7 @@ const Privacy = lazy(() => import("./routes/Privacy"));
 const Reports = lazy(() => import("./routes/Reports"));
 const ResetPassword = lazy(() => import("./routes/ResetPassword"));
 const ReturnCheckForm = lazy(() => import("./routes/ReturnCheckForm"));
+const Lottery = lazy(() => import("./routes/Lottery"));
 const ReturnChecks = lazy(() => import("./routes/ReturnChecks"));
 const SectionHub = lazy(() => import("./routes/SectionHub"));
 const Settings = lazy(() => import("./routes/Settings"));
@@ -284,6 +285,7 @@ export default function App() {
           <Route path="bank-transactions" element={<RequirePermission resource="bank_sync" action="read"><BankTransactions /></RequirePermission>} />
           <Route path="monthly"          element={<RequirePermission resource="monthly" action="read"><Monthly /></RequirePermission>} />
           <Route path="monthly/edit"     element={<RequirePermission resource="monthly" action="update"><EditMonthly /></RequirePermission>} />
+          <Route path="lottery"                element={<RequirePermission resource="lottery" action="read"><Lottery /></RequirePermission>} />
           <Route path="return-checks"          element={<RequirePermission resource="return_checks" action="read"><ReturnChecks /></RequirePermission>} />
           <Route path="return-checks/new"      element={<RequirePermission resource="return_checks" action="create"><ReturnCheckForm /></RequirePermission>} />
           <Route path="return-checks/:id/edit" element={<RequirePermission resource="return_checks" action="update"><ReturnCheckForm /></RequirePermission>} />
