@@ -49,6 +49,8 @@ STORE_OWNED_MODELS: list[str] = [
     "DailyLineItem", "MoneyTransferSummary", "ReturnCheck",
     "MonthlyFinancial", "BankRule", "BankTransaction",
     "StripeBankAccount", "StoreOwnerLink",
+    # Lottery: counts FK packs FK games — purge in that order.
+    "LotteryDayCount", "LotteryPack", "LotteryGame",
     # TimeClockEntry + TimeClockShift + StoreEmployeePasskey must
     # purge before StoreEmployee (all FK to it).
     "TimeClockEntry",
@@ -103,6 +105,9 @@ def _store_owned_models() -> list[tuple[type, str]]:
     from api.Modules.TimeClock.Models import (
         StoreEmployeePasskey, TimeClockEntry, TimeClockShift,
     )
+    from api.Modules.Lottery.Models import (
+        LotteryDayCount, LotteryGame, LotteryPack,
+    )
     from api.Modules.Transfers.Models import Transfer
     from api.Modules.Support.Models import SupportMessage, SupportTicket
     from api.Modules.TVDisplay.Models import TVDisplay
@@ -121,6 +126,10 @@ def _store_owned_models() -> list[tuple[type, str]]:
         (DailyLineItem, "store_id"),
         (MoneyTransferSummary, "store_id"),
         (ReturnCheck, "store_id"),
+        # Lottery: counts FK packs FK games — purge in that order.
+        (LotteryDayCount, "store_id"),
+        (LotteryPack, "store_id"),
+        (LotteryGame, "store_id"),
         # BankTransaction + BankRule must purge before StripeBankAccount
         # — both FK to it.
         (MonthlyFinancial, "store_id"),
