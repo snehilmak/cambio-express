@@ -619,15 +619,15 @@ def owner_store_detail_route(
     co_rows = db.query(
         Transfer.company,
         func.count(Transfer.id),
-        func.coalesce(func.sum(Transfer.send_amount), 0.0),
-        func.coalesce(func.sum(Transfer.fee), 0.0),
-        func.coalesce(func.sum(Transfer.federal_tax), 0.0),
+        func.coalesce(func.sum(Transfer.send_amount_cents), 0) / 100.0,
+        func.coalesce(func.sum(Transfer.fee_cents), 0) / 100.0,
+        func.coalesce(func.sum(Transfer.federal_tax_cents), 0) / 100.0,
     ).filter(
         Transfer.store_id == store_id,
         Transfer.send_date >= start, Transfer.send_date <= end,
         Transfer.status.notin_(_OWNER_TRANSFER_EXCLUDED),
     ).group_by(Transfer.company).order_by(
-        func.coalesce(func.sum(Transfer.send_amount), 0.0).desc()
+        func.coalesce(func.sum(Transfer.send_amount_cents), 0).desc()
     ).all()
     company_rows = [
         {"company": (co or "—"), "count": int(c),

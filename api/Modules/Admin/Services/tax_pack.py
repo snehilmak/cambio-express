@@ -178,8 +178,8 @@ def _customers_csv(db: Session, store_id: int, year: int) -> str:
             Transfer.customer_id,
             Transfer.sender_name,
             func.count(Transfer.id),
-            func.coalesce(func.sum(Transfer.send_amount), 0.0),
-            func.coalesce(func.sum(Transfer.fee), 0.0),
+            func.coalesce(func.sum(Transfer.send_amount_cents), 0) / 100.0,
+            func.coalesce(func.sum(Transfer.fee_cents), 0) / 100.0,
         )
         .filter(
             Transfer.store_id == store_id,
@@ -188,7 +188,7 @@ def _customers_csv(db: Session, store_id: int, year: int) -> str:
             Transfer.status.notin_(OWNER_TRANSFER_EXCLUDED),
         )
         .group_by(Transfer.customer_id, Transfer.sender_name)
-        .order_by(func.sum(Transfer.send_amount).desc())
+        .order_by(func.sum(Transfer.send_amount_cents).desc())
         .all()
     )
     cust_ids = {cid for cid, *_ in rows if cid is not None}

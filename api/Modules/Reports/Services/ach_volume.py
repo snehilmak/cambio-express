@@ -35,7 +35,7 @@ def ach_volume(
         db.query(
             ACHBatch.company,
             func.count(ACHBatch.id),
-            func.coalesce(func.sum(ACHBatch.ach_amount), 0.0),
+            func.coalesce(func.sum(ACHBatch.ach_amount_cents), 0) / 100.0,
         )
         .filter(
             ACHBatch.store_id.in_(store_ids),

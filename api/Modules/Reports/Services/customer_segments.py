@@ -39,7 +39,7 @@ def new_vs_returning(
         db.query(
             Transfer.customer_id,
             func.count(Transfer.id),
-            func.coalesce(func.sum(Transfer.send_amount), 0.0),
+            func.coalesce(func.sum(Transfer.send_amount_cents), 0) / 100.0,
         )
         .filter(*period_filters(store_ids, d_from, d_to))
         .group_by(Transfer.customer_id)

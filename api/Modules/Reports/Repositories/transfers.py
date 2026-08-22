@@ -69,9 +69,9 @@ def aggregate(
         db.query(
             group_col,
             func.count(Transfer.id),
-            func.coalesce(func.sum(Transfer.send_amount), 0.0),
-            func.coalesce(func.sum(Transfer.fee), 0.0),
-            func.coalesce(func.sum(Transfer.federal_tax), 0.0),
+            func.coalesce(func.sum(Transfer.send_amount_cents), 0) / 100.0,
+            func.coalesce(func.sum(Transfer.fee_cents), 0) / 100.0,
+            func.coalesce(func.sum(Transfer.federal_tax_cents), 0) / 100.0,
         )
         .filter(*period_filters(store_ids, d_from, d_to))
         .group_by(group_col)

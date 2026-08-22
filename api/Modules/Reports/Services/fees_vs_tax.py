@@ -40,8 +40,8 @@ def fees_vs_tax(
 
     fee_total, tax_total, count = (
         db.query(
-            func.coalesce(func.sum(Transfer.fee), 0.0),
-            func.coalesce(func.sum(Transfer.federal_tax), 0.0),
+            func.coalesce(func.sum(Transfer.fee_cents), 0) / 100.0,
+            func.coalesce(func.sum(Transfer.federal_tax_cents), 0) / 100.0,
             func.count(Transfer.id),
         )
         .filter(*period_filters(store_ids, d_from, d_to))

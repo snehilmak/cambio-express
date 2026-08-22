@@ -33,15 +33,16 @@ def high_value_transfers(
     automatically excluded — same active-transfer definition as
     the other reports.
     """
+    from api.Core.Money import to_cents
     from api.Modules.Transfers.Models import Transfer
     from api.Modules.Reports.Repositories.transfers import period_filters
 
     rows_q = (
         db.query(Transfer)
           .filter(*period_filters(store_ids, d_from, d_to))
-          .filter(Transfer.send_amount >= threshold)
+          .filter(Transfer.send_amount_cents >= to_cents(threshold))
           .order_by(
-              Transfer.send_amount.desc(),
+              Transfer.send_amount_cents.desc(),
               Transfer.send_date.desc(),
           )
           .all()

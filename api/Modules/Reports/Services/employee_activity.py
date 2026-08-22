@@ -40,7 +40,7 @@ def employee_activity(
         db.query(
             Transfer.created_by,
             func.count(Transfer.id),
-            func.coalesce(func.sum(Transfer.send_amount), 0.0),
+            func.coalesce(func.sum(Transfer.send_amount_cents), 0) / 100.0,
             func.max(Transfer.send_date),
         )
         .filter(

@@ -220,7 +220,7 @@ def superadmin_dashboard_context(db: Session) -> dict[str, Any]:
         db.query(
             Transfer.company,
             func.count(Transfer.id),
-            func.coalesce(func.sum(Transfer.send_amount), 0.0),
+            func.coalesce(func.sum(Transfer.send_amount_cents), 0) / 100.0,
         )
         .filter(
             Transfer.created_at >= d30_ago,
@@ -228,7 +228,7 @@ def superadmin_dashboard_context(db: Session) -> dict[str, Any]:
         )
         .group_by(Transfer.company)
         .order_by(
-            func.coalesce(func.sum(Transfer.send_amount), 0.0).desc(),
+            func.coalesce(func.sum(Transfer.send_amount_cents), 0).desc(),
         )
         .limit(6)
         .all()

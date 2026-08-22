@@ -12,11 +12,12 @@ from __future__ import annotations
 from datetime import datetime
 
 from sqlalchemy import (
-    Column, Date, DateTime, Float, ForeignKey, Index, Integer, String,
+    BigInteger, Column, Date, DateTime, ForeignKey, Index, Integer, String,
 )
 from sqlalchemy.orm import relationship
 
 from api.Core.Database import Base
+from api.Core.Money import to_cents, to_dollars
 
 
 class Transfer(Base):
@@ -38,13 +39,17 @@ class Transfer(Base):
     # is the gate, not this column.
     service_type   = Column(String(30), default="Money Transfer", nullable=False)
     sender_name    = Column(String(120), nullable=False)
-    send_amount    = Column(Float, nullable=False)
-    fee            = Column(Float, default=0.0)
+    # Money is stored as INTEGER CENTS (P0-3 — exact math; see
+    # api/Core/Money.py). The dollar-named @property pairs below
+    # keep Python readers/writers and ORM kwargs speaking dollars;
+    # SQL expressions must use the _cents columns explicitly.
+    send_amount_cents = Column(BigInteger, nullable=False, default=0)
+    fee_cents         = Column(BigInteger, default=0)
     # Federal tax (e.g. 1%) the customer pays on the send amount.
     # Tracked separately from ``fee`` because it leaves the store
     # with the ACH withdrawal — it's not store revenue.
-    federal_tax    = Column(Float, default=0.0)
-    commission     = Column(Float, default=0.0)
+    federal_tax_cents = Column(BigInteger, default=0)
+    commission_cents  = Column(BigInteger, default=0)
     recipient_name = Column(String(120), default="")
     country        = Column(String(60), default="")
     recipient_phone= Column(String(40), default="")
@@ -88,15 +93,58 @@ class Transfer(Base):
         Index("ix_transfer_confirm_number", "confirm_number"),
     )
 
+    # ── Dollar views over the cents columns ────────────────
+    # Getter returns dollars, setter accepts dollars — so ORM
+    # kwargs (Transfer(send_amount=25.0)) and every Python call
+    # site keep their existing contract while the stored value
+    # is exact integer cents.
+
+    @property
+    def send_amount(self) -> float:
+        return to_dollars(self.send_amount_cents)  # type: ignore[arg-type]
+
+    @send_amount.setter
+    def send_amount(self, dollars: object) -> None:
+        self.send_amount_cents = to_cents(dollars)  # type: ignore[assignment]
+
+    @property
+    def fee(self) -> float:
+        return to_dollars(self.fee_cents)  # type: ignore[arg-type]
+
+    @fee.setter
+    def fee(self, dollars: object) -> None:
+        self.fee_cents = to_cents(dollars)  # type: ignore[assignment]
+
+    @property
+    def federal_tax(self) -> float:
+        return to_dollars(self.federal_tax_cents)  # type: ignore[arg-type]
+
+    @federal_tax.setter
+    def federal_tax(self, dollars: object) -> None:
+        self.federal_tax_cents = to_cents(dollars)  # type: ignore[assignment]
+
+    @property
+    def commission(self) -> float:
+        return to_dollars(self.commission_cents)  # type: ignore[arg-type]
+
+    @commission.setter
+    def commission(self, dollars: object) -> None:
+        self.commission_cents = to_cents(dollars)  # type: ignore[assignment]
+
+    @property
+    def total_collected_cents(self) -> int:
+        """What the customer actually handed over, in exact cents:
+        send amount + store fee + federal tax."""
+        return int(
+            (self.send_amount_cents or 0)
+            + (self.fee_cents or 0)
+            + (self.federal_tax_cents or 0)
+        )
+
     @property
     def total_collected(self) -> float:
-        """What the customer actually handed over: send amount +
-        store fee + federal tax."""
-        return float(
-            (self.send_amount or 0)
-            + (self.fee or 0)
-            + (self.federal_tax or 0)
-        )
+        """Dollar view of ``total_collected_cents``."""
+        return to_dollars(self.total_collected_cents)
 
 
 # Re-export the surrounding entities the Transfers services touch.

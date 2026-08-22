@@ -18,7 +18,7 @@ SORT_COLUMNS: dict[str, Any] = {
     "ach_date":   ACHBatch.ach_date,
     "company":    ACHBatch.company,
     "batch_ref":  ACHBatch.batch_ref,
-    "ach_amount": ACHBatch.ach_amount,
+    "ach_amount": ACHBatch.ach_amount_cents,
     "status":     ACHBatch.status,
 }
 
@@ -66,8 +66,8 @@ def sum_transfer_totals_for_batch_refs(
         db.query(
             Transfer.batch_id,
             (
-                func.coalesce(func.sum(Transfer.send_amount), 0.0)
-                + func.coalesce(func.sum(Transfer.federal_tax), 0.0)
+                (func.coalesce(func.sum(Transfer.send_amount_cents), 0)
+                 + func.coalesce(func.sum(Transfer.federal_tax_cents), 0)) / 100.0
             ).label("total"),
         )
         .filter(

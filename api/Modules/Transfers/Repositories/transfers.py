@@ -27,7 +27,7 @@ SORT_COLUMNS: dict[str, Any] = {
     "date":      Transfer.send_date,
     "sender":    Transfer.sender_name,
     "company":   Transfer.company,
-    "amount":    Transfer.send_amount,
+    "amount":    Transfer.send_amount_cents,
     "recipient": Transfer.recipient_name,
     "country":   Transfer.country,
     "confirm":   Transfer.confirm_number,
