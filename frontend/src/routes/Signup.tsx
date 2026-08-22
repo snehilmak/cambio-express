@@ -20,6 +20,7 @@ export default function Signup() {
   const [phone,     setPhone]     = useState("");
   const [password,  setPassword]  = useState("");
   const [refCode,   setRefCode]   = useState(refFromUrl);
+  const [bizType,   setBizType]   = useState("cstore");
   const [busy,      setBusy]      = useState(false);
   const [error,     setError]     = useState<string | null>(null);
   const [errors,    setErrors]    = useState<Record<string, string>>({});
@@ -56,6 +57,7 @@ export default function Signup() {
         password,
         phone:      phone.trim(),
         ref_code:   refCode.trim().toUpperCase(),
+        business_type: bizType,
       });
       setAccessToken(result.access_token);
       navigate("/home", { replace: true });
@@ -98,10 +100,23 @@ export default function Signup() {
             type="text"
             value={storeName}
             onChange={(e) => setStoreName(e.target.value)}
-            placeholder="e.g. Lamar Money Center"
+            placeholder="e.g. Lamar Corner Store"
             disabled={busy}
             required
           />
+        </SignupField>
+        <SignupField label="Business type">
+          <select
+            className={styles.input}
+            value={bizType}
+            onChange={(e) => setBizType(e.target.value)}
+            disabled={busy}
+          >
+            <option value="cstore">Convenience store</option>
+            <option value="gas_station">Gas station</option>
+            <option value="grocery">Grocery store</option>
+            <option value="msb_hybrid">Money services / hybrid</option>
+          </select>
         </SignupField>
         <SignupField label="Store Email" error={errors.email}>
           <input

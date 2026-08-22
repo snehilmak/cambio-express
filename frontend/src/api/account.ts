@@ -29,6 +29,9 @@ export interface SignupBody {
   password: string;
   phone?: string;
   ref_code?: string;
+  /** cstore | gas_station | grocery | msb_hybrid — drives which
+   *  product modules the new store starts with. */
+  business_type?: string;
 }
 
 export interface ReferralPreview {
@@ -262,6 +265,11 @@ export interface SessionStatus {
   reason:     "frozen" | "subscription" | "";
   plan:       string;
   store_name: string;
+  /** cstore | gas_station | grocery | msb_hybrid ("" for
+   *  store-less principals like superadmin). */
+  business_type: string;
+  /** Module flags ON for this store — gates nav + routes. */
+  features: string[];
 }
 
 export function useSessionStatus() {

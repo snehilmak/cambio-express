@@ -57,6 +57,7 @@ class SuperadminStoreDetailRow(BaseModel):
     phone: str
     address: str
     plan: str
+    business_type: str
     billing_cycle: str
     is_active: bool
     federal_tax_rate: float
@@ -97,6 +98,7 @@ class SuperadminStoreCreateRequest(BaseModel):
     phone:   str = Field("",  max_length=40)
     address: str = Field("",  max_length=255)
     plan:    str = Field("trial", pattern=_PLAN_PATTERN)
+    business_type: str = Field("cstore", pattern="^(cstore|gas_station|grocery|msb_hybrid)$")
 
     admin_username: str = Field("admin",       min_length=1, max_length=80)
     admin_name:     str = Field("Store Admin", max_length=120)
@@ -124,6 +126,7 @@ class SuperadminStoreUpdateRequest(BaseModel):
     phone:            str   | None = Field(None, max_length=40)
     address:          str   | None = Field(None, max_length=255)
     plan:             str   | None = Field(None, pattern=_PLAN_PATTERN)
+    business_type:    str   | None = Field(None, pattern="^(cstore|gas_station|grocery|msb_hybrid)$")
     federal_tax_rate: float | None = Field(None, ge=0.0, le=1.0)
 
     _v_email = field_validator("email")(_validate_optional_email)

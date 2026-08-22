@@ -7093,6 +7093,12 @@
         "additionalProperties": false,
         "description": "POST body for /auth/signup. Mirrors the legacy /signup\nJinja form. Returns a JWT on success so the SPA can drop\nthe new admin straight onto the dashboard without a second\nlogin round-trip.",
         "properties": {
+          "business_type": {
+            "default": "cstore",
+            "pattern": "^(cstore|gas_station|grocery|msb_hybrid)$",
+            "title": "Business Type",
+            "type": "string"
+          },
           "email": {
             "maxLength": 255,
             "minLength": 3,
@@ -8097,6 +8103,12 @@
             "title": "Admin Username",
             "type": "string"
           },
+          "business_type": {
+            "default": "cstore",
+            "pattern": "^(cstore|gas_station|grocery|msb_hybrid)$",
+            "title": "Business Type",
+            "type": "string"
+          },
           "email": {
             "default": "",
             "maxLength": 120,
@@ -8209,6 +8221,10 @@
             "title": "Billing Cycle",
             "type": "string"
           },
+          "business_type": {
+            "title": "Business Type",
+            "type": "string"
+          },
           "created_at": {
             "title": "Created At",
             "type": "string"
@@ -8274,6 +8290,7 @@
           "phone",
           "address",
           "plan",
+          "business_type",
           "billing_cycle",
           "is_active",
           "federal_tax_rate",
@@ -8448,6 +8465,18 @@
               }
             ],
             "title": "Address"
+          },
+          "business_type": {
+            "anyOf": [
+              {
+                "pattern": "^(cstore|gas_station|grocery|msb_hybrid)$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Business Type"
           },
           "email": {
             "anyOf": [
@@ -15022,7 +15051,7 @@
     },
     "/auth/session-status": {
       "get": {
-        "description": "Store-gate status for the authed user's SPA shell (PR C).\n\nEvery authed role calls this on app load so the chrome can decide\nwhether to gate the user out of the app to a \"re-subscribe\" /\n\"suspended\" screen. Read-only \u2014 no login/token logic, no writes.\n\nReturns ``{gated, reason, plan, store_name}``:\n  * ``gated``  \u2014 True when the store is frozen or its subscription\n    has fully lapsed (see ``store_gate_status``).\n  * ``reason`` \u2014 \"frozen\" | \"subscription\" | \"\".\n  * ``plan``   \u2014 the store's plan slug (for the re-subscribe copy).\n  * ``store_name`` \u2014 shown on the gate screen.\n\nA superadmin (no ``store_id``) is never gated \u2014 they operate the\nplatform, not a store.",
+        "description": "Store-gate status for the authed user's SPA shell (PR C).\n\nEvery authed role calls this on app load so the chrome can decide\nwhether to gate the user out of the app to a \"re-subscribe\" /\n\"suspended\" screen. Read-only \u2014 no login/token logic, no writes.\n\nReturns ``{gated, reason, plan, store_name}``:\n  * ``gated``  \u2014 True when the store is frozen or its subscription\n    has fully lapsed (see ``store_gate_status``).\n  * ``reason`` \u2014 \"frozen\" | \"subscription\" | \"\".\n  * ``plan``   \u2014 the store's plan slug (for the re-subscribe copy).\n  * ``store_name`` \u2014 shown on the gate screen.\n\nA superadmin (no ``store_id``) is never gated \u2014 they operate the\nplatform, not a store.\n\nAlso carries the store's ``business_type`` and the module flags\ncurrently ON (``features``) so the shell can decide which nav\nsections and routes to render \u2014 a convenience store doesn't see\nthe money-transfer ledger it never uses. Store-less principals\n(superadmin, owner) get every module.",
         "operationId": "session_status_route_auth_session_status_get",
         "parameters": [
           {

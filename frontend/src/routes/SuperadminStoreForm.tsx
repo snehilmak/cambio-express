@@ -39,6 +39,15 @@ const PLAN_OPTIONS: { value: string; label: string }[] = [
   { value: "inactive", label: "Inactive" },
 ];
 
+// Which kind of business the store is — drives module defaults
+// (module_money_services et al.) through the feature-flag bundles.
+const BUSINESS_TYPE_OPTIONS = [
+  { value: "cstore",      label: "Convenience store" },
+  { value: "gas_station", label: "Gas station" },
+  { value: "grocery",     label: "Grocery store" },
+  { value: "msb_hybrid",  label: "Money services / hybrid" },
+];
+
 const SPAN_2 = { gridColumn: "1 / -1" } as const;
 
 export default function SuperadminStoreForm() {
@@ -59,6 +68,7 @@ export default function SuperadminStoreForm() {
   const [phone,   setPhone]   = useState("");
   const [address, setAddress] = useState("");
   const [plan,    setPlan]    = useState("trial");
+  const [bizType, setBizType] = useState("cstore");
   // Federal tax — stored as a fraction (0.01 = 1%) to match the
   // Store column. Only rendered on edit; create doesn't expose it
   // (the legacy form didn't either; default of 0.01 ships from
@@ -79,7 +89,7 @@ export default function SuperadminStoreForm() {
   const toast = useToast();
 
   const snapshot = JSON.stringify({
-    name, slug, email, phone, address, plan, federalTaxRate,
+    name, slug, email, phone, address, plan, bizType, federalTaxRate,
     adminName, adminUsername, adminPassword,
   });
 
@@ -95,6 +105,7 @@ export default function SuperadminStoreForm() {
     setPhone(s.phone);
     setAddress(s.address);
     setPlan(s.plan || "trial");
+    setBizType(s.business_type || "msb_hybrid");
     setFederalTaxRate(String(s.federal_tax_rate ?? 0.01));
     // Capture the dirty baseline from the hydrated values directly —
     // building it off `snapshot` here would still see the pre-hydrate
@@ -102,6 +113,7 @@ export default function SuperadminStoreForm() {
     setBaseline(JSON.stringify({
       name: s.name, slug: s.slug, email: s.email, phone: s.phone,
       address: s.address, plan: s.plan || "trial",
+      bizType: s.business_type || "msb_hybrid",
       federalTaxRate: String(s.federal_tax_rate ?? 0.01),
       adminName, adminUsername, adminPassword,
     }));
@@ -220,6 +232,7 @@ export default function SuperadminStoreForm() {
           phone:   phone.trim(),
           address: address.trim(),
           plan,
+          business_type: bizType,
         };
         const parsedRate = Number.parseFloat(federalTaxRate);
         if (Number.isFinite(parsedRate)) {
@@ -239,6 +252,7 @@ export default function SuperadminStoreForm() {
           phone:          phone.trim(),
           address:        address.trim(),
           plan,
+          business_type:  bizType,
           admin_username: adminUsername.trim() || "admin",
           admin_name:     adminName.trim() || "Store Admin",
           admin_password: adminPassword,
@@ -345,6 +359,18 @@ export default function SuperadminStoreForm() {
                 placeholder="Full address"
                 disabled={busy}
               />
+            </Field>
+
+            <Field label="Business type" error={fieldErrors.business_type}>
+              <Select
+                value={bizType}
+                onChange={(e) => { setBizType(e.target.value); clearFieldError("business_type"); }}
+                disabled={busy}
+              >
+                {BUSINESS_TYPE_OPTIONS.map((b) => (
+                  <option key={b.value} value={b.value}>{b.label}</option>
+                ))}
+              </Select>
             </Field>
 
             <Field label="Plan" error={fieldErrors.plan}>

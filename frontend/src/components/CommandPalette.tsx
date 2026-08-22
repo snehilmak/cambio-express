@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Command } from "cmdk";
 
+import { useSessionStatus } from "../api/account";
 import { getCurrentIdentity } from "../lib/auth";
 import { filterNavForRole } from "./navConfig";
 import styles from "./CommandPalette.module.css";
@@ -13,8 +14,10 @@ interface CommandItem {
   keywords?: string;
 }
 
-function buildItems(role: string, permissions: string[] = []): CommandItem[] {
-  const groups = filterNavForRole(role, permissions);
+function buildItems(
+  role: string, permissions: string[] = [], features?: string[],
+): CommandItem[] {
+  const groups = filterNavForRole(role, permissions, features);
   const items: CommandItem[] = [];
   for (const g of groups) {
     // Direct-link group (e.g. Reports): the group itself is the
@@ -43,7 +46,10 @@ export function CommandPalette() {
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
   const identity = getCurrentIdentity();
-  const items = identity ? buildItems(identity.role, identity.permissions) : [];
+  const { data: sessionStatus } = useSessionStatus();
+  const items = identity
+    ? buildItems(identity.role, identity.permissions, sessionStatus?.features)
+    : [];
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {

@@ -20,6 +20,7 @@ export interface SuperadminStoreDetail {
   phone: string;
   address: string;
   plan: string;
+  business_type: string;
   billing_cycle: string;
   is_active: boolean;
   federal_tax_rate: number;
@@ -45,6 +46,7 @@ export interface SuperadminStoreCreateBody {
   phone?: string;
   address?: string;
   plan?: string;
+  business_type?: string;
   admin_username?: string;
   admin_name?: string;
   admin_password: string;
@@ -58,6 +60,7 @@ export interface SuperadminStoreUpdateBody {
   phone?: string;
   address?: string;
   plan?: string;
+  business_type?: string;
   federal_tax_rate?: number;
 }
 
