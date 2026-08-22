@@ -124,7 +124,15 @@ def init_db(logger: Optional[logging.Logger] = None) -> None:
                 log.info("Seeded superadmin user (custom password set via env).")
 
         try:
-            from api.Core.Permissions import seed_defaults as _seed_casbin
+            from api.Core.Permissions import (
+                ensure_resource_defaults as _ensure_resource,
+                seed_defaults as _seed_casbin,
+            )
             _seed_casbin()
+            # Resources added AFTER the first seed need an additive
+            # sync on existing databases (seed_defaults no-ops once
+            # policy exists). Append new resources here when they
+            # join RBAC_RESOURCES.
+            _ensure_resource("lottery")
         except Exception as exc:
             log.warning("Casbin seed skipped: %s", exc)

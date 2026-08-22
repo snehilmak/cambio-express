@@ -2586,6 +2586,144 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/lottery/day/{day}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Day Summary Route */
+        get: operations["day_summary_route_lottery_day__day__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/lottery/day/{day}/counts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Record Count Route */
+        post: operations["record_count_route_lottery_day__day__counts_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/lottery/games": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Games Route */
+        get: operations["list_games_route_lottery_games_get"];
+        put?: never;
+        /** Create Game Route */
+        post: operations["create_game_route_lottery_games_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/lottery/games/{game_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Update Game Route */
+        put: operations["update_game_route_lottery_games__game_id__put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/lottery/packs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Packs Route */
+        get: operations["list_packs_route_lottery_packs_get"];
+        put?: never;
+        /** Receive Pack Route */
+        post: operations["receive_pack_route_lottery_packs_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/lottery/packs/{pack_id}/activate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Activate Pack Route */
+        post: operations["activate_pack_route_lottery_packs__pack_id__activate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/lottery/packs/{pack_id}/return": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Return Pack Route */
+        post: operations["return_pack_route_lottery_packs__pack_id__return_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/lottery/packs/{pack_id}/settle": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Settle Pack Route */
+        post: operations["settle_pack_route_lottery_packs__pack_id__settle_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/maintenance-status": {
         parameters: {
             query?: never;
@@ -6693,6 +6831,51 @@ export interface components {
             /** Taxable Sales */
             taxable_sales?: number | null;
         };
+        /** DayCountRow */
+        DayCountRow: {
+            /** Bin Number */
+            bin_number: string;
+            /** Closing Ticket */
+            closing_ticket: number | null;
+            /** Counted */
+            counted: boolean;
+            /** Game Name */
+            game_name: string;
+            /** Game Number */
+            game_number: string;
+            /** Pack Id */
+            pack_id: number;
+            /** Pack Number */
+            pack_number: string;
+            /** Previous Reference */
+            previous_reference: number;
+            /** Sold */
+            sold: number;
+            /** Ticket Price */
+            ticket_price: number;
+            /** Value */
+            value: number;
+        };
+        /** DayCountWriteRequest */
+        DayCountWriteRequest: {
+            /** Closing Ticket */
+            closing_ticket: number;
+            /** Pack Id */
+            pack_id: number;
+        };
+        /** DaySummaryResponse */
+        DaySummaryResponse: {
+            /** Date */
+            date: string;
+            /** Rows */
+            rows: components["schemas"]["DayCountRow"][];
+            /** Total Sold */
+            total_sold: number;
+            /** Total Value */
+            total_value: number;
+            /** Uncounted Active Packs */
+            uncounted_active_packs: number;
+        };
         /** DiscountCodeListResponse */
         DiscountCodeListResponse: {
             /** Rows */
@@ -6827,6 +7010,52 @@ export interface components {
         ForgotPasswordRequest: {
             /** Email */
             email: string;
+        };
+        /** GameListResponse */
+        GameListResponse: {
+            /** Games */
+            games: components["schemas"]["GameRow"][];
+        };
+        /** GameResponse */
+        GameResponse: {
+            game: components["schemas"]["GameRow"];
+        };
+        /** GameRow */
+        GameRow: {
+            /** Game Number */
+            game_number: string;
+            /** Id */
+            id: number;
+            /** Is Active */
+            is_active: boolean;
+            /** Name */
+            name: string;
+            /** Ticket Price */
+            ticket_price: number;
+            /** Tickets Per Pack */
+            tickets_per_pack: number;
+        };
+        /** GameUpdateRequest */
+        GameUpdateRequest: {
+            /** Is Active */
+            is_active?: boolean | null;
+            /** Name */
+            name?: string | null;
+            /** Ticket Price */
+            ticket_price?: number | null;
+            /** Tickets Per Pack */
+            tickets_per_pack?: number | null;
+        };
+        /** GameWriteRequest */
+        GameWriteRequest: {
+            /** Game Number */
+            game_number: string;
+            /** Name */
+            name: string;
+            /** Ticket Price */
+            ticket_price: number;
+            /** Tickets Per Pack */
+            tickets_per_pack: number;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -8069,6 +8298,76 @@ export interface components {
          *     explicit + future-extensible.
          */
         OwnerUnlinkRequest: Record<string, never>;
+        /** PackActivateRequest */
+        PackActivateRequest: {
+            /** Activated On */
+            activated_on: string;
+            /**
+             * Bin Number
+             * @default
+             */
+            bin_number: string;
+            /**
+             * Opening Ticket
+             * @default 0
+             */
+            opening_ticket: number;
+        };
+        /**
+         * PackDateRequest
+         * @description Settle / return — just the effective date.
+         */
+        PackDateRequest: {
+            /** On */
+            on: string;
+        };
+        /** PackListResponse */
+        PackListResponse: {
+            /** Packs */
+            packs: components["schemas"]["PackRow"][];
+        };
+        /** PackReceiveRequest */
+        PackReceiveRequest: {
+            /** Game Id */
+            game_id: number;
+            /** Pack Number */
+            pack_number: string;
+            /** Received On */
+            received_on: string;
+        };
+        /** PackResponse */
+        PackResponse: {
+            pack: components["schemas"]["PackRow"];
+        };
+        /** PackRow */
+        PackRow: {
+            /** Activated On */
+            activated_on: string | null;
+            /** Bin Number */
+            bin_number: string;
+            /** Game Id */
+            game_id: number;
+            /** Game Name */
+            game_name: string;
+            /** Game Number */
+            game_number: string;
+            /** Id */
+            id: number;
+            /** Opening Ticket */
+            opening_ticket: number;
+            /** Pack Number */
+            pack_number: string;
+            /** Received On */
+            received_on: string | null;
+            /** Settled On */
+            settled_on: string | null;
+            /** Status */
+            status: string;
+            /** Ticket Price */
+            ticket_price: number;
+            /** Tickets Per Pack */
+            tickets_per_pack: number;
+        };
         /**
          * PaystubResponse
          * @description Pay summary for one roster member over a date range.
@@ -14891,6 +15190,380 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+        };
+    };
+    day_summary_route_lottery_day__day__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                day: string;
+            };
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DaySummaryResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    record_count_route_lottery_day__day__counts_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                day: string;
+            };
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DayCountWriteRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DaySummaryResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_games_route_lottery_games_get: {
+        parameters: {
+            query?: {
+                include_inactive?: boolean;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GameListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_game_route_lottery_games_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GameWriteRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GameResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_game_route_lottery_games__game_id__put: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                game_id: number;
+            };
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GameUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GameResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_packs_route_lottery_packs_get: {
+        parameters: {
+            query?: {
+                status?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PackListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    receive_pack_route_lottery_packs_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PackReceiveRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PackResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    activate_pack_route_lottery_packs__pack_id__activate_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                pack_id: number;
+            };
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PackActivateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PackResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    return_pack_route_lottery_packs__pack_id__return_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                pack_id: number;
+            };
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PackDateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PackResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    settle_pack_route_lottery_packs__pack_id__settle_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                pack_id: number;
+            };
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PackDateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PackResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

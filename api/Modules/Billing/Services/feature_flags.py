@@ -35,17 +35,20 @@ from api.Modules.Billing.Services.store_state import store_addon_keys
 # NOTE: module flags are a product/UX boundary, not a security
 # boundary — routes stay store-scoped regardless. When modules
 # become billing-tiered, add backend enforcement at that point.
-MODULE_FLAG_KEYS = ("module_money_services",)
+MODULE_FLAG_KEYS = ("module_money_services", "module_lottery")
 
 _BUSINESS_TYPE_MODULE_DEFAULTS: dict[str, dict[str, bool]] = {
     # module_money_services: money-transfer ledger + ACH batches +
     # sender directory. Check cashing / returned checks are NOT in
     # this bundle — plenty of c-stores cash checks, so those
     # surfaces stay available to every type.
-    "cstore":      {"module_money_services": False},
-    "gas_station": {"module_money_services": False},
-    "grocery":     {"module_money_services": False},
-    "msb_hybrid":  {"module_money_services": True},
+    # module_lottery: games / packs / day-close counts. ON for the
+    # retail types that sell scratch-offs; OFF for the pure
+    # money-services profile (override available per store).
+    "cstore":      {"module_money_services": False, "module_lottery": True},
+    "gas_station": {"module_money_services": False, "module_lottery": True},
+    "grocery":     {"module_money_services": False, "module_lottery": True},
+    "msb_hybrid":  {"module_money_services": True,  "module_lottery": False},
 }
 
 

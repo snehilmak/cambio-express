@@ -33,7 +33,7 @@ _log = logging.getLogger(__name__)
 RBAC_RESOURCES = [
     "transfers", "customers", "daily_book", "monthly",
     "batches", "bank_sync", "reports", "settings",
-    "users", "time_clock", "return_checks",
+    "users", "time_clock", "return_checks", "lottery",
 ]
 RBAC_ACTIONS = ["create", "read", "update", "delete"]
 
@@ -45,6 +45,8 @@ RBAC_DEFAULTS: dict[str, list[str]] = {
         "daily_book.read",
         "time_clock.create", "time_clock.read",
         "return_checks.read",
+        # Cashiers enter the lottery day-close counts.
+        "lottery.create", "lottery.read",
     ],
     "owner": (
         [f"{r}.read" for r in RBAC_RESOURCES]
@@ -261,6 +263,36 @@ def seed_defaults() -> None:
     e.save_policy()
     _log.info("Casbin: seeded %d default rules",
               sum(len(v) for v in RBAC_DEFAULTS.values()))
+
+
+def ensure_resource_defaults(resource: str) -> None:
+    """Additively seed the default rules for ONE resource into an
+    ALREADY-SEEDED policy store — the path a brand-new resource
+    (e.g. "lottery") takes on existing databases, where
+    ``seed_defaults`` is a no-op because policy is non-empty.
+
+    Additive only: rows that already exist are left alone and
+    nothing is ever removed, so per-store overrides and superadmin
+    edits survive. Idempotent — safe to call on every boot.
+    """
+    e = _get_enforcer()
+    if not e.get_policy():
+        return  # empty store → seed_defaults handles the full set
+    added = 0
+    for role, perms in RBAC_DEFAULTS.items():
+        for perm in perms:
+            r, action = perm.split(".", 1)
+            if r != resource:
+                continue
+            if not e.has_policy(role, "global", r, action):
+                e.add_policy(role, "global", r, action)
+                added += 1
+    if added:
+        e.save_policy()
+        _log.info(
+            "Casbin: additively seeded %d default rules for new "
+            "resource %r", added, resource,
+        )
 
 
 # ── Matrix builders (for permission UI endpoints) ──────────

@@ -2711,6 +2711,135 @@
         "title": "DailyReportUpdateRequest",
         "type": "object"
       },
+      "DayCountRow": {
+        "additionalProperties": false,
+        "properties": {
+          "bin_number": {
+            "title": "Bin Number",
+            "type": "string"
+          },
+          "closing_ticket": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Closing Ticket"
+          },
+          "counted": {
+            "title": "Counted",
+            "type": "boolean"
+          },
+          "game_name": {
+            "title": "Game Name",
+            "type": "string"
+          },
+          "game_number": {
+            "title": "Game Number",
+            "type": "string"
+          },
+          "pack_id": {
+            "title": "Pack Id",
+            "type": "integer"
+          },
+          "pack_number": {
+            "title": "Pack Number",
+            "type": "string"
+          },
+          "previous_reference": {
+            "title": "Previous Reference",
+            "type": "integer"
+          },
+          "sold": {
+            "title": "Sold",
+            "type": "integer"
+          },
+          "ticket_price": {
+            "title": "Ticket Price",
+            "type": "number"
+          },
+          "value": {
+            "title": "Value",
+            "type": "number"
+          }
+        },
+        "required": [
+          "pack_id",
+          "pack_number",
+          "bin_number",
+          "game_number",
+          "game_name",
+          "ticket_price",
+          "counted",
+          "closing_ticket",
+          "previous_reference",
+          "sold",
+          "value"
+        ],
+        "title": "DayCountRow",
+        "type": "object"
+      },
+      "DayCountWriteRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "closing_ticket": {
+            "minimum": 0.0,
+            "title": "Closing Ticket",
+            "type": "integer"
+          },
+          "pack_id": {
+            "minimum": 1.0,
+            "title": "Pack Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "pack_id",
+          "closing_ticket"
+        ],
+        "title": "DayCountWriteRequest",
+        "type": "object"
+      },
+      "DaySummaryResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "date": {
+            "title": "Date",
+            "type": "string"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/DayCountRow"
+            },
+            "title": "Rows",
+            "type": "array"
+          },
+          "total_sold": {
+            "title": "Total Sold",
+            "type": "integer"
+          },
+          "total_value": {
+            "title": "Total Value",
+            "type": "number"
+          },
+          "uncounted_active_packs": {
+            "title": "Uncounted Active Packs",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "date",
+          "rows",
+          "total_sold",
+          "total_value",
+          "uncounted_active_packs"
+        ],
+        "title": "DaySummaryResponse",
+        "type": "object"
+      },
       "DiscountCodeListResponse": {
         "additionalProperties": false,
         "properties": {
@@ -3018,6 +3147,167 @@
           "email"
         ],
         "title": "ForgotPasswordRequest",
+        "type": "object"
+      },
+      "GameListResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "games": {
+            "items": {
+              "$ref": "#/components/schemas/GameRow"
+            },
+            "title": "Games",
+            "type": "array"
+          }
+        },
+        "required": [
+          "games"
+        ],
+        "title": "GameListResponse",
+        "type": "object"
+      },
+      "GameResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "game": {
+            "$ref": "#/components/schemas/GameRow"
+          }
+        },
+        "required": [
+          "game"
+        ],
+        "title": "GameResponse",
+        "type": "object"
+      },
+      "GameRow": {
+        "additionalProperties": false,
+        "properties": {
+          "game_number": {
+            "title": "Game Number",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "is_active": {
+            "title": "Is Active",
+            "type": "boolean"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "ticket_price": {
+            "title": "Ticket Price",
+            "type": "number"
+          },
+          "tickets_per_pack": {
+            "title": "Tickets Per Pack",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "game_number",
+          "name",
+          "ticket_price",
+          "tickets_per_pack",
+          "is_active"
+        ],
+        "title": "GameRow",
+        "type": "object"
+      },
+      "GameUpdateRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "is_active": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Active"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "ticket_price": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ticket Price"
+          },
+          "tickets_per_pack": {
+            "anyOf": [
+              {
+                "maximum": 10000.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tickets Per Pack"
+          }
+        },
+        "title": "GameUpdateRequest",
+        "type": "object"
+      },
+      "GameWriteRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "game_number": {
+            "maxLength": 20,
+            "minLength": 1,
+            "title": "Game Number",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "ticket_price": {
+            "minimum": 0.0,
+            "title": "Ticket Price",
+            "type": "number"
+          },
+          "tickets_per_pack": {
+            "maximum": 10000.0,
+            "minimum": 1.0,
+            "title": "Tickets Per Pack",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "game_number",
+          "name",
+          "ticket_price",
+          "tickets_per_pack"
+        ],
+        "title": "GameWriteRequest",
         "type": "object"
       },
       "HTTPValidationError": {
@@ -5520,6 +5810,205 @@
         "description": "POST body for /owner/unlink/{store_id}. Empty schema today\n(the store_id is in the path), but `extra=\"forbid\"` keeps it\nexplicit + future-extensible.",
         "properties": {},
         "title": "OwnerUnlinkRequest",
+        "type": "object"
+      },
+      "PackActivateRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "activated_on": {
+            "maxLength": 10,
+            "minLength": 10,
+            "title": "Activated On",
+            "type": "string"
+          },
+          "bin_number": {
+            "default": "",
+            "maxLength": 10,
+            "title": "Bin Number",
+            "type": "string"
+          },
+          "opening_ticket": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Opening Ticket",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "activated_on"
+        ],
+        "title": "PackActivateRequest",
+        "type": "object"
+      },
+      "PackDateRequest": {
+        "additionalProperties": false,
+        "description": "Settle / return \u2014 just the effective date.",
+        "properties": {
+          "on": {
+            "maxLength": 10,
+            "minLength": 10,
+            "title": "On",
+            "type": "string"
+          }
+        },
+        "required": [
+          "on"
+        ],
+        "title": "PackDateRequest",
+        "type": "object"
+      },
+      "PackListResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "packs": {
+            "items": {
+              "$ref": "#/components/schemas/PackRow"
+            },
+            "title": "Packs",
+            "type": "array"
+          }
+        },
+        "required": [
+          "packs"
+        ],
+        "title": "PackListResponse",
+        "type": "object"
+      },
+      "PackReceiveRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "game_id": {
+            "minimum": 1.0,
+            "title": "Game Id",
+            "type": "integer"
+          },
+          "pack_number": {
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Pack Number",
+            "type": "string"
+          },
+          "received_on": {
+            "maxLength": 10,
+            "minLength": 10,
+            "title": "Received On",
+            "type": "string"
+          }
+        },
+        "required": [
+          "game_id",
+          "pack_number",
+          "received_on"
+        ],
+        "title": "PackReceiveRequest",
+        "type": "object"
+      },
+      "PackResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "pack": {
+            "$ref": "#/components/schemas/PackRow"
+          }
+        },
+        "required": [
+          "pack"
+        ],
+        "title": "PackResponse",
+        "type": "object"
+      },
+      "PackRow": {
+        "additionalProperties": false,
+        "properties": {
+          "activated_on": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Activated On"
+          },
+          "bin_number": {
+            "title": "Bin Number",
+            "type": "string"
+          },
+          "game_id": {
+            "title": "Game Id",
+            "type": "integer"
+          },
+          "game_name": {
+            "title": "Game Name",
+            "type": "string"
+          },
+          "game_number": {
+            "title": "Game Number",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "opening_ticket": {
+            "title": "Opening Ticket",
+            "type": "integer"
+          },
+          "pack_number": {
+            "title": "Pack Number",
+            "type": "string"
+          },
+          "received_on": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Received On"
+          },
+          "settled_on": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Settled On"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "ticket_price": {
+            "title": "Ticket Price",
+            "type": "number"
+          },
+          "tickets_per_pack": {
+            "title": "Tickets Per Pack",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "game_id",
+          "game_number",
+          "game_name",
+          "ticket_price",
+          "tickets_per_pack",
+          "pack_number",
+          "status",
+          "bin_number",
+          "received_on",
+          "activated_on",
+          "settled_on",
+          "opening_ticket"
+        ],
+        "title": "PackRow",
         "type": "object"
       },
       "PaystubResponse": {
@@ -19474,6 +19963,810 @@
         "summary": "Health",
         "tags": [
           "meta"
+        ]
+      }
+    },
+    "/lottery/day/{day}": {
+      "get": {
+        "operationId": "day_summary_route_lottery_day__day__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "day",
+            "required": true,
+            "schema": {
+              "maxLength": 10,
+              "minLength": 10,
+              "title": "Day",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DaySummaryResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Day Summary Route",
+        "tags": [
+          "lottery"
+        ]
+      }
+    },
+    "/lottery/day/{day}/counts": {
+      "post": {
+        "operationId": "record_count_route_lottery_day__day__counts_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "day",
+            "required": true,
+            "schema": {
+              "maxLength": 10,
+              "minLength": 10,
+              "title": "Day",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DayCountWriteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DaySummaryResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Record Count Route",
+        "tags": [
+          "lottery"
+        ]
+      }
+    },
+    "/lottery/games": {
+      "get": {
+        "operationId": "list_games_route_lottery_games_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "include_inactive",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Include Inactive",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GameListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Games Route",
+        "tags": [
+          "lottery"
+        ]
+      },
+      "post": {
+        "operationId": "create_game_route_lottery_games_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GameWriteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GameResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Game Route",
+        "tags": [
+          "lottery"
+        ]
+      }
+    },
+    "/lottery/games/{game_id}": {
+      "put": {
+        "operationId": "update_game_route_lottery_games__game_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "game_id",
+            "required": true,
+            "schema": {
+              "minimum": 1,
+              "title": "Game Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GameUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GameResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Game Route",
+        "tags": [
+          "lottery"
+        ]
+      }
+    },
+    "/lottery/packs": {
+      "get": {
+        "operationId": "list_packs_route_lottery_packs_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PackListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Packs Route",
+        "tags": [
+          "lottery"
+        ]
+      },
+      "post": {
+        "operationId": "receive_pack_route_lottery_packs_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PackReceiveRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PackResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Receive Pack Route",
+        "tags": [
+          "lottery"
+        ]
+      }
+    },
+    "/lottery/packs/{pack_id}/activate": {
+      "post": {
+        "operationId": "activate_pack_route_lottery_packs__pack_id__activate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "pack_id",
+            "required": true,
+            "schema": {
+              "minimum": 1,
+              "title": "Pack Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PackActivateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PackResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Activate Pack Route",
+        "tags": [
+          "lottery"
+        ]
+      }
+    },
+    "/lottery/packs/{pack_id}/return": {
+      "post": {
+        "operationId": "return_pack_route_lottery_packs__pack_id__return_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "pack_id",
+            "required": true,
+            "schema": {
+              "minimum": 1,
+              "title": "Pack Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PackDateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PackResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Return Pack Route",
+        "tags": [
+          "lottery"
+        ]
+      }
+    },
+    "/lottery/packs/{pack_id}/settle": {
+      "post": {
+        "operationId": "settle_pack_route_lottery_packs__pack_id__settle_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "pack_id",
+            "required": true,
+            "schema": {
+              "minimum": 1,
+              "title": "Pack Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PackDateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PackResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Settle Pack Route",
+        "tags": [
+          "lottery"
         ]
       }
     },
