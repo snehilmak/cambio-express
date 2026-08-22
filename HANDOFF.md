@@ -123,20 +123,33 @@ doubt, write it here rather than leaving it in chat.
 >   `utc_now()` flip point.
 
 **Phase 0 — Foundations** (each its own PR):
-1. `business_type` on Store (cstore / gas_station / grocery /
-   msb_hybrid) driving module visibility through the existing
-   feature-flag system + per-type onboarding.
-2. Postgres-in-dev (docker-compose) + Dockerfile portability.
-3. Float→cents money migration (staged, dual-write — the careful
-   one; do BEFORE the price book multiplies money fields).
-4. Generalize MSB-specific copy; product name config-driven
-   (rebrand-ready — "DineroBook" reads MSB-flavored).
-5. Activate the Redis job queue already staged in render.yaml.
+1. ✅ SHIPPED — `business_type` on Store (cstore / gas_station /
+   grocery / msb_hybrid) driving module visibility through the
+   existing feature-flag system + per-type onboarding.
+2. ✅ SHIPPED — Postgres-in-dev (docker-compose) + Dockerfile
+   portability (Dockerfile still deserves one local `docker build`
+   smoke test — no daemon in the dev sandbox).
+3. ✅ SHIPPED — Float→cents money migration (all 82 money columns
+   are `_cents` BigInteger; dollar attributes are property /
+   `DollarView` views; see the money-storage sections in the
+   Transfers / DailyBook / Monthly INVARIANTS.md).
+4. ✅ SHIPPED — MSB copy generalized; product name config-driven
+   via `BRAND_NAME` / `VITE_BRAND_NAME` (Privacy page text
+   deliberately deferred to legal review at actual rebrand).
+5. ⏳ AWAITING OWNER APPROVAL — activate the Redis job queue
+   staged in render.yaml (~$10–20/mo Render resources; runbook
+   embedded in the YAML comments).
 
 **Phase 1 — The wedge (c-store back-office core):**
-6. Lottery management — games, pack activation, shift counts,
-   settlement vs. state report (modeled on daily-book
-   architecture; the #1 c-store daily pain).
+6. ✅ SHIPPED (PRs #859 backend + #860 frontend) — Lottery
+   management: game catalog, pack lifecycle
+   (received→active→settled/returned, bins, opening tickets),
+   day-close counts with sold/value math + uncounted-pack
+   shrinkage nag. `/lottery` SPA page (Day close / Packs /
+   Games), nav gated on `module_lottery` + `lottery.read`;
+   employees can count, admins run lifecycle. Settlement vs.
+   state report + daily-book auto-posting are follow-ups
+   (the P1-7 integration point).
 7. Generalized day-close — register/shift totals + department
    sales alongside the existing cash ledger.
 8. Accounting export — journal-entry CSV first, QuickBooks Online
