@@ -45,7 +45,7 @@ def sum_line_items_by_kind(
     are derived from these on save — this helper is the single
     source for that derivation."""
     total = (
-        db.query(func.coalesce(func.sum(DailyLineItem.amount), 0.0))
+        db.query(func.coalesce(func.sum(DailyLineItem.amount_cents), 0) / 100.0)
           .filter(
               DailyLineItem.store_id == store_id,
               DailyLineItem.report_date == report_date,

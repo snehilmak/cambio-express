@@ -163,7 +163,7 @@ def recompute_line_items_total(
     assertions).
     """
     total = (
-        db.query(func.coalesce(func.sum(DailyLineItem.amount), 0.0))
+        db.query(func.coalesce(func.sum(DailyLineItem.amount_cents), 0) / 100.0)
           .filter_by(
               store_id=store_id,
               report_date=report_date,
