@@ -59,7 +59,7 @@ def writeoff_total(
         return 0.0
     ReturnCheck, ReturnCheckPayment = _models()
     rows = (
-        db.query(ReturnCheck.id, ReturnCheck.amount)
+        db.query(ReturnCheck.id, ReturnCheck.amount_cents / 100.0)
           .filter(
               ReturnCheck.store_id.in_(store_ids),
               ReturnCheck.status == status_value,
@@ -75,7 +75,7 @@ def writeoff_total(
     paid_rows = (
         db.query(
             ReturnCheckPayment.return_check_id,
-            func.coalesce(func.sum(ReturnCheckPayment.amount), 0.0),
+            func.coalesce(func.sum(ReturnCheckPayment.amount_cents), 0) / 100.0,
         )
         .filter(ReturnCheckPayment.return_check_id.in_(rc_ids))
         .group_by(ReturnCheckPayment.return_check_id)
@@ -111,7 +111,7 @@ def period_aggregates(
     # store filter. Payment doesn't carry store_id — parent does
     # — so we join through.
     rec = (
-        db.query(func.coalesce(func.sum(ReturnCheckPayment.amount), 0.0))
+        db.query(func.coalesce(func.sum(ReturnCheckPayment.amount_cents), 0) / 100.0)
           .join(
               ReturnCheck,
               ReturnCheckPayment.return_check_id == ReturnCheck.id,
@@ -129,7 +129,7 @@ def period_aggregates(
 
     pending_q = (
         db.query(
-            func.coalesce(func.sum(ReturnCheck.amount), 0.0),
+            func.coalesce(func.sum(ReturnCheck.amount_cents), 0) / 100.0,
             func.count(ReturnCheck.id),
         )
         .filter(
@@ -146,7 +146,7 @@ def period_aggregates(
     # not original face value.
     if pending_count > 0:
         pending_paid = (
-            db.query(func.coalesce(func.sum(ReturnCheckPayment.amount), 0.0))
+            db.query(func.coalesce(func.sum(ReturnCheckPayment.amount_cents), 0) / 100.0)
               .join(
                   ReturnCheck,
                   ReturnCheckPayment.return_check_id == ReturnCheck.id,
