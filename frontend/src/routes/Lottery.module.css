@@ -1,0 +1,30 @@
+/* Lottery page — the few page-specific treatments the kit
+   primitives don't cover (CLAUDE.md inline-styles-vs-modules). */
+
+.countInput {
+  max-width: 7rem;
+}
+
+/* Active pack with no day-close count yet — the shrinkage nag.
+   Left accent bar in the warning tone; text stays readable in
+   both themes via the semantic tokens. */
+.uncountedRow td:first-child {
+  box-shadow: inset 3px 0 0 0 var(--db-warning, #ffb020);
+}
+
+.modalForm {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.modalActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.gamesActions {
+  display: flex;
+  gap: 0.5rem;
+}
