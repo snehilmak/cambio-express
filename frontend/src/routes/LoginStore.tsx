@@ -4,6 +4,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { lookupStoreBySlug, type StoreLookup } from "../api/account";
 import { api, ApiError } from "../lib/api";
 import { setAccessToken } from "../lib/auth";
+import { BRAND_NAME } from "../lib/brand";
 
 interface LoginResponse {
   access_token: string;
@@ -101,7 +102,7 @@ export default function LoginStore() {
             <div className="bg-glow" aria-hidden="true" />
             <div className="brand-block">
               <img className="brand-mark" src="/static/brand-mark.svg" alt="" />
-              <div className="brand-name">DineroBook</div>
+              <div className="brand-name">{BRAND_NAME}</div>
               <div className="brand-store">{store.name}</div>
               <div className="brand-tagline">Employee portal</div>
             </div>

@@ -1,5 +1,6 @@
 import { Button, ButtonLink } from "./ui";
 import styles from "./StoreGate.module.css";
+import { BRAND_NAME } from "../lib/brand";
 
 // Full-screen takeover shown when a store's users are gated out of the
 // app (PR C). Two reasons:
@@ -52,7 +53,7 @@ export default function StoreGate({ reason, storeName, onSignOut }: StoreGatePro
           {frozen ? (
             <>
               {storeName ? <strong>{storeName}</strong> : "This store"} has been
-              suspended by the DineroBook team. Please contact support to
+              suspended by the {BRAND_NAME} team. Please contact support to
               restore access. Your data is safe.
             </>
           ) : (

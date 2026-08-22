@@ -56,16 +56,16 @@ export default function Landing() {
         <div className={styles.heroInner}>
           <div className={styles.eyebrow}>
             <span className={styles.eyebrowDot} />
-            BUILT FOR MONEY-SERVICE BUSINESSES
+            BUILT FOR INDEPENDENT STORE OWNERS
           </div>
           <h1 className={styles.heroTitle}>
-            The daily book for<br />
-            <span className={styles.accent}>money-service businesses.</span>
+            The modern back office for<br />
+            <span className={styles.accent}>your store.</span>
           </h1>
           <p className={styles.heroSub}>
-            Check cashing, money orders, wire transfers, bill pay — all your
-            cash activity tracked in one place. No paper logs, no end-of-month
-            mystery variances.
+            Convenience stores, gas stations, groceries — daily close-out,
+            check cashing, money services, and your monthly P&amp;L, all in
+            one place. No paper logs, no end-of-month mystery variances.
           </p>
           <div className={styles.ctas}>
             <Link to="/signup" className={styles.btnPrimary}>Start free trial</Link>
@@ -107,7 +107,7 @@ export default function Landing() {
       </section>
 
       <section className={styles.section} id="features">
-        <div className={styles.sectionEye}>BUILT FOR MSB OWNERS</div>
+        <div className={styles.sectionEye}>BUILT FOR STORE OWNERS</div>
         <h2 className={styles.sectionTitle}>
           Every part of the day, <span className={styles.accent}>finally in one place.</span>
         </h2>

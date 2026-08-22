@@ -41,8 +41,11 @@ def render_email_template(template_name: str, /, **ctx: object) -> str:
     TypeError. (Legacy callers do exactly that — the previous
     signature ``(name: str, **ctx)`` was a latent bug.)
     """
+    from api.Core.Brand import get_brand_name
     tmpl = _env.get_template(template_name)
-    return tmpl.render(**ctx)
+    # brand_name is available in EVERY email template (the _base
+    # chrome uses it); explicit ctx wins if a caller passes one.
+    return tmpl.render(**{"brand_name": get_brand_name(), **ctx})
 
 
 __all__ = ["render_email_template"]

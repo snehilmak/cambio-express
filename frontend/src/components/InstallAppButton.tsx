@@ -1,6 +1,7 @@
 import { Tooltip } from "./ui";
 import { useInstallPrompt } from "../lib/installPrompt";
 import styles from "./InstallAppButton.module.css";
+import { BRAND_NAME } from "../lib/brand";
 
 /** Topbar button that triggers the browser's PWA install
  *  prompt. Self-hides when the install isn't available
@@ -11,12 +12,12 @@ export function InstallAppButton() {
   const { canInstall, promptInstall } = useInstallPrompt();
   if (!canInstall) return null;
   return (
-    <Tooltip label="Install DineroBook as a standalone app on this device">
+    <Tooltip label={`Install ${BRAND_NAME} as a standalone app on this device`}>
     <button
       type="button"
       className={styles.button}
       onClick={() => { void promptInstall(); }}
-      aria-label="Install DineroBook as an app"
+      aria-label={`Install ${BRAND_NAME} as an app`}
     >
       <svg
         width="16" height="16" viewBox="0 0 24 24"

@@ -31,7 +31,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <meta name="color-scheme" content="light" />
   <meta name="supported-color-schemes" content="light" />
-  <title>{% block title %}DineroBook{% endblock %}</title>
+  <title>{% block title %}{{ brand_name or 'DineroBook' }}{% endblock %}</title>
   {# Preheader — the preview text Gmail/Apple Mail shows next to the
      subject. Hidden in the body, visible in the inbox list. #}
   {% if preheader %}
@@ -60,7 +60,7 @@
           <tr>
             <td style="padding:32px 40px 12px;">
               <span style="font-family:'Space Grotesk','Inter','Segoe UI',Arial,sans-serif;font-size:22px;font-weight:700;color:#0a0a0a;letter-spacing:-0.02em;">
-                DineroBook
+                {{ brand_name or 'DineroBook' }}
               </span>
             </td>
           </tr>
@@ -78,11 +78,11 @@
             <td style="padding:24px 40px 28px;background:#f9fafb;border-top:1px solid #e5e7eb;font-family:'Inter','Segoe UI',Arial,sans-serif;font-size:12px;color:#6b7280;line-height:1.55;">
               {% block footer_extra %}{% endblock %}
               <p style="margin:0;">
-                &copy; {{ year or 2026 }} DineroBook &middot;
+                &copy; {{ year or 2026 }} {{ brand_name or 'DineroBook' }} &middot;
                 <a href="https://dinerobook.com" style="color:#6b7280;text-decoration:underline;">dinerobook.com</a>
               </p>
               <p style="margin:6px 0 0;color:#9ca3af;font-size:11px;">
-                You're receiving this because your DineroBook account is
+                You're receiving this because your {{ brand_name or 'DineroBook' }} account is
                 set to receive transactional notifications. Manage
                 preferences on your
                 <a href="{{ base_url or 'https://dinerobook.com' }}/account/notifications" style="color:#9ca3af;">notifications page</a>.
