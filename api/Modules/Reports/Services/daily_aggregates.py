@@ -37,7 +37,7 @@ def _line_items_by_report_date(
         db.query(
             DailyLineItem.report_date,
             func.count(DailyLineItem.id),
-            func.coalesce(func.sum(DailyLineItem.amount), 0.0),
+            func.coalesce(func.sum(DailyLineItem.amount_cents), 0) / 100.0,
         )
         .filter(
             DailyLineItem.store_id.in_(store_ids),

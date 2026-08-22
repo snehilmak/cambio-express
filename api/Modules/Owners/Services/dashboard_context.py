@@ -155,7 +155,7 @@ def dashboard_context(db: Session, user, period: str) -> dict[str, Any]:
     daily_rows_per_store = (
         db.query(
             DailyReport.store_id,
-            func.coalesce(func.sum(DailyReport.over_short), 0.0),
+            func.coalesce(func.sum(DailyReport.over_short_cents), 0) / 100.0,
         )
         .filter(
             DailyReport.store_id.in_(store_ids),
@@ -278,7 +278,7 @@ def locations_payload(
     daily_rows = (
         db.query(
             DailyReport.store_id,
-            func.coalesce(func.sum(DailyReport.over_short), 0.0),
+            func.coalesce(func.sum(DailyReport.over_short_cents), 0) / 100.0,
             func.count(DailyReport.id),
         )
         .filter(

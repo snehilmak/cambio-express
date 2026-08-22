@@ -120,6 +120,7 @@ def big_over_short_anomalies(db: Session, today: date) -> list[dict]:
     threshold. Big variance = either a counting mistake or
     something worse; either way superadmin should know.
     """
+    from api.Core.Money import to_cents
     from api.Modules.DailyBook.Models import DailyReport
 
     cutoff = today - timedelta(days=ANOMALY_OVERSHORT_LOOKBACK_DAYS)
@@ -127,10 +128,10 @@ def big_over_short_anomalies(db: Session, today: date) -> list[dict]:
         db.query(DailyReport)
           .filter(DailyReport.report_date >= cutoff)
           .filter(
-              func.abs(DailyReport.over_short)
-              >= ANOMALY_OVERSHORT_MEDIUM_THRESHOLD
+              func.abs(DailyReport.over_short_cents)
+              >= to_cents(ANOMALY_OVERSHORT_MEDIUM_THRESHOLD)
           )
-          .order_by(func.abs(DailyReport.over_short).desc())
+          .order_by(func.abs(DailyReport.over_short_cents).desc())
           .limit(20)
           .all()
     )

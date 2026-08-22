@@ -668,7 +668,7 @@ def owner_store_detail_route(
     )
 
     period_over_short = float(db.query(
-        func.coalesce(func.sum(DailyReport.over_short), 0.0)
+        func.coalesce(func.sum(DailyReport.over_short_cents), 0) / 100.0
     ).filter(
         DailyReport.store_id == store_id,
         DailyReport.report_date >= start, DailyReport.report_date <= end,

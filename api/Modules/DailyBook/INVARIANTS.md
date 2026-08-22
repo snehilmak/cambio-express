@@ -140,6 +140,30 @@ locked_at, locked_by, updated_at) and the computed properties
 (total_receipts, total_disbursements).
 
 
+## Money storage — INTEGER CENTS (P0-3)
+
+Every money column on `DailyReport` (all 28), plus
+`DailyDrop.amount`, `CheckDeposit.amount`, `DailyLineItem.amount`
+and the four `MoneyTransferSummary` columns, is stored as
+`<name>_cents` (BigInteger). The dollar-named attributes are
+`DollarView` descriptors (`api/Core/Money.py`) — getters return
+dollars, setters accept dollars, so Python call sites and ORM
+kwargs keep the dollars contract and the API keeps speaking
+dollars. Rules:
+
+- SQL expressions (`func.sum`, filters, `order_by`) MUST use the
+  `_cents` columns — a dollar name in a query fails loudly.
+  Convert back with one `/ 100.0` around the whole aggregate.
+- Exact math uses the cents twins: `total_receipts_cents`,
+  `total_disbursements_cents`, `computed_over_short_cents`,
+  `MoneyTransferSummary.individual_total_cents`. The dollar
+  properties below are views over these.
+- The three historical one-shot line-item backfill migrations
+  (from_bank, money_order, payroll_cash) read the old Float
+  columns — correct at their point in the chain; their direct
+  characterization tests are retired (skip-marked) because the
+  live schema no longer has those columns.
+
 ## Math invariants — characterization
 
 `DailyReport.total_receipts` (Python `@property`):

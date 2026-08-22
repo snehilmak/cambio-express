@@ -113,7 +113,7 @@ def owner_kpis(
           .scalar() or 0.0
     )
     os_total = (
-        db.query(func.coalesce(func.sum(DailyReport.over_short), 0.0))
+        db.query(func.coalesce(func.sum(DailyReport.over_short_cents), 0) / 100.0)
           .filter(
               DailyReport.store_id.in_(store_ids),
               DailyReport.report_date >= start,

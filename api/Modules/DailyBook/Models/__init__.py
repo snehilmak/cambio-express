@@ -21,11 +21,12 @@ from datetime import datetime
 from typing import Any
 
 from sqlalchemy import (
-    Column, Date, DateTime, Float, ForeignKey, Integer, String, Text,
-    Time, UniqueConstraint,
+    BigInteger, Column, Date, DateTime, ForeignKey, Integer, String,
+    Text, Time, UniqueConstraint,
 )
 
 from api.Core.Database import Base
+from api.Core.Money import DollarView, to_dollars
 
 
 class DailyReport(Base):
@@ -33,38 +34,38 @@ class DailyReport(Base):
     id                    = Column(Integer, primary_key=True)
     store_id              = Column(Integer, ForeignKey("store.id"), nullable=False)
     report_date           = Column(Date, nullable=False)
-    taxable_sales         = Column(Float, default=0.0)
-    non_taxable           = Column(Float, default=0.0)
-    sales_tax             = Column(Float, default=0.0)
-    bill_payment_charge   = Column(Float, default=0.0)
-    phone_recargas        = Column(Float, default=0.0)
-    boost_mobile          = Column(Float, default=0.0)
-    money_transfer        = Column(Float, default=0.0)
-    money_order           = Column(Float, default=0.0)
-    money_order_fees      = Column(Float, default=0.0)
-    check_cashing_fees    = Column(Float, default=0.0)
-    return_check_hold_fees= Column(Float, default=0.0)
-    return_check_paid_back= Column(Float, default=0.0)
-    forward_balance       = Column(Float, default=0.0)
-    from_bank             = Column(Float, default=0.0)
-    other_cash_in         = Column(Float, default=0.0)
-    rebates_commissions   = Column(Float, default=0.0)
-    cash_purchases        = Column(Float, default=0.0)
-    cash_expense          = Column(Float, default=0.0)
-    check_purchases       = Column(Float, default=0.0)
-    check_expense         = Column(Float, default=0.0)
-    outside_cash_drops    = Column(Float, default=0.0)
-    cash_deposit          = Column(Float, default=0.0)
-    checks_deposit        = Column(Float, default=0.0)
-    safe_balance          = Column(Float, default=0.0)
-    payroll_expense       = Column(Float, default=0.0)
+    taxable_sales_cents   = Column(BigInteger, default=0)
+    non_taxable_cents     = Column(BigInteger, default=0)
+    sales_tax_cents       = Column(BigInteger, default=0)
+    bill_payment_charge_cents = Column(BigInteger, default=0)
+    phone_recargas_cents  = Column(BigInteger, default=0)
+    boost_mobile_cents    = Column(BigInteger, default=0)
+    money_transfer_cents  = Column(BigInteger, default=0)
+    money_order_cents     = Column(BigInteger, default=0)
+    money_order_fees_cents = Column(BigInteger, default=0)
+    check_cashing_fees_cents = Column(BigInteger, default=0)
+    return_check_hold_fees_cents = Column(BigInteger, default=0)
+    return_check_paid_back_cents = Column(BigInteger, default=0)
+    forward_balance_cents = Column(BigInteger, default=0)
+    from_bank_cents       = Column(BigInteger, default=0)
+    other_cash_in_cents   = Column(BigInteger, default=0)
+    rebates_commissions_cents = Column(BigInteger, default=0)
+    cash_purchases_cents  = Column(BigInteger, default=0)
+    cash_expense_cents    = Column(BigInteger, default=0)
+    check_purchases_cents = Column(BigInteger, default=0)
+    check_expense_cents   = Column(BigInteger, default=0)
+    outside_cash_drops_cents = Column(BigInteger, default=0)
+    cash_deposit_cents    = Column(BigInteger, default=0)
+    checks_deposit_cents  = Column(BigInteger, default=0)
+    safe_balance_cents    = Column(BigInteger, default=0)
+    payroll_expense_cents = Column(BigInteger, default=0)
     # Check payroll — line-item-derived (kind='payroll_check').
     # Deliberately NOT in total_disbursements or over_short: a
     # payroll check doesn't move drawer cash. Exists to feed the
     # monthly P&L's check-payroll line only.
-    payroll_check         = Column(Float, default=0.0)
-    other_cash_out        = Column(Float, default=0.0)
-    over_short            = Column(Float, default=0.0)
+    payroll_check_cents   = Column(BigInteger, default=0)
+    other_cash_out_cents  = Column(BigInteger, default=0)
+    over_short_cents      = Column(BigInteger, default=0)
     notes                 = Column(Text, default="")
     updated_at            = Column(DateTime, default=datetime.utcnow)
     # Lock state. When ``locked_at`` is not None every write to this
@@ -76,25 +77,70 @@ class DailyReport(Base):
     locked_by             = Column(Integer, ForeignKey("user.id"), nullable=True)
     __table_args__ = (UniqueConstraint("store_id", "report_date"),)
 
+    # Money is stored as INTEGER CENTS (P0-3; see api/Core/Money.py).
+    # Each dollar-named DollarView reads/writes dollars over its
+    # _cents column, so Python call sites and ORM kwargs keep their
+    # dollars contract; SQL expressions must use _cents explicitly.
+    taxable_sales = DollarView("taxable_sales_cents")
+    non_taxable = DollarView("non_taxable_cents")
+    sales_tax = DollarView("sales_tax_cents")
+    bill_payment_charge = DollarView("bill_payment_charge_cents")
+    phone_recargas = DollarView("phone_recargas_cents")
+    boost_mobile = DollarView("boost_mobile_cents")
+    money_transfer = DollarView("money_transfer_cents")
+    money_order = DollarView("money_order_cents")
+    money_order_fees = DollarView("money_order_fees_cents")
+    check_cashing_fees = DollarView("check_cashing_fees_cents")
+    return_check_hold_fees = DollarView("return_check_hold_fees_cents")
+    return_check_paid_back = DollarView("return_check_paid_back_cents")
+    forward_balance = DollarView("forward_balance_cents")
+    from_bank = DollarView("from_bank_cents")
+    other_cash_in = DollarView("other_cash_in_cents")
+    rebates_commissions = DollarView("rebates_commissions_cents")
+    cash_purchases = DollarView("cash_purchases_cents")
+    cash_expense = DollarView("cash_expense_cents")
+    check_purchases = DollarView("check_purchases_cents")
+    check_expense = DollarView("check_expense_cents")
+    outside_cash_drops = DollarView("outside_cash_drops_cents")
+    cash_deposit = DollarView("cash_deposit_cents")
+    checks_deposit = DollarView("checks_deposit_cents")
+    safe_balance = DollarView("safe_balance_cents")
+    payroll_expense = DollarView("payroll_expense_cents")
+    payroll_check = DollarView("payroll_check_cents")
+    other_cash_out = DollarView("other_cash_out_cents")
+    over_short = DollarView("over_short_cents")
+
+    @property
+    def total_receipts_cents(self) -> int:
+        return int(sum(int(v or 0) for v in [
+            self.taxable_sales_cents, self.non_taxable_cents,
+            self.sales_tax_cents, self.bill_payment_charge_cents,
+            self.phone_recargas_cents, self.boost_mobile_cents,
+            self.money_transfer_cents, self.money_order_cents,
+            self.money_order_fees_cents, self.check_cashing_fees_cents,
+            self.return_check_hold_fees_cents,
+            self.return_check_paid_back_cents, self.forward_balance_cents,
+            self.from_bank_cents, self.other_cash_in_cents,
+            self.rebates_commissions_cents,
+        ]))
+
     @property
     def total_receipts(self) -> float:
-        return float(sum([
-            self.taxable_sales, self.non_taxable, self.sales_tax,
-            self.bill_payment_charge, self.phone_recargas,
-            self.boost_mobile, self.money_transfer, self.money_order,
-            self.money_order_fees,
-            self.check_cashing_fees, self.return_check_hold_fees,
-            self.return_check_paid_back, self.forward_balance,
-            self.from_bank, self.other_cash_in, self.rebates_commissions,
+        return to_dollars(self.total_receipts_cents)
+
+    @property
+    def total_disbursements_cents(self) -> int:
+        return int(sum(int(v or 0) for v in [
+            self.cash_purchases_cents, self.cash_expense_cents,
+            self.check_purchases_cents, self.check_expense_cents,
+            self.outside_cash_drops_cents, self.cash_deposit_cents,
+            self.checks_deposit_cents, self.payroll_expense_cents,
+            self.other_cash_out_cents,
         ]))
 
     @property
     def total_disbursements(self) -> float:
-        return float(sum([
-            self.cash_purchases, self.cash_expense, self.check_purchases,
-            self.check_expense, self.outside_cash_drops, self.cash_deposit,
-            self.checks_deposit, self.payroll_expense, self.other_cash_out,
-        ]))
+        return to_dollars(self.total_disbursements_cents)
 
     @property
     def computed_over_short(self) -> float:
@@ -119,11 +165,16 @@ class DailyReport(Base):
         say more cash should be on hand than there is). See
         ``INVARIANTS.md`` → "Over/Short is derived".
         """
-        return float(
-            self.total_disbursements
-            - (self.check_purchases or 0) - (self.check_expense or 0)
-            + (self.safe_balance or 0)
-            - self.total_receipts
+        return to_dollars(self.computed_over_short_cents)
+
+    @property
+    def computed_over_short_cents(self) -> int:
+        return int(
+            self.total_disbursements_cents
+            - int(self.check_purchases_cents or 0)
+            - int(self.check_expense_cents or 0)
+            + int(self.safe_balance_cents or 0)
+            - self.total_receipts_cents
         )
 
 
@@ -142,7 +193,8 @@ class DailyDrop(Base):
     store_id    = Column(Integer, ForeignKey("store.id"), nullable=False, index=True)
     report_date = Column(Date, nullable=False)
     drop_time   = Column(Time, nullable=False)
-    amount      = Column(Float, nullable=False)
+    amount_cents = Column(BigInteger, nullable=False, default=0)
+    amount      = DollarView("amount_cents")
     note        = Column(String(120), default="")
     created_by  = Column(Integer, ForeignKey("user.id"), nullable=True)
     created_at  = Column(DateTime, default=datetime.utcnow)
@@ -172,7 +224,8 @@ class CheckDeposit(Base):
     store_id     = Column(Integer, ForeignKey("store.id"), nullable=False, index=True)
     report_date  = Column(Date, nullable=False)
     deposit_time = Column(Time, nullable=False)
-    amount       = Column(Float, nullable=False)
+    amount_cents = Column(BigInteger, nullable=False, default=0)
+    amount       = DollarView("amount_cents")
     note         = Column(String(120), default="")
     created_by   = Column(Integer, ForeignKey("user.id"), nullable=True)
     created_at   = Column(DateTime, default=datetime.utcnow)
@@ -211,7 +264,8 @@ class DailyLineItem(Base):
     # kinds can be introduced with zero migration.
     kind        = Column(String(40), nullable=False, index=True)
     at_time     = Column(Time, nullable=True)
-    amount      = Column(Float, nullable=False)
+    amount_cents = Column(BigInteger, nullable=False, default=0)
+    amount      = DollarView("amount_cents")
     note        = Column(String(120), default="")
     # When this line item was auto-created by marking a ReturnCheck as
     # recovered, this FK links back to the source ReturnCheck. Lets us
@@ -238,19 +292,28 @@ class MoneyTransferSummary(Base):
     store_id     = Column(Integer, ForeignKey("store.id"), nullable=False)
     report_date  = Column(Date, nullable=False)
     company      = Column(String(40), nullable=False)
-    amount       = Column(Float, default=0.0)
-    fees         = Column(Float, default=0.0)
-    commission   = Column(Float, default=0.0)
+    amount_cents      = Column(BigInteger, default=0)
+    fees_cents        = Column(BigInteger, default=0)
+    commission_cents  = Column(BigInteger, default=0)
     # Federal tax collected from the customer on this company's
     # transfers for the day. Tracked separately from fees because
     # tax leaves with the ACH withdrawal, not store revenue.
-    federal_tax  = Column(Float, default=0.0)
+    federal_tax_cents = Column(BigInteger, default=0)
+    amount      = DollarView("amount_cents")
+    fees        = DollarView("fees_cents")
+    commission  = DollarView("commission_cents")
+    federal_tax = DollarView("federal_tax_cents")
     __table_args__ = (UniqueConstraint("store_id", "report_date", "company"),)
 
     @property
+    def individual_total_cents(self) -> int:
+        return int((self.amount_cents or 0) + (self.fees_cents or 0)
+                   + (self.commission_cents or 0)
+                   + (self.federal_tax_cents or 0))
+
+    @property
     def individual_total(self) -> float:
-        return float((self.amount or 0) + (self.fees or 0)
-                     + (self.commission or 0) + (self.federal_tax or 0))
+        return to_dollars(self.individual_total_cents)
 
 
 # Re-export sibling models the DailyBook services touch.

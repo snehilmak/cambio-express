@@ -309,7 +309,7 @@ def migrate_legacy_line_item_tables(session: Session) -> int:
         existing = session.query(DailyLineItem).filter_by(
             store_id=dd.store_id, report_date=dd.report_date,
             kind="drop", at_time=dd.drop_time,
-        ).filter(DailyLineItem.amount == dd.amount).first()
+        ).filter(DailyLineItem.amount_cents == dd.amount_cents).first()
         if existing is None:
             session.add(DailyLineItem(
                 store_id=dd.store_id, report_date=dd.report_date,
@@ -327,7 +327,7 @@ def migrate_legacy_line_item_tables(session: Session) -> int:
         existing = session.query(DailyLineItem).filter_by(
             store_id=cd.store_id, report_date=cd.report_date,
             kind="check_deposit", at_time=cd.deposit_time,
-        ).filter(DailyLineItem.amount == cd.amount).first()
+        ).filter(DailyLineItem.amount_cents == cd.amount_cents).first()
         if existing is None:
             session.add(DailyLineItem(
                 store_id=cd.store_id, report_date=cd.report_date,
