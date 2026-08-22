@@ -7,6 +7,7 @@ import { Alert, Button, Field, Input, Pill } from "../components/ui";
 import { api, ApiError } from "../lib/api";
 import { setAccessToken } from "../lib/auth";
 import styles from "./Login.module.css";
+import { BRAND_NAME } from "../lib/brand";
 
 interface LoginResponse {
   access_token: string;
@@ -328,7 +329,7 @@ function BrandPane() {
     <>
       <div className={styles.brandHead}>
         <span className={styles.brandMark} aria-hidden="true">$</span>
-        <span className={styles.wordmark}>DineroBook</span>
+        <span className={styles.wordmark}>{BRAND_NAME}</span>
       </div>
 
       <div className={styles.midBlock}>

@@ -11,6 +11,7 @@ import {
   type TotpEnrollStartResponse,
 } from "../api/account";
 import styles from "./TwoFactor.module.css";
+import { BRAND_NAME } from "../lib/brand";
 
 interface PendingState {
   pending_token: string;
@@ -384,7 +385,7 @@ function BrandPane() {
   return (
     <div className={styles.brandBlock}>
       <img src="/static/brand-mark.svg" className={styles.brandMark} alt="" />
-      <div className={styles.brandName}>DineroBook</div>
+      <div className={styles.brandName}>{BRAND_NAME}</div>
       <div className={styles.brandTagline}>TWO-FACTOR AUTHENTICATION</div>
     </div>
   );

@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import type { ReactNode } from "react";
 
 import styles from "../routes/auth.module.css";
+import { BRAND_NAME } from "../lib/brand";
 
 /** Shared chrome for the centered-card auth pages (ForgotPassword,
  *  ResetPassword, Signup, SignupOwner). Renders the sticky nav +
@@ -20,7 +21,7 @@ export function AuthChrome({
       <nav className={styles.nav}>
         <Link to="/" className={styles.navBrand}>
           <img className={styles.navBrandMark} src="/static/brand-mark.svg" alt="" />
-          <span className={styles.navBrandName}>DineroBook</span>
+          <span className={styles.navBrandName}>{BRAND_NAME}</span>
         </Link>
         {navLink && (
           <Link to={navLink.to} className={styles.navLink}>{navLink.label}</Link>

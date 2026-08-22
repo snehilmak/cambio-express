@@ -23,6 +23,7 @@ import {
   Section, Table, tdStyle, thStyle, tokens, useToast,
 } from "../components/ui";
 import styles from "./AccountNotifications.module.css";
+import { BRAND_NAME } from "../lib/brand";
 
 // /app/account/notifications — per-user boolean toggles.
 //
@@ -279,7 +280,7 @@ export default function AccountNotifications() {
         <Section
           title={
             <>
-              What DineroBook sends you
+              What {BRAND_NAME} sends you
               <InfoTip text="We send as little as possible. This is the complete list — anything user-controllable has a toggle on the left; the rest is essential (like password reset)." />
             </>
           }

@@ -48,5 +48,16 @@ services:
       timeout: 3s
       retries: 10
 
+  # Optional Redis for the job queue + rate-limit buckets (P0-5 /
+  # BACKLOG D5). Off by default — start with:
+  #   docker compose --profile queue up -d
+  # then export JOB_QUEUE_ENABLED=1 REDIS_URL=redis://localhost:6379/0
+  redis:
+    image: redis:7-alpine
+    container_name: dinerobook-dev-redis
+    profiles: ["queue"]
+    ports:
+      - "127.0.0.1:6379:6379"
+
 volumes:
   dinerobook-pgdata:
