@@ -1,0 +1,21 @@
+# Keep the image lean + deterministic: everything the runtime
+# doesn't need stays out of the build context.
+.git
+.github
+.claude
+__pycache__
+**/__pycache__
+*.pyc
+*.db
+*.sqlite3
+.venv
+venv
+node_modules
+frontend/node_modules
+frontend/dist
+tests
+docs
+*.md
+!README.md
+.env
+.env.*

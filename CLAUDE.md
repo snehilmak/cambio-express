@@ -176,6 +176,19 @@ python -m scripts.backfill_federal_tax       # one-shot — recompute Transfer.f
 ```
 Set `DEV_RELOAD=1` for hot-reload on Python edits. The Vite dev
 server (port 5173) handles SPA reload on its own.
+
+**Prefer Postgres for dev** (parity with prod — the SQLite/Postgres
+split is being retired, HANDOFF.md §2):
+```bash
+docker compose up -d          # local Postgres 16 on 127.0.0.1:5432
+export DATABASE_URL=postgresql://dinerobook:dinerobook@localhost:5432/dinerobook
+uvicorn asgi:asgi_app --reload --port 5000
+```
+`docker compose --profile queue up -d` also starts Redis for the
+job queue (then set `JOB_QUEUE_ENABLED=1` + `REDIS_URL`). The
+`Dockerfile` builds the full production image (SPA bundle + ASGI
+app) — Render doesn't use it; it exists so the app stays portable
+to any container host.
 First boot seeds a superadmin (`superadmin / super2025!`) and demo store
 admin (`admin / cambio2025!`). Override via `SUPERADMIN_PASSWORD` /
 `ADMIN_PASSWORD` env vars in prod.
