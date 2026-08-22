@@ -48,6 +48,17 @@ That's it. Every other table the P&L cares about (`daily_report`,
 the resulting sums are written into the matching columns here.
 
 
+## Money storage — INTEGER CENTS (P0-3)
+
+All 38 MonthlyFinancial money columns are stored as
+`<name>_cents` (BigInteger) with dollar-named `DollarView`
+descriptors (`api/Core/Money.py`) — Python call sites and the API
+keep speaking dollars; SQL expressions must use `_cents`. The
+income / expense / net formulas compute in cents
+(`total_revenue_cents`, `total_purchases_cents`,
+`total_expenses_cents`, `net_income_cents`) with dollar views on
+top, so the P&L can never show float-drift phantom cents.
+
 ## The three field categories — DO NOT MIX THEM UP
 
 ### Category 1: Operator-editable
