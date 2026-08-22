@@ -235,7 +235,7 @@ def _maybe_auto_recover(
     that adds/removes a child row.
     """
     total = float(
-        db.query(func.coalesce(func.sum(ReturnCheckPayment.amount), 0.0))
+        db.query(func.coalesce(func.sum(ReturnCheckPayment.amount_cents), 0) / 100.0)
           .filter_by(return_check_id=rc.id)
           .scalar() or 0.0
     )
@@ -279,7 +279,7 @@ def record_payment(
     # same session that haven't yet been reloaded into the
     # ``rc.payments`` relationship.
     existing = float(
-        db.query(func.coalesce(func.sum(ReturnCheckPayment.amount), 0.0))
+        db.query(func.coalesce(func.sum(ReturnCheckPayment.amount_cents), 0) / 100.0)
           .filter_by(return_check_id=rc.id)
           .scalar() or 0.0
     )

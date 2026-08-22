@@ -19,11 +19,12 @@ from __future__ import annotations
 from datetime import date, datetime
 
 from sqlalchemy import (
-    Column, Date, DateTime, Float, ForeignKey, Integer, String, Text,
+    BigInteger, Column, Date, DateTime, ForeignKey, Integer, String, Text,
 )
 from sqlalchemy.orm import relationship
 
 from api.Core.Database import Base
+from api.Core.Money import to_cents, to_dollars
 
 
 # Status values for ``ReturnCheck.status``. Kept as module-level
@@ -92,12 +93,14 @@ class ReturnCheck(Base):
     company_name    = Column(String(120), nullable=False, server_default="")
     check_number    = Column(String(40),  default="")
     payer_bank      = Column(String(120), default="")
-    amount          = Column(Float,       nullable=False)
+    # Integer cents (P0-3) — dollar views via the @property pairs
+    # below (see Transfers/INVARIANTS.md for the pattern).
+    amount_cents    = Column(BigInteger,  nullable=False, default=0)
     # Fee the store charges on a returned check (optional). Stored on
     # the record for reference; does not auto-feed the P&L — the daily
     # book's own return_check_hold_fees line stays the operator-entered
     # source for that.
-    return_check_fee = Column(Float, nullable=False, server_default="0")
+    return_check_fee_cents = Column(BigInteger, nullable=False, server_default="0", default=0)
     status          = Column(String(16),  default="pending", nullable=False)
     status_changed_on = Column(Date,      nullable=True)
     notes           = Column(Text,        default="")
@@ -114,27 +117,55 @@ class ReturnCheck(Base):
     )
 
     @property
+    def amount(self) -> float:
+        return to_dollars(self.amount_cents)  # type: ignore[arg-type]
+
+    @amount.setter
+    def amount(self, dollars: object) -> None:
+        self.amount_cents = to_cents(dollars)  # type: ignore[assignment]
+
+    @property
+    def return_check_fee(self) -> float:
+        return to_dollars(self.return_check_fee_cents)  # type: ignore[arg-type]
+
+    @return_check_fee.setter
+    def return_check_fee(self, dollars: object) -> None:
+        self.return_check_fee_cents = to_cents(dollars)  # type: ignore[assignment]
+
+    @property
+    def recovered_total_cents(self) -> int:
+        """Sum of all installment payments, in exact cents. Source
+        of truth for 'how much have we got back so far'."""
+        return int(sum((p.amount_cents or 0) for p in (self.payments or [])))
+
+    @property
     def recovered_total(self) -> float:
-        """Sum of all installment payments. Source of truth for
-        'how much have we got back so far'."""
-        return float(sum((p.amount or 0.0) for p in (self.payments or [])))
+        return to_dollars(self.recovered_total_cents)
+
+    @property
+    def total_due_cents(self) -> int:
+        """Full balance the customer owes on this check, in exact
+        cents: the face ``amount`` plus any ``return_check_fee`` the
+        store charges for the bounce. This is the target the recovery
+        workflow pays down to — a check isn't fully recovered until
+        the fee is collected too, and collected fee dollars ride the
+        payment→P&L recovery feed like the principal."""
+        return int(self.amount_cents or 0) + int(self.return_check_fee_cents or 0)
 
     @property
     def total_due(self) -> float:
-        """Full balance the customer owes on this check: the face
-        ``amount`` plus any ``return_check_fee`` the store charges for
-        the bounce. This is the target the recovery workflow pays down
-        to — a check isn't fully recovered until the fee is collected
-        too, and collected fee dollars ride the payment→P&L recovery
-        feed like the principal."""
-        return float(self.amount or 0.0) + float(self.return_check_fee or 0.0)
+        return to_dollars(self.total_due_cents)
+
+    @property
+    def remaining_cents(self) -> int:
+        """Outstanding cents against ``total_due_cents``. Never goes
+        negative because the payment endpoint caps each installment
+        at remaining."""
+        return max(0, self.total_due_cents - self.recovered_total_cents)
 
     @property
     def remaining(self) -> float:
-        """Outstanding balance against ``total_due`` (face amount +
-        fee). Never goes negative because the payment endpoint caps
-        each installment at remaining."""
-        return max(0.0, self.total_due - self.recovered_total)
+        return to_dollars(self.remaining_cents)
 
     @property
     def days_outstanding(self) -> int:
@@ -170,7 +201,7 @@ class ReturnCheckPayment(Base):
     return_check_id    = Column(Integer,
                                  ForeignKey("return_check.id"),
                                  nullable=False, index=True)
-    amount             = Column(Float, nullable=False)
+    amount_cents       = Column(BigInteger, nullable=False, default=0)
     paid_on            = Column(Date,  nullable=False)
     # cash / check / zelle / wire / money_order / other — see
     # ``_PAYMENT_METHODS`` for the canonical set. Free-form on save
@@ -178,6 +209,14 @@ class ReturnCheckPayment(Base):
     # ``<select>`` without a migration.
     payment_method     = Column(String(20), default="")
     note               = Column(String(200), default="")
+
+    @property
+    def amount(self) -> float:
+        return to_dollars(self.amount_cents)  # type: ignore[arg-type]
+
+    @amount.setter
+    def amount(self, dollars: object) -> None:
+        self.amount_cents = to_cents(dollars)  # type: ignore[assignment]
     created_by         = Column(Integer, ForeignKey("user.id"),
                                  nullable=True)
     created_at         = Column(DateTime, default=datetime.utcnow)
