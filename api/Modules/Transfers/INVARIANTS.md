@@ -72,6 +72,25 @@ Employee, ACH Volume, etc.) follow the same formula. **Do not
 change it.** Page-total sums in `list_transfers` use the same
 expression — keep them in sync.
 
+**Storage is INTEGER CENTS (P0-3).** The four money fields live in
+`send_amount_cents / fee_cents / federal_tax_cents /
+commission_cents` (BigInteger); the dollar-named attributes are
+`@property` get/set pairs converting through `api/Core/Money.py`
+(HALF-UP at the cent). The rules that follow from this:
+
+- Python code (Services, Controllers, ORM kwargs) keeps reading
+  and writing **dollars** through the properties — don't convert
+  by hand at call sites.
+- SQL expressions (`func.sum`, filters, `order_by`, sort maps)
+  MUST use the `_cents` columns — the dollar names are plain
+  properties and fail loudly in a query. Convert back to dollars
+  with a single `/ 100.0` around the whole aggregate expression
+  (one division stays exact; don't divide per-term).
+- Exact math belongs in cents: use `total_collected_cents` (and
+  `ACHBatch.transfers_total_cents` / `variance_cents`) for any
+  comparison or reconciliation; the dollar twins are display
+  views. The same pattern applies to `ACHBatch.ach_amount_cents`.
+
 ## Federal tax — server-computed, never client-supplied
 
 `federal_tax` is the single most-corrupted field in this system

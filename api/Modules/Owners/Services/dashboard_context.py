@@ -80,7 +80,7 @@ def dashboard_context(db: Session, user, period: str) -> dict[str, Any]:
         db.query(
             Transfer.send_date,
             func.count(Transfer.id),
-            func.coalesce(func.sum(Transfer.send_amount), 0.0),
+            func.coalesce(func.sum(Transfer.send_amount_cents), 0) / 100.0,
         )
         .filter(
             Transfer.store_id.in_(store_ids),
@@ -108,8 +108,8 @@ def dashboard_context(db: Session, user, period: str) -> dict[str, Any]:
         db.query(
             Transfer.company,
             func.count(Transfer.id),
-            func.coalesce(func.sum(Transfer.send_amount), 0.0),
-            func.coalesce(func.sum(Transfer.fee), 0.0),
+            func.coalesce(func.sum(Transfer.send_amount_cents), 0) / 100.0,
+            func.coalesce(func.sum(Transfer.fee_cents), 0) / 100.0,
         )
         .filter(
             Transfer.store_id.in_(store_ids),
@@ -118,7 +118,7 @@ def dashboard_context(db: Session, user, period: str) -> dict[str, Any]:
         )
         .group_by(Transfer.company)
         .order_by(
-            func.coalesce(func.sum(Transfer.send_amount), 0.0).desc()
+            func.coalesce(func.sum(Transfer.send_amount_cents), 0).desc()
         )
         .all()
         if store_ids else []
@@ -134,7 +134,7 @@ def dashboard_context(db: Session, user, period: str) -> dict[str, Any]:
         db.query(
             Transfer.store_id,
             func.count(Transfer.id),
-            func.coalesce(func.sum(Transfer.send_amount), 0.0),
+            func.coalesce(func.sum(Transfer.send_amount_cents), 0) / 100.0,
         )
         .filter(
             Transfer.store_id.in_(store_ids),
@@ -260,7 +260,7 @@ def locations_payload(
         db.query(
             Transfer.store_id,
             func.count(Transfer.id),
-            func.coalesce(func.sum(Transfer.send_amount), 0.0),
+            func.coalesce(func.sum(Transfer.send_amount_cents), 0) / 100.0,
         )
         .filter(
             Transfer.store_id.in_(visible_ids),
@@ -299,7 +299,7 @@ def locations_payload(
         db.query(
             Transfer.store_id, Transfer.company,
             func.count(Transfer.id),
-            func.coalesce(func.sum(Transfer.send_amount), 0.0),
+            func.coalesce(func.sum(Transfer.send_amount_cents), 0) / 100.0,
         )
         .filter(
             Transfer.store_id.in_(visible_ids),

@@ -881,8 +881,8 @@ def store_drill_route(
     stats_30d = (
         db.query(
             func.count(Transfer.id),
-            func.coalesce(func.sum(Transfer.send_amount), 0.0),
-            func.coalesce(func.sum(Transfer.fee), 0.0),
+            func.coalesce(func.sum(Transfer.send_amount_cents), 0) / 100.0,
+            func.coalesce(func.sum(Transfer.fee_cents), 0) / 100.0,
         )
         .filter(
             Transfer.store_id == store_id,

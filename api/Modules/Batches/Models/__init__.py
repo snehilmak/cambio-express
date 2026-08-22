@@ -13,12 +13,13 @@ from datetime import datetime
 from typing import Any
 
 from sqlalchemy import (
-    Boolean, Column, Date, DateTime, Float, ForeignKey, Integer, String,
-    UniqueConstraint, func,
+    BigInteger, Boolean, Column, Date, DateTime, ForeignKey, Integer,
+    String, UniqueConstraint, func,
 )
 from sqlalchemy.orm import Session
 
 from api.Core.Database import Base
+from api.Core.Money import to_cents, to_dollars
 
 
 class ACHBatch(Base):
@@ -28,7 +29,8 @@ class ACHBatch(Base):
     ach_date       = Column(Date, nullable=False)
     company        = Column(String(30), nullable=False)
     batch_ref      = Column(String(60), nullable=False)
-    ach_amount     = Column(Float, nullable=False)
+    # Integer cents (P0-3) — dollar view via the @property below.
+    ach_amount_cents = Column(BigInteger, nullable=False, default=0)
     transfer_dates = Column(String(60), default="")
     status         = Column(String(30), default="Pending")
     reconciled     = Column(Boolean, default=False)
@@ -37,26 +39,42 @@ class ACHBatch(Base):
     __table_args__ = (UniqueConstraint("store_id", "batch_ref"),)
 
     @property
-    def transfers_total(self) -> float:
-        """Sum of what the ACH actually debits: send amount + federal
-        tax. The store fee stays with the store, so it's excluded from
-        this total."""
+    def ach_amount(self) -> float:
+        return to_dollars(self.ach_amount_cents)  # type: ignore[arg-type]
+
+    @ach_amount.setter
+    def ach_amount(self, dollars: object) -> None:
+        self.ach_amount_cents = to_cents(dollars)  # type: ignore[assignment]
+
+    @property
+    def transfers_total_cents(self) -> int:
+        """Sum of what the ACH actually debits, in exact cents:
+        send amount + federal tax. The store fee stays with the
+        store, so it's excluded from this total."""
         # Lazy import to avoid Transfer ↔ ACHBatch module-import cycle.
         from api.Modules.Transfers.Models import Transfer
         s = Session.object_session(self)
         if s is None:
-            return 0.0
+            return 0
         v = (s.query(
-                func.coalesce(func.sum(Transfer.send_amount), 0.0)
-              + func.coalesce(func.sum(Transfer.federal_tax), 0.0))
+                func.coalesce(func.sum(Transfer.send_amount_cents), 0)
+              + func.coalesce(func.sum(Transfer.federal_tax_cents), 0))
              .filter_by(store_id=self.store_id, batch_id=self.batch_ref)
              .filter(Transfer.status != "Cancelled")
              .scalar())
-        return float(v or 0.0)
+        return int(v or 0)
+
+    @property
+    def transfers_total(self) -> float:
+        return to_dollars(self.transfers_total_cents)
+
+    @property
+    def variance_cents(self) -> int:
+        return int(self.ach_amount_cents or 0) - self.transfers_total_cents
 
     @property
     def variance(self) -> float:
-        return round(float(self.ach_amount) - self.transfers_total, 2)
+        return to_dollars(self.variance_cents)
 
     @property
     def transfer_count(self) -> int:

@@ -103,7 +103,7 @@ def owner_kpis(
           .count()
     )
     vol = (
-        db.query(func.coalesce(func.sum(Transfer.send_amount), 0.0))
+        db.query(func.coalesce(func.sum(Transfer.send_amount_cents), 0) / 100.0)
           .filter(
               Transfer.store_id.in_(store_ids),
               Transfer.send_date >= start,

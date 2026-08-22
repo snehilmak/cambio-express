@@ -50,7 +50,7 @@ def period_pl(
           .all()
     )
     fee_total = (
-        db.query(func.coalesce(func.sum(Transfer.fee), 0.0))
+        db.query(func.coalesce(func.sum(Transfer.fee_cents), 0) / 100.0)
           .filter(*period_filters(store_ids, d_from, d_to))
           .scalar()
     ) or 0.0
