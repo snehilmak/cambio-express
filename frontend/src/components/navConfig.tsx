@@ -50,22 +50,6 @@ export const NAV: NavGroup[] = [
         desc: "Rollup across all your stores.",
       },
       {
-        to: "/transfers", label: "Transfers",
-        flag: "module_money_services",
-        roles: ["admin", "employee"],
-        perm: "transfers.read",
-        icon: iconTransfers(),
-        desc: "Log and review money transfers.",
-      },
-      {
-        to: "/customers", label: "Customers",
-        flag: "module_money_services",
-        roles: ["admin", "employee"],
-        perm: "customers.read",
-        icon: iconCustomers(),
-        desc: "Sender and recipient records.",
-      },
-      {
         to: "/daily", label: "Daily book",
         roles: ["admin", "employee"],
         perm: "daily_book.read",
@@ -86,6 +70,7 @@ export const NAV: NavGroup[] = [
       },
       {
         to: "/return-checks", label: "Returned checks",
+        flag: "module_check_cashing",
         roles: ["admin", "employee"],
         perm: "return_checks.read",
         icon: iconReturnChecks(),
@@ -101,6 +86,41 @@ export const NAV: NavGroup[] = [
         roles: ["admin"],
         icon: iconDevice(),
         desc: "In-store rate board and pairing.",
+      },
+    ],
+  },
+  {
+    // Money services — the MSB module as its own nav section
+    // (P1-11): transfers + sender directory + ACH batches live
+    // together, and the whole group vanishes when
+    // module_money_services is off (filterNavForRole drops groups
+    // whose every item filters out), keeping Daily retail-focused.
+    title: "Money services",
+    icon: iconTransfers(),
+    items: [
+      {
+        to: "/transfers", label: "Transfers",
+        flag: "module_money_services",
+        roles: ["admin", "employee"],
+        perm: "transfers.read",
+        icon: iconTransfers(),
+        desc: "Log and review money transfers.",
+      },
+      {
+        to: "/customers", label: "Customers",
+        flag: "module_money_services",
+        roles: ["admin", "employee"],
+        perm: "customers.read",
+        icon: iconCustomers(),
+        desc: "Sender and recipient records.",
+      },
+      {
+        to: "/batches", label: "ACH batches",
+        flag: "module_money_services",
+        roles: ["admin"],
+        perm: "batches.read",
+        icon: iconBatches(),
+        desc: "Group transfers into ACH runs.",
       },
     ],
   },
@@ -182,7 +202,6 @@ export const NAV: NavGroup[] = [
     roles: ["admin"],
     icon: iconBank(),
     items: [
-      { to: "/batches",            label: "ACH batches", flag: "module_money_services", perm: "batches.read",    icon: iconBatches(), desc: "Group transfers into ACH runs." },
       { to: "/bank",               label: "Bank sync",   perm: "bank_sync.read", icon: iconBank(),    desc: "Connect and reconcile accounts." },
       { to: "/bank-transactions",  label: "Bank transactions",   perm: "bank_sync.read", icon: iconBank(),    desc: "Categorize imported transactions." },
     ],

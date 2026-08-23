@@ -121,6 +121,18 @@ doubt, write it here rather than leaving it in chat.
 >   the SQLite/Postgres split), money → integer cents, composite
 >   (store_id, date) indexes, tz-aware timestamps via the
 >   `utc_now()` flip point.
+> - **URL structure stays `/app/*` until the rebrand** (decided
+>   with owner, 2026-08-23). A path migration to `dinerobook.com/*`
+>   was considered and rejected: the root serves the marketing
+>   landing + public pages, module flags already deliver the
+>   "bring surfaces over per store" control a URL split was meant
+>   to give, and the migration cost (redirects, PWA scope,
+>   bookmarks, emailed links, TV pairing links) buys only
+>   cosmetics. THE standing decision: at rebrand time, split to
+>   marketing on `newbrand.com` + product at `app.newbrand.com`
+>   with root paths — done once while every link/template is being
+>   touched anyway. Keep the WebAuthn rpId on the parent domain so
+>   passkeys survive the move.
 > - **The operator owns every catalog** (owner-stated product
 >   principle, 2026-08-23): departments, vendors, sub-departments,
 >   registers, MT companies, lottery games — anything that names
@@ -194,11 +206,27 @@ doubt, write it here rather than leaving it in chat.
    gallons + dollars per grade) is parsed and surfaced — the seed
    of the future fuel module.
 
+**Post-Phase-1 modularization (owner-directed, 2026-08-23):**
+10. ✅ SHIPPED (PR #869) — module-driven dashboard: admin +
+    employee dashboards render sections per enabled module
+    (day-close store sales / drawer O-S / department mix, lottery
+    counts) and skip money-services queries entirely when that
+    module is off; msb_hybrid stores see the pre-pivot layout
+    unchanged.
+11. module_check_cashing flag (bundle ON for every business type,
+    per-store override to hide) gating the Returned-checks pages
+    and the check-cashing / hold-fee entries in the daily-book
+    Fees box, + a "Money services" nav group (Transfers /
+    Customers / ACH batches) that vanishes wholesale when
+    module_money_services is off.
+
 **Phase 2+ (not yet scoped in detail):** price book + vendors +
 purchase invoices with AI-assisted scanning; inventory basics;
 fuel module (needs a gas-station design partner first);
 Modisoft/Cronysoft migration importers; public API/webhooks GA;
-loyalty / scan-data rebates; POS; payments.
+loyalty / scan-data rebates; POS; payments. P1-8 accounting
+export (journal-entry CSV → QuickBooks OAuth) is next in the
+queue after item 11.
 
 _Superadmin "PR C" (store freeze + webhook replay) from the old
 roadmap shipped long ago; see git history._

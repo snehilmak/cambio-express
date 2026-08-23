@@ -37,6 +37,7 @@ from api.Modules.Billing.Services.store_state import store_addon_keys
 # become billing-tiered, add backend enforcement at that point.
 MODULE_FLAG_KEYS = (
     "module_money_services", "module_lottery", "module_day_close",
+    "module_check_cashing",
 )
 
 _BUSINESS_TYPE_MODULE_DEFAULTS: dict[str, dict[str, bool]] = {
@@ -50,25 +51,33 @@ _BUSINESS_TYPE_MODULE_DEFAULTS: dict[str, dict[str, bool]] = {
     # module_day_close: register/shift Z-report totals + department
     # sales (P1-7). ON for the retail types; OFF for msb_hybrid,
     # whose day-close is the daily book itself.
+    # module_check_cashing: returned-checks pages + the check-
+    # cashing / hold-fee entries in the daily book (P1-11). ON for
+    # EVERY type — plenty of c-stores cash checks — with the
+    # per-store override as the off switch for stores that don't.
     "cstore": {
         "module_money_services": False,
         "module_lottery": True,
         "module_day_close": True,
+        "module_check_cashing": True,
     },
     "gas_station": {
         "module_money_services": False,
         "module_lottery": True,
         "module_day_close": True,
+        "module_check_cashing": True,
     },
     "grocery": {
         "module_money_services": False,
         "module_lottery": True,
         "module_day_close": True,
+        "module_check_cashing": True,
     },
     "msb_hybrid": {
         "module_money_services": True,
         "module_lottery": False,
         "module_day_close": False,
+        "module_check_cashing": True,
     },
 }
 
