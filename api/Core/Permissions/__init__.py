@@ -34,6 +34,7 @@ RBAC_RESOURCES = [
     "transfers", "customers", "daily_book", "monthly",
     "batches", "bank_sync", "reports", "settings",
     "users", "time_clock", "return_checks", "lottery",
+    "day_close",
 ]
 RBAC_ACTIONS = ["create", "read", "update", "delete"]
 
@@ -47,6 +48,8 @@ RBAC_DEFAULTS: dict[str, list[str]] = {
         "return_checks.read",
         # Cashiers enter the lottery day-close counts.
         "lottery.create", "lottery.read",
+        # Cashiers submit their own register/shift close.
+        "day_close.create", "day_close.read",
     ],
     "owner": (
         [f"{r}.read" for r in RBAC_RESOURCES]

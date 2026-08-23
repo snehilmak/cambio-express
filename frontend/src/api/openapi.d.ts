@@ -2464,6 +2464,92 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/dayclose/closes/{close_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Close Route */
+        delete: operations["delete_close_route_dayclose_closes__close_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/dayclose/day/{day}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Day Summary Route */
+        get: operations["day_summary_route_dayclose_day__day__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/dayclose/day/{day}/closes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Upsert Close Route */
+        post: operations["upsert_close_route_dayclose_day__day__closes_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/dayclose/departments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Departments Route */
+        get: operations["list_departments_route_dayclose_departments_get"];
+        put?: never;
+        /** Create Department Route */
+        post: operations["create_department_route_dayclose_departments_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/dayclose/departments/{department_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Update Department Route */
+        put: operations["update_department_route_dayclose_departments__department_id__put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/feature-flags": {
         parameters: {
             query?: never;
@@ -6831,6 +6917,31 @@ export interface components {
             /** Taxable Sales */
             taxable_sales?: number | null;
         };
+        /** DayCloseSummaryResponse */
+        DayCloseSummaryResponse: {
+            /** Card Total */
+            card_total: number;
+            /** Cash Total */
+            cash_total: number;
+            /** Closes */
+            closes: components["schemas"]["RegisterCloseRow"][];
+            /** Date */
+            date: string;
+            /** Department Totals */
+            department_totals: components["schemas"]["DepartmentTotalRow"][];
+            /** Gross Sales */
+            gross_sales: number;
+            /** Other Total */
+            other_total: number;
+            /** Over Short */
+            over_short: number | null;
+            /** Sales Tax */
+            sales_tax: number;
+            /** Tender Variance */
+            tender_variance: number;
+            /** Uncounted Drawers */
+            uncounted_drawers: number;
+        };
         /** DayCountRow */
         DayCountRow: {
             /** Bin Number */
@@ -6875,6 +6986,70 @@ export interface components {
             total_value: number;
             /** Uncounted Active Packs */
             uncounted_active_packs: number;
+        };
+        /** DepartmentListResponse */
+        DepartmentListResponse: {
+            /** Departments */
+            departments: components["schemas"]["DepartmentRow"][];
+        };
+        /** DepartmentResponse */
+        DepartmentResponse: {
+            department: components["schemas"]["DepartmentRow"];
+        };
+        /** DepartmentRow */
+        DepartmentRow: {
+            /** Id */
+            id: number;
+            /** Is Active */
+            is_active: boolean;
+            /** Name */
+            name: string;
+            /** Sort Order */
+            sort_order: number;
+        };
+        /** DepartmentSaleLine */
+        DepartmentSaleLine: {
+            /** Amount */
+            amount: number;
+            /** Department Id */
+            department_id: number;
+        };
+        /** DepartmentSaleRow */
+        DepartmentSaleRow: {
+            /** Amount */
+            amount: number;
+            /** Department Id */
+            department_id: number;
+            /** Department Name */
+            department_name: string;
+        };
+        /** DepartmentTotalRow */
+        DepartmentTotalRow: {
+            /** Amount */
+            amount: number;
+            /** Department Id */
+            department_id: number;
+            /** Department Name */
+            department_name: string;
+        };
+        /** DepartmentUpdateRequest */
+        DepartmentUpdateRequest: {
+            /** Is Active */
+            is_active?: boolean | null;
+            /** Name */
+            name?: string | null;
+            /** Sort Order */
+            sort_order?: number | null;
+        };
+        /** DepartmentWriteRequest */
+        DepartmentWriteRequest: {
+            /** Name */
+            name: string;
+            /**
+             * Sort Order
+             * @default 0
+             */
+            sort_order: number;
         };
         /** DiscountCodeListResponse */
         DiscountCodeListResponse: {
@@ -8782,6 +8957,76 @@ export interface components {
             self_credit_applied: boolean;
             /** Stripe Self Txn Id */
             stripe_self_txn_id: string;
+        };
+        /** RegisterCloseRow */
+        RegisterCloseRow: {
+            /** Card Total */
+            card_total: number;
+            /** Cash Counted */
+            cash_counted: number | null;
+            /** Cash Total */
+            cash_total: number;
+            /** Department Sales */
+            department_sales: components["schemas"]["DepartmentSaleRow"][];
+            /** Gross Sales */
+            gross_sales: number;
+            /** Id */
+            id: number;
+            /** Notes */
+            notes: string;
+            /** Other Total */
+            other_total: number;
+            /** Over Short */
+            over_short: number | null;
+            /** Register Label */
+            register_label: string;
+            /** Sales Tax */
+            sales_tax: number;
+            /** Shift Label */
+            shift_label: string;
+            /** Tender Variance */
+            tender_variance: number;
+        };
+        /** RegisterCloseWriteRequest */
+        RegisterCloseWriteRequest: {
+            /**
+             * Card Total
+             * @default 0
+             */
+            card_total: number;
+            /** Cash Counted */
+            cash_counted?: number | null;
+            /**
+             * Cash Total
+             * @default 0
+             */
+            cash_total: number;
+            /** Department Sales */
+            department_sales?: components["schemas"]["DepartmentSaleLine"][];
+            /** Gross Sales */
+            gross_sales: number;
+            /**
+             * Notes
+             * @default
+             */
+            notes: string;
+            /**
+             * Other Total
+             * @default 0
+             */
+            other_total: number;
+            /** Register Label */
+            register_label: string;
+            /**
+             * Sales Tax
+             * @default 0
+             */
+            sales_tax: number;
+            /**
+             * Shift Label
+             * @default
+             */
+            shift_label: string;
         };
         /**
          * ReportCategory
@@ -14908,6 +15153,226 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_close_route_dayclose_closes__close_id__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                close_id: number;
+            };
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DayCloseSummaryResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    day_summary_route_dayclose_day__day__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                day: string;
+            };
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DayCloseSummaryResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upsert_close_route_dayclose_day__day__closes_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                day: string;
+            };
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegisterCloseWriteRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DayCloseSummaryResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_departments_route_dayclose_departments_get: {
+        parameters: {
+            query?: {
+                include_inactive?: boolean;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DepartmentListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_department_route_dayclose_departments_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DepartmentWriteRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DepartmentResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_department_route_dayclose_departments__department_id__put: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                department_id: number;
+            };
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DepartmentUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DepartmentResponse"];
                 };
             };
             /** @description Validation Error */

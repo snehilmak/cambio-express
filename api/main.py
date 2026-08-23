@@ -62,6 +62,9 @@ def _register_routers(app: FastAPI) -> None:
     from api.Modules.Lottery.Controllers import router as lottery_router
     app.include_router(lottery_router)
 
+    from api.Modules.DayClose.Controllers import router as dayclose_router
+    app.include_router(dayclose_router)
+
     from api.Modules.Batches.Controllers import router as batches_router
     app.include_router(batches_router, prefix="/batches", tags=["batches"])
 
