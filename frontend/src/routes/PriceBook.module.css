@@ -1,0 +1,55 @@
+/* Price book page — the few page-specific treatments the kit
+   primitives don't cover (CLAUDE.md inline-styles-vs-modules). */
+
+.modalForm {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.modalActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+/* Two-up field grid in the item modal so the form stays compact. */
+.fieldGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+@media (max-width: 30rem) {
+  .fieldGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.toolbarActions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  align-items: end;
+}
+
+/* Search + filter row above the items table. */
+.filtersRow {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  align-items: end;
+  margin-bottom: 0.75rem;
+}
+
+.searchField {
+  flex: 1;
+  min-width: 14rem;
+}
+
+/* Scan codes read as machine identifiers — JetBrains Mono per the
+   design system's money/dates/IDs rule. */
+.posCode {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 0.85rem;
+}
