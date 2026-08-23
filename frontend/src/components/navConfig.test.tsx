@@ -98,6 +98,26 @@ describe("module-flag gating (business-type bundles)", () => {
     expect(labels).toContain("ACH batches");
   });
 
+  it("gates Price book on module_price_book + catalog.read", () => {
+    const withFlag = filterNavForRole(
+      "admin", [...perms, "catalog.read"], ["module_price_book"],
+    );
+    expect(withFlag.flatMap((g) => g.items.map((i) => i.label)))
+      .toContain("Price book");
+    // Flag off (msb_hybrid bundle) → hidden.
+    const withoutFlag = filterNavForRole(
+      "admin", [...perms, "catalog.read"], [],
+    );
+    expect(withoutFlag.flatMap((g) => g.items.map((i) => i.label)))
+      .not.toContain("Price book");
+    // Flag on but no catalog permission → hidden.
+    const withoutPerm = filterNavForRole(
+      "admin", perms, ["module_price_book"],
+    );
+    expect(withoutPerm.flatMap((g) => g.items.map((i) => i.label)))
+      .not.toContain("Price book");
+  });
+
   it("shows everything while features are still loading (undefined)", () => {
     const groups = filterNavForRole("admin", perms, undefined);
     const labels = groups.flatMap((g) => g.items.map((i) => i.label));

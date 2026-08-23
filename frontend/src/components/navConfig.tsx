@@ -69,6 +69,12 @@ export const NAV: NavGroup[] = [
         desc: "Games, packs, and day-close counts.",
       },
       {
+        to: "/price-book", label: "Price book",
+        flag: "module_price_book", perm: "catalog.read",
+        icon: iconPriceBook(),
+        desc: "Items, prices, and vendors.",
+      },
+      {
         to: "/return-checks", label: "Returned checks",
         flag: "module_check_cashing",
         roles: ["admin", "employee"],
@@ -597,6 +603,17 @@ function iconRegister() {
       <path d="M9 4h6" />
       <path d="M7 17h4" />
       <path d="M16 17h1" />
+    </svg>
+  );
+}
+function iconPriceBook() {
+  // A price tag with a barcode — items + prices.
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false"
+      stroke="currentColor" strokeWidth="2" strokeLinecap="round"
+      strokeLinejoin="round">
+      <path d="M20.6 13.4L11 3H4v7l9.6 10.4a2 2 0 0 0 2.8 0l4.2-4.2a2 2 0 0 0 0-2.8z" />
+      <path d="M7.5 6.5h.01" />
     </svg>
   );
 }
