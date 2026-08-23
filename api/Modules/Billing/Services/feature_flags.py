@@ -37,7 +37,7 @@ from api.Modules.Billing.Services.store_state import store_addon_keys
 # become billing-tiered, add backend enforcement at that point.
 MODULE_FLAG_KEYS = (
     "module_money_services", "module_lottery", "module_day_close",
-    "module_check_cashing",
+    "module_check_cashing", "module_price_book",
 )
 
 _BUSINESS_TYPE_MODULE_DEFAULTS: dict[str, dict[str, bool]] = {
@@ -55,29 +55,36 @@ _BUSINESS_TYPE_MODULE_DEFAULTS: dict[str, dict[str, bool]] = {
     # cashing / hold-fee entries in the daily book (P1-11). ON for
     # EVERY type — plenty of c-stores cash checks — with the
     # per-store override as the off switch for stores that don't.
+    # module_price_book: item catalog + vendors (P2-1). ON for the
+    # retail types (shelves full of scannable items); OFF for the
+    # pure money-services profile, which has no shelf inventory.
     "cstore": {
         "module_money_services": False,
         "module_lottery": True,
         "module_day_close": True,
         "module_check_cashing": True,
+        "module_price_book": True,
     },
     "gas_station": {
         "module_money_services": False,
         "module_lottery": True,
         "module_day_close": True,
         "module_check_cashing": True,
+        "module_price_book": True,
     },
     "grocery": {
         "module_money_services": False,
         "module_lottery": True,
         "module_day_close": True,
         "module_check_cashing": True,
+        "module_price_book": True,
     },
     "msb_hybrid": {
         "module_money_services": True,
         "module_lottery": False,
         "module_day_close": False,
         "module_check_cashing": True,
+        "module_price_book": False,
     },
 }
 

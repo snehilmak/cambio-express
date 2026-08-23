@@ -53,7 +53,9 @@ STORE_OWNED_MODELS: list[str] = [
     "LotteryDayCount", "LotteryPack", "LotteryGame",
     # Day close: sale lines FK closes + departments — lines first;
     # the POS merchandise mapping FKs departments too.
-    "DepartmentSale", "RegisterClose", "PosMerchandiseMap", "Department",
+    # Catalog: items FK departments + vendors — items before both.
+    "DepartmentSale", "RegisterClose", "PosMerchandiseMap",
+    "PriceBookItem", "Vendor", "Department",
     # POS import: agent keys + staged journal files (store-scoped).
     "PosAgentCredential", "PosJournalFile",
     # TimeClockEntry + TimeClockShift + StoreEmployeePasskey must
@@ -119,6 +121,7 @@ def _store_owned_models() -> list[tuple[type, str]]:
     from api.Modules.PosImport.Models import (
         PosAgentCredential, PosJournalFile, PosMerchandiseMap,
     )
+    from api.Modules.Catalog.Models import PriceBookItem, Vendor
     from api.Modules.Transfers.Models import Transfer
     from api.Modules.Support.Models import SupportMessage, SupportTicket
     from api.Modules.TVDisplay.Models import TVDisplay
@@ -146,6 +149,9 @@ def _store_owned_models() -> list[tuple[type, str]]:
         (DepartmentSale, "store_id"),
         (RegisterClose, "store_id"),
         (PosMerchandiseMap, "store_id"),
+        # Catalog: items FK departments + vendors — items first.
+        (PriceBookItem, "store_id"),
+        (Vendor, "store_id"),
         (Department, "store_id"),
         (PosAgentCredential, "store_id"),
         (PosJournalFile, "store_id"),

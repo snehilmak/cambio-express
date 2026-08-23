@@ -34,7 +34,7 @@ RBAC_RESOURCES = [
     "transfers", "customers", "daily_book", "monthly",
     "batches", "bank_sync", "reports", "settings",
     "users", "time_clock", "return_checks", "lottery",
-    "day_close",
+    "day_close", "catalog",
 ]
 RBAC_ACTIONS = ["create", "read", "update", "delete"]
 
@@ -50,6 +50,9 @@ RBAC_DEFAULTS: dict[str, list[str]] = {
         "lottery.create", "lottery.read",
         # Cashiers submit their own register/shift close.
         "day_close.create", "day_close.read",
+        # Cashiers look items up in the price book; managing the
+        # catalog (items + vendors) stays admin-side.
+        "catalog.read",
     ],
     "owner": (
         [f"{r}.read" for r in RBAC_RESOURCES]
