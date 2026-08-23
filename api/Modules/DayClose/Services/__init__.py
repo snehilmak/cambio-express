@@ -106,6 +106,7 @@ def upsert_register_close(
     cash_counted: float | None, notes: str = "",
     department_sales: dict[int, float] | None = None,
     created_by: int | None,
+    source: str = "manual",
 ) -> RegisterClose:
     """Create or replace the close for one (register, shift) on one
     day. Department sales are replace-all: the submitted lines
@@ -151,7 +152,15 @@ def upsert_register_close(
     row.other_total = other_total
     row.cash_counted = cash_counted
     row.notes = notes.strip()
+    row.source = source
     row.created_by = created_by
+    # Replace-all in two flushes: delete the old lines BEFORE
+    # inserting replacements, or a re-submit that keeps a
+    # department trips the (close, department) unique constraint —
+    # SQLAlchemy orders the INSERT ahead of the orphan DELETE
+    # within a single flush.
+    row.department_sales = []
+    db.flush()
     row.department_sales = [
         DepartmentSale(
             store_id=store_id, department_id=dept_id, amount=amount,

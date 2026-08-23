@@ -110,6 +110,7 @@ def _close_row(c: RegisterClose) -> RegisterCloseRow:
         ),
         tender_variance=to_dollars(c.tender_variance_cents),
         notes=c.notes or "",
+        source=c.source or "manual",
         department_sales=[
             DepartmentSaleRow(
                 department_id=line.department_id,

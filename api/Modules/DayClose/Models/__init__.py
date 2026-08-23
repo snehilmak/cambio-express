@@ -82,6 +82,10 @@ class RegisterClose(Base):
     cash_counted_cents = Column(BigInteger, nullable=True)
 
     notes      = Column(String(500), nullable=False, default="")
+    # Provenance: "manual" (keyed by an operator) or an import
+    # source like "gilbarco" (PosImport NAXML ingest). Display
+    # only — imported closes stay editable like any other.
+    source     = Column(String(20), nullable=False, default="manual")
     created_by = Column(Integer, ForeignKey("user.id"), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     __table_args__ = (

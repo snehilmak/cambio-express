@@ -3229,6 +3229,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/posimport/mapping": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Mapping Route */
+        get: operations["list_mapping_route_posimport_mapping_get"];
+        /** Set Mapping Route */
+        put: operations["set_mapping_route_posimport_mapping_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/posimport/naxml/commit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Commit Naxml Route */
+        post: operations["commit_naxml_route_posimport_naxml_commit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/posimport/naxml/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Preview Naxml Route */
+        post: operations["preview_naxml_route_posimport_naxml_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/report-import/intermex/commit": {
         parameters: {
             query?: never;
@@ -7186,6 +7238,17 @@ export interface components {
             /** Email */
             email: string;
         };
+        /** FuelGradeRow */
+        FuelGradeRow: {
+            /** Amount */
+            amount: number;
+            /** Description */
+            description: string;
+            /** Gallons */
+            gallons: number;
+            /** Grade Id */
+            grade_id: string;
+        };
         /** GameListResponse */
         GameListResponse: {
             /** Games */
@@ -7236,6 +7299,46 @@ export interface components {
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /** ImportDepartmentRow */
+        ImportDepartmentRow: {
+            /** Amount */
+            amount: number;
+            /** Department Id */
+            department_id: number | null;
+            /** Department Name */
+            department_name: string;
+            /** Merchandise Code */
+            merchandise_code: string;
+        };
+        /** ImportRegisterRow */
+        ImportRegisterRow: {
+            /** Business Date */
+            business_date: string;
+            /** Card Total */
+            card_total: number;
+            /** Cash Total */
+            cash_total: number;
+            /** Departments */
+            departments: components["schemas"]["ImportDepartmentRow"][];
+            /** Fuel */
+            fuel: components["schemas"]["FuelGradeRow"][];
+            /** Net Sales */
+            net_sales: number;
+            /** Opening Cash */
+            opening_cash: number | null;
+            /** Other Total */
+            other_total: number;
+            /** Refund Count */
+            refund_count: number;
+            /** Refunds */
+            refunds: number;
+            /** Register Label */
+            register_label: string;
+            /** Sale Count */
+            sale_count: number;
+            /** Sales Tax */
+            sales_tax: number;
         };
         /**
          * IntermexCommitRequest
@@ -7637,6 +7740,32 @@ export interface components {
             /** Name */
             name: string;
         };
+        /** MappingListResponse */
+        MappingListResponse: {
+            /** Mappings */
+            mappings: components["schemas"]["MappingRow"][];
+        };
+        /** MappingRow */
+        MappingRow: {
+            /** Department Id */
+            department_id: number;
+            /** Department Name */
+            department_name: string;
+            /** Merchandise Code */
+            merchandise_code: string;
+        };
+        /** MappingWriteRequest */
+        MappingWriteRequest: {
+            /** Mappings */
+            mappings: components["schemas"]["MappingWriteRow"][];
+        };
+        /** MappingWriteRow */
+        MappingWriteRow: {
+            /** Department Id */
+            department_id: number;
+            /** Merchandise Code */
+            merchandise_code: string;
+        };
         /** MessageListResponse */
         MessageListResponse: {
             /** Messages */
@@ -8028,6 +8157,42 @@ export interface components {
             target_type: string;
             /** Ts */
             ts: string;
+        };
+        /** NaxmlCommitRequest */
+        NaxmlCommitRequest: {
+            /** Content Base64 */
+            content_base64: string;
+            /** Day */
+            day: string;
+        };
+        /** NaxmlCommitResponse */
+        NaxmlCommitResponse: {
+            /** Closes Written */
+            closes_written: number;
+            /** Day */
+            day: string;
+            /** Registers */
+            registers: string[];
+        };
+        /** NaxmlPreviewResponse */
+        NaxmlPreviewResponse: {
+            /** Business Dates */
+            business_dates: string[];
+            /** Event Count */
+            event_count: number;
+            /** File Count */
+            file_count: number;
+            /** Parse Errors */
+            parse_errors: string[];
+            /** Registers */
+            registers: components["schemas"]["ImportRegisterRow"][];
+            /** Unmapped Codes */
+            unmapped_codes: string[];
+        };
+        /** NaxmlUploadRequest */
+        NaxmlUploadRequest: {
+            /** Content Base64 */
+            content_base64: string;
         };
         /**
          * NotificationsResponse
@@ -8984,6 +9149,8 @@ export interface components {
             sales_tax: number;
             /** Shift Label */
             shift_label: string;
+            /** Source */
+            source: string;
             /** Tender Variance */
             tender_variance: number;
         };
@@ -16785,6 +16952,150 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_mapping_route_posimport_mapping_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MappingListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_mapping_route_posimport_mapping_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MappingWriteRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MappingListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    commit_naxml_route_posimport_naxml_commit_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NaxmlCommitRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NaxmlCommitResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_naxml_route_posimport_naxml_preview_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NaxmlUploadRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NaxmlPreviewResponse"];
                 };
             };
             /** @description Validation Error */

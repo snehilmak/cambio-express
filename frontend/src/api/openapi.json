@@ -3421,6 +3421,35 @@
         "title": "ForgotPasswordRequest",
         "type": "object"
       },
+      "FuelGradeRow": {
+        "additionalProperties": false,
+        "properties": {
+          "amount": {
+            "title": "Amount",
+            "type": "number"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "gallons": {
+            "title": "Gallons",
+            "type": "number"
+          },
+          "grade_id": {
+            "title": "Grade Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "grade_id",
+          "description",
+          "gallons",
+          "amount"
+        ],
+        "title": "FuelGradeRow",
+        "type": "object"
+      },
       "GameListResponse": {
         "additionalProperties": false,
         "properties": {
@@ -3593,6 +3622,129 @@
           }
         },
         "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "ImportDepartmentRow": {
+        "additionalProperties": false,
+        "properties": {
+          "amount": {
+            "title": "Amount",
+            "type": "number"
+          },
+          "department_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Department Id"
+          },
+          "department_name": {
+            "title": "Department Name",
+            "type": "string"
+          },
+          "merchandise_code": {
+            "title": "Merchandise Code",
+            "type": "string"
+          }
+        },
+        "required": [
+          "merchandise_code",
+          "amount",
+          "department_id",
+          "department_name"
+        ],
+        "title": "ImportDepartmentRow",
+        "type": "object"
+      },
+      "ImportRegisterRow": {
+        "additionalProperties": false,
+        "properties": {
+          "business_date": {
+            "title": "Business Date",
+            "type": "string"
+          },
+          "card_total": {
+            "title": "Card Total",
+            "type": "number"
+          },
+          "cash_total": {
+            "title": "Cash Total",
+            "type": "number"
+          },
+          "departments": {
+            "items": {
+              "$ref": "#/components/schemas/ImportDepartmentRow"
+            },
+            "title": "Departments",
+            "type": "array"
+          },
+          "fuel": {
+            "items": {
+              "$ref": "#/components/schemas/FuelGradeRow"
+            },
+            "title": "Fuel",
+            "type": "array"
+          },
+          "net_sales": {
+            "title": "Net Sales",
+            "type": "number"
+          },
+          "opening_cash": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Opening Cash"
+          },
+          "other_total": {
+            "title": "Other Total",
+            "type": "number"
+          },
+          "refund_count": {
+            "title": "Refund Count",
+            "type": "integer"
+          },
+          "refunds": {
+            "title": "Refunds",
+            "type": "number"
+          },
+          "register_label": {
+            "title": "Register Label",
+            "type": "string"
+          },
+          "sale_count": {
+            "title": "Sale Count",
+            "type": "integer"
+          },
+          "sales_tax": {
+            "title": "Sales Tax",
+            "type": "number"
+          }
+        },
+        "required": [
+          "business_date",
+          "register_label",
+          "net_sales",
+          "sales_tax",
+          "refunds",
+          "cash_total",
+          "card_total",
+          "other_total",
+          "sale_count",
+          "refund_count",
+          "opening_cash",
+          "departments",
+          "fuel"
+        ],
+        "title": "ImportRegisterRow",
         "type": "object"
       },
       "IntermexCommitRequest": {
@@ -4327,6 +4479,87 @@
           "name"
         ],
         "title": "MTCompanyEntry",
+        "type": "object"
+      },
+      "MappingListResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "mappings": {
+            "items": {
+              "$ref": "#/components/schemas/MappingRow"
+            },
+            "title": "Mappings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "mappings"
+        ],
+        "title": "MappingListResponse",
+        "type": "object"
+      },
+      "MappingRow": {
+        "additionalProperties": false,
+        "properties": {
+          "department_id": {
+            "title": "Department Id",
+            "type": "integer"
+          },
+          "department_name": {
+            "title": "Department Name",
+            "type": "string"
+          },
+          "merchandise_code": {
+            "title": "Merchandise Code",
+            "type": "string"
+          }
+        },
+        "required": [
+          "merchandise_code",
+          "department_id",
+          "department_name"
+        ],
+        "title": "MappingRow",
+        "type": "object"
+      },
+      "MappingWriteRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "mappings": {
+            "items": {
+              "$ref": "#/components/schemas/MappingWriteRow"
+            },
+            "maxItems": 500,
+            "title": "Mappings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "mappings"
+        ],
+        "title": "MappingWriteRequest",
+        "type": "object"
+      },
+      "MappingWriteRow": {
+        "additionalProperties": false,
+        "properties": {
+          "department_id": {
+            "minimum": 1.0,
+            "title": "Department Id",
+            "type": "integer"
+          },
+          "merchandise_code": {
+            "maxLength": 20,
+            "minLength": 1,
+            "title": "Merchandise Code",
+            "type": "string"
+          }
+        },
+        "required": [
+          "merchandise_code",
+          "department_id"
+        ],
+        "title": "MappingWriteRow",
         "type": "object"
       },
       "MessageListResponse": {
@@ -5094,6 +5327,121 @@
           "store_name"
         ],
         "title": "MyActivityRow",
+        "type": "object"
+      },
+      "NaxmlCommitRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "content_base64": {
+            "minLength": 1,
+            "title": "Content Base64",
+            "type": "string"
+          },
+          "day": {
+            "maxLength": 10,
+            "minLength": 10,
+            "title": "Day",
+            "type": "string"
+          }
+        },
+        "required": [
+          "content_base64",
+          "day"
+        ],
+        "title": "NaxmlCommitRequest",
+        "type": "object"
+      },
+      "NaxmlCommitResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "closes_written": {
+            "title": "Closes Written",
+            "type": "integer"
+          },
+          "day": {
+            "title": "Day",
+            "type": "string"
+          },
+          "registers": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Registers",
+            "type": "array"
+          }
+        },
+        "required": [
+          "day",
+          "closes_written",
+          "registers"
+        ],
+        "title": "NaxmlCommitResponse",
+        "type": "object"
+      },
+      "NaxmlPreviewResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "business_dates": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Business Dates",
+            "type": "array"
+          },
+          "event_count": {
+            "title": "Event Count",
+            "type": "integer"
+          },
+          "file_count": {
+            "title": "File Count",
+            "type": "integer"
+          },
+          "parse_errors": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Parse Errors",
+            "type": "array"
+          },
+          "registers": {
+            "items": {
+              "$ref": "#/components/schemas/ImportRegisterRow"
+            },
+            "title": "Registers",
+            "type": "array"
+          },
+          "unmapped_codes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Unmapped Codes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "file_count",
+          "event_count",
+          "parse_errors",
+          "business_dates",
+          "registers",
+          "unmapped_codes"
+        ],
+        "title": "NaxmlPreviewResponse",
+        "type": "object"
+      },
+      "NaxmlUploadRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "content_base64": {
+            "minLength": 1,
+            "title": "Content Base64",
+            "type": "string"
+          }
+        },
+        "required": [
+          "content_base64"
+        ],
+        "title": "NaxmlUploadRequest",
         "type": "object"
       },
       "NotificationsResponse": {
@@ -7163,6 +7511,10 @@
             "title": "Shift Label",
             "type": "string"
           },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
           "tender_variance": {
             "title": "Tender Variance",
             "type": "number"
@@ -7181,6 +7533,7 @@
           "over_short",
           "tender_variance",
           "notes",
+          "source",
           "department_sales"
         ],
         "title": "RegisterCloseRow",
@@ -23371,6 +23724,294 @@
         "summary": "Owner Users Route",
         "tags": [
           "owner"
+        ]
+      }
+    },
+    "/posimport/mapping": {
+      "get": {
+        "operationId": "list_mapping_route_posimport_mapping_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MappingListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Mapping Route",
+        "tags": [
+          "posimport"
+        ]
+      },
+      "put": {
+        "operationId": "set_mapping_route_posimport_mapping_put",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MappingWriteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MappingListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Set Mapping Route",
+        "tags": [
+          "posimport"
+        ]
+      }
+    },
+    "/posimport/naxml/commit": {
+      "post": {
+        "operationId": "commit_naxml_route_posimport_naxml_commit_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NaxmlCommitRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NaxmlCommitResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Commit Naxml Route",
+        "tags": [
+          "posimport"
+        ]
+      }
+    },
+    "/posimport/naxml/preview": {
+      "post": {
+        "operationId": "preview_naxml_route_posimport_naxml_preview_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NaxmlUploadRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NaxmlPreviewResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Preview Naxml Route",
+        "tags": [
+          "posimport"
         ]
       }
     },

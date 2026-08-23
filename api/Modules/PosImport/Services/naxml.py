@@ -87,6 +87,14 @@ class PjrTender:
     is_change: bool
 
 
+# Aggregation key + display label for pay-at-pump activity. All
+# outside (OutsideSalesFlag="yes") events collapse into one
+# virtual register per day: pump registers carry synthetic IDs
+# (10008, …) that operators never reconcile individually.
+OUTSIDE_REGISTER_KEY = "outside"
+OUTSIDE_REGISTER_LABEL = "Pay at pump"
+
+
 @dataclass
 class PjrEvent:
     kind: str
@@ -95,6 +103,7 @@ class PjrEvent:
     cashier_id: str
     till_id: str
     transaction_id: str
+    outside: bool = False
     items: list[PjrItemLine] = field(default_factory=list)
     tenders: list[PjrTender] = field(default_factory=list)
     gross_cents: int = 0
@@ -196,6 +205,7 @@ def parse_pjr(data: bytes | str) -> PjrEvent:
             "POSJournal contains no recognized event.",
         )
 
+    outside_el = event_el.find(".//OutsideSalesFlag")
     event = PjrEvent(
         kind=kind,
         business_date=_date(event_el, "BusinessDate"),
@@ -203,6 +213,9 @@ def parse_pjr(data: bytes | str) -> PjrEvent:
         cashier_id=_text(event_el, "CashierID"),
         till_id=_text(event_el, "TillID"),
         transaction_id=_text(event_el, "TransactionID"),
+        outside=(
+            outside_el is not None and outside_el.get("value") == "yes"
+        ),
     )
 
     # Register open/close detail (OtherEvent): opening drawer cash.
@@ -285,12 +298,15 @@ def aggregate_events(
     for ev in events:
         if ev.business_date is None:
             continue
-        key = (ev.business_date, ev.register_id or "")
+        register_key = (
+            OUTSIDE_REGISTER_KEY if ev.outside else (ev.register_id or "")
+        )
+        key = (ev.business_date, register_key)
         agg = by_key.get(key)
         if agg is None:
             agg = RegisterDayAggregate(
                 business_date=ev.business_date,
-                register_id=ev.register_id or "",
+                register_id=register_key,
             )
             by_key[key] = agg
 
@@ -344,6 +360,7 @@ def aggregate_events(
 
 __all__ = [
     "CARD_TENDER_CODES", "CASH_TENDER_CODES", "FuelGradeAggregate",
+    "OUTSIDE_REGISTER_KEY", "OUTSIDE_REGISTER_LABEL",
     "PjrEvent", "PjrItemLine", "PjrTender", "PosJournalParseError",
     "RegisterDayAggregate", "aggregate_events", "parse_pjr",
 ]
