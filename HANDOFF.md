@@ -121,6 +121,17 @@ doubt, write it here rather than leaving it in chat.
 >   the SQLite/Postgres split), money → integer cents, composite
 >   (store_id, date) indexes, tz-aware timestamps via the
 >   `utc_now()` flip point.
+> - **The operator owns every catalog** (owner-stated product
+>   principle, 2026-08-23): departments, vendors, sub-departments,
+>   registers, MT companies, lottery games — anything that names
+>   the store's world is user-definable CRUD, never hardcoded.
+>   Ship sensible prefills as an explicit one-click offer (see the
+>   day-close "Add starter departments" empty state), never
+>   auto-seeded, always editable after. Deactivate-not-delete so
+>   customizing never orphans history. Sub-departments are the
+>   designed extension: a nullable `Department.parent_id` when the
+>   price book lands — extend that table, don't invent a second
+>   catalog.
 
 **Phase 0 — Foundations** (each its own PR):
 1. ✅ SHIPPED — `business_type` on Store (cstore / gas_station /

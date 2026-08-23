@@ -73,6 +73,12 @@ export const NAV: NavGroup[] = [
         desc: "Cash ledger and daily close-out.",
       },
       {
+        to: "/day-close", label: "Day close",
+        flag: "module_day_close", perm: "day_close.read",
+        icon: iconRegister(),
+        desc: "Register totals and department sales.",
+      },
+      {
         to: "/lottery", label: "Lottery",
         flag: "module_lottery", perm: "lottery.read",
         icon: iconLottery(),
@@ -557,6 +563,21 @@ function iconHealth() {
       stroke="currentColor" strokeWidth="2" strokeLinecap="round"
       strokeLinejoin="round">
       <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+    </svg>
+  );
+}
+function iconRegister() {
+  // A cash register / till: drawer base + keypad top.
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false"
+      stroke="currentColor" strokeWidth="2" strokeLinecap="round"
+      strokeLinejoin="round">
+      <rect x="3" y="13" width="18" height="7" rx="1" />
+      <path d="M6 13V8a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v5" />
+      <path d="M12 7V4" />
+      <path d="M9 4h6" />
+      <path d="M7 17h4" />
+      <path d="M16 17h1" />
     </svg>
   );
 }
