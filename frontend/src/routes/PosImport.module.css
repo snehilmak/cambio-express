@@ -1,0 +1,53 @@
+/* POS import page — the few page-specific treatments the kit
+   primitives don't cover (CLAUDE.md inline-styles-vs-modules). */
+
+.uploadRow {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.fileName {
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 18rem;
+}
+
+.mapRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.mapCode {
+  font-family: var(--db-font-mono, "JetBrains Mono", monospace);
+}
+
+.mapSelect {
+  max-width: 14rem;
+}
+
+.mapList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.commitRow {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.parseErrors {
+  max-height: 10rem;
+  overflow-y: auto;
+  font-family: var(--db-font-mono, "JetBrains Mono", monospace);
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
