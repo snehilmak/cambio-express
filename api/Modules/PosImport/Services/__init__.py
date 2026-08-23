@@ -17,6 +17,13 @@ from api.Modules.PosImport.Services.agent import (
     staged_days,
     staged_events_for_day,
 )
+from api.Modules.PosImport.Services.pricebook import (
+    HarvestedItem,
+    SEED_SOURCE,
+    SeedResult,
+    harvest_price_book,
+    seed_price_book,
+)
 from api.Modules.PosImport.Services.ingest import (
     CommitDayResult,
     IMPORT_SOURCE,
@@ -60,7 +67,12 @@ __all__ = [
     "staged_days",
     "staged_events_for_day",
     "FuelGradeAggregate",
+    "HarvestedItem",
     "IMPORT_SOURCE",
+    "SEED_SOURCE",
+    "SeedResult",
+    "harvest_price_book",
+    "seed_price_book",
     "LoadedPayload",
     "OUTSIDE_REGISTER_KEY",
     "OUTSIDE_REGISTER_LABEL",

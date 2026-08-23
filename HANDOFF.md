@@ -230,16 +230,19 @@ doubt, write it here rather than leaving it in chat.
 
 **Phase 2 — price book + vendors (owner-approved 2026-08-23,
 in flight as the P2 series):**
-- P2-1 — Catalog module backend: `Vendor` + `PriceBookItem`
-  (operator-owned catalogs, cents money, store-scoped), CRUD at
-  `/api/v2/catalog/*`, new RBAC resource `catalog` (employee =
-  read-only), `module_price_book` flag (retail types ON,
-  msb_hybrid OFF).
-- P2-2 — Catalog SPA: Vendors + Price book pages, nav group gated
-  on the flag.
-- P2-3 — Gilbarco warm start: seed the price book from staged
-  register journal data (PJR sale lines carry POSCode +
-  Description + MerchandiseCode + RegularSellPrice).
+- ✅ P2-1 (PR #873) — Catalog module backend: `Vendor` +
+  `PriceBookItem` (operator-owned catalogs, cents money,
+  store-scoped), CRUD at `/api/v2/catalog/*`, new RBAC resource
+  `catalog` (employee = read-only), `module_price_book` flag
+  (retail types ON, msb_hybrid OFF).
+- ✅ P2-2 (PR #874) — Catalog SPA: /app/price-book with Items +
+  Vendors tabs, nav entry gated on the flag + catalog.read.
+- ✅ P2-3 — Gilbarco warm start: "Seed from register" on the
+  price-book page harvests distinct items from staged journal
+  files (POSCode + format + Description + RegularSellPrice,
+  newest sale wins, departments via PosMerchandiseMap) and
+  creates the missing items with source="gilbarco"; existing
+  scan codes are never overwritten, so re-seeding is safe.
 - P2-4 — sub-departments via nullable `Department.parent_id`.
 
 **Phase 2+ (not yet scoped in detail):** purchase invoices with

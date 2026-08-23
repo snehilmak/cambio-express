@@ -77,6 +77,12 @@ class PjrItemLine:
     fuel_grade_id: str = ""
     fuel_position: str = ""
     gallons: float = 0.0
+    # Item identity for the price-book warm start (P2-3): the scan
+    # code (UPC digits or keyed PLU), its format, and the shelf
+    # price at the time of sale. Fuel lines carry none of these.
+    pos_code: str = ""
+    pos_code_format: str = ""
+    regular_price_cents: int = 0
 
 
 @dataclass
@@ -159,11 +165,17 @@ def _date(el, tag: str) -> date | None:
 def _parse_item_line(line_el) -> list[PjrItemLine]:
     items: list[PjrItemLine] = []
     for item in line_el.findall(".//ItemLine"):
+        fmt_el = item.find(".//ItemCode/POSCodeFormat")
         items.append(PjrItemLine(
             merchandise_code=_text(item, "MerchandiseCode"),
             description=_text(item, "Description"),
             quantity=_float(item, "SalesQuantity"),
             amount_cents=_cents(item, "SalesAmount"),
+            pos_code=_text(item, "ItemCode/POSCode"),
+            pos_code_format=(
+                (fmt_el.get("format") or "") if fmt_el is not None else ""
+            ),
+            regular_price_cents=_cents(item, "RegularSellPrice"),
         ))
     for fuel in line_el.findall(".//FuelLine"):
         items.append(PjrItemLine(

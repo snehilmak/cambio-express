@@ -3410,6 +3410,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/posimport/pricebook/commit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Pricebook Commit Route */
+        post: operations["pricebook_commit_route_posimport_pricebook_commit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/posimport/pricebook/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Pricebook Preview Route
+         * @description Distinct sellable items harvested from the store's staged
+         *     journal files — what a seed run would create. Writes the price
+         *     book, so it carries catalog.update rather than the day-close
+         *     permission the rest of this router uses.
+         */
+        get: operations["pricebook_preview_route_posimport_pricebook_preview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/posimport/staged": {
         parameters: {
             query?: never;
@@ -9112,6 +9152,45 @@ export interface components {
             password: string;
             /** Username */
             username: string;
+        };
+        /** PriceBookHarvestResponse */
+        PriceBookHarvestResponse: {
+            /** Existing Count */
+            existing_count: number;
+            /** Items */
+            items: components["schemas"]["PriceBookHarvestRow"][];
+            /** New Count */
+            new_count: number;
+        };
+        /** PriceBookHarvestRow */
+        PriceBookHarvestRow: {
+            /** Already In Price Book */
+            already_in_price_book: boolean;
+            /** Department Id */
+            department_id: number | null;
+            /** Department Name */
+            department_name: string;
+            /** Description */
+            description: string;
+            /** Last Seen */
+            last_seen: string;
+            /** Merchandise Code */
+            merchandise_code: string;
+            /** Pos Code */
+            pos_code: string;
+            /** Pos Code Format */
+            pos_code_format: string;
+            /** Price */
+            price: number;
+            /** Seen Count */
+            seen_count: number;
+        };
+        /** PriceBookSeedResponse */
+        PriceBookSeedResponse: {
+            /** Created */
+            created: number;
+            /** Skipped Existing */
+            skipped_existing: number;
         };
         /**
          * ProfileResponse
@@ -17875,6 +17954,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["NaxmlPreviewResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    pricebook_commit_route_posimport_pricebook_commit_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PriceBookSeedResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    pricebook_preview_route_posimport_pricebook_preview_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PriceBookHarvestResponse"];
                 };
             };
             /** @description Validation Error */

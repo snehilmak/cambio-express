@@ -171,3 +171,33 @@ class StagedCommitRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     day: str = Field(..., min_length=10, max_length=10)
+
+
+class PriceBookHarvestRow(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    pos_code: str
+    pos_code_format: str
+    description: str
+    merchandise_code: str
+    department_id: int | None
+    department_name: str
+    price: float
+    last_seen: str
+    seen_count: int
+    already_in_price_book: bool
+
+
+class PriceBookHarvestResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    items: list[PriceBookHarvestRow]
+    new_count: int
+    existing_count: int
+
+
+class PriceBookSeedResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    created: int
+    skipped_existing: int
