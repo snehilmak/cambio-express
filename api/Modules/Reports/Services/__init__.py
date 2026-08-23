@@ -33,6 +33,8 @@ from .period_comparison import (
     PL_INCOME_LINES,
     period_comparison,
 )
+from .journal_entries import journal_entries
+from .transfers_dump import transfers_dump
 from .period_pl import period_pl
 from .returned_checks import returned_check_status
 from .sales import (
@@ -61,6 +63,8 @@ __all__ = [
     "high_value_transfers",
     "new_vs_returning",
     "period_comparison",
+    "journal_entries",
+    "transfers_dump",
     "period_pl",
     "returned_check_status",
     "sales_by_company",

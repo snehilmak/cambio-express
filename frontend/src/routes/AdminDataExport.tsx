@@ -42,6 +42,12 @@ export default function AdminDataExport() {
   const [transBusy, setTransBusy] = useState(false);
   const [transErr,  setTransErr]  = useState("");
 
+  // Journal-entries CSV (P1-8) — same default window as transfers.
+  const [journalFrom, setJournalFrom] = useState(_isoDate(lastMonth));
+  const [journalTo,   setJournalTo]   = useState(_isoDate(today));
+  const [journalBusy, setJournalBusy] = useState(false);
+  const [journalErr,  setJournalErr]  = useState("");
+
   // Time-clock entries CSV — same default window as transfers.
   const [tcFrom, setTcFrom] = useState(_isoDate(lastMonth));
   const [tcTo,   setTcTo]   = useState(_isoDate(today));
@@ -113,6 +119,21 @@ export default function AdminDataExport() {
       setTransErr(e instanceof Error ? e.message : "Download failed.");
     } finally {
       setTransBusy(false);
+    }
+  }
+
+  async function onDownloadJournal() {
+    setJournalBusy(true); setJournalErr("");
+    try {
+      const url = `/api/v2/reports/journal-entries.csv`
+        + `?from=${encodeURIComponent(journalFrom)}`
+        + `&to=${encodeURIComponent(journalTo)}`
+        + `&store_ids=`;
+      await downloadCsv(url, `journal-entries-${journalFrom}-to-${journalTo}.csv`);
+    } catch (e) {
+      setJournalErr(e instanceof Error ? e.message : "Download failed.");
+    } finally {
+      setJournalBusy(false);
     }
   }
 
@@ -261,6 +282,50 @@ export default function AdminDataExport() {
                 busy={transBusy} disabled={transBusy}
               >
                 {transBusy ? "Preparing…" : "Download CSV"}
+              </Button>
+            </div>
+          </div>
+        </Section>
+      </Card>
+
+      <Card>
+        <Section title="Journal entries (accounting)">
+          <p className={styles.intro}>
+            Double-entry journal lines built from your booked day
+            closes — one balanced entry per business day (cash /
+            card / other tenders against per-department sales, sales
+            tax payable, and cash over/short). Import into
+            QuickBooks, Xero, or hand it to your accountant as-is.
+          </p>
+          {journalErr && (
+            <Alert tone="error">{journalErr}</Alert>
+          )}
+          <div className={styles.exportRow}>
+            <div className={styles.exportText}>
+              <div className={styles.exportName}>Journal entries CSV</div>
+              <div className={styles.exportDesc}>
+                Defaults to the last 30 days.
+              </div>
+            </div>
+            <div className={styles.exportControls}>
+              <Field label="From" style={{ minWidth: "9rem" }}>
+                <DateInput
+                  value={journalFrom}
+                  onChange={(e) => setJournalFrom(e.target.value)}
+                />
+              </Field>
+              <Field label="To" style={{ minWidth: "9rem" }}>
+                <DateInput
+                  value={journalTo}
+                  onChange={(e) => setJournalTo(e.target.value)}
+                />
+              </Field>
+              <Button
+                tone="primary"
+                onClick={() => { void onDownloadJournal(); }}
+                busy={journalBusy} disabled={journalBusy}
+              >
+                {journalBusy ? "Preparing…" : "Download CSV"}
               </Button>
             </div>
           </div>
