@@ -7312,6 +7312,10 @@ export interface components {
             is_active: boolean;
             /** Name */
             name: string;
+            /** Parent Id */
+            parent_id: number | null;
+            /** Parent Name */
+            parent_name: string;
             /** Sort Order */
             sort_order: number;
         };
@@ -7346,6 +7350,8 @@ export interface components {
             is_active?: boolean | null;
             /** Name */
             name?: string | null;
+            /** Parent Id */
+            parent_id?: number | null;
             /** Sort Order */
             sort_order?: number | null;
         };
@@ -7353,6 +7359,8 @@ export interface components {
         DepartmentWriteRequest: {
             /** Name */
             name: string;
+            /** Parent Id */
+            parent_id?: number | null;
             /**
              * Sort Order
              * @default 0

@@ -3115,6 +3115,21 @@
             "title": "Name",
             "type": "string"
           },
+          "parent_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Id"
+          },
+          "parent_name": {
+            "title": "Parent Name",
+            "type": "string"
+          },
           "sort_order": {
             "title": "Sort Order",
             "type": "integer"
@@ -3124,7 +3139,9 @@
           "id",
           "name",
           "sort_order",
-          "is_active"
+          "is_active",
+          "parent_id",
+          "parent_name"
         ],
         "title": "DepartmentRow",
         "type": "object"
@@ -3225,6 +3242,18 @@
             ],
             "title": "Name"
           },
+          "parent_id": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Id"
+          },
           "sort_order": {
             "anyOf": [
               {
@@ -3250,6 +3279,18 @@
             "minLength": 1,
             "title": "Name",
             "type": "string"
+          },
+          "parent_id": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Id"
           },
           "sort_order": {
             "default": 0,

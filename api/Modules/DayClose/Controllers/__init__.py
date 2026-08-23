@@ -90,6 +90,8 @@ def _department_row(d: Department) -> DepartmentRow:
         id=d.id, name=d.name or "",
         sort_order=int(d.sort_order or 0),
         is_active=bool(d.is_active),
+        parent_id=d.parent_id,
+        parent_name=(d.parent.name or "") if d.parent else "",
     )
 
 
@@ -156,6 +158,11 @@ def create_department_route(
     try:
         dept = create_department(
             db, sid, name=body.name.strip(), sort_order=body.sort_order,
+            parent_id=body.parent_id,
+        )
+    except DayCloseNotFoundError:
+        raise HTTPException(
+            status_code=404, detail="Parent department not found",
         )
     except DayCloseStateError as exc:
         raise HTTPException(status_code=409, detail=str(exc))
@@ -183,6 +190,7 @@ def update_department_route(
             name=body.name.strip() if body.name is not None else None,
             sort_order=body.sort_order,
             is_active=body.is_active,
+            parent_id=body.parent_id,
         )
     except DayCloseNotFoundError:
         raise HTTPException(status_code=404, detail="Department not found")

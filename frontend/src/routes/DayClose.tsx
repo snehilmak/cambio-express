@@ -11,8 +11,8 @@ import { fmtMoney2 } from "../lib/formatters";
 import {
   Alert, Breadcrumbs, Button, ButtonLink, Card, DateInput, EmptyState,
   ErrorState, Field, InfoTip, Input, KpiCard, KpiGrid, Loading, Modal,
-  PageHeader, PageShell, Pill, RowActions, Section, TabsBar, TabsButton,
-  Table, Textarea, tdStyle, thStyle, useToast,
+  PageHeader, PageShell, Pill, RowActions, Section, Select, TabsBar,
+  TabsButton, Table, Textarea, tdStyle, thStyle, useToast,
 } from "../components/ui";
 import styles from "./DayClose.module.css";
 
@@ -547,15 +547,16 @@ function DepartmentsTab() {
             <Table>
               <thead>
                 <tr>
-                  {["Department", "Sort", "Status", "Actions"].map((h) => (
-                    <th key={h} style={thStyle}>{h}</th>
-                  ))}
+                  {["Department", "Parent", "Sort", "Status", "Actions"].map(
+                    (h) => <th key={h} style={thStyle}>{h}</th>,
+                  )}
                 </tr>
               </thead>
               <tbody>
                 {departments.data.departments.map((d) => (
                   <tr key={d.id}>
                     <td style={tdStyle}>{d.name}</td>
+                    <td style={tdStyle}>{d.parent_name || "—"}</td>
                     <td style={tdStyle}>{d.sort_order}</td>
                     <td style={tdStyle}>
                       <Pill tone={d.is_active ? "success" : "neutral"}>
@@ -589,6 +590,7 @@ function DepartmentsTab() {
       <DepartmentModal
         open={adding || editing != null}
         existing={editing}
+        departments={departments.data?.departments ?? []}
         onClose={() => { setAdding(false); setEditing(null); }}
         onDone={() => { setAdding(false); setEditing(null); refresh(); }}
       />
@@ -597,10 +599,11 @@ function DepartmentsTab() {
 }
 
 function DepartmentModal({
-  open, existing, onClose, onDone,
+  open, existing, departments, onClose, onDone,
 }: {
   open: boolean;
   existing: Department | null;
+  departments: Department[];
   onClose: () => void;
   onDone: () => void;
 }) {
@@ -616,6 +619,7 @@ function DepartmentModal({
         <DepartmentForm
           key={existing?.id ?? "new"}
           existing={existing}
+          departments={departments}
           onClose={onClose}
           onDone={onDone}
         />
@@ -625,9 +629,10 @@ function DepartmentModal({
 }
 
 function DepartmentForm({
-  existing, onClose, onDone,
+  existing, departments, onClose, onDone,
 }: {
   existing: Department | null;
+  departments: Department[];
   onClose: () => void;
   onDone: () => void;
 }) {
@@ -635,8 +640,18 @@ function DepartmentForm({
   const [sortOrder, setSortOrder] = useState(
     String(existing?.sort_order ?? 0),
   );
+  const [parentId, setParentId] = useState(
+    existing?.parent_id != null ? String(existing.parent_id) : "",
+  );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Valid parents: top-level departments other than this one
+  // (sub-departments go one level deep — the server enforces it,
+  // the picker just doesn't offer invalid choices).
+  const parentChoices = departments.filter(
+    (d) => d.parent_id == null && d.id !== existing?.id,
+  );
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -648,9 +663,16 @@ function DepartmentForm({
     };
     try {
       if (existing) {
-        await updateDepartment(existing.id, body);
+        await updateDepartment(existing.id, {
+          ...body,
+          // 0 clears the parent link (server PATCH semantics).
+          parent_id: parentId === "" ? 0 : Number(parentId),
+        });
       } else {
-        await createDepartment(body);
+        await createDepartment({
+          ...body,
+          parent_id: parentId === "" ? null : Number(parentId),
+        });
       }
       onDone();
     } catch (err) {
@@ -681,6 +703,24 @@ function DepartmentForm({
             type="number" min={0} value={sortOrder}
             onChange={(e) => setSortOrder(e.target.value)}
           />
+        </Field>
+        <Field
+          label={
+            <>
+              Parent department (optional)
+              <InfoTip text="Nest this under a top-level department to group related lines — e.g. Tobacco › Cigarettes. One level deep." />
+            </>
+          }
+        >
+          <Select
+            value={parentId}
+            onChange={(e) => setParentId(e.target.value)}
+          >
+            <option value="">None (top level)</option>
+            {parentChoices.map((d) => (
+              <option key={d.id} value={d.id}>{d.name}</option>
+            ))}
+          </Select>
         </Field>
         <div className={styles.modalActions}>
           <Button tone="secondary" type="button" onClick={onClose}>

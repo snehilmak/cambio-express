@@ -60,14 +60,56 @@ def _department_name_taken(
     return q.first() is not None
 
 
+def _resolve_parent(
+    db: Session, store_id: int, parent_id: int, *,
+    child_id: int | None = None,
+) -> int:
+    """Validate a sub-department link (P2-4). One level deep only:
+    the parent must be a top-level department in the same store,
+    and a department that already has children can't itself be
+    nested. Self-parenting is a cycle by definition."""
+    if child_id is not None and parent_id == child_id:
+        raise DayCloseStateError(
+            "A department can't be its own parent.",
+        )
+    parent = db.get(Department, parent_id)
+    if parent is None or parent.store_id != store_id:
+        raise DayCloseNotFoundError("Parent department not found")
+    if parent.parent_id is not None:
+        raise DayCloseStateError(
+            "Sub-departments go one level deep — pick a top-level "
+            "department as the parent.",
+        )
+    if child_id is not None:
+        has_children = (
+            db.query(Department.id)
+              .filter_by(store_id=store_id, parent_id=child_id)
+              .first()
+        ) is not None
+        if has_children:
+            raise DayCloseStateError(
+                "This department has sub-departments of its own — "
+                "move those first.",
+            )
+    return parent.id
+
+
 def create_department(
     db: Session, store_id: int, *, name: str, sort_order: int = 0,
+    parent_id: int | None = None,
 ) -> Department:
     if _department_name_taken(db, store_id, name):
         raise DayCloseStateError(
             f"A department named {name!r} already exists.",
         )
-    dept = Department(store_id=store_id, name=name, sort_order=sort_order)
+    resolved_parent = (
+        _resolve_parent(db, store_id, parent_id)
+        if parent_id is not None else None
+    )
+    dept = Department(
+        store_id=store_id, name=name, sort_order=sort_order,
+        parent_id=resolved_parent,
+    )
     db.add(dept)
     db.flush()
     return dept
@@ -77,6 +119,7 @@ def update_department(
     db: Session, store_id: int, department_id: int, *,
     name: str | None = None, sort_order: int | None = None,
     is_active: bool | None = None,
+    parent_id: int | None = None,
 ) -> Department:
     dept = db.get(Department, department_id)
     if dept is None or dept.store_id != store_id:
@@ -91,6 +134,14 @@ def update_department(
         dept.sort_order = int(sort_order)
     if is_active is not None:
         dept.is_active = bool(is_active)
+    # parent_id: None = leave unchanged, 0 = clear, else re-link.
+    if parent_id is not None:
+        dept.parent_id = (
+            None if int(parent_id) == 0
+            else _resolve_parent(
+                db, store_id, int(parent_id), child_id=dept.id,
+            )
+        )
     db.flush()
     return dept
 
