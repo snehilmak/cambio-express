@@ -161,12 +161,35 @@ doubt, write it here rather than leaving it in chat.
    employees can count, admins run lifecycle. Settlement vs.
    state report + daily-book auto-posting are follow-ups
    (the P1-7 integration point).
-7. Generalized day-close — register/shift totals + department
-   sales alongside the existing cash ledger.
+7. ✅ SHIPPED (PRs #862 backend + #863 frontend) — Generalized
+   day-close: per-store Department catalog (operator-owned CRUD +
+   one-click starter prefill), RegisterClose Z-report rows
+   (gross/tax/tenders, optional counted drawer cash) keyed unique
+   on (store, date, register, shift) with upsert-replace
+   semantics, department sale lines. Derived-not-stored:
+   over_short = counted − cash tender (null until counted, nagged
+   in the day summary), tender_variance surfaced never blocked.
+   `/day-close` SPA page gated on `module_day_close` +
+   `day_close.read`; employees submit closes, admins run the
+   catalog + deletes.
 8. Accounting export — journal-entry CSV first, QuickBooks Online
    OAuth after.
-9. POS day-close import v1 — generic CSV + one real POS format
-   (reuse the ReportImport parse→review→commit pattern).
+9. **Gilbarco Passport NAXML import — rescoped as the primary
+   market wedge (owner, 2026-08-23).** Target: sites on Gilbarco
+   (and similar) registers currently using Cronysoft/Modisoft.
+   Passport writes NAXML XML period-close files to a network
+   share; Phase A ingests uploads of those files (deterministic
+   parse → review → commit into DayClose: MCM → department sales,
+   MSM → tenders/taxes, POSJournal → register closes; FGM fuel
+   data stashed for the future fuel module). Phase B is a thin
+   Windows site agent watching the share and pushing raw gzipped
+   XML to our API (parse stays SERVER-side: fleet agents stay
+   dumb + updatable, raw files archive for re-parse). Owner has
+   ~a month of real Passport sample data to build against —
+   treat as production data, do NOT commit raw files to git;
+   derive scrubbed synthetic fixtures for tests. NAXML also
+   covers Verifone Ruby/Commander exports. Generic CSV import
+   remains the fallback path.
 
 **Phase 2+ (not yet scoped in detail):** price book + vendors +
 purchase invoices with AI-assisted scanning; inventory basics;

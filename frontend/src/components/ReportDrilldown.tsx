@@ -7,8 +7,8 @@ import {
 } from "../api/reportDrilldown";
 import { downloadCsv } from "../lib/api";
 import {
-  Breadcrumbs, Button, EmptyState, ErrorState, KpiCard, KpiGrid,
-  PageHeader, PageShell, TableSkeleton, tdStyle, thStyle,
+  Breadcrumbs, Button, DateInput, EmptyState, ErrorState, KpiCard,
+  KpiGrid, PageHeader, PageShell, TableSkeleton, tdStyle, thStyle,
 } from "./ui";
 import styles from "./ReportDrilldown.module.css";
 
@@ -109,8 +109,7 @@ export function ReportDrilldown({
               >
                 <label className={styles.inputLabel}>
                   <span>From</span>
-                  <input
-                    type="date"
+                  <DateInput
                     value={from}
                     onChange={(e) => setFrom(e.target.value)}
                     className={styles.dateInput}
@@ -118,8 +117,7 @@ export function ReportDrilldown({
                 </label>
                 <label className={styles.inputLabel}>
                   <span>To</span>
-                  <input
-                    type="date"
+                  <DateInput
                     value={to}
                     onChange={(e) => setTo(e.target.value)}
                     className={styles.dateInput}
