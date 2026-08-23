@@ -7285,6 +7285,118 @@
         "title": "PlatformUserCreateRequest",
         "type": "object"
       },
+      "PriceBookHarvestResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "existing_count": {
+            "title": "Existing Count",
+            "type": "integer"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PriceBookHarvestRow"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "new_count": {
+            "title": "New Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "new_count",
+          "existing_count"
+        ],
+        "title": "PriceBookHarvestResponse",
+        "type": "object"
+      },
+      "PriceBookHarvestRow": {
+        "additionalProperties": false,
+        "properties": {
+          "already_in_price_book": {
+            "title": "Already In Price Book",
+            "type": "boolean"
+          },
+          "department_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Department Id"
+          },
+          "department_name": {
+            "title": "Department Name",
+            "type": "string"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "last_seen": {
+            "title": "Last Seen",
+            "type": "string"
+          },
+          "merchandise_code": {
+            "title": "Merchandise Code",
+            "type": "string"
+          },
+          "pos_code": {
+            "title": "Pos Code",
+            "type": "string"
+          },
+          "pos_code_format": {
+            "title": "Pos Code Format",
+            "type": "string"
+          },
+          "price": {
+            "title": "Price",
+            "type": "number"
+          },
+          "seen_count": {
+            "title": "Seen Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "pos_code",
+          "pos_code_format",
+          "description",
+          "merchandise_code",
+          "department_id",
+          "department_name",
+          "price",
+          "last_seen",
+          "seen_count",
+          "already_in_price_book"
+        ],
+        "title": "PriceBookHarvestRow",
+        "type": "object"
+      },
+      "PriceBookSeedResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "created": {
+            "title": "Created",
+            "type": "integer"
+          },
+          "skipped_existing": {
+            "title": "Skipped Existing",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "created",
+          "skipped_existing"
+        ],
+        "title": "PriceBookSeedResponse",
+        "type": "object"
+      },
       "ProfileResponse": {
         "additionalProperties": false,
         "description": "Full payload for the /app/account/profile page on first\npaint. Includes editable fields, read-only metadata, and the\ncanonical timezone list so the SPA doesn't have to ship its\nown copy.",
@@ -25569,6 +25681,137 @@
           }
         },
         "summary": "Preview Naxml Route",
+        "tags": [
+          "posimport"
+        ]
+      }
+    },
+    "/posimport/pricebook/commit": {
+      "post": {
+        "operationId": "pricebook_commit_route_posimport_pricebook_commit_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PriceBookSeedResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Pricebook Commit Route",
+        "tags": [
+          "posimport"
+        ]
+      }
+    },
+    "/posimport/pricebook/preview": {
+      "get": {
+        "description": "Distinct sellable items harvested from the store's staged\njournal files \u2014 what a seed run would create. Writes the price\nbook, so it carries catalog.update rather than the day-close\npermission the rest of this router uses.",
+        "operationId": "pricebook_preview_route_posimport_pricebook_preview_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PriceBookHarvestResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Pricebook Preview Route",
         "tags": [
           "posimport"
         ]

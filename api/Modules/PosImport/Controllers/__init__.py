@@ -51,6 +51,9 @@ from api.Modules.PosImport.Requests import (
     NaxmlCommitResponse,
     NaxmlPreviewResponse,
     NaxmlUploadRequest,
+    PriceBookHarvestResponse,
+    PriceBookHarvestRow,
+    PriceBookSeedResponse,
     StagedCommitRequest,
     StagedDayRow,
     StagedDaysResponse,
@@ -61,6 +64,7 @@ from api.Modules.PosImport.Services import (
     aggregate_events,
     authenticate_agent,
     commit_business_day,
+    harvest_price_book,
     issue_agent_key,
     list_agent_keys,
     list_mappings,
@@ -68,6 +72,7 @@ from api.Modules.PosImport.Services import (
     mapping_status,
     register_label_for,
     revoke_agent_key,
+    seed_price_book,
     set_mappings,
     stage_journal_file,
     staged_days,
@@ -388,6 +393,67 @@ def staged_days_route(
         )
         for d in staged_days(db, sid)
     ])
+
+
+# ── Price-book warm start (P2-3) ───────────────────────────
+
+
+@router.get(
+    "/pricebook/preview", response_model=PriceBookHarvestResponse,
+)
+def pricebook_preview_route(
+    db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
+) -> PriceBookHarvestResponse:
+    """Distinct sellable items harvested from the store's staged
+    journal files — what a seed run would create. Writes the price
+    book, so it carries catalog.update rather than the day-close
+    permission the rest of this router uses."""
+    sid = resolve_store_scope(claims)
+    require_permission(claims, "catalog", "update")
+    items = harvest_price_book(db, sid)
+    return PriceBookHarvestResponse(
+        items=[
+            PriceBookHarvestRow(
+                pos_code=h.pos_code,
+                pos_code_format=h.pos_code_format,
+                description=h.description,
+                merchandise_code=h.merchandise_code,
+                department_id=h.department_id,
+                department_name=h.department_name,
+                price=h.price_cents / 100.0,
+                last_seen=h.last_seen.isoformat(),
+                seen_count=h.seen_count,
+                already_in_price_book=h.already_in_price_book,
+            )
+            for h in items
+        ],
+        new_count=sum(1 for h in items if not h.already_in_price_book),
+        existing_count=sum(1 for h in items if h.already_in_price_book),
+    )
+
+
+@router.post("/pricebook/commit", response_model=PriceBookSeedResponse)
+def pricebook_commit_route(
+    db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
+) -> PriceBookSeedResponse:
+    sid = resolve_store_scope(claims)
+    require_permission(claims, "catalog", "update")
+    result = seed_price_book(db, sid)
+    _audit(
+        db, claims=claims, action="seed_price_book",
+        target_type="price_book_item", target_id=str(sid),
+        summary=(
+            f"price book seeded from register data: {result.created} "
+            f"item(s) created, {result.skipped_existing} already present"
+        ),
+    )
+    db.commit()
+    return PriceBookSeedResponse(
+        created=result.created,
+        skipped_existing=result.skipped_existing,
+    )
 
 
 @router.post("/staged/commit", response_model=NaxmlCommitResponse)

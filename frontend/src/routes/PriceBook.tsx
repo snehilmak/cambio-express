@@ -1,11 +1,15 @@
 import { useState, type FormEvent } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
   createItem, createVendor, updateItem, updateVendor,
   useItems, useVendors,
   type PriceBookItem, type Vendor,
 } from "../api/catalog";
+import {
+  commitPriceBookSeed, previewPriceBookSeed,
+  type PriceBookHarvest,
+} from "../api/posimport";
 import { useDepartments, type Department } from "../api/dayclose";
 import { ApiError } from "../lib/api";
 import { fmtMoney2 } from "../lib/formatters";
@@ -79,6 +83,7 @@ function ItemsTab() {
   const toast = useToast();
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<PriceBookItem | null>(null);
+  const [seeding, setSeeding] = useState(false);
 
   function refresh() {
     void qc.invalidateQueries({ queryKey: ["catalog"] });
@@ -114,6 +119,12 @@ function ItemsTab() {
             >
               {filters.params.inactive === "1"
                 ? "Hide inactive" : "Show inactive"}
+            </Button>
+            <Button
+              size="sm" tone="secondary"
+              onClick={() => setSeeding(true)}
+            >
+              Seed from register
             </Button>
             <Button size="sm" onClick={() => setAdding(true)}>
               + Add item
@@ -175,7 +186,7 @@ function ItemsTab() {
           }
           body={
             canManage
-              ? 'Add items by hand with "+ Add item" — or connect your register and seed the whole price book from its journal data (coming with the Gilbarco import).'
+              ? 'Add items by hand with "+ Add item" — or click "Seed from register" to build the whole price book from the journal data your register agent uploads.'
               : "The price book is empty."
           }
         />
@@ -262,7 +273,155 @@ function ItemsTab() {
         onClose={() => { setAdding(false); setEditing(null); }}
         onDone={() => { setAdding(false); setEditing(null); refresh(); }}
       />
+      <SeedModal
+        open={seeding}
+        onClose={() => setSeeding(false)}
+        onDone={() => { setSeeding(false); refresh(); }}
+      />
     </Section>
+  );
+}
+
+// ── Seed-from-register modal (P2-3 warm start) ───────────────
+
+function SeedModal({
+  open, onClose, onDone,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title={
+        <>
+          Seed from register data
+          <InfoTip text="Reads every journal file your register agent has uploaded and builds price-book entries from the items it sold — scan code, name, latest shelf price, and the department your merchandise-code mapping points at. Items you already added are never touched." />
+        </>
+      }
+    >
+      {open && <SeedPreview onClose={onClose} onDone={onDone} />}
+    </Modal>
+  );
+}
+
+function SeedPreview({
+  onClose, onDone,
+}: {
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  // Fresh fetch per open: the preview re-parses staged journals
+  // server-side, so never serve it from cache.
+  const previewQuery = useQuery<PriceBookHarvest>({
+    queryKey: ["posimport", "pricebook-preview"],
+    queryFn: previewPriceBookSeed,
+    gcTime: 0,
+    staleTime: 0,
+  });
+  const preview = previewQuery.data ?? null;
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const toast = useToast();
+
+  async function onCommit() {
+    setBusy(true);
+    setError(null);
+    try {
+      const result = await commitPriceBookSeed();
+      toast({
+        message: `${result.created} item(s) added from register data`
+          + (result.skipped_existing
+            ? ` (${result.skipped_existing} already in your price book)`
+            : "."),
+        tone: "success",
+      });
+      onDone();
+    } catch (err) {
+      setError(
+        err instanceof ApiError ? err.message : "Could not seed.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className={styles.modalForm}>
+      {error && <Alert tone="error">{error}</Alert>}
+      {previewQuery.isLoading && <Loading />}
+      {previewQuery.isError && (
+        <ErrorState
+          message="Could not read the register data."
+          onRetry={() => { void previewQuery.refetch(); }}
+        />
+      )}
+      {preview != null && preview.items.length === 0 && (
+        <EmptyState
+          title="No register data yet"
+          body="Once your site agent has uploaded journal files (see Day close → Import from register), items it sold show up here."
+        />
+      )}
+      {preview != null && preview.items.length > 0 && (
+        <>
+          <p>
+            Found <strong>{preview.items.length}</strong> distinct
+            item(s) in the uploaded journals —{" "}
+            <strong>{preview.new_count}</strong> new,{" "}
+            {preview.existing_count} already in your price book.
+            New items land with their latest shelf price and stay
+            fully editable.
+          </p>
+          <div style={{ overflowX: "auto", maxHeight: "18rem" }}>
+            <Table>
+              <thead>
+                <tr>
+                  {["Scan code", "Item", "Department", "Price", ""].map(
+                    (h) => <th key={h} style={thStyle}>{h}</th>,
+                  )}
+                </tr>
+              </thead>
+              <tbody>
+                {preview.items.slice(0, 50).map((i) => (
+                  <tr key={i.pos_code}>
+                    <td style={tdStyle}>
+                      <span className={styles.posCode}>{i.pos_code}</span>
+                    </td>
+                    <td style={tdStyle}>{i.description || "—"}</td>
+                    <td style={tdStyle}>{i.department_name || "—"}</td>
+                    <td style={tdStyle}>{fmtMoney2(i.price)}</td>
+                    <td style={tdStyle}>
+                      {i.already_in_price_book && (
+                        <Pill tone="neutral">already added</Pill>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </Table>
+          </div>
+          {preview.items.length > 50 && (
+            <p>…and {preview.items.length - 50} more.</p>
+          )}
+        </>
+      )}
+      <div className={styles.modalActions}>
+        <Button tone="secondary" type="button" onClick={onClose}>
+          Cancel
+        </Button>
+        <Button
+          type="button" busy={busy}
+          disabled={busy || preview == null || preview.new_count === 0}
+          onClick={() => { void onCommit(); }}
+        >
+          {preview != null && preview.new_count > 0
+            ? `Add ${preview.new_count} item(s)`
+            : "Nothing to add"}
+        </Button>
+      </div>
+    </div>
   );
 }
 

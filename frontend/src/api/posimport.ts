@@ -96,3 +96,20 @@ export function fileToBase64(file: File): Promise<string> {
     reader.readAsDataURL(file);
   });
 }
+
+// ── Price-book warm start (P2-3) ─────────────────────────────
+
+export type PriceBookHarvest =
+  components["schemas"]["PriceBookHarvestResponse"];
+export type PriceBookSeedResult =
+  components["schemas"]["PriceBookSeedResponse"];
+
+export async function previewPriceBookSeed(): Promise<PriceBookHarvest> {
+  return api<PriceBookHarvest>("/api/v2/posimport/pricebook/preview");
+}
+
+export async function commitPriceBookSeed(): Promise<PriceBookSeedResult> {
+  return api<PriceBookSeedResult>("/api/v2/posimport/pricebook/commit", {
+    method: "POST",
+  });
+}
