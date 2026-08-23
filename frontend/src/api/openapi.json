@@ -2711,6 +2711,83 @@
         "title": "DailyReportUpdateRequest",
         "type": "object"
       },
+      "DayCloseSummaryResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "card_total": {
+            "title": "Card Total",
+            "type": "number"
+          },
+          "cash_total": {
+            "title": "Cash Total",
+            "type": "number"
+          },
+          "closes": {
+            "items": {
+              "$ref": "#/components/schemas/RegisterCloseRow"
+            },
+            "title": "Closes",
+            "type": "array"
+          },
+          "date": {
+            "title": "Date",
+            "type": "string"
+          },
+          "department_totals": {
+            "items": {
+              "$ref": "#/components/schemas/DepartmentTotalRow"
+            },
+            "title": "Department Totals",
+            "type": "array"
+          },
+          "gross_sales": {
+            "title": "Gross Sales",
+            "type": "number"
+          },
+          "other_total": {
+            "title": "Other Total",
+            "type": "number"
+          },
+          "over_short": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Over Short"
+          },
+          "sales_tax": {
+            "title": "Sales Tax",
+            "type": "number"
+          },
+          "tender_variance": {
+            "title": "Tender Variance",
+            "type": "number"
+          },
+          "uncounted_drawers": {
+            "title": "Uncounted Drawers",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "date",
+          "closes",
+          "department_totals",
+          "gross_sales",
+          "sales_tax",
+          "cash_total",
+          "card_total",
+          "other_total",
+          "over_short",
+          "tender_variance",
+          "uncounted_drawers"
+        ],
+        "title": "DayCloseSummaryResponse",
+        "type": "object"
+      },
       "DayCountRow": {
         "additionalProperties": false,
         "properties": {
@@ -2838,6 +2915,201 @@
           "uncounted_active_packs"
         ],
         "title": "DaySummaryResponse",
+        "type": "object"
+      },
+      "DepartmentListResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "departments": {
+            "items": {
+              "$ref": "#/components/schemas/DepartmentRow"
+            },
+            "title": "Departments",
+            "type": "array"
+          }
+        },
+        "required": [
+          "departments"
+        ],
+        "title": "DepartmentListResponse",
+        "type": "object"
+      },
+      "DepartmentResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "department": {
+            "$ref": "#/components/schemas/DepartmentRow"
+          }
+        },
+        "required": [
+          "department"
+        ],
+        "title": "DepartmentResponse",
+        "type": "object"
+      },
+      "DepartmentRow": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "is_active": {
+            "title": "Is Active",
+            "type": "boolean"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "sort_order": {
+            "title": "Sort Order",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "sort_order",
+          "is_active"
+        ],
+        "title": "DepartmentRow",
+        "type": "object"
+      },
+      "DepartmentSaleLine": {
+        "additionalProperties": false,
+        "properties": {
+          "amount": {
+            "minimum": 0.0,
+            "title": "Amount",
+            "type": "number"
+          },
+          "department_id": {
+            "minimum": 1.0,
+            "title": "Department Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "department_id",
+          "amount"
+        ],
+        "title": "DepartmentSaleLine",
+        "type": "object"
+      },
+      "DepartmentSaleRow": {
+        "additionalProperties": false,
+        "properties": {
+          "amount": {
+            "title": "Amount",
+            "type": "number"
+          },
+          "department_id": {
+            "title": "Department Id",
+            "type": "integer"
+          },
+          "department_name": {
+            "title": "Department Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "department_id",
+          "department_name",
+          "amount"
+        ],
+        "title": "DepartmentSaleRow",
+        "type": "object"
+      },
+      "DepartmentTotalRow": {
+        "additionalProperties": false,
+        "properties": {
+          "amount": {
+            "title": "Amount",
+            "type": "number"
+          },
+          "department_id": {
+            "title": "Department Id",
+            "type": "integer"
+          },
+          "department_name": {
+            "title": "Department Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "department_id",
+          "department_name",
+          "amount"
+        ],
+        "title": "DepartmentTotalRow",
+        "type": "object"
+      },
+      "DepartmentUpdateRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "is_active": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Active"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "sort_order": {
+            "anyOf": [
+              {
+                "maximum": 10000.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sort Order"
+          }
+        },
+        "title": "DepartmentUpdateRequest",
+        "type": "object"
+      },
+      "DepartmentWriteRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "sort_order": {
+            "default": 0,
+            "maximum": 10000.0,
+            "minimum": 0.0,
+            "title": "Sort Order",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "DepartmentWriteRequest",
         "type": "object"
       },
       "DiscountCodeListResponse": {
@@ -6821,6 +7093,175 @@
           "stripe_self_txn_id"
         ],
         "title": "ReferralRedemptionRow",
+        "type": "object"
+      },
+      "RegisterCloseRow": {
+        "additionalProperties": false,
+        "properties": {
+          "card_total": {
+            "title": "Card Total",
+            "type": "number"
+          },
+          "cash_counted": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cash Counted"
+          },
+          "cash_total": {
+            "title": "Cash Total",
+            "type": "number"
+          },
+          "department_sales": {
+            "items": {
+              "$ref": "#/components/schemas/DepartmentSaleRow"
+            },
+            "title": "Department Sales",
+            "type": "array"
+          },
+          "gross_sales": {
+            "title": "Gross Sales",
+            "type": "number"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "notes": {
+            "title": "Notes",
+            "type": "string"
+          },
+          "other_total": {
+            "title": "Other Total",
+            "type": "number"
+          },
+          "over_short": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Over Short"
+          },
+          "register_label": {
+            "title": "Register Label",
+            "type": "string"
+          },
+          "sales_tax": {
+            "title": "Sales Tax",
+            "type": "number"
+          },
+          "shift_label": {
+            "title": "Shift Label",
+            "type": "string"
+          },
+          "tender_variance": {
+            "title": "Tender Variance",
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "register_label",
+          "shift_label",
+          "gross_sales",
+          "sales_tax",
+          "cash_total",
+          "card_total",
+          "other_total",
+          "cash_counted",
+          "over_short",
+          "tender_variance",
+          "notes",
+          "department_sales"
+        ],
+        "title": "RegisterCloseRow",
+        "type": "object"
+      },
+      "RegisterCloseWriteRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "card_total": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Card Total",
+            "type": "number"
+          },
+          "cash_counted": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cash Counted"
+          },
+          "cash_total": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Cash Total",
+            "type": "number"
+          },
+          "department_sales": {
+            "items": {
+              "$ref": "#/components/schemas/DepartmentSaleLine"
+            },
+            "maxItems": 200,
+            "title": "Department Sales",
+            "type": "array"
+          },
+          "gross_sales": {
+            "minimum": 0.0,
+            "title": "Gross Sales",
+            "type": "number"
+          },
+          "notes": {
+            "default": "",
+            "maxLength": 500,
+            "title": "Notes",
+            "type": "string"
+          },
+          "other_total": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Other Total",
+            "type": "number"
+          },
+          "register_label": {
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Register Label",
+            "type": "string"
+          },
+          "sales_tax": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Sales Tax",
+            "type": "number"
+          },
+          "shift_label": {
+            "default": "",
+            "maxLength": 40,
+            "title": "Shift Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "register_label",
+          "gross_sales"
+        ],
+        "title": "RegisterCloseWriteRequest",
         "type": "object"
       },
       "ReportCategory": {
@@ -19394,6 +19835,476 @@
         "summary": "Dashboard Summary",
         "tags": [
           "dashboard"
+        ]
+      }
+    },
+    "/dayclose/closes/{close_id}": {
+      "delete": {
+        "operationId": "delete_close_route_dayclose_closes__close_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "close_id",
+            "required": true,
+            "schema": {
+              "minimum": 1,
+              "title": "Close Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DayCloseSummaryResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Close Route",
+        "tags": [
+          "dayclose"
+        ]
+      }
+    },
+    "/dayclose/day/{day}": {
+      "get": {
+        "operationId": "day_summary_route_dayclose_day__day__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "day",
+            "required": true,
+            "schema": {
+              "maxLength": 10,
+              "minLength": 10,
+              "title": "Day",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DayCloseSummaryResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Day Summary Route",
+        "tags": [
+          "dayclose"
+        ]
+      }
+    },
+    "/dayclose/day/{day}/closes": {
+      "post": {
+        "operationId": "upsert_close_route_dayclose_day__day__closes_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "day",
+            "required": true,
+            "schema": {
+              "maxLength": 10,
+              "minLength": 10,
+              "title": "Day",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterCloseWriteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DayCloseSummaryResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Upsert Close Route",
+        "tags": [
+          "dayclose"
+        ]
+      }
+    },
+    "/dayclose/departments": {
+      "get": {
+        "operationId": "list_departments_route_dayclose_departments_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "include_inactive",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Include Inactive",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DepartmentListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Departments Route",
+        "tags": [
+          "dayclose"
+        ]
+      },
+      "post": {
+        "operationId": "create_department_route_dayclose_departments_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DepartmentWriteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DepartmentResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Department Route",
+        "tags": [
+          "dayclose"
+        ]
+      }
+    },
+    "/dayclose/departments/{department_id}": {
+      "put": {
+        "operationId": "update_department_route_dayclose_departments__department_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "department_id",
+            "required": true,
+            "schema": {
+              "minimum": 1,
+              "title": "Department Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DepartmentUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DepartmentResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Department Route",
+        "tags": [
+          "dayclose"
         ]
       }
     },
