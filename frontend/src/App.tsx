@@ -75,6 +75,7 @@ const ResetPassword = lazy(() => import("./routes/ResetPassword"));
 const ReturnCheckForm = lazy(() => import("./routes/ReturnCheckForm"));
 const Lottery = lazy(() => import("./routes/Lottery"));
 const DayClose = lazy(() => import("./routes/DayClose"));
+const PosImport = lazy(() => import("./routes/PosImport"));
 const ReturnChecks = lazy(() => import("./routes/ReturnChecks"));
 const SectionHub = lazy(() => import("./routes/SectionHub"));
 const Settings = lazy(() => import("./routes/Settings"));
@@ -288,6 +289,7 @@ export default function App() {
           <Route path="monthly/edit"     element={<RequirePermission resource="monthly" action="update"><EditMonthly /></RequirePermission>} />
           <Route path="lottery"                element={<RequirePermission resource="lottery" action="read"><Lottery /></RequirePermission>} />
           <Route path="day-close"              element={<RequirePermission resource="day_close" action="read"><DayClose /></RequirePermission>} />
+          <Route path="pos-import"             element={<RequirePermission resource="day_close" action="update"><PosImport /></RequirePermission>} />
           <Route path="return-checks"          element={<RequirePermission resource="return_checks" action="read"><ReturnChecks /></RequirePermission>} />
           <Route path="return-checks/new"      element={<RequirePermission resource="return_checks" action="create"><ReturnCheckForm /></RequirePermission>} />
           <Route path="return-checks/:id/edit" element={<RequirePermission resource="return_checks" action="update"><ReturnCheckForm /></RequirePermission>} />

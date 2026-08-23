@@ -9,10 +9,10 @@ import {
 import { ApiError } from "../lib/api";
 import { fmtMoney2 } from "../lib/formatters";
 import {
-  Alert, Breadcrumbs, Button, Card, DateInput, EmptyState, ErrorState,
-  Field, InfoTip, Input, KpiCard, KpiGrid, Loading, Modal, PageHeader,
-  PageShell, Pill, RowActions, Section, TabsBar, TabsButton, Table,
-  Textarea, tdStyle, thStyle, useToast,
+  Alert, Breadcrumbs, Button, ButtonLink, Card, DateInput, EmptyState,
+  ErrorState, Field, InfoTip, Input, KpiCard, KpiGrid, Loading, Modal,
+  PageHeader, PageShell, Pill, RowActions, Section, TabsBar, TabsButton,
+  Table, Textarea, tdStyle, thStyle, useToast,
 } from "../components/ui";
 import styles from "./DayClose.module.css";
 
@@ -44,6 +44,11 @@ export default function DayClose() {
           </>
         }
         subtitle="Register totals and department sales."
+        actions={
+          <ButtonLink to="/pos-import" size="sm" tone="secondary">
+            Import from register
+          </ButtonLink>
+        }
       />
       <TabsBar>
         <TabsButton active={tab === "day"} onClick={() => setTab("day")}>
