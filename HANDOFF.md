@@ -174,22 +174,25 @@ doubt, write it here rather than leaving it in chat.
    catalog + deletes.
 8. Accounting export — journal-entry CSV first, QuickBooks Online
    OAuth after.
-9. **Gilbarco Passport NAXML import — rescoped as the primary
-   market wedge (owner, 2026-08-23).** Target: sites on Gilbarco
-   (and similar) registers currently using Cronysoft/Modisoft.
-   Passport writes NAXML XML period-close files to a network
-   share; Phase A ingests uploads of those files (deterministic
-   parse → review → commit into DayClose: MCM → department sales,
-   MSM → tenders/taxes, POSJournal → register closes; FGM fuel
-   data stashed for the future fuel module). Phase B is a thin
-   Windows site agent watching the share and pushing raw gzipped
-   XML to our API (parse stays SERVER-side: fleet agents stay
-   dumb + updatable, raw files archive for re-parse). Owner has
-   ~a month of real Passport sample data to build against —
-   treat as production data, do NOT commit raw files to git;
-   derive scrubbed synthetic fixtures for tests. NAXML also
-   covers Verifone Ruby/Commander exports. Generic CSV import
-   remains the fallback path.
+9. ✅ SHIPPED (PRs #865 parser, #866 ingest API, #867 import
+   page, #868 site agent) — **Gilbarco Passport NAXML import,
+   the primary market wedge (owner, 2026-08-23).** The PosImport
+   module parses Passport's per-transaction PJR journal files
+   (NAXML-POSJournal 3.4; validated 100% against a real site's
+   full month — 17,723 files), aggregates per (business day,
+   register) with pay-at-pump grouped as one virtual register,
+   and books days into DayClose behind a hard merchandise-code →
+   Department mapping gate. Two paths: manual upload (XML or ZIP)
+   on /pos-import, and the thin stdlib-only Windows site agent
+   (agent/ — install runbook in agent/README.md) pushing files to
+   a key-authenticated staging endpoint the moment Passport
+   writes them (keys sha256-stored, shown once; staged days book
+   with one click). Parse stays SERVER-side by design — fleet
+   agents never need updates for parser work; raw gzipped XML is
+   kept for re-parse. NAXML also covers Verifone Ruby/Commander
+   exports (future format, same module). Fuel-grade data (FGM
+   gallons + dollars per grade) is parsed and surfaced — the seed
+   of the future fuel module.
 
 **Phase 2+ (not yet scoped in detail):** price book + vendors +
 purchase invoices with AI-assisted scanning; inventory basics;
