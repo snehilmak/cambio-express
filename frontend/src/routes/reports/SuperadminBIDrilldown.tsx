@@ -16,7 +16,7 @@ import { api, downloadCsv } from "../../lib/api";
 import { chartSeries, countChartOptions, moneyChartOptions, seriesFill } from "../../lib/chartOptions";
 import { fmtShortDate } from "../../lib/formatters";
 import {
-  Button, Card, EmptyState, ErrorState, KpiCard, KpiGrid,
+  Button, Card, DateInput, EmptyState, ErrorState, KpiCard, KpiGrid,
   PageHeader, PageShell, TableSkeleton, tdStyle, thStyle, tokens,
 } from "../../components/ui";
 import styles from "./SuperadminBIDrilldown.module.css";
@@ -172,8 +172,7 @@ export default function SuperadminBIDrilldown() {
             <div className={styles.actionRow}>
               <label className={styles.inputLabel}>
                 <span>From</span>
-                <input
-                  type="date"
+                <DateInput
                   value={from}
                   onChange={e => setFrom(e.target.value)}
                   className={styles.dateInput}
@@ -181,8 +180,7 @@ export default function SuperadminBIDrilldown() {
               </label>
               <label className={styles.inputLabel}>
                 <span>To</span>
-                <input
-                  type="date"
+                <DateInput
                   value={to}
                   onChange={e => setTo(e.target.value)}
                   className={styles.dateInput}
