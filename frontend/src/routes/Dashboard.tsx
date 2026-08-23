@@ -134,22 +134,79 @@ function Body({ summary }: { summary: DashboardSummary }) {
 
 function AdminPanel({ d }: { d: AdminDashboard }) {
   const monthName = monthShort(d.today);
+  // Module-driven layout (P1-10): each enabled module contributes
+  // its own KPIs/sections; disabled modules disappear entirely.
+  const ms = d.modules.includes("module_money_services");
   return (
     <>
       <KpiGrid>
-        <KpiCard label="Total transfers" value={d.kpis.total_transfers.toLocaleString()} sub="All time" />
-        <KpiCard
-          label="Today's transfers"
-          value={d.kpis.today_transfers.toLocaleString()}
-          sub={fmtShortDate(d.today)}
-          tone="positive"
-        />
-        <KpiCard
-          label="Unreconciled ACH"
-          value={d.kpis.pending_ach.toLocaleString()}
-          sub={d.kpis.pending_ach > 0 ? "Needs attention" : "All clear"}
-          tone={d.kpis.pending_ach > 0 ? "negative" : "positive"}
-        />
+        {ms && (
+          <>
+            <KpiCard label="Total transfers" value={d.kpis.total_transfers.toLocaleString()} sub="All time" />
+            <KpiCard
+              label="Today's transfers"
+              value={d.kpis.today_transfers.toLocaleString()}
+              sub={fmtShortDate(d.today)}
+              tone="positive"
+            />
+            <KpiCard
+              label="Unreconciled ACH"
+              value={d.kpis.pending_ach.toLocaleString()}
+              sub={d.kpis.pending_ach > 0 ? "Needs attention" : "All clear"}
+              tone={d.kpis.pending_ach > 0 ? "negative" : "positive"}
+            />
+          </>
+        )}
+        {d.day_close && (
+          <>
+            <KpiCard
+              label={`Store sales (${shortDate(d.day_close.date)})`}
+              value={`$${d.day_close.gross_sales.toLocaleString(undefined, {
+                minimumFractionDigits: 2, maximumFractionDigits: 2,
+              })}`}
+              sub={
+                <Link to="/day-close" className="ds-link" style={{ color: tokens.accent }}>
+                  Open day close →
+                </Link>
+              }
+              tone="positive"
+            />
+            <KpiCard
+              label="Drawer over / short"
+              value={
+                d.day_close.over_short == null
+                  ? "—"
+                  : `$${d.day_close.over_short.toFixed(2)}`
+              }
+              sub={
+                d.day_close.uncounted_drawers > 0
+                  ? `${d.day_close.uncounted_drawers} drawer(s) uncounted`
+                  : "All drawers counted"
+              }
+              tone={
+                d.day_close.uncounted_drawers > 0
+                || (d.day_close.over_short ?? 0) !== 0
+                  ? "warning" : "positive"
+              }
+            />
+          </>
+        )}
+        {d.lottery && (
+          <KpiCard
+            label={`Lottery (${shortDate(d.lottery.date)})`}
+            value={`$${d.lottery.value.toLocaleString(undefined, {
+              minimumFractionDigits: 2, maximumFractionDigits: 2,
+            })}`}
+            sub={
+              d.lottery.uncounted_active_packs > 0
+                ? `${d.lottery.uncounted_active_packs} pack(s) uncounted`
+                : `${d.lottery.tickets_sold} tickets sold`
+            }
+            tone={
+              d.lottery.uncounted_active_packs > 0 ? "warning" : "positive"
+            }
+          />
+        )}
         <KpiCard
           label="Today's daily book"
           value={d.kpis.today_report_entered ? "Entered" : "Pending"}
@@ -200,6 +257,33 @@ function AdminPanel({ d }: { d: AdminDashboard }) {
         )}
       </KpiGrid>
 
+      {d.day_close && d.day_close.top_departments.length > 0 && (
+        <Section title={`Department sales (${shortDate(d.day_close.date)})`}>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+              gap: space.lg,
+            }}
+          >
+            {d.day_close.top_departments.map((t) => (
+              <Card key={t.name}>
+                <div style={{ fontWeight: 600, marginBottom: space.sm }}>
+                  {t.name}
+                </div>
+                <div style={{ fontFamily: tokens.fontMono, fontSize: "1.4rem" }}>
+                  ${t.amount.toLocaleString(undefined, {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })}
+                </div>
+              </Card>
+            ))}
+          </div>
+        </Section>
+      )}
+
+      {ms && (
       <Section title="This month by company">
         <div
           style={{
@@ -244,6 +328,7 @@ function AdminPanel({ d }: { d: AdminDashboard }) {
           )}
         </div>
       </Section>
+      )}
 
       <div
         style={{
@@ -252,6 +337,7 @@ function AdminPanel({ d }: { d: AdminDashboard }) {
           gap: space.lg,
         }}
       >
+        {ms && (
         <Card>
           <header
             style={{
@@ -305,8 +391,10 @@ function AdminPanel({ d }: { d: AdminDashboard }) {
             </tbody>
           </Table>
         </Card>
+        )}
 
         <div style={{ display: "flex", flexDirection: "column", gap: space.lg }}>
+          {ms && (
           <Card>
             <header
               style={{
@@ -362,6 +450,7 @@ function AdminPanel({ d }: { d: AdminDashboard }) {
               </tbody>
             </Table>
           </Card>
+          )}
 
           <Card>
             <header
@@ -421,16 +510,51 @@ function AdminPanel({ d }: { d: AdminDashboard }) {
 // ── Employee ──────────────────────────────────────────────────
 
 function EmployeePanel({ d }: { d: EmployeeDashboard }) {
+  const ms = d.modules.includes("module_money_services");
   return (
     <>
       <KpiGrid>
-        <KpiCard
-          label="Today's transfers"
-          value={d.totals.count.toLocaleString()}
-          sub={fmtShortDate(d.today)}
-        />
+        {ms && (
+          <KpiCard
+            label="Today's transfers"
+            value={d.totals.count.toLocaleString()}
+            sub={fmtShortDate(d.today)}
+          />
+        )}
+        {d.day_close && (
+          <KpiCard
+            label={`Store sales (${shortDate(d.day_close.date)})`}
+            value={`$${d.day_close.gross_sales.toLocaleString(undefined, {
+              minimumFractionDigits: 2, maximumFractionDigits: 2,
+            })}`}
+            sub={
+              <Link to="/day-close" className="ds-link" style={{ color: tokens.accent }}>
+                Open day close →
+              </Link>
+            }
+          />
+        )}
+        {d.lottery && (
+          <KpiCard
+            label="Lottery counts"
+            value={
+              d.lottery.uncounted_active_packs > 0
+                ? `${d.lottery.uncounted_active_packs} pending`
+                : "Done"
+            }
+            sub={
+              <Link to="/lottery" className="ds-link" style={{ color: tokens.accent }}>
+                Count packs →
+              </Link>
+            }
+            tone={
+              d.lottery.uncounted_active_packs > 0 ? "warning" : "positive"
+            }
+          />
+        )}
       </KpiGrid>
 
+      {ms && (
       <Section
         title="Today's transfers"
         actions={
@@ -511,8 +635,9 @@ function EmployeePanel({ d }: { d: EmployeeDashboard }) {
           </Table>
         </Card>
       </Section>
+      )}
 
-      {d.totals.count > 0 && (
+      {ms && d.totals.count > 0 && (
         <Card>
           <div
             style={{

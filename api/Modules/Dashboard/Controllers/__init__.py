@@ -27,9 +27,94 @@ from api.Core.Clock import utc_now
 router = APIRouter()
 
 
+def _day_close_snapshot(
+    db: Session, store_id: int, today: date,
+) -> dict[str, Any] | None:
+    """Latest day-close rollup for the module section. Prefers
+    today; falls back to the most recent booked business day so
+    the card shows real numbers first thing in the morning."""
+    from api.Modules.DayClose.Models import RegisterClose
+    from api.Modules.DayClose.Services import day_summary
+
+    target = today
+    if not (
+        db.query(RegisterClose.id)
+        .filter_by(store_id=store_id, report_date=today).first()
+    ):
+        latest = (
+            db.query(RegisterClose.report_date)
+            .filter_by(store_id=store_id)
+            .order_by(RegisterClose.report_date.desc())
+            .first()
+        )
+        if latest is None:
+            return None
+        target = latest[0]
+    summary = day_summary(db, store_id, target)
+    return {
+        "date": target.isoformat(),
+        "gross_sales": summary.gross_sales_cents / 100.0,
+        "sales_tax": summary.sales_tax_cents / 100.0,
+        "over_short": (
+            None if summary.over_short_cents is None
+            else summary.over_short_cents / 100.0
+        ),
+        "uncounted_drawers": summary.uncounted_drawers,
+        "closes": len(summary.closes),
+        "top_departments": [
+            {
+                "name": t.department.name or "",
+                "amount": t.amount_cents / 100.0,
+            }
+            for t in summary.department_totals[:5]
+        ],
+    }
+
+
+def _lottery_snapshot(
+    db: Session, store_id: int, today: date,
+) -> dict[str, Any] | None:
+    """Latest lottery day-close rollup. Prefers today; falls back
+    to the most recent counted day. None until the store has any
+    active packs or counts."""
+    from api.Modules.Lottery.Models import LotteryDayCount, LotteryPack
+    from api.Modules.Lottery.Services import day_summary as lottery_day
+
+    active_packs = (
+        db.query(LotteryPack)
+        .filter_by(store_id=store_id, status="active").count()
+    )
+    target = today
+    if not (
+        db.query(LotteryDayCount.id)
+        .filter_by(store_id=store_id, report_date=today).first()
+    ):
+        latest = (
+            db.query(LotteryDayCount.report_date)
+            .filter_by(store_id=store_id)
+            .order_by(LotteryDayCount.report_date.desc())
+            .first()
+        )
+        if latest is None and active_packs == 0:
+            return None
+        if latest is not None:
+            target = latest[0]
+    summary = lottery_day(db, store_id, target)
+    return {
+        "date": target.isoformat(),
+        "tickets_sold": summary.total_sold,
+        "value": summary.total_value_cents / 100.0,
+        "uncounted_active_packs": summary.uncounted_active_packs,
+        "active_packs": active_packs,
+    }
+
+
 def _admin_summary(db: Session, store_id: int) -> dict[str, Any]:
     from api.Modules.BankSync.Models import StripeBankAccount
     from api.Modules.Batches.Models import ACHBatch
+    from api.Modules.Billing.Services.feature_flags import (
+        enabled_module_flags,
+    )
     from api.Modules.DailyBook.Models import DailyReport
     from api.Modules.Monthly.Models import MonthlyFinancial
     from api.Modules.Tenancy.Models import Store
@@ -43,46 +128,64 @@ def _admin_summary(db: Session, store_id: int) -> dict[str, Any]:
     if store is None:
         raise HTTPException(status_code=404, detail="Store not found.")
 
-    total_transfers = (
-        db.query(Transfer).filter_by(store_id=store_id).count()
-    )
-    today_transfers = (
-        db.query(Transfer)
-        .filter_by(store_id=store_id, send_date=today).count()
-    )
-    pending_ach = (
-        db.query(ACHBatch)
-        .filter_by(store_id=store_id, reconciled=False).count()
-    )
+    # The dashboard is module-driven (P1-10): each enabled module
+    # contributes its section; disabled modules cost zero queries.
+    modules = enabled_module_flags(db, store)
+    money_services = "module_money_services" in modules
 
-    recent_transfers = (
-        db.query(Transfer).filter_by(store_id=store_id)
-        .order_by(Transfer.created_at.desc()).limit(8).all()
-    )
-    recent_batches = (
-        db.query(ACHBatch).filter_by(store_id=store_id)
-        .order_by(ACHBatch.ach_date.desc()).limit(5).all()
-    )
+    total_transfers = today_transfers = pending_ach = 0
+    recent_transfers: list[Any] = []
+    recent_batches: list[Any] = []
+    company_stats: list[dict[str, Any]] = []
+    if money_services:
+        total_transfers = (
+            db.query(Transfer).filter_by(store_id=store_id).count()
+        )
+        today_transfers = (
+            db.query(Transfer)
+            .filter_by(store_id=store_id, send_date=today).count()
+        )
+        pending_ach = (
+            db.query(ACHBatch)
+            .filter_by(store_id=store_id, reconciled=False).count()
+        )
+        recent_transfers = (
+            db.query(Transfer).filter_by(store_id=store_id)
+            .order_by(Transfer.created_at.desc()).limit(8).all()
+        )
+        recent_batches = (
+            db.query(ACHBatch).filter_by(store_id=store_id)
+            .order_by(ACHBatch.ach_date.desc()).limit(5).all()
+        )
 
-    from sqlalchemy import func
-    co_q = (db.query(
-        Transfer.company,
-        func.count(Transfer.id),
-        func.coalesce(func.sum(Transfer.send_amount_cents), 0) / 100.0,
-        func.coalesce(func.sum(Transfer.fee_cents), 0) / 100.0,
-    ).filter(
-        Transfer.store_id == store_id,
-        Transfer.send_date >= month_start,
-        Transfer.status.notin_(OWNER_TRANSFER_EXCLUDED),
-    ).group_by(Transfer.company).all())
-    co_by_name = {co: (int(c or 0), float(t or 0), float(f or 0))
-                  for co, c, t, f in co_q}
-    company_stats = []
-    for co in store_mt_companies(store):
-        count, total, fees = co_by_name.get(co, (0, 0.0, 0.0))
-        company_stats.append({
-            "company": co, "count": count, "total": total, "fees": fees,
-        })
+        from sqlalchemy import func
+        co_q = (db.query(
+            Transfer.company,
+            func.count(Transfer.id),
+            func.coalesce(func.sum(Transfer.send_amount_cents), 0) / 100.0,
+            func.coalesce(func.sum(Transfer.fee_cents), 0) / 100.0,
+        ).filter(
+            Transfer.store_id == store_id,
+            Transfer.send_date >= month_start,
+            Transfer.status.notin_(OWNER_TRANSFER_EXCLUDED),
+        ).group_by(Transfer.company).all())
+        co_by_name = {co: (int(c or 0), float(t or 0), float(f or 0))
+                      for co, c, t, f in co_q}
+        for co in store_mt_companies(store):
+            count, total, fees = co_by_name.get(co, (0, 0.0, 0.0))
+            company_stats.append({
+                "company": co, "count": count, "total": total,
+                "fees": fees,
+            })
+
+    day_close = (
+        _day_close_snapshot(db, store_id, today)
+        if "module_day_close" in modules else None
+    )
+    lottery = (
+        _lottery_snapshot(db, store_id, today)
+        if "module_lottery" in modules else None
+    )
 
     today_report = (
         db.query(DailyReport)
@@ -101,6 +204,9 @@ def _admin_summary(db: Session, store_id: int) -> dict[str, Any]:
 
     return {
         "today": today.isoformat(),
+        "modules": modules,
+        "day_close": day_close,
+        "lottery": lottery,
         "kpis": {
             "total_transfers": total_transfers,
             "today_transfers": today_transfers,
@@ -148,15 +254,32 @@ def _admin_summary(db: Session, store_id: int) -> dict[str, Any]:
 
 
 def _employee_summary(db: Session, store_id: int) -> dict[str, Any]:
+    from api.Modules.Billing.Services.feature_flags import (
+        enabled_module_flags,
+    )
+    from api.Modules.Tenancy.Models import Store
     from api.Modules.Transfers.Models import Transfer
     today = date.today()
-    rows = (
-        db.query(Transfer)
-        .filter_by(store_id=store_id, send_date=today)
-        .order_by(Transfer.created_at.desc()).all()
-    )
+    store = db.get(Store, store_id)
+    modules = enabled_module_flags(db, store)
+    rows = []
+    if "module_money_services" in modules:
+        rows = (
+            db.query(Transfer)
+            .filter_by(store_id=store_id, send_date=today)
+            .order_by(Transfer.created_at.desc()).all()
+        )
     return {
         "today": today.isoformat(),
+        "modules": modules,
+        "day_close": (
+            _day_close_snapshot(db, store_id, today)
+            if "module_day_close" in modules else None
+        ),
+        "lottery": (
+            _lottery_snapshot(db, store_id, today)
+            if "module_lottery" in modules else None
+        ),
         "today_transfers": [
             {
                 "id": t.id,

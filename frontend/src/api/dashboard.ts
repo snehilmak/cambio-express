@@ -50,9 +50,32 @@ export interface DashboardBankAccount {
   last_balance_as_of: string | null;
 }
 
+// Module snapshots (P1-10): each enabled module contributes its
+// dashboard section; null = module on but nothing recorded yet.
+export interface DayCloseSnapshot {
+  date: string;
+  gross_sales: number;
+  sales_tax: number;
+  over_short: number | null;
+  uncounted_drawers: number;
+  closes: number;
+  top_departments: Array<{ name: string; amount: number }>;
+}
+
+export interface LotterySnapshot {
+  date: string;
+  tickets_sold: number;
+  value: number;
+  uncounted_active_packs: number;
+  active_packs: number;
+}
+
 export interface AdminDashboard {
   role: "admin";
   today: string;
+  modules: string[];
+  day_close: DayCloseSnapshot | null;
+  lottery: LotterySnapshot | null;
   kpis: AdminDashboardKpis;
   company_stats: CompanyStat[];
   recent_transfers: DashboardTransferRow[];
@@ -76,6 +99,9 @@ export interface EmployeeTodayRow {
 export interface EmployeeDashboard {
   role: "employee";
   today: string;
+  modules: string[];
+  day_close: DayCloseSnapshot | null;
+  lottery: LotterySnapshot | null;
   today_transfers: EmployeeTodayRow[];
   totals: { sent: number; fees: number; count: number };
 }
