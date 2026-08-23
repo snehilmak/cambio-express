@@ -135,5 +135,6 @@ def init_db(logger: Optional[logging.Logger] = None) -> None:
             # join RBAC_RESOURCES.
             _ensure_resource("lottery")
             _ensure_resource("day_close")
+            _ensure_resource("catalog")
         except Exception as exc:
             log.warning("Casbin seed skipped: %s", exc)

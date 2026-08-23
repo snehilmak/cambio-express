@@ -228,12 +228,26 @@ doubt, write it here rather than leaving it in chat.
     `store_ids` now resolves to the caller's own scope). Direct
     QuickBooks Online OAuth remains a later phase.
 
-**Phase 2+ (not yet scoped in detail):** price book + vendors +
-purchase invoices with AI-assisted scanning; inventory basics;
-fuel module (needs a gas-station design partner first);
-Modisoft/Cronysoft migration importers; public API/webhooks GA;
-loyalty / scan-data rebates; POS; payments. QuickBooks Online
-OAuth (P1-8 phase B) joins this queue.
+**Phase 2 — price book + vendors (owner-approved 2026-08-23,
+in flight as the P2 series):**
+- P2-1 — Catalog module backend: `Vendor` + `PriceBookItem`
+  (operator-owned catalogs, cents money, store-scoped), CRUD at
+  `/api/v2/catalog/*`, new RBAC resource `catalog` (employee =
+  read-only), `module_price_book` flag (retail types ON,
+  msb_hybrid OFF).
+- P2-2 — Catalog SPA: Vendors + Price book pages, nav group gated
+  on the flag.
+- P2-3 — Gilbarco warm start: seed the price book from staged
+  register journal data (PJR sale lines carry POSCode +
+  Description + MerchandiseCode + RegularSellPrice).
+- P2-4 — sub-departments via nullable `Department.parent_id`.
+
+**Phase 2+ (not yet scoped in detail):** purchase invoices with
+AI-assisted scanning; inventory basics; fuel module (needs a
+gas-station design partner first); Modisoft/Cronysoft migration
+importers; public API/webhooks GA; loyalty / scan-data rebates;
+POS; payments. QuickBooks Online OAuth (P1-8 phase B) joins
+this queue.
 
 _Superadmin "PR C" (store freeze + webhook replay) from the old
 roadmap shipped long ago; see git history._

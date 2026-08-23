@@ -2018,6 +2018,76 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/catalog/items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Items Route */
+        get: operations["list_items_route_catalog_items_get"];
+        put?: never;
+        /** Create Item Route */
+        post: operations["create_item_route_catalog_items_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/catalog/items/{item_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Update Item Route */
+        put: operations["update_item_route_catalog_items__item_id__put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/catalog/vendors": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Vendors Route */
+        get: operations["list_vendors_route_catalog_vendors_get"];
+        put?: never;
+        /** Create Vendor Route */
+        post: operations["create_vendor_route_catalog_vendors_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/catalog/vendors/{vendor_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Update Vendor Route */
+        put: operations["update_vendor_route_catalog_vendors__vendor_id__put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/customers/export.csv": {
         parameters: {
             query?: never;
@@ -7605,6 +7675,102 @@ export interface components {
             /** Total Collected */
             total_collected: number;
         };
+        /** ItemListResponse */
+        ItemListResponse: {
+            /** Page */
+            page: number;
+            /** Rows */
+            rows: components["schemas"]["ItemRow"][];
+            /** Total */
+            total: number;
+            /** Total Pages */
+            total_pages: number;
+        };
+        /** ItemResponse */
+        ItemResponse: {
+            item: components["schemas"]["ItemRow"];
+        };
+        /** ItemRow */
+        ItemRow: {
+            /** Cost */
+            cost: number;
+            /** Department Id */
+            department_id: number | null;
+            /** Department Name */
+            department_name: string;
+            /** Id */
+            id: number;
+            /** Is Active */
+            is_active: boolean;
+            /** Is Taxable */
+            is_taxable: boolean;
+            /** Name */
+            name: string;
+            /** Pos Code */
+            pos_code: string;
+            /** Pos Code Format */
+            pos_code_format: string;
+            /** Price */
+            price: number;
+            /** Source */
+            source: string;
+            /** Vendor Id */
+            vendor_id: number | null;
+            /** Vendor Name */
+            vendor_name: string;
+        };
+        /** ItemUpdateRequest */
+        ItemUpdateRequest: {
+            /** Cost */
+            cost?: number | null;
+            /** Department Id */
+            department_id?: number | null;
+            /** Is Active */
+            is_active?: boolean | null;
+            /** Is Taxable */
+            is_taxable?: boolean | null;
+            /** Name */
+            name?: string | null;
+            /** Pos Code */
+            pos_code?: string | null;
+            /** Pos Code Format */
+            pos_code_format?: string | null;
+            /** Price */
+            price?: number | null;
+            /** Vendor Id */
+            vendor_id?: number | null;
+        };
+        /** ItemWriteRequest */
+        ItemWriteRequest: {
+            /**
+             * Cost
+             * @default 0
+             */
+            cost: number;
+            /** Department Id */
+            department_id?: number | null;
+            /**
+             * Is Taxable
+             * @default true
+             */
+            is_taxable: boolean;
+            /** Name */
+            name: string;
+            /** Pos Code */
+            pos_code: string;
+            /**
+             * Pos Code Format
+             * @default upc
+             */
+            pos_code_format: string;
+            /**
+             * Price
+             * @default 0
+             */
+            price: number;
+            /** Vendor Id */
+            vendor_id?: number | null;
+        };
         /**
          * LineItemCreateRequest
          * @description POST body for /daily/{store}/{date}/line-items. Validates
@@ -11155,6 +11321,83 @@ export interface components {
             msg: string;
             /** Error Type */
             type: string;
+        };
+        /** VendorListResponse */
+        VendorListResponse: {
+            /** Vendors */
+            vendors: components["schemas"]["VendorRow"][];
+        };
+        /** VendorResponse */
+        VendorResponse: {
+            vendor: components["schemas"]["VendorRow"];
+        };
+        /** VendorRow */
+        VendorRow: {
+            /** Account Number */
+            account_number: string;
+            /** Contact Name */
+            contact_name: string;
+            /** Email */
+            email: string;
+            /** Id */
+            id: number;
+            /** Is Active */
+            is_active: boolean;
+            /** Item Count */
+            item_count: number;
+            /** Name */
+            name: string;
+            /** Notes */
+            notes: string;
+            /** Phone */
+            phone: string;
+        };
+        /** VendorUpdateRequest */
+        VendorUpdateRequest: {
+            /** Account Number */
+            account_number?: string | null;
+            /** Contact Name */
+            contact_name?: string | null;
+            /** Email */
+            email?: string | null;
+            /** Is Active */
+            is_active?: boolean | null;
+            /** Name */
+            name?: string | null;
+            /** Notes */
+            notes?: string | null;
+            /** Phone */
+            phone?: string | null;
+        };
+        /** VendorWriteRequest */
+        VendorWriteRequest: {
+            /**
+             * Account Number
+             * @default
+             */
+            account_number: string;
+            /**
+             * Contact Name
+             * @default
+             */
+            contact_name: string;
+            /**
+             * Email
+             * @default
+             */
+            email: string;
+            /** Name */
+            name: string;
+            /**
+             * Notes
+             * @default
+             */
+            notes: string;
+            /**
+             * Phone
+             * @default
+             */
+            phone: string;
         };
         /**
          * CustomerRow
@@ -14740,6 +14983,235 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BillingPortalResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_items_route_catalog_items_get: {
+        parameters: {
+            query?: {
+                q?: string;
+                department_id?: number | null;
+                vendor_id?: number | null;
+                include_inactive?: boolean;
+                /** @description 1-based page number */
+                page?: number;
+                /** @description Rows per page (1 to 200) */
+                per_page?: number;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_item_route_catalog_items_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ItemWriteRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_item_route_catalog_items__item_id__put: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                item_id: number;
+            };
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ItemUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_vendors_route_catalog_vendors_get: {
+        parameters: {
+            query?: {
+                include_inactive?: boolean;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VendorListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_vendor_route_catalog_vendors_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VendorWriteRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VendorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_vendor_route_catalog_vendors__vendor_id__put: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                vendor_id: number;
+            };
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VendorUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VendorResponse"];
                 };
             };
             /** @description Validation Error */
@@ -18880,10 +19352,12 @@ export interface operations {
     list_audit_route_superadmin_audit_log_get: {
         parameters: {
             query?: {
-                page?: number;
-                per_page?: number;
                 /** @description Optional substring filter on action */
                 action?: string;
+                /** @description 1-based page number */
+                page?: number;
+                /** @description Rows per page (1 to 200) */
+                per_page?: number;
             };
             header?: {
                 authorization?: string | null;
@@ -19103,7 +19577,9 @@ export interface operations {
             query?: {
                 q?: string | null;
                 event_type?: string | null;
+                /** @description 1-based page number */
                 page?: number;
+                /** @description Rows per page (1 to 200) */
                 per_page?: number;
             };
             header?: {
@@ -20128,7 +20604,9 @@ export interface operations {
                 q?: string | null;
                 role?: string | null;
                 store_id?: number | null;
+                /** @description 1-based page number */
                 page?: number;
+                /** @description Rows per page (1 to 200) */
                 per_page?: number;
             };
             header?: {
