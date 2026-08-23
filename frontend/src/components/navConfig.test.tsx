@@ -68,13 +68,24 @@ describe("module-flag gating (business-type bundles)", () => {
   ];
 
   it("hides money-services items when the module flag is off", () => {
-    const groups = filterNavForRole("admin", perms, []);
+    // module_check_cashing is bundled ON for every business type,
+    // so a realistic features list carries it even when money
+    // services is off (P1-11).
+    const groups = filterNavForRole(
+      "admin", perms, ["module_check_cashing"],
+    );
     const labels = groups.flatMap((g) => g.items.map((i) => i.label));
     expect(labels).not.toContain("Transfers");
     expect(labels).not.toContain("Customers");
     expect(labels).not.toContain("ACH batches");
-    // Non-module surfaces stay: check cashing is for everyone.
     expect(labels).toContain("Returned checks");
+    expect(labels).toContain("Daily book");
+  });
+
+  it("hides Returned checks when check cashing is switched off", () => {
+    const groups = filterNavForRole("admin", perms, []);
+    const labels = groups.flatMap((g) => g.items.map((i) => i.label));
+    expect(labels).not.toContain("Returned checks");
     expect(labels).toContain("Daily book");
   });
 

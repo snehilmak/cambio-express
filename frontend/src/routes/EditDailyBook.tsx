@@ -22,7 +22,7 @@ import {
   type MTBreakdownRow,
   type MTBreakdownWriteRow,
 } from "../api/dailybook";
-import { useStoreInfo } from "../api/account";
+import { useSessionStatus, useStoreInfo } from "../api/account";
 import { fmtMoney2 } from "../lib/formatters";
 import { addDaysIso } from "../lib/datetime";
 import { ApiError } from "../lib/api";
@@ -1101,6 +1101,13 @@ function FeesWidget({
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  // Check-cashing fee rows follow the module flag (P1-11) — a
+  // store that doesn't cash checks never sees them. Fail-open
+  // while session-status loads, same as the nav's hasModule.
+  const { data: session } = useSessionStatus();
+  const checkCashing =
+    session?.features == null
+    || session.features.includes("module_check_cashing");
 
   const total =
     (form.money_order_fees || 0) +
@@ -1153,22 +1160,26 @@ function FeesWidget({
                 disabled={locked}
               />
             </div>
-            <div className={styles.addRowAmount}>
-              <MoneyInput
-                label="Check cashing fees"
-                value={form.check_cashing_fees}
-                onChange={(v) => set("check_cashing_fees", v)}
-                disabled={locked}
-              />
-            </div>
-            <div className={styles.addRowAmount}>
-              <MoneyInput
-                label="Return check hold fees"
-                value={form.return_check_hold_fees}
-                onChange={(v) => set("return_check_hold_fees", v)}
-                disabled={locked}
-              />
-            </div>
+            {checkCashing && (
+              <>
+                <div className={styles.addRowAmount}>
+                  <MoneyInput
+                    label="Check cashing fees"
+                    value={form.check_cashing_fees}
+                    onChange={(v) => set("check_cashing_fees", v)}
+                    disabled={locked}
+                  />
+                </div>
+                <div className={styles.addRowAmount}>
+                  <MoneyInput
+                    label="Return check hold fees"
+                    value={form.return_check_hold_fees}
+                    onChange={(v) => set("return_check_hold_fees", v)}
+                    disabled={locked}
+                  />
+                </div>
+              </>
+            )}
             <div className={styles.addRowAmount}>
               <MoneyInput
                 label="Rebates / commissions"

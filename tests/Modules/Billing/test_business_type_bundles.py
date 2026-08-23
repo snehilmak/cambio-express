@@ -181,3 +181,42 @@ def test_superadmin_create_and_update_business_type(client):
     )
     assert updated.status_code == 200, updated.text
     assert updated.json()["store"]["business_type"] == "cstore"
+
+
+# ── module_check_cashing (P1-11) ───────────────────────────
+
+
+def test_check_cashing_on_for_every_type_override_wins(
+    client, test_store_id,
+):
+    """Every business type cashes checks by default; the per-store
+    override is the off switch for stores that don't."""
+    from api.Modules.Billing.Services import store_feature_enabled
+    from api.Modules.Billing.Models import StoreFeatureOverride
+    from api.Modules.Tenancy.Models import Store
+
+    for btype in ("cstore", "gas_station", "grocery", "msb_hybrid"):
+        _set_business_type(test_store_id, btype)
+        with db_session():
+            store = db.session.get(Store, test_store_id)
+            assert store_feature_enabled(
+                db.session, store, "module_check_cashing",
+            ) is True, btype
+
+    with db_session():
+        db.session.add(StoreFeatureOverride(
+            store_id=test_store_id,
+            flag_key="module_check_cashing",
+            enabled=False,
+        ))
+        db.session.commit()
+        store = db.session.get(Store, test_store_id)
+        assert store_feature_enabled(
+            db.session, store, "module_check_cashing",
+        ) is False
+
+    token = login_admin(client, test_store_id)
+    body = client.get(
+        "/api/v2/auth/session-status", headers=_headers(token),
+    ).json()
+    assert "module_check_cashing" not in body["features"]
