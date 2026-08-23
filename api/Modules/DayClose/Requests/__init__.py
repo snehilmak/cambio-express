@@ -91,6 +91,7 @@ class RegisterCloseRow(BaseModel):
     over_short: float | None
     tender_variance: float
     notes: str
+    source: str
     department_sales: list[DepartmentSaleRow]
 
 

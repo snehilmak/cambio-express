@@ -166,6 +166,25 @@ def test_upsert_replaces_same_register_shift(client, test_store_id):
     ).json()
     assert len(day["closes"]) == 2
 
+    # Regression: re-submitting with the SAME department must not
+    # trip the (close, department) unique constraint — old lines
+    # delete before replacements insert.
+    day = client.post(
+        "/api/v2/dayclose/day/2026-08-20/closes", headers=h,
+        json=_close_payload(
+            gross_sales=950.0,
+            department_sales=[
+                {"department_id": beer["id"], "amount": 950.0},
+            ],
+        ),
+    ).json()
+    assert day["gross_sales"] == 950.0 + 100.0
+    totals = {
+        t["department_name"]: t["amount"]
+        for t in day["department_totals"]
+    }
+    assert totals == {"Beer": 950.0}
+
 
 def test_close_validation_guards(client, test_store_id):
     h = _admin(client, test_store_id)

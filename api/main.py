@@ -65,6 +65,9 @@ def _register_routers(app: FastAPI) -> None:
     from api.Modules.DayClose.Controllers import router as dayclose_router
     app.include_router(dayclose_router)
 
+    from api.Modules.PosImport.Controllers import router as posimport_router
+    app.include_router(posimport_router)
+
     from api.Modules.Batches.Controllers import router as batches_router
     app.include_router(batches_router, prefix="/batches", tags=["batches"])
 

@@ -51,8 +51,9 @@ STORE_OWNED_MODELS: list[str] = [
     "StripeBankAccount", "StoreOwnerLink",
     # Lottery: counts FK packs FK games — purge in that order.
     "LotteryDayCount", "LotteryPack", "LotteryGame",
-    # Day close: sale lines FK closes + departments — lines first.
-    "DepartmentSale", "RegisterClose", "Department",
+    # Day close: sale lines FK closes + departments — lines first;
+    # the POS merchandise mapping FKs departments too.
+    "DepartmentSale", "RegisterClose", "PosMerchandiseMap", "Department",
     # TimeClockEntry + TimeClockShift + StoreEmployeePasskey must
     # purge before StoreEmployee (all FK to it).
     "TimeClockEntry",
@@ -113,6 +114,7 @@ def _store_owned_models() -> list[tuple[type, str]]:
     from api.Modules.DayClose.Models import (
         Department, DepartmentSale, RegisterClose,
     )
+    from api.Modules.PosImport.Models import PosMerchandiseMap
     from api.Modules.Transfers.Models import Transfer
     from api.Modules.Support.Models import SupportMessage, SupportTicket
     from api.Modules.TVDisplay.Models import TVDisplay
@@ -135,9 +137,11 @@ def _store_owned_models() -> list[tuple[type, str]]:
         (LotteryDayCount, "store_id"),
         (LotteryPack, "store_id"),
         (LotteryGame, "store_id"),
-        # Day close: sale lines FK closes + departments — lines first.
+        # Day close: sale lines FK closes + departments — lines
+        # first; the POS mapping FKs departments too.
         (DepartmentSale, "store_id"),
         (RegisterClose, "store_id"),
+        (PosMerchandiseMap, "store_id"),
         (Department, "store_id"),
         # BankTransaction + BankRule must purge before StripeBankAccount
         # — both FK to it.
