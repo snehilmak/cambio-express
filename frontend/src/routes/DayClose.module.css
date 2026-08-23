@@ -1,0 +1,59 @@
+/* Day close page — the few page-specific treatments the kit
+   primitives don't cover (CLAUDE.md inline-styles-vs-modules). */
+
+.modalForm {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.modalActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+/* Money fields in the close modal — two-up so the Z-report entry
+   doesn't become a mile-long single column. */
+.moneyGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+@media (max-width: 30rem) {
+  .moneyGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Department amount rows inside the close modal. */
+.deptRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.deptName {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.deptAmount {
+  max-width: 9rem;
+}
+
+/* A close whose drawer was never counted — same accent-bar nag as
+   the lottery uncounted-pack row. */
+.uncountedRow td:first-child {
+  box-shadow: inset 3px 0 0 0 var(--db-warning, #ffb020);
+}
+
+.departmentsActions {
+  display: flex;
+  gap: 0.5rem;
+}
