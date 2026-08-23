@@ -213,20 +213,27 @@ doubt, write it here rather than leaving it in chat.
     counts) and skip money-services queries entirely when that
     module is off; msb_hybrid stores see the pre-pivot layout
     unchanged.
-11. module_check_cashing flag (bundle ON for every business type,
-    per-store override to hide) gating the Returned-checks pages
-    and the check-cashing / hold-fee entries in the daily-book
-    Fees box, + a "Money services" nav group (Transfers /
-    Customers / ACH batches) that vanishes wholesale when
-    module_money_services is off.
+11. ✅ SHIPPED (PR #870) — module_check_cashing flag (bundle ON
+    for every business type, per-store override to hide) gating
+    the Returned-checks pages and the check-cashing / hold-fee
+    entries in the daily-book Fees box, + a "Money services" nav
+    group (Transfers / Customers / ACH batches) that vanishes
+    wholesale when module_money_services is off.
+12. ✅ SHIPPED (PR #871) — P1-8 phase A: journal-entry CSV export
+    (`/api/v2/reports/journal-entries.csv`) — one balanced
+    double-entry per business day from the day-close data, with
+    per-department sales credits and a Cash over/short balancing
+    line; importable into QuickBooks/Xero. Also fixed the
+    Data Export "Transfers CSV" (slug didn't exist; empty
+    `store_ids` now resolves to the caller's own scope). Direct
+    QuickBooks Online OAuth remains a later phase.
 
 **Phase 2+ (not yet scoped in detail):** price book + vendors +
 purchase invoices with AI-assisted scanning; inventory basics;
 fuel module (needs a gas-station design partner first);
 Modisoft/Cronysoft migration importers; public API/webhooks GA;
-loyalty / scan-data rebates; POS; payments. P1-8 accounting
-export (journal-entry CSV → QuickBooks OAuth) is next in the
-queue after item 11.
+loyalty / scan-data rebates; POS; payments. QuickBooks Online
+OAuth (P1-8 phase B) joins this queue.
 
 _Superadmin "PR C" (store freeze + webhook replay) from the old
 roadmap shipped long ago; see git history._

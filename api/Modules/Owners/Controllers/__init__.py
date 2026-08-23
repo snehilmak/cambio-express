@@ -723,7 +723,7 @@ def owner_users_route(
     user = _require_owner_principal(db, claims)
     sids = owner_store_ids(db, user)
     if not sids:
-        return {"rows": [], "total": 0, "page": 1, "total_pages": 0}
+        return {"rows": [], "total": 0, "page": 1, "total_pages": 1}
     if store_id is not None:
         if store_id not in sids:
             raise HTTPException(status_code=403, detail="Store not in your umbrella")
@@ -897,7 +897,7 @@ def owner_activity_route(
     user = _require_owner_principal(db, claims)
     sids = owner_store_ids(db, user)
     if not sids:
-        return {"rows": [], "total": 0, "page": 1, "total_pages": 0}
+        return {"rows": [], "total": 0, "page": 1, "total_pages": 1}
     if store_id is not None:
         if store_id not in sids:
             raise HTTPException(status_code=403, detail="Store not in your umbrella")

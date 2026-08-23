@@ -11,13 +11,12 @@ Auth: requires JWT principal with role="superadmin". Subsequent
 PRs add the controls dashboard, anomaly feed, discounts/
 announcements/feature-flag CRUD, and impersonation.
 """
-from math import ceil
-
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from api.Core.Database import get_db
+from api.Core.Pagination import PaginationParams, paginate, pagination_dep
 from api.Modules.Audit.Services import record_superadmin_action
 from api.Modules.Auth.Controllers import get_principal
 from api.Modules.Auth.Models import User
@@ -377,8 +376,7 @@ def list_users_route(
     q: str | None = Query(None),
     role: str | None = Query(None),
     store_id: int | None = Query(None),
-    page: int = Query(1, ge=1),
-    per_page: int = Query(50, ge=1, le=200),
+    pagination: PaginationParams = Depends(pagination_dep),
     db: Session = Depends(get_db),
     claims: dict[str, Any] = Depends(get_principal),
 ) -> dict[str, Any]:
@@ -398,16 +396,10 @@ def list_users_route(
         query = query.filter(User.role == role)
     if store_id:
         query = query.filter(User.store_id == store_id)
-    total = query.count()
-    users = (
-        query
-        .offset((page - 1) * per_page)
-        .limit(per_page)
-        .all()
-    )
-    rows = []
-    for u, store_name in users:
-        rows.append({
+
+    def _row(pair: Any) -> dict[str, Any]:
+        u, store_name = pair
+        return {
             "id": u.id,
             "username": u.username,
             "full_name": u.full_name or "",
@@ -419,13 +411,9 @@ def list_users_route(
             "has_2fa": bool(u.totp_enrolled_at),
             "last_login_at": _iso(u.last_login_at),
             "created_at": _iso(u.created_at),
-        })
-    return {
-        "rows": rows,
-        "total": total,
-        "page": page,
-        "total_pages": ceil(total / per_page),
-    }
+        }
+
+    return paginate(query, pagination, adapter=_row)
 
 
 @router.post("/users/{user_id}/change-role")
@@ -764,8 +752,7 @@ def billing_overview_route(
 def email_log_route(
     q: str | None = Query(None),
     event_type: str | None = Query(None),
-    page: int = Query(1, ge=1),
-    per_page: int = Query(50, ge=1, le=200),
+    pagination: PaginationParams = Depends(pagination_dep),
     db: Session = Depends(get_db),
     claims: dict[str, Any] = Depends(get_principal),
 ) -> dict[str, Any]:
@@ -775,12 +762,6 @@ def email_log_route(
     from api.Modules.Superadmin.Repositories import email_events_query
 
     query = email_events_query(db, search=q, event_type=event_type)
-    total = query.count()
-    events = (
-        query.offset((page - 1) * per_page)
-        .limit(per_page)
-        .all()
-    )
 
     # Suppressed addresses
     suppressed = (
@@ -788,31 +769,26 @@ def email_log_route(
         .filter(User.email_bounced_at.isnot(None))
         .all()
     )
-
-    rows = []
-    for e in events:
-        rows.append({
-            "id": e.id,
-            "to_addr": e.to_addr or "",
-            "event_type": e.event_type or "",
-            "bounce_type": e.bounce_type or "",
-            "message_id": e.message_id or "",
-            "created_at": _iso(e.created_at),
-        })
-
     suppressed_rows = [
         {"user_id": u.id, "username": u.username, "email": u.email,
          "bounced_at": _iso(u.email_bounced_at)}
         for u in suppressed
     ]
 
-    return {
-        "rows": rows,
-        "total": total,
-        "page": page,
-        "total_pages": ceil(total / per_page),
-        "suppressed": suppressed_rows,
-    }
+    def _row(e: Any) -> dict[str, Any]:
+        return {
+            "id": e.id,
+            "to_addr": e.to_addr or "",
+            "event_type": e.event_type or "",
+            "bounce_type": e.bounce_type or "",
+            "message_id": e.message_id or "",
+            "created_at": _iso(e.created_at),
+        }
+
+    return paginate(
+        query, pagination, adapter=_row,
+        extras={"suppressed": suppressed_rows},
+    )
 
 
 # ── Store deep-drill ───────────────────────────────────────
@@ -1580,8 +1556,7 @@ def email_store_route(
 
 @router.get("/audit-log", response_model=SuperadminAuditListResponse)
 def list_audit_route(
-    page: int = Query(1, ge=1),
-    per_page: int = Query(50, ge=1, le=200),
+    pagination: PaginationParams = Depends(pagination_dep),
     action: str = Query("", description="Optional substring filter on action"),
     db: Session = Depends(get_db),
     claims: dict[str, Any] = Depends(get_principal),
@@ -1595,30 +1570,26 @@ def list_audit_route(
     _require_superadmin(claims)
     from api.Modules.Superadmin.Repositories import superadmin_audit_query
     q = superadmin_audit_query(db, action=action)
-    total = q.count()
-    rows = (
-        q.offset((page - 1) * per_page)
-         .limit(per_page)
-         .all()
-    )
+
+    def _row(r: Any) -> SuperadminAuditRow:
+        return SuperadminAuditRow(
+            id=r.id,
+            admin_id=r.admin_id,
+            admin_name=r.admin_name or "",
+            action=r.action or "",
+            target_type=r.target_type or "",
+            target_id=r.target_id or "",
+            details=r.details or "",
+            created_at=_iso(r.created_at),
+        )
+
+    payload = paginate(q, pagination, adapter=_row)
     return SuperadminAuditListResponse(
-        rows=[
-            SuperadminAuditRow(
-                id=r.id,
-                admin_id=r.admin_id,
-                admin_name=r.admin_name or "",
-                action=r.action or "",
-                target_type=r.target_type or "",
-                target_id=r.target_id or "",
-                details=r.details or "",
-                created_at=_iso(r.created_at),
-            )
-            for r in rows
-        ],
-        total=total,
-        page=page,
-        per_page=per_page,
-        total_pages=max(1, ceil(total / per_page)),
+        rows=payload["rows"],
+        total=payload["total"],
+        page=payload["page"],
+        per_page=pagination.per_page,
+        total_pages=payload["total_pages"],
     )
 
 
