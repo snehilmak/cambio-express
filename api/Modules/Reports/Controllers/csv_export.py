@@ -40,6 +40,7 @@ from api.Modules.Reports.Services import (
     bank_txn_breakdown, by_destination_country, cancelled_transfers,
     cashier_productivity, check_deposits, daily_drops,
     employee_activity, fees_vs_tax, high_value_transfers,
+    journal_entries, transfers_dump,
     new_vs_returning, period_comparison, period_pl,
     returned_check_status, sales_by_company, sales_by_employee,
     sales_by_service, top_customers, top_recipients,
@@ -289,6 +290,18 @@ _STORE_REGISTRY: dict[str, dict] = {
         columns=['Date', 'Sender', 'Recipient', 'Country', 'Company', 'Status', 'Send Amount', 'Notes', 'Confirm #'],
         row_fn=lambda r: [r['send_date'].isoformat(), r['sender_name'], r['recipient_name'], r['country'], r['company'], r['status'], f"{r['amount']:.2f}", r['status_notes'], r['confirm']],
     ),
+    "transfers": _spec(
+        service=transfers_dump,
+        columns=['Date', 'Sender', 'Recipient', 'Country', 'Company', 'Service', 'Send Amount', 'Fee', 'Federal Tax', 'Total Collected', 'Status', 'Confirm #'],
+        row_fn=lambda r: [r['send_date'].isoformat(), r['sender_name'], r['recipient_name'], r['country'], r['company'], r['service_type'], f"{r['send_amount']:.2f}", f"{r['fee']:.2f}", f"{r['federal_tax']:.2f}", f"{r['total_collected']:.2f}", r['status'], r['confirm']],
+        totals_fn=lambda t: ['TOTAL', '', '', '', '', t['count'], f"{t['sent']:.2f}", f"{t['fees']:.2f}", f"{t['tax']:.2f}", '', '', ''],
+    ),
+    "journal-entries": _spec(
+        service=journal_entries,
+        columns=['Date', 'Account', 'Debit', 'Credit', 'Memo'],
+        row_fn=lambda r: [r['date'].isoformat(), r['account'], f"{r['debit']:.2f}" if r['debit'] else '', f"{r['credit']:.2f}" if r['credit'] else '', r['memo']],
+        totals_fn=lambda t: ['TOTAL', '', f"{t['debits']:.2f}", f"{t['credits']:.2f}", f"{t['days']} day(s)"],
+    ),
     "period-pl": _spec(
         service=period_pl,
         columns=['Section', 'Line', 'Amount'],
@@ -345,9 +358,13 @@ def store_csv_export(
         requested = [int(s.strip()) for s in (store_ids_raw or "").split(",") if s.strip()]
     except ValueError:
         raise HTTPException(status_code=422, detail="store_ids must be comma-separated integers.")
-    if not requested:
-        raise HTTPException(status_code=422, detail="store_ids must include at least one ID.")
+    # Empty ``store_ids`` resolves to the caller's own scope
+    # (admin/employee → their store, owner → their umbrella) —
+    # the Data Export page relies on this. Superadmin must still
+    # name stores explicitly for store-scope reports.
     store_ids = _authorize_store_scope(db, claims, requested)
+    if not store_ids:
+        raise HTTPException(status_code=422, detail="store_ids must include at least one ID.")
 
     args = {
         "from_": from_, "to": to,
