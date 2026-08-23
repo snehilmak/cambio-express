@@ -4,15 +4,17 @@ import { useQueryClient } from "@tanstack/react-query";
 
 import { useDepartments } from "../api/dayclose";
 import {
-  commitNaxml, fileToBase64, previewNaxml, saveMappings,
+  commitNaxml, commitStagedDay, fileToBase64, issueAgentKey,
+  previewNaxml, revokeAgentKey, saveMappings, useAgentKeys,
+  useStagedDays,
   type ImportRegisterRow, type NaxmlPreview,
 } from "../api/posimport";
 import { ApiError } from "../lib/api";
 import { fmtMoney2 } from "../lib/formatters";
 import {
   Alert, Breadcrumbs, Button, Card, EmptyState, Field, InfoTip,
-  KpiCard, KpiGrid, PageHeader, PageShell, Pill, Section, Select,
-  Table, tdStyle, thStyle, useToast,
+  Input, KpiCard, KpiGrid, PageHeader, PageShell, Pill, Section,
+  Select, Table, tdStyle, thStyle, useToast,
 } from "../components/ui";
 import styles from "./PosImport.module.css";
 
@@ -324,6 +326,197 @@ export default function PosImport() {
           )}
         </Section>
       )}
+
+      <AgentSection />
     </PageShell>
+  );
+}
+
+// ── Site agent (automatic uploads) ───────────────────────────
+
+function AgentSection() {
+  const qc = useQueryClient();
+  const toast = useToast();
+  const staged = useStagedDays();
+  const keys = useAgentKeys();
+  const [newLabel, setNewLabel] = useState("");
+  const [freshKey, setFreshKey] = useState<string | null>(null);
+  const [busyDay, setBusyDay] = useState("");
+  const [keyBusy, setKeyBusy] = useState(false);
+
+  async function bookDay(day: string) {
+    setBusyDay(day);
+    try {
+      const result = await commitStagedDay(day);
+      toast({
+        message: `${result.day} booked — ${result.closes_written} register close(s).`,
+        tone: "success",
+      });
+      void qc.invalidateQueries({ queryKey: ["dayclose"] });
+      void qc.invalidateQueries({ queryKey: ["posimport", "staged"] });
+    } catch (err) {
+      toast({
+        message: err instanceof ApiError
+          ? err.message : "Could not book the day.",
+        tone: "error",
+      });
+    } finally {
+      setBusyDay("");
+    }
+  }
+
+  async function onIssueKey() {
+    setKeyBusy(true);
+    try {
+      const issued = await issueAgentKey(newLabel.trim());
+      setFreshKey(issued.key);
+      setNewLabel("");
+      void qc.invalidateQueries({ queryKey: ["posimport", "agent-keys"] });
+    } catch (err) {
+      toast({
+        message: err instanceof ApiError
+          ? err.message : "Could not create the key.",
+        tone: "error",
+      });
+    } finally {
+      setKeyBusy(false);
+    }
+  }
+
+  async function onRevoke(id: number) {
+    try {
+      await revokeAgentKey(id);
+      void qc.invalidateQueries({ queryKey: ["posimport", "agent-keys"] });
+    } catch (err) {
+      toast({
+        message: err instanceof ApiError
+          ? err.message : "Could not revoke the key.",
+        tone: "error",
+      });
+    }
+  }
+
+  const stagedRows = staged.data?.days ?? [];
+  const keyRows = keys.data?.keys ?? [];
+
+  return (
+    <Section
+      title={
+        <>
+          Automatic uploads
+          <InfoTip text="Install the DineroBook site agent on the store's back-office PC and it pushes every journal file here the moment the register writes it. Issue an agent key below — it's shown exactly once. Days appear as they accumulate; book each one when you're ready." />
+        </>
+      }
+    >
+      {stagedRows.length > 0 && (
+        <Card>
+          <div style={{ overflowX: "auto" }}>
+            <Table>
+              <thead>
+                <tr>
+                  {["Business day", "Files", "Errors", "Status", ""].map(
+                    (h) => <th key={h} style={thStyle}>{h}</th>,
+                  )}
+                </tr>
+              </thead>
+              <tbody>
+                {stagedRows.map((d) => (
+                  <tr key={d.business_date}>
+                    <td style={tdStyle}>{d.business_date}</td>
+                    <td style={tdStyle}>{d.file_count}</td>
+                    <td style={tdStyle}>{d.error_count || "—"}</td>
+                    <td style={tdStyle}>
+                      <Pill tone={d.committed ? "success" : "neutral"}>
+                        {d.committed ? "booked" : "ready"}
+                      </Pill>
+                    </td>
+                    <td style={tdStyle}>
+                      <Button
+                        size="sm"
+                        busy={busyDay === d.business_date}
+                        disabled={busyDay !== ""}
+                        tone={d.committed ? "secondary" : "primary"}
+                        onClick={() => { void bookDay(d.business_date); }}
+                      >
+                        {d.committed ? "Re-book" : "Book day"}
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </Table>
+          </div>
+        </Card>
+      )}
+      {staged.data && stagedRows.length === 0 && (
+        <EmptyState
+          title="No agent uploads yet"
+          body="Once the site agent is running, days appear here as the register writes its journal."
+        />
+      )}
+
+      {freshKey && (
+        <Alert tone="success">
+          Agent key created — copy it now, it will not be shown again:
+          {" "}<code className={styles.mapCode}>{freshKey}</code>
+        </Alert>
+      )}
+      <Card>
+        <div className={styles.uploadRow}>
+          <Input
+            type="text" value={newLabel} maxLength={80}
+            placeholder="Key label (e.g. Back office PC)"
+            onChange={(e) => setNewLabel(e.target.value)}
+          />
+          <Button
+            size="sm" busy={keyBusy} disabled={keyBusy}
+            onClick={() => { void onIssueKey(); }}
+          >
+            New agent key
+          </Button>
+        </div>
+        {keyRows.length > 0 && (
+          <div style={{ overflowX: "auto" }}>
+            <Table>
+              <thead>
+                <tr>
+                  {["Label", "Created", "Last seen", "Status", ""].map(
+                    (h) => <th key={h} style={thStyle}>{h}</th>,
+                  )}
+                </tr>
+              </thead>
+              <tbody>
+                {keyRows.map((k) => (
+                  <tr key={k.id}>
+                    <td style={tdStyle}>{k.label || "—"}</td>
+                    <td style={tdStyle}>{k.created_at.slice(0, 10)}</td>
+                    <td style={tdStyle}>
+                      {k.last_used_at
+                        ? k.last_used_at.slice(0, 16).replace("T", " ")
+                        : "never"}
+                    </td>
+                    <td style={tdStyle}>
+                      <Pill tone={k.revoked ? "neutral" : "success"}>
+                        {k.revoked ? "revoked" : "active"}
+                      </Pill>
+                    </td>
+                    <td style={tdStyle}>
+                      {!k.revoked && (
+                        <Button
+                          size="sm" tone="secondary"
+                          onClick={() => { void onRevoke(k.id); }}
+                        >
+                          Revoke
+                        </Button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </Table>
+          </div>
+        )}
+      </Card>
+    </Section>
   );
 }

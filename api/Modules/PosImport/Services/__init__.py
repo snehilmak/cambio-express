@@ -4,6 +4,19 @@ Gilbarco Passport NAXML first (the market wedge); Verifone
 Ruby/Commander exports use the same NAXML family and land here
 when a design-partner site provides samples.
 """
+from api.Modules.PosImport.Services.agent import (
+    KEY_PREFIX,
+    MAX_AGENT_FILE_BYTES,
+    StagedDay,
+    StageResult,
+    authenticate_agent,
+    issue_agent_key,
+    list_agent_keys,
+    revoke_agent_key,
+    stage_journal_file,
+    staged_days,
+    staged_events_for_day,
+)
 from api.Modules.PosImport.Services.ingest import (
     CommitDayResult,
     IMPORT_SOURCE,
@@ -35,6 +48,17 @@ __all__ = [
     "CARD_TENDER_CODES",
     "CASH_TENDER_CODES",
     "CommitDayResult",
+    "KEY_PREFIX",
+    "MAX_AGENT_FILE_BYTES",
+    "StageResult",
+    "StagedDay",
+    "authenticate_agent",
+    "issue_agent_key",
+    "list_agent_keys",
+    "revoke_agent_key",
+    "stage_journal_file",
+    "staged_days",
+    "staged_events_for_day",
     "FuelGradeAggregate",
     "IMPORT_SOURCE",
     "LoadedPayload",

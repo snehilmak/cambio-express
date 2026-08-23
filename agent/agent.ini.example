@@ -1,0 +1,6 @@
+[agent]
+api_url    = https://dinerobook.com
+agent_key  = pak_PASTE_YOUR_KEY_HERE
+watch_dir  = C:\Passport\XMLGateway\BOOutbox
+pattern    = PJR*.xml
+poll_seconds = 5

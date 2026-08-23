@@ -1,3 +1,5 @@
+import { useQuery } from "@tanstack/react-query";
+
 import { api } from "../lib/api";
 import type { components } from "./openapi";
 
@@ -6,8 +8,13 @@ export type NaxmlPreview = components["schemas"]["NaxmlPreviewResponse"];
 export type ImportRegisterRow = components["schemas"]["ImportRegisterRow"];
 export type MappingRow = components["schemas"]["MappingRow"];
 export type NaxmlCommitResult = components["schemas"]["NaxmlCommitResponse"];
+export type AgentKey = components["schemas"]["AgentKeyRow"];
+export type StagedDay = components["schemas"]["StagedDayRow"];
 
 type MappingListResponse = components["schemas"]["MappingListResponse"];
+type AgentKeyListResponse = components["schemas"]["AgentKeyListResponse"];
+type AgentKeyIssueResponse = components["schemas"]["AgentKeyIssueResponse"];
+type StagedDaysResponse = components["schemas"]["StagedDaysResponse"];
 
 export async function previewNaxml(
   contentBase64: string,
@@ -34,6 +41,45 @@ export async function commitNaxml(
 ): Promise<NaxmlCommitResult> {
   return api<NaxmlCommitResult>("/api/v2/posimport/naxml/commit", {
     method: "POST", json: { content_base64: contentBase64, day },
+  });
+}
+
+export function useAgentKeys() {
+  return useQuery<AgentKeyListResponse>({
+    queryKey: ["posimport", "agent-keys"],
+    queryFn: () => api<AgentKeyListResponse>("/api/v2/posimport/agent-keys"),
+  });
+}
+
+export async function issueAgentKey(
+  label: string,
+): Promise<AgentKeyIssueResponse> {
+  return api<AgentKeyIssueResponse>("/api/v2/posimport/agent-keys", {
+    method: "POST", json: { label },
+  });
+}
+
+export async function revokeAgentKey(
+  id: number,
+): Promise<AgentKeyListResponse> {
+  return api<AgentKeyListResponse>(
+    `/api/v2/posimport/agent-keys/${id}/revoke`, { method: "POST" },
+  );
+}
+
+export function useStagedDays() {
+  return useQuery<StagedDaysResponse>({
+    queryKey: ["posimport", "staged"],
+    queryFn: () => api<StagedDaysResponse>("/api/v2/posimport/staged"),
+    refetchInterval: 60_000,   // agent pushes land continuously
+  });
+}
+
+export async function commitStagedDay(
+  day: string,
+): Promise<NaxmlCommitResult> {
+  return api<NaxmlCommitResult>("/api/v2/posimport/staged/commit", {
+    method: "POST", json: { day },
   });
 }
 

@@ -100,3 +100,74 @@ class NaxmlCommitResponse(BaseModel):
     day: str
     closes_written: int
     registers: list[str]
+
+
+# ── Site agent (Phase B) ───────────────────────────────────
+
+
+class AgentUploadRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    filename:       str = Field(..., min_length=1, max_length=120)
+    content_base64: str = Field(..., min_length=1)
+
+
+class AgentUploadResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    staged: bool
+    duplicate: bool
+    business_date: str | None
+    parse_error: str
+
+
+class AgentKeyIssueRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    label: str = Field("", max_length=80)
+
+
+class AgentKeyIssueResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: int
+    label: str
+    # The raw key — returned exactly once, never retrievable again.
+    key: str
+
+
+class AgentKeyRow(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: int
+    label: str
+    created_at: str
+    last_used_at: str | None
+    revoked: bool
+
+
+class AgentKeyListResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    keys: list[AgentKeyRow]
+
+
+class StagedDayRow(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    business_date: str
+    file_count: int
+    error_count: int
+    committed: bool
+
+
+class StagedDaysResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    days: list[StagedDayRow]
+
+
+class StagedCommitRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    day: str = Field(..., min_length=10, max_length=10)
