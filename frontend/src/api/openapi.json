@@ -589,6 +589,159 @@
         "title": "AdminUserUpdateRequest",
         "type": "object"
       },
+      "AgentKeyIssueRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "label": {
+            "default": "",
+            "maxLength": 80,
+            "title": "Label",
+            "type": "string"
+          }
+        },
+        "title": "AgentKeyIssueRequest",
+        "type": "object"
+      },
+      "AgentKeyIssueResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "key"
+        ],
+        "title": "AgentKeyIssueResponse",
+        "type": "object"
+      },
+      "AgentKeyListResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "keys": {
+            "items": {
+              "$ref": "#/components/schemas/AgentKeyRow"
+            },
+            "title": "Keys",
+            "type": "array"
+          }
+        },
+        "required": [
+          "keys"
+        ],
+        "title": "AgentKeyListResponse",
+        "type": "object"
+      },
+      "AgentKeyRow": {
+        "additionalProperties": false,
+        "properties": {
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "last_used_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Used At"
+          },
+          "revoked": {
+            "title": "Revoked",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "created_at",
+          "last_used_at",
+          "revoked"
+        ],
+        "title": "AgentKeyRow",
+        "type": "object"
+      },
+      "AgentUploadRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "content_base64": {
+            "minLength": 1,
+            "title": "Content Base64",
+            "type": "string"
+          },
+          "filename": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Filename",
+            "type": "string"
+          }
+        },
+        "required": [
+          "filename",
+          "content_base64"
+        ],
+        "title": "AgentUploadRequest",
+        "type": "object"
+      },
+      "AgentUploadResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "business_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Business Date"
+          },
+          "duplicate": {
+            "title": "Duplicate",
+            "type": "boolean"
+          },
+          "parse_error": {
+            "title": "Parse Error",
+            "type": "string"
+          },
+          "staged": {
+            "title": "Staged",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "staged",
+          "duplicate",
+          "business_date",
+          "parse_error"
+        ],
+        "title": "AgentUploadResponse",
+        "type": "object"
+      },
       "AggregatedTotals": {
         "additionalProperties": false,
         "description": "Sums across every row, returned alongside the rows.",
@@ -8484,6 +8637,68 @@
           "permissions"
         ],
         "title": "SignupResponse",
+        "type": "object"
+      },
+      "StagedCommitRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "day": {
+            "maxLength": 10,
+            "minLength": 10,
+            "title": "Day",
+            "type": "string"
+          }
+        },
+        "required": [
+          "day"
+        ],
+        "title": "StagedCommitRequest",
+        "type": "object"
+      },
+      "StagedDayRow": {
+        "additionalProperties": false,
+        "properties": {
+          "business_date": {
+            "title": "Business Date",
+            "type": "string"
+          },
+          "committed": {
+            "title": "Committed",
+            "type": "boolean"
+          },
+          "error_count": {
+            "title": "Error Count",
+            "type": "integer"
+          },
+          "file_count": {
+            "title": "File Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "business_date",
+          "file_count",
+          "error_count",
+          "committed"
+        ],
+        "title": "StagedDayRow",
+        "type": "object"
+      },
+      "StagedDaysResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "days": {
+            "items": {
+              "$ref": "#/components/schemas/StagedDayRow"
+            },
+            "title": "Days",
+            "type": "array"
+          }
+        },
+        "required": [
+          "days"
+        ],
+        "title": "StagedDaysResponse",
         "type": "object"
       },
       "StoreHourEntry": {
@@ -23727,6 +23942,273 @@
         ]
       }
     },
+    "/posimport/agent-keys": {
+      "get": {
+        "operationId": "list_agent_keys_route_posimport_agent_keys_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentKeyListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Agent Keys Route",
+        "tags": [
+          "posimport"
+        ]
+      },
+      "post": {
+        "operationId": "issue_agent_key_route_posimport_agent_keys_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentKeyIssueRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentKeyIssueResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Issue Agent Key Route",
+        "tags": [
+          "posimport"
+        ]
+      }
+    },
+    "/posimport/agent-keys/{key_id}/revoke": {
+      "post": {
+        "operationId": "revoke_agent_key_route_posimport_agent_keys__key_id__revoke_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key_id",
+            "required": true,
+            "schema": {
+              "minimum": 1,
+              "title": "Key Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentKeyListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Revoke Agent Key Route",
+        "tags": [
+          "posimport"
+        ]
+      }
+    },
+    "/posimport/agent/upload": {
+      "post": {
+        "description": "Site-agent push: one journal file per call, authenticated by\nthe per-store agent key (opaque 401 on any failure \u2014 no\nenumeration hints). Idempotent per filename so retries are\nfree. Commits its own transaction: staging isn't an operator\nmutation, so there's no audit row to co-commit.",
+        "operationId": "agent_upload_route_posimport_agent_upload_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-agent-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Agent-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentUploadRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentUploadResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Agent Upload Route",
+        "tags": [
+          "posimport"
+        ]
+      }
+    },
     "/posimport/mapping": {
       "get": {
         "operationId": "list_mapping_route_posimport_mapping_get",
@@ -24010,6 +24492,146 @@
           }
         },
         "summary": "Preview Naxml Route",
+        "tags": [
+          "posimport"
+        ]
+      }
+    },
+    "/posimport/staged": {
+      "get": {
+        "operationId": "staged_days_route_posimport_staged_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StagedDaysResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Staged Days Route",
+        "tags": [
+          "posimport"
+        ]
+      }
+    },
+    "/posimport/staged/commit": {
+      "post": {
+        "operationId": "commit_staged_route_posimport_staged_commit_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StagedCommitRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NaxmlCommitResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Commit Staged Route",
         "tags": [
           "posimport"
         ]

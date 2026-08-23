@@ -24,16 +24,23 @@ import binascii
 from datetime import datetime
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Path, Request
 from sqlalchemy.orm import Session
 
 from api.Core.Database import get_db
+from api.Core.RateLimit import limiter as _rate_limiter
 from api.Modules.Auth.Controllers import get_principal
 from api.Modules.Auth.Services.principal import (
     require_permission,
     resolve_store_scope,
 )
 from api.Modules.PosImport.Requests import (
+    AgentKeyIssueRequest,
+    AgentKeyIssueResponse,
+    AgentKeyListResponse,
+    AgentKeyRow,
+    AgentUploadRequest,
+    AgentUploadResponse,
     FuelGradeRow,
     ImportDepartmentRow,
     ImportRegisterRow,
@@ -44,17 +51,27 @@ from api.Modules.PosImport.Requests import (
     NaxmlCommitResponse,
     NaxmlPreviewResponse,
     NaxmlUploadRequest,
+    StagedCommitRequest,
+    StagedDayRow,
+    StagedDaysResponse,
 )
 from api.Modules.PosImport.Services import (
     LoadedPayload,
     PosImportError,
     aggregate_events,
+    authenticate_agent,
     commit_business_day,
+    issue_agent_key,
+    list_agent_keys,
     list_mappings,
     load_pjr_payload,
     mapping_status,
     register_label_for,
+    revoke_agent_key,
     set_mappings,
+    stage_journal_file,
+    staged_days,
+    staged_events_for_day,
 )
 
 router = APIRouter(prefix="/posimport", tags=["posimport"])
@@ -236,6 +253,169 @@ def commit_naxml_route(
             f"Gilbarco import {day.isoformat()}: "
             f"{result.closes_written} register close(s) "
             f"({', '.join(result.registers)})"
+        ),
+    )
+    db.commit()
+    return NaxmlCommitResponse(
+        day=result.day.isoformat(),
+        closes_written=result.closes_written,
+        registers=result.registers,
+    )
+
+
+# ── Site agent (Phase B) ───────────────────────────────────
+
+
+def _key_row(c) -> AgentKeyRow:
+    return AgentKeyRow(
+        id=c.id,
+        label=c.label or "",
+        created_at=c.created_at.isoformat() if c.created_at else "",
+        last_used_at=(
+            c.last_used_at.isoformat() if c.last_used_at else None
+        ),
+        revoked=c.revoked_at is not None,
+    )
+
+
+@router.get("/agent-keys", response_model=AgentKeyListResponse)
+def list_agent_keys_route(
+    db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
+) -> AgentKeyListResponse:
+    sid = resolve_store_scope(claims)
+    require_permission(claims, "day_close", "update")
+    return AgentKeyListResponse(
+        keys=[_key_row(c) for c in list_agent_keys(db, sid)],
+    )
+
+
+@router.post(
+    "/agent-keys", response_model=AgentKeyIssueResponse, status_code=201,
+)
+def issue_agent_key_route(
+    body: AgentKeyIssueRequest,
+    db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
+) -> AgentKeyIssueResponse:
+    sid = resolve_store_scope(claims)
+    require_permission(claims, "day_close", "update")
+    cred, raw = issue_agent_key(db, sid, label=body.label)
+    _audit(
+        db, claims=claims, action="issue_pos_agent_key",
+        target_type="pos_agent_credential", target_id=str(cred.id),
+        summary=f"agent key issued ({cred.label or 'unlabeled'})",
+    )
+    db.commit()
+    # The raw key crosses the wire exactly once, here.
+    return AgentKeyIssueResponse(id=cred.id, label=cred.label or "", key=raw)
+
+
+@router.post(
+    "/agent-keys/{key_id}/revoke", response_model=AgentKeyListResponse,
+)
+def revoke_agent_key_route(
+    key_id: int = Path(..., ge=1),
+    db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
+) -> AgentKeyListResponse:
+    sid = resolve_store_scope(claims)
+    require_permission(claims, "day_close", "update")
+    try:
+        cred = revoke_agent_key(db, sid, key_id)
+    except PosImportError:
+        raise HTTPException(status_code=404, detail="Agent key not found")
+    _audit(
+        db, claims=claims, action="revoke_pos_agent_key",
+        target_type="pos_agent_credential", target_id=str(cred.id),
+        summary=f"agent key revoked ({cred.label or 'unlabeled'})",
+    )
+    db.commit()
+    return AgentKeyListResponse(
+        keys=[_key_row(c) for c in list_agent_keys(db, sid)],
+    )
+
+
+@router.post("/agent/upload", response_model=AgentUploadResponse)
+@_rate_limiter.limit("120/minute;6000/hour")
+def agent_upload_route(
+    request: Request,
+    body: AgentUploadRequest,
+    x_agent_key: str = Header(""),
+    db: Session = Depends(get_db),
+) -> AgentUploadResponse:
+    """Site-agent push: one journal file per call, authenticated by
+    the per-store agent key (opaque 401 on any failure — no
+    enumeration hints). Idempotent per filename so retries are
+    free. Commits its own transaction: staging isn't an operator
+    mutation, so there's no audit row to co-commit."""
+    cred = authenticate_agent(db, x_agent_key)
+    if cred is None:
+        raise HTTPException(status_code=401, detail="Invalid agent key.")
+    try:
+        result = stage_journal_file(
+            db, int(cred.store_id),
+            filename=body.filename,
+            content=_decode_payload(body.content_base64),
+        )
+    except PosImportError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    db.commit()
+    return AgentUploadResponse(
+        staged=not result.duplicate,
+        duplicate=result.duplicate,
+        business_date=(
+            result.file.business_date.isoformat()
+            if result.file.business_date else None
+        ),
+        parse_error=result.file.parse_error or "",
+    )
+
+
+@router.get("/staged", response_model=StagedDaysResponse)
+def staged_days_route(
+    db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
+) -> StagedDaysResponse:
+    sid = resolve_store_scope(claims)
+    require_permission(claims, "day_close", "update")
+    return StagedDaysResponse(days=[
+        StagedDayRow(
+            business_date=d.business_date.isoformat(),
+            file_count=d.file_count,
+            error_count=d.error_count,
+            committed=d.committed,
+        )
+        for d in staged_days(db, sid)
+    ])
+
+
+@router.post("/staged/commit", response_model=NaxmlCommitResponse)
+def commit_staged_route(
+    body: StagedCommitRequest,
+    db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
+) -> NaxmlCommitResponse:
+    sid = resolve_store_scope(claims)
+    require_permission(claims, "day_close", "update")
+    try:
+        day = datetime.strptime(body.day, "%Y-%m-%d").date()
+    except ValueError:
+        raise HTTPException(status_code=422, detail="day must be YYYY-MM-DD")
+    events = staged_events_for_day(db, sid, day)
+    try:
+        result = commit_business_day(
+            db, sid, day, events=events,
+            created_by=int(claims["sub"]),
+        )
+    except PosImportError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    _audit(
+        db, claims=claims, action="commit_pos_import",
+        target_type="register_close", target_id=day.isoformat(),
+        summary=(
+            f"Gilbarco staged import {day.isoformat()}: "
+            f"{result.closes_written} register close(s)"
         ),
     )
     db.commit()

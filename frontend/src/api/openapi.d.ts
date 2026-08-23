@@ -3229,6 +3229,65 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/posimport/agent-keys": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Agent Keys Route */
+        get: operations["list_agent_keys_route_posimport_agent_keys_get"];
+        put?: never;
+        /** Issue Agent Key Route */
+        post: operations["issue_agent_key_route_posimport_agent_keys_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/posimport/agent-keys/{key_id}/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Revoke Agent Key Route */
+        post: operations["revoke_agent_key_route_posimport_agent_keys__key_id__revoke_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/posimport/agent/upload": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Agent Upload Route
+         * @description Site-agent push: one journal file per call, authenticated by
+         *     the per-store agent key (opaque 401 on any failure — no
+         *     enumeration hints). Idempotent per filename so retries are
+         *     free. Commits its own transaction: staging isn't an operator
+         *     mutation, so there's no audit row to co-commit.
+         */
+        post: operations["agent_upload_route_posimport_agent_upload_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/posimport/mapping": {
         parameters: {
             query?: never;
@@ -3275,6 +3334,40 @@ export interface paths {
         put?: never;
         /** Preview Naxml Route */
         post: operations["preview_naxml_route_posimport_naxml_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/posimport/staged": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Staged Days Route */
+        get: operations["staged_days_route_posimport_staged_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/posimport/staged/commit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Commit Staged Route */
+        post: operations["commit_staged_route_posimport_staged_commit_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -5654,6 +5747,59 @@ export interface components {
             password?: string | null;
             /** Role */
             role?: string | null;
+        };
+        /** AgentKeyIssueRequest */
+        AgentKeyIssueRequest: {
+            /**
+             * Label
+             * @default
+             */
+            label: string;
+        };
+        /** AgentKeyIssueResponse */
+        AgentKeyIssueResponse: {
+            /** Id */
+            id: number;
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+        };
+        /** AgentKeyListResponse */
+        AgentKeyListResponse: {
+            /** Keys */
+            keys: components["schemas"]["AgentKeyRow"][];
+        };
+        /** AgentKeyRow */
+        AgentKeyRow: {
+            /** Created At */
+            created_at: string;
+            /** Id */
+            id: number;
+            /** Label */
+            label: string;
+            /** Last Used At */
+            last_used_at: string | null;
+            /** Revoked */
+            revoked: boolean;
+        };
+        /** AgentUploadRequest */
+        AgentUploadRequest: {
+            /** Content Base64 */
+            content_base64: string;
+            /** Filename */
+            filename: string;
+        };
+        /** AgentUploadResponse */
+        AgentUploadResponse: {
+            /** Business Date */
+            business_date: string | null;
+            /** Duplicate */
+            duplicate: boolean;
+            /** Parse Error */
+            parse_error: string;
+            /** Staged */
+            staged: boolean;
         };
         /**
          * AggregatedTotals
@@ -9635,6 +9781,27 @@ export interface components {
             user_id: number;
             /** Username */
             username: string;
+        };
+        /** StagedCommitRequest */
+        StagedCommitRequest: {
+            /** Day */
+            day: string;
+        };
+        /** StagedDayRow */
+        StagedDayRow: {
+            /** Business Date */
+            business_date: string;
+            /** Committed */
+            committed: boolean;
+            /** Error Count */
+            error_count: number;
+            /** File Count */
+            file_count: number;
+        };
+        /** StagedDaysResponse */
+        StagedDaysResponse: {
+            /** Days */
+            days: components["schemas"]["StagedDayRow"][];
         };
         /**
          * StoreHourEntry
@@ -16965,6 +17132,146 @@ export interface operations {
             };
         };
     };
+    list_agent_keys_route_posimport_agent_keys_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentKeyListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    issue_agent_key_route_posimport_agent_keys_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentKeyIssueRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentKeyIssueResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revoke_agent_key_route_posimport_agent_keys__key_id__revoke_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                key_id: number;
+            };
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentKeyListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    agent_upload_route_posimport_agent_upload_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-agent-key"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentUploadRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentUploadResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_mapping_route_posimport_mapping_get: {
         parameters: {
             query?: never;
@@ -17096,6 +17403,76 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["NaxmlPreviewResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    staged_days_route_posimport_staged_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StagedDaysResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    commit_staged_route_posimport_staged_commit_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StagedCommitRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NaxmlCommitResponse"];
                 };
             };
             /** @description Validation Error */
