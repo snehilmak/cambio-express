@@ -46,12 +46,22 @@ class Department(Base):
     id         = Column(Integer, primary_key=True)
     store_id   = Column(Integer, ForeignKey("store.id"), nullable=False, index=True)
     name       = Column(String(80), nullable=False)
+    # Sub-departments (P2-4): one level deep only — a parent must
+    # itself be top-level, enforced in the Service. Sales lines and
+    # price-book items keep pointing at whichever department they
+    # reference; the hierarchy is display/grouping, not a rollup
+    # rewrite.
+    parent_id  = Column(
+        Integer, ForeignKey("department.id"), nullable=True, index=True,
+    )
     sort_order = Column(Integer, nullable=False, default=0)
     # Deactivate instead of delete — historical sales lines keep
     # their FK when a department is retired.
     is_active  = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     __table_args__ = (UniqueConstraint("store_id", "name"),)
+
+    parent = relationship("Department", remote_side=[id])
 
 
 class RegisterClose(Base):

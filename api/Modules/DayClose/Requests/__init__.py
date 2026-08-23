@@ -13,6 +13,7 @@ class DepartmentWriteRequest(BaseModel):
 
     name:       str = Field(..., min_length=1, max_length=80)
     sort_order: int = Field(0, ge=0, le=10000)
+    parent_id:  int | None = Field(None, ge=1)
 
 
 class DepartmentUpdateRequest(BaseModel):
@@ -21,6 +22,9 @@ class DepartmentUpdateRequest(BaseModel):
     name:       str | None = Field(None, min_length=1, max_length=80)
     sort_order: int | None = Field(None, ge=0, le=10000)
     is_active:  bool | None = None
+    # 0 clears the parent link (None = leave unchanged — see the
+    # PATCH-style semantics in update_department).
+    parent_id:  int | None = Field(None, ge=0)
 
 
 class DepartmentRow(BaseModel):
@@ -30,6 +34,8 @@ class DepartmentRow(BaseModel):
     name: str
     sort_order: int
     is_active: bool
+    parent_id: int | None
+    parent_name: str
 
 
 class DepartmentListResponse(BaseModel):

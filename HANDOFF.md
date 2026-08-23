@@ -243,7 +243,12 @@ in flight as the P2 series):**
   newest sale wins, departments via PosMerchandiseMap) and
   creates the missing items with source="gilbarco"; existing
   scan codes are never overwritten, so re-seeding is safe.
-- P2-4 — sub-departments via nullable `Department.parent_id`.
+- ✅ P2-4 — sub-departments via nullable `Department.parent_id`,
+  one level deep (Service-enforced: parent must be top-level, no
+  self/cycle, a department with children can't be nested; 0
+  clears the link on update). Day-close department picker +
+  price-book links keep pointing at whichever department a row
+  references — the hierarchy is grouping, not a rollup rewrite.
 
 **Phase 2+ (not yet scoped in detail):** purchase invoices with
 AI-assisted scanning; inventory basics; fuel module (needs a

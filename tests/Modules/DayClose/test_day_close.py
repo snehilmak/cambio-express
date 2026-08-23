@@ -282,3 +282,53 @@ def test_session_status_carries_day_close_flag(client, test_store_id):
         "/api/v2/auth/session-status", headers=_headers(token),
     ).json()
     assert "module_day_close" in body["features"]
+
+
+# ── Sub-departments (P2-4) ─────────────────────────────────
+
+
+def test_sub_department_one_level_rules(client, test_store_id):
+    h = _admin(client, test_store_id)
+    tobacco = _mk_department(client, h, "Tobacco")
+    resp = client.post("/api/v2/dayclose/departments", headers=h, json={
+        "name": "Cigarettes", "parent_id": tobacco["id"],
+    })
+    assert resp.status_code == 201, resp.text
+    cigs = resp.json()["department"]
+    assert cigs["parent_id"] == tobacco["id"]
+    assert cigs["parent_name"] == "Tobacco"
+
+    # Depth 2 is rejected: can't nest under a sub-department.
+    resp = client.post("/api/v2/dayclose/departments", headers=h, json={
+        "name": "Menthols", "parent_id": cigs["id"],
+    })
+    assert resp.status_code == 409
+
+    # A department with children can't itself gain a parent.
+    other = _mk_department(client, h, "Beverages")
+    resp = client.put(
+        f"/api/v2/dayclose/departments/{tobacco['id']}", headers=h,
+        json={"parent_id": other["id"]},
+    )
+    assert resp.status_code == 409
+
+    # Self-parenting is a cycle.
+    resp = client.put(
+        f"/api/v2/dayclose/departments/{other['id']}", headers=h,
+        json={"parent_id": other["id"]},
+    )
+    assert resp.status_code == 409
+
+    # Unknown / cross-store parent 404s.
+    resp = client.post("/api/v2/dayclose/departments", headers=h, json={
+        "name": "Bad", "parent_id": 999999,
+    })
+    assert resp.status_code == 404
+
+    # 0 clears the link.
+    resp = client.put(
+        f"/api/v2/dayclose/departments/{cigs['id']}", headers=h,
+        json={"parent_id": 0},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["department"]["parent_id"] is None

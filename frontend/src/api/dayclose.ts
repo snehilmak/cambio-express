@@ -31,7 +31,7 @@ export function useDayClose(day: string) {
 }
 
 export async function createDepartment(body: {
-  name: string; sort_order?: number;
+  name: string; sort_order?: number; parent_id?: number | null;
 }): Promise<DepartmentResponse> {
   return api<DepartmentResponse>("/api/v2/dayclose/departments", {
     method: "POST", json: body,
@@ -40,7 +40,11 @@ export async function createDepartment(body: {
 
 export async function updateDepartment(
   id: number,
-  body: { name?: string; sort_order?: number; is_active?: boolean },
+  body: {
+    name?: string; sort_order?: number; is_active?: boolean;
+    // 0 clears the parent link (server PATCH semantics).
+    parent_id?: number;
+  },
 ): Promise<DepartmentResponse> {
   return api<DepartmentResponse>(`/api/v2/dayclose/departments/${id}`, {
     method: "PUT", json: body,
