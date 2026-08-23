@@ -16,6 +16,10 @@ Pillow==10.4.0
 # which conflicts with our Pillow==10.4.0 pin. 0.11.9 accepts
 # Pillow 10.x and its extract_text() output is identical.
 pdfplumber==0.11.9
+# Gilbarco Passport NAXML journal ingest (PosImport) — the XML
+# comes from customer sites (untrusted), so parse through
+# defusedxml to neutralize XXE / entity-expansion attacks.
+defusedxml==0.7.1
 pytest==8.2.0
 # ── FastAPI ─────────────────────────────────────────────────────
 # Flask is gone as of PR #550 — asgi.py is the production entry
