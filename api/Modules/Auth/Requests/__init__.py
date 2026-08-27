@@ -37,6 +37,12 @@ from api.Modules.Auth.Requests.push import (
     PushSubscribeRequest,
     PushUnsubscribeRequest,
 )
+from api.Modules.Auth.Requests.switch_store import (
+    MyStoresResponse,
+    SwitchableStoreRow,
+    SwitchStoreRequest,
+    SwitchStoreResponse,
+)
 from api.Modules.Auth.Requests.sessions import (
     ActiveSessionRow,
     ActiveSessionsResponse,
@@ -53,12 +59,14 @@ __all__ = [
     "LoginResponse",
     "MyActivityResponse",
     "MyActivityRow",
+    "MyStoresResponse",
     "NotificationsResponse",
     "NotificationsUpdateRequest",
     "OwnerSignupRequest",
     "OwnerSignupResponse",
     "ProfileResponse",
     "ProfileUpdateRequest",
+    "SwitchableStoreRow",
     "PushStatusResponse",
     "PushSubscribeRequest",
     "PushUnsubscribeRequest",
@@ -69,6 +77,8 @@ __all__ = [
     "SignupRequest",
     "SignupResponse",
     "StoreLookupResponse",
+    "SwitchStoreRequest",
+    "SwitchStoreResponse",
     "TotpEnrollConfirmRequest",
     "TotpEnrollFinishRequest",
     "TotpEnrollFinishResponse",

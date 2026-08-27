@@ -65,6 +65,13 @@ async function _silentRefresh(): Promise<boolean> {
         typeof body.user_id === "number"
       ) {
         persistLoginResponse(body);
+        // Owner store context: refresh re-mints the BASE owner
+        // token (the server never persists switch state), so if
+        // this device had entered a store, re-enter it now — the
+        // retried request then runs store-scoped as before.
+        if (body.role === "owner") {
+          await _reenterOwnerStore();
+        }
       }
       return true;
     } catch {
@@ -75,6 +82,36 @@ async function _silentRefresh(): Promise<boolean> {
   })();
   return _inFlightRefresh;
 }
+
+async function _reenterOwnerStore(): Promise<void> {
+  let storeId: number | null = null;
+  try {
+    const raw = window.localStorage.getItem("db.owner_active_store");
+    const id = raw != null ? Number(raw) : NaN;
+    storeId = Number.isFinite(id) && id > 0 ? id : null;
+  } catch { /* ignore */ }
+  if (storeId == null) return;
+  try {
+    const resp = await fetch("/api/v2/auth/switch-store", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ store_id: storeId }),
+    });
+    if (resp.ok) {
+      const body = await resp.json();
+      if (typeof body === "object" && body
+          && typeof body.user_id === "number") {
+        persistLoginResponse(body);
+      }
+    } else if (resp.status === 403 || resp.status === 404) {
+      // Store no longer switchable (unlinked / deactivated) —
+      // stop trying on every refresh.
+      window.localStorage.removeItem("db.owner_active_store");
+    }
+  } catch { /* base owner token still works; the chrome recovers */ }
+}
+
 
 function _bounceToLogin(): void {
   clearAccessToken();

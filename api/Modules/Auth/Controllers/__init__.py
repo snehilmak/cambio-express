@@ -29,10 +29,12 @@ from api.Modules.Auth.Requests import (
     LoginResponse,
     MyActivityResponse,
     MyActivityRow,
+    MyStoresResponse,
     NotificationsResponse,
     NotificationsUpdateRequest,
     OwnerSignupRequest,
     OwnerSignupResponse,
+    SwitchableStoreRow,
     ProfileResponse,
     ProfileUpdateRequest,
     PushStatusResponse,
@@ -45,6 +47,8 @@ from api.Modules.Auth.Requests import (
     SignupRequest,
     SignupResponse,
     StoreLookupResponse,
+    SwitchStoreRequest,
+    SwitchStoreResponse,
     TotpEnrollConfirmRequest,
     TotpEnrollFinishRequest,
     TotpEnrollFinishResponse,
@@ -1849,3 +1853,135 @@ def revoke_session_route(
     n = _revoke_one(db, user_id=int(sub), session_id=session_id)
     db.commit()
     return SessionRevokeResponse(revoked=n)
+
+
+# ── Owner store switching (U-2, single-dashboard principle) ──
+#
+# An owner ENTERS a store and sees exactly the same store view as
+# the users they create — /auth/switch-store derives a store-scoped
+# admin token for the selected store, and the Switch Store modal
+# just changes which store the one dashboard shows.
+#
+# Security contract (see Auth INVARIANTS.md): the derived token is
+# minted ONLY from an already-full access token (get_principal
+# refuses pending/purpose tokens) whose subject is an active owner
+# linked to the target store. The `owner_id` claim marks the token
+# as owner-context so the SPA keeps offering the switcher and this
+# route accepts re-switching from it.
+
+
+def _resolve_switching_owner(db: Session, claims: dict[str, Any]):
+    """The active owner behind this principal, or 403. Accepts a
+    base owner token (role=owner) or an owner-context store token
+    (role=admin + owner_id claim from a prior switch)."""
+    from api.Modules.Tenancy.Models import User
+    if claims.get("role") == "owner":
+        owner_id = int(claims["sub"])
+    elif claims.get("owner_id") is not None:
+        owner_id = int(claims["owner_id"])
+    else:
+        raise HTTPException(
+            status_code=403, detail="Only owners can switch stores.",
+        )
+    owner = db.get(User, owner_id)
+    if owner is None or owner.role != "owner" or not owner.is_active:
+        raise HTTPException(
+            status_code=403, detail="Only owners can switch stores.",
+        )
+    return owner
+
+
+def _owner_switchable_store_ids(db: Session, owner: Any) -> set[int]:
+    """Umbrella links plus the owner's own home store."""
+    from api.Modules.Owners.Services import owner_store_ids
+    ids = set(owner_store_ids(db, owner))
+    if owner.store_id is not None:
+        ids.add(int(owner.store_id))
+    return ids
+
+
+@router.get("/my-stores", response_model=MyStoresResponse)
+def my_stores_route(
+    db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
+) -> MyStoresResponse:
+    """The stores this owner can switch into — feeds the Switch
+    Store modal (name + address search happens client-side)."""
+    from api.Modules.Tenancy.Models import Store
+    owner = _resolve_switching_owner(db, claims)
+    ids = _owner_switchable_store_ids(db, owner)
+    current = claims.get("store_id")
+    stores = (
+        db.query(Store)
+          .filter(Store.id.in_(ids), Store.is_active.is_(True))
+          .order_by(Store.name)
+          .all()
+    ) if ids else []
+    return MyStoresResponse(stores=[
+        SwitchableStoreRow(
+            store_id=s.id,
+            name=s.name or "",
+            slug=s.slug or "",
+            address=s.address or "",
+            is_current=(current is not None and int(current) == s.id),
+        )
+        for s in stores
+    ])
+
+
+@router.post("/switch-store", response_model=SwitchStoreResponse)
+@_rate_limiter.limit("30/minute")
+def switch_store_route(
+    request: Request,
+    body: SwitchStoreRequest,
+    response: Response,
+    db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
+) -> SwitchStoreResponse:
+    """Enter one of the owner's stores: issue a store-scoped admin
+    token so the owner gets the exact store view their team sees."""
+    from api.Core.Permissions import permissions_for as _perms_for
+    from api.Modules.Audit.Services import record_operator_action
+    from api.Modules.Tenancy.Models import Store
+    owner = _resolve_switching_owner(db, claims)
+    if body.store_id not in _owner_switchable_store_ids(db, owner):
+        raise HTTPException(status_code=404, detail="Store not found")
+    store = db.get(Store, body.store_id)
+    if store is None or not store.is_active:
+        raise HTTPException(status_code=404, detail="Store not found")
+
+    issuer = JWTIssuer(
+        sub=owner.id,
+        role="admin",
+        store_id=store.id,
+        permissions=_perms_for("admin", store_id=store.id),
+        full_name=owner.full_name or "",
+        username=owner.username or "",
+        session_id=claims.get("sid"),
+    )
+    token = issue_access_token(issuer, extra={"owner_id": owner.id})
+    _set_access_token_cookie(response, token)
+    record_operator_action(
+        db,
+        store_id=store.id,
+        user_id=owner.id,
+        user_name=owner.full_name or owner.username or "",
+        user_role="owner",
+        target_type="store",
+        action="owner_enter_store",
+        target_id=str(store.id),
+        summary=f"owner entered store {store.name or store.id}",
+    )
+    db.commit()
+    return SwitchStoreResponse(
+        access_token=token,
+        store_id=store.id,
+        store_name=store.name or "",
+        role="admin",
+        expires_in=DEFAULT_ACCESS_TOKEN_TTL_SECONDS,
+        user_id=owner.id,
+        username=owner.username or "",
+        full_name=owner.full_name or "",
+        permissions=issuer.permissions,
+        owner_id=owner.id,
+    )

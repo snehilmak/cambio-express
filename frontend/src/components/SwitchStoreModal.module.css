@@ -1,0 +1,103 @@
+/* Switch Store modal — the owner's store picker (U-2). */
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-width: min(26rem, 80vw);
+}
+
+.tabsRow {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  max-height: 22rem;
+  overflow-y: auto;
+  border: 1px solid var(--db-border, var(--border));
+  border-radius: 0.75rem;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.65rem 0.75rem;
+  border-bottom: 1px solid var(--db-border, var(--border));
+}
+
+.row:last-child {
+  border-bottom: none;
+}
+
+.rowCurrent {
+  background: var(--db-surface-2, var(--surface-2));
+}
+
+.rowMain {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  text-align: left;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  color: var(--db-text, var(--text));
+}
+
+.rowMain:disabled {
+  cursor: default;
+}
+
+.rowName {
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.rowAddress {
+  font-size: 0.8rem;
+  color: var(--db-text-muted, var(--text-muted));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.star {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1.1rem;
+  color: var(--db-text-muted, var(--text-muted));
+  padding: 0.25rem;
+}
+
+.starOn {
+  color: var(--db-warning, #ffb020);
+}
+
+.radio {
+  width: 1.05rem;
+  height: 1.05rem;
+  border-radius: 50%;
+  border: 2px solid var(--db-border-strong, var(--border-strong));
+  flex-shrink: 0;
+}
+
+.radioOn {
+  border-color: var(--db-accent, #3fff00);
+  box-shadow: inset 0 0 0 3.5px var(--db-accent, #3fff00);
+}
+
+.footer {
+  display: flex;
+  justify-content: flex-start;
+}

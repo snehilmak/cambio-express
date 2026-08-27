@@ -12,7 +12,9 @@ import { CommandPalette } from "./CommandPalette";
 import { HelpCenter } from "./HelpCenter";
 import { InstallAppButton } from "./InstallAppButton";
 import { filterNavForRole, SUPPORT_LINK } from "./navConfig";
+import { isOwnerSession } from "../api/switchStore";
 import { SlimSidebar } from "./SlimSidebar";
+import SwitchStoreModal from "./SwitchStoreModal";
 import ThemeToggle from "./ThemeToggle";
 import { UserMenu } from "./UserMenu";
 
@@ -174,12 +176,70 @@ function Topbar({
           <path d="M4 18h16" />
         </svg>
       </button>
+      {isOwnerSession() && <StoreSwitchChip identity={identity} />}
       <span style={topbarSpacer} />
       {referralCode && <ReferralBadge code={referralCode} />}
       <InstallAppButton />
       <ThemeToggle />
       <UserMenu identity={identity} onSignOut={onSignOut} />
     </header>
+  );
+}
+
+// Owner store-context chip (U-2, single-dashboard principle):
+// shows which store the owner is currently viewing and opens the
+// Switch Store modal. Rendered only for owner sessions — base
+// owner logins ("Enter a store") and owner-context store views.
+function StoreSwitchChip({
+  identity,
+}: {
+  identity: ReturnType<typeof getCurrentIdentity>;
+}) {
+  const [open, setOpen] = useState(false);
+  const session = useSessionStatus();
+  const inStore = identity?.role === "admin" && identity?.owner_id != null;
+  const label = inStore
+    ? (session.data?.store_name || "Switch store")
+    : "Enter a store";
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        title="Switch store"
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: "0.4rem",
+          padding: "0.3rem 0.8rem",
+          borderRadius: "999px",
+          border: "1px solid var(--db-border-strong, var(--border-strong))",
+          background: "var(--db-surface-2, var(--surface-2))",
+          color: "var(--db-text, var(--text))",
+          cursor: "pointer",
+          fontWeight: 600,
+          maxWidth: "14rem",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+        }}
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+          stroke="currentColor" strokeWidth="2" strokeLinecap="round"
+          strokeLinejoin="round" aria-hidden="true">
+          <path d="M3 9l1-5h16l1 5" />
+          <path d="M4 9v11h16V9" />
+          <path d="M9 20v-6h6v6" />
+        </svg>
+        {label}
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+          stroke="currentColor" strokeWidth="2" strokeLinecap="round"
+          strokeLinejoin="round" aria-hidden="true">
+          <path d="M6 9l6 6 6-6" />
+        </svg>
+      </button>
+      <SwitchStoreModal open={open} onClose={() => setOpen(false)} />
+    </>
   );
 }
 

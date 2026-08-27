@@ -65,9 +65,15 @@ class JWTIssuer:
 
 def issue_access_token(
     issuer: JWTIssuer, *, ttl_seconds: int = DEFAULT_ACCESS_TOKEN_TTL_SECONDS,
+    extra: dict[str, Any] | None = None,
 ) -> str:
     """Mint an HS256 JWT carrying the issuer's claims. Returns the
-    encoded token string."""
+    encoded token string.
+
+    ``extra`` adds auxiliary claims (e.g. the owner-context marker
+    ``owner_id`` on a store-scoped token minted by /auth/switch-
+    store). Reserved claim names can't be overridden — auxiliary
+    context must never rewrite identity, scope, or expiry."""
     now = _now()
     payload: dict[str, Any] = {
         "sub": str(issuer.sub),
@@ -81,6 +87,9 @@ def issue_access_token(
     }
     if issuer.session_id is not None:
         payload["sid"] = issuer.session_id
+    for key, value in (extra or {}).items():
+        if key not in payload and key != "purpose":
+            payload[key] = value
     return jwt.encode(payload, _secret(), algorithm=JWT_ALGORITHM)
 
 

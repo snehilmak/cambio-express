@@ -282,6 +282,26 @@ in flight as the P2 series):**
 - Future: AI-assisted invoice scanning (photograph the paper
   invoice → drafted lines), payment/aging report.
 
+**U-track — simplified user hierarchy (owner-directed,
+2026-08-27):** the SINGLE-DASHBOARD principle: an owner logging
+in sees the SAME store view as the users they create — one
+dashboard to maintain; the Switch Store modal (patterned on the
+competitor's picker: search, favorites, active-store radio) just
+changes which store it shows.
+- ✅ U-1 (PR #880) — per-resource permission overlay (the
+  "created admin can't see new modules" bug).
+- ✅ U-2 — owner store switcher: `/auth/my-stores` +
+  `/auth/switch-store` mint a store-scoped ADMIN token for an
+  owner (sub stays the owner for audit; `owner_id` claim marks
+  owner-context; rules in Auth INVARIANTS.md). SPA: topbar store
+  chip + Switch Store modal; silent refresh re-enters the
+  remembered store ("db.owner_active_store").
+- U-3 — per-user module access grants (owner gives users
+  specific module access).
+- U-4 — owner-first signup + login unification (retire the
+  separate owner login/surfaces; owner overview becomes a page
+  inside the one dashboard).
+
 **Phase 2+ (not yet scoped in detail):** inventory basics; fuel module (needs a
 gas-station design partner first); Modisoft/Cronysoft migration
 importers; public API/webhooks GA; loyalty / scan-data rebates;

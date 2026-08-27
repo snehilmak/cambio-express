@@ -1094,6 +1094,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/my-stores": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * My Stores Route
+         * @description The stores this owner can switch into — feeds the Switch
+         *     Store modal (name + address search happens client-side).
+         */
+        get: operations["my_stores_route_auth_my_stores_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/notifications": {
         parameters: {
             query?: never;
@@ -1582,6 +1603,27 @@ export interface paths {
         get: operations["store_by_slug_route_auth_store_by_slug__slug__get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/switch-store": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Switch Store Route
+         * @description Enter one of the owner's stores: issue a store-scoped admin
+         *     token so the owner gets the exact store view their team sees.
+         */
+        post: operations["switch_store_route_auth_switch_store_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -8757,6 +8799,11 @@ export interface components {
             /** Ts */
             ts: string;
         };
+        /** MyStoresResponse */
+        MyStoresResponse: {
+            /** Stores */
+            stores: components["schemas"]["SwitchableStoreRow"][];
+        };
         /** NaxmlCommitRequest */
         NaxmlCommitRequest: {
             /** Content Base64 */
@@ -10928,6 +10975,47 @@ export interface components {
             plan?: string | null;
             /** Slug */
             slug?: string | null;
+        };
+        /** SwitchStoreRequest */
+        SwitchStoreRequest: {
+            /** Store Id */
+            store_id: number;
+        };
+        /** SwitchStoreResponse */
+        SwitchStoreResponse: {
+            /** Access Token */
+            access_token: string;
+            /** Expires In */
+            expires_in: number;
+            /** Full Name */
+            full_name: string;
+            /** Owner Id */
+            owner_id: number;
+            /** Permissions */
+            permissions: string[];
+            /** Role */
+            role: string;
+            /** Store Id */
+            store_id: number;
+            /** Store Name */
+            store_name: string;
+            /** User Id */
+            user_id: number;
+            /** Username */
+            username: string;
+        };
+        /** SwitchableStoreRow */
+        SwitchableStoreRow: {
+            /** Address */
+            address: string;
+            /** Is Current */
+            is_current: boolean;
+            /** Name */
+            name: string;
+            /** Slug */
+            slug: string;
+            /** Store Id */
+            store_id: number;
         };
         /**
          * TVDisplayBankRow
@@ -13807,6 +13895,39 @@ export interface operations {
             };
         };
     };
+    my_stores_route_auth_my_stores_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyStoresResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_notifications_route_auth_notifications_get: {
         parameters: {
             query?: never;
@@ -14515,6 +14636,43 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StoreLookupResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    switch_store_route_auth_switch_store_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SwitchStoreRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SwitchStoreResponse"];
                 };
             };
             /** @description Validation Error */
