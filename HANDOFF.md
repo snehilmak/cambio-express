@@ -270,8 +270,19 @@ in flight as the P2 series):**
   price-book links keep pointing at whichever department a row
   references — the hierarchy is grouping, not a rollup rewrite.
 
-**Phase 2+ (not yet scoped in detail):** purchase invoices with
-AI-assisted scanning; inventory basics; fuel module (needs a
+**Phase 3 — purchase invoices (owner-approved, in flight):**
+- ✅ P3-1 (PR #878) — PurchaseInvoice + PurchaseInvoiceLine in the
+  Catalog module: per-vendor invoice numbers, derived totals,
+  optional price-book line links, opt-in `update_item_costs`
+  feedback into `PriceBookItem.cost`.
+- ✅ P3-2 — SPA: /purchase-invoices list (filters + mark-paid /
+  reopen / delete) and a full-page entry form whose line editor
+  resolves items by scan code; "Purchases" nav item in Daily
+  (module_price_book, admin only).
+- Future: AI-assisted invoice scanning (photograph the paper
+  invoice → drafted lines), payment/aging report.
+
+**Phase 2+ (not yet scoped in detail):** inventory basics; fuel module (needs a
 gas-station design partner first); Modisoft/Cronysoft migration
 importers; public API/webhooks GA; loyalty / scan-data rebates;
 POS; payments. QuickBooks Online OAuth (P1-8 phase B) joins

@@ -70,3 +70,72 @@ export async function updateItem(
     method: "PUT", json: body,
   });
 }
+
+// ── Purchase invoices (P3) ───────────────────────────────────
+
+export type InvoiceRow = components["schemas"]["InvoiceRow"];
+export type InvoiceDetail = components["schemas"]["InvoiceDetail"];
+export type InvoiceLineRow = components["schemas"]["InvoiceLineRow"];
+export type InvoiceList = components["schemas"]["InvoiceListResponse"];
+export type InvoiceWrite = components["schemas"]["InvoiceWriteRequest"];
+export type InvoiceUpdate = components["schemas"]["InvoiceUpdateRequest"];
+type InvoiceResponse = components["schemas"]["InvoiceResponse"];
+
+export function useInvoices(params: {
+  q: string;
+  page: number;
+  vendorId: string;
+  status: string;
+}) {
+  const qs = new URLSearchParams({ page: String(params.page) });
+  if (params.q) qs.set("q", params.q);
+  if (params.vendorId) qs.set("vendor_id", params.vendorId);
+  if (params.status) qs.set("status", params.status);
+  return useQuery<InvoiceList>({
+    queryKey: ["catalog", "invoices", params],
+    queryFn: () => api<InvoiceList>(`/api/v2/catalog/invoices?${qs}`),
+  });
+}
+
+export function useInvoice(id: number | null) {
+  return useQuery<InvoiceResponse>({
+    enabled: id != null,
+    queryKey: ["catalog", "invoice", id],
+    queryFn: () => api<InvoiceResponse>(`/api/v2/catalog/invoices/${id}`),
+  });
+}
+
+export async function createInvoice(
+  body: InvoiceWrite,
+): Promise<InvoiceResponse> {
+  return api<InvoiceResponse>("/api/v2/catalog/invoices", {
+    method: "POST", json: body,
+  });
+}
+
+export async function updateInvoice(
+  // Partial: openapi-typescript marks server-defaulted fields
+  // (clear_due_date, update_item_costs) required; the API treats
+  // absent fields as "leave unchanged".
+  id: number, body: Partial<InvoiceUpdate>,
+): Promise<InvoiceResponse> {
+  return api<InvoiceResponse>(`/api/v2/catalog/invoices/${id}`, {
+    method: "PUT", json: body,
+  });
+}
+
+export async function deleteInvoice(id: number): Promise<{ ok: boolean }> {
+  return api<{ ok: boolean }>(`/api/v2/catalog/invoices/${id}`, {
+    method: "DELETE",
+  });
+}
+
+/** Resolve a scanned/typed code to a price-book item (exact
+ *  pos_code match only) — the invoice line editor's item lookup. */
+export async function lookupItemByCode(
+  code: string,
+): Promise<PriceBookItem | null> {
+  const qs = new URLSearchParams({ q: code, per_page: "50" });
+  const list = await api<ItemList>(`/api/v2/catalog/items?${qs}`);
+  return list.rows.find((r) => r.pos_code === code) ?? null;
+}

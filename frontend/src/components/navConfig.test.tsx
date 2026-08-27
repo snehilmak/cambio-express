@@ -94,10 +94,26 @@ describe("filterNavForRole → section-hub resolution", () => {
     const labels = filterNavForRole("superadmin", [])
       .flatMap((g) => g.items.map((i) => i.label));
     for (const storeOnly of [
-      "MSB Daily book", "Day close", "Lottery", "Price book",
+      "MSB Daily book", "Day close", "Lottery", "Price book", "Purchases",
     ]) {
       expect(labels).not.toContain(storeOnly);
     }
+  });
+
+  it("Purchases follows the price-book flag, admin only", () => {
+    const on = filterNavForRole(
+      "admin", ["catalog.read"], ["module_price_book"],
+    ).flatMap((g) => g.items.map((i) => i.label));
+    expect(on).toContain("Purchases");
+    const off = filterNavForRole(
+      "admin", ["catalog.read"], [],
+    ).flatMap((g) => g.items.map((i) => i.label));
+    expect(off).not.toContain("Purchases");
+    const employee = filterNavForRole(
+      "employee", ["catalog.read"], ["module_price_book"],
+    ).flatMap((g) => g.items.map((i) => i.label));
+    expect(employee).not.toContain("Purchases");
+    expect(employee).toContain("Price book");
   });
 });
 

@@ -76,6 +76,10 @@ const ReturnCheckForm = lazy(() => import("./routes/ReturnCheckForm"));
 const Lottery = lazy(() => import("./routes/Lottery"));
 const DayClose = lazy(() => import("./routes/DayClose"));
 const PriceBook = lazy(() => import("./routes/PriceBook"));
+const PurchaseInvoices = lazy(() => import("./routes/PurchaseInvoices"));
+const PurchaseInvoiceForm = lazy(
+  () => import("./routes/PurchaseInvoiceForm"),
+);
 const PosImport = lazy(() => import("./routes/PosImport"));
 const ReturnChecks = lazy(() => import("./routes/ReturnChecks"));
 const SectionHub = lazy(() => import("./routes/SectionHub"));
@@ -293,6 +297,9 @@ export default function App() {
           <Route path="day-close"              element={<RequirePermission resource="day_close" action="read"><DayClose /></RequirePermission>} />
           <Route path="pos-import"             element={<RequirePermission resource="day_close" action="update"><PosImport /></RequirePermission>} />
           <Route path="price-book"             element={<RequirePermission resource="catalog" action="read"><PriceBook /></RequirePermission>} />
+          <Route path="purchase-invoices"      element={<RequirePermission resource="catalog" action="read"><PurchaseInvoices /></RequirePermission>} />
+          <Route path="purchase-invoices/new"  element={<RequirePermission resource="catalog" action="update"><PurchaseInvoiceForm /></RequirePermission>} />
+          <Route path="purchase-invoices/:id"  element={<RequirePermission resource="catalog" action="update"><PurchaseInvoiceForm /></RequirePermission>} />
           <Route path="return-checks"          element={<RequirePermission resource="return_checks" action="read"><ReturnChecks /></RequirePermission>} />
           <Route path="return-checks/new"      element={<RequirePermission resource="return_checks" action="create"><ReturnCheckForm /></RequirePermission>} />
           <Route path="return-checks/:id/edit" element={<RequirePermission resource="return_checks" action="update"><ReturnCheckForm /></RequirePermission>} />
