@@ -77,9 +77,24 @@ of truth has two layers:
    on every request (no JWT-staleness anymore).
 
 Resolution order in `_resolve_grants(role, store_id)`:
-1. Per-store rules (domain matches) → use exclusively
-2. Global rules (domain = "global") → fallback
+1. Per-store rules (domain matches) → **per-resource overlay**:
+   they govern only the resources they mention. A save writes
+   every CURRENT resource explicitly — grant rows, or a
+   `__none__` marker row when all of a resource's actions are
+   off — so "explicitly off" is distinguishable from "resource
+   didn't exist when this matrix was saved".
+2. Global rules (domain = "global") → fallback for resources the
+   store overlay never mentions. **This is what lets a NEW
+   platform resource (lottery, day_close, catalog…) reach stores
+   whose matrix predates it** — the old wholesale-replacement
+   semantics froze such stores out of every later resource (the
+   "admin can't see new modules" bug).
 3. `RBAC_DEFAULTS` hardcoded → boot-time/Casbin-down fallback
+
+Legacy compatibility: a lone `__override_active__` sentinel row
+(the old all-off save format) still means zero access; old
+partial snapshots have no markers, so their switched-off
+resources fall back to global once and re-freeze on next save.
 
 **Defensive fallback (PR #768):** if Casbin throws (DB hiccup,
 adapter fault) both `permissions_for` and `check_permission`

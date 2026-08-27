@@ -415,3 +415,67 @@ class TestSuperadminPerStorePermissions:
             headers=_headers(admin_token),
         )
         assert resp.status_code == 403
+
+
+class TestOverlayHealsNewResources:
+    """The owner-reported bug: a store whose permission matrix was
+    saved BEFORE a resource existed must still receive that
+    resource's default grants (per-resource overlay semantics)."""
+
+    def test_legacy_snapshot_gains_new_resource_defaults(self):
+        from api.Core.Permissions import (
+            _get_enforcer, check_permission, permissions_for,
+            reset_store_to_defaults,
+        )
+        # Simulate a pre-overlay save: raw rows only, no markers —
+        # exactly what set_store_permissions wrote before catalog /
+        # day_close / lottery existed.
+        e = _get_enforcer()
+        e.add_policy("admin", "986", "transfers", "read")
+        e.add_policy("admin", "986", "reports", "read")
+        e.save_policy()
+        try:
+            perms = permissions_for("admin", store_id=986)
+            # Mentioned resources stay governed by the snapshot…
+            assert "transfers.read" in perms
+            assert "transfers.create" not in perms
+            # …but resources the snapshot never mentioned fall back
+            # to the role defaults instead of vanishing.
+            assert check_permission("admin", 986, "catalog", "read") is True
+            assert check_permission("admin", 986, "day_close", "read") is True
+            assert check_permission("admin", 986, "lottery", "read") is True
+        finally:
+            reset_store_to_defaults(986, "admin")
+
+    def test_new_save_freezes_current_resources_explicitly(self):
+        from api.Core.Permissions import (
+            check_permission, reset_store_to_defaults,
+            set_store_permissions,
+        )
+        # A modern save that grants only reports.read: every other
+        # CURRENT resource is explicitly off (markers), so global
+        # changes to them don't leak in…
+        set_store_permissions(985, "admin", {
+            "reports": {"read": True},
+        })
+        try:
+            assert check_permission("admin", 985, "reports", "read") is True
+            assert check_permission("admin", 985, "catalog", "read") is False
+            assert check_permission("admin", 985, "transfers", "read") is False
+        finally:
+            reset_store_to_defaults(985, "admin")
+
+    def test_legacy_all_off_sentinel_still_means_no_access(self):
+        from api.Core.Permissions import (
+            _get_enforcer, _OVERRIDE_SENTINEL, check_permission,
+            reset_store_to_defaults,
+        )
+        e = _get_enforcer()
+        e.add_policy("employee", "984", _OVERRIDE_SENTINEL, _OVERRIDE_SENTINEL)
+        e.save_policy()
+        try:
+            assert check_permission(
+                "employee", 984, "transfers", "read",
+            ) is False
+        finally:
+            reset_store_to_defaults(984, "employee")
