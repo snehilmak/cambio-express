@@ -235,6 +235,7 @@ export default function App() {
           <Route path="daily"            element={<RequirePermission resource="daily_book" action="read"><DailyBook /></RequirePermission>} />
           <Route path="daily/edit"       element={<RequirePermission resource="daily_book" action="update"><EditDailyBook /></RequirePermission>} />
           <Route path="reports"          element={<RequirePermission resource="reports" action="read"><Reports /></RequirePermission>} />
+          <Route path="store-reports"    element={<RequirePermission resource="reports" action="read"><Reports collection="store" /></RequirePermission>} />
           <Route path="reports/sales-by-company"      element={<RequirePermission resource="reports" action="read"><SalesByCompany /></RequirePermission>} />
           <Route path="reports/sales-by-service-type" element={<RequirePermission resource="reports" action="read"><SalesByService /></RequirePermission>} />
           <Route path="reports/sales-by-employee"     element={<RequirePermission resource="reports" action="read"><SalesByEmployee /></RequirePermission>} />

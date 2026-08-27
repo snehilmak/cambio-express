@@ -26152,9 +26152,20 @@
     },
     "/reports": {
       "get": {
-        "description": "Per-store report-center categories for the admin Reports page.\n\nMirrors the legacy /reports Jinja landing \u2014 same registry\n(`_REPORT_CATEGORIES`), same View / Coming-soon split, same\ndrilldown URLs (still on Flask templates one PR-per-report\nuntil each report individually migrates).\n\nAuth: any logged-in caller scoped to a store. Owners get the\nsame admin-side category list when viewing through their own\nstore; the owner-prefix variant lives at /owner/reports.",
+        "description": "Per-store report-center categories.\n\nTwo collections, kept fully separate (owner directive \u2014 MSB\nand back-office must not blur):\n  * ``msb`` (default) \u2014 the original money-services Report\n    Center (transfers, ACH, senders, P&L, logs & exports).\n  * ``store`` \u2014 the retail back-office center (day close,\n    lottery, price book, store accounting).\n\nAuth: any logged-in caller scoped to a store. Owners get the\nsame admin-side category list when viewing through their own\nstore; the owner-prefix variant lives at /owner/reports.",
         "operationId": "list_reports_route_reports_get",
         "parameters": [
+          {
+            "in": "query",
+            "name": "collection",
+            "required": false,
+            "schema": {
+              "default": "msb",
+              "pattern": "^(msb|store)$",
+              "title": "Collection",
+              "type": "string"
+            }
+          },
           {
             "in": "header",
             "name": "authorization",

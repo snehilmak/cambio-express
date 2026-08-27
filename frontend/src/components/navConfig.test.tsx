@@ -36,18 +36,35 @@ describe("filterNavForRole → section-hub resolution", () => {
     });
   }
 
-  it("admin Reports is a direct link to the Report Center (no submenu)", () => {
-    const groups = filterNavForRole("admin", ["reports.read"]);
+  it("admin Reports is a fly-out with the two separate centers", () => {
+    const groups = filterNavForRole(
+      "admin", ["reports.read"], ["module_day_close"],
+    );
     const reports = groups.find((g) => g.title === "Reports");
     expect(reports).toBeDefined();
-    expect(reports!.to).toBe("/reports");
-    expect(reports!.items).toHaveLength(0);
+    expect(reports!.to).toBeUndefined();
+    expect(reports!.items.map((i) => i.label))
+      .toEqual(["MSB Reports", "Store Reports"]);
+    // Store Reports is flag-gated — an MSB-profile store (no
+    // module_day_close) sees only the MSB center.
+    const msbOnly = filterNavForRole("admin", ["reports.read"], [])
+      .find((g) => g.title === "Reports");
+    expect(msbOnly!.items.map((i) => i.label)).toEqual(["MSB Reports"]);
+  });
+
+  it("Dashboard is its own direct-link entry above Daily", () => {
+    const groups = filterNavForRole("admin", ["daily_book.read"]);
+    const titles = groups.map((g) => g.title);
+    expect(titles.indexOf("Dashboard"))
+      .toBeLessThan(titles.indexOf("Daily"));
+    const dash = groups.find((g) => g.title === "Dashboard");
+    expect(dash!.to).toBe("/dashboard");
+    const owner = filterNavForRole("owner", [])
+      .find((g) => g.title === "Dashboard");
+    expect(owner!.to).toBe("/owner/dashboard");
   });
 
   it("admin can resolve the Daily hub to its destinations", () => {
-    // Admin has every Daily permission by default in this context
-    // (perms filter is role==='superadmin' OR listed) — pass the
-    // perms the Daily items require so the group resolves fully.
     const perms = [
       "transfers.read", "customers.read",
       "daily_book.read", "return_checks.read",
@@ -56,8 +73,31 @@ describe("filterNavForRole → section-hub resolution", () => {
     const daily = groups.find((g) => sectionSlug(g.title) === "daily");
     expect(daily).toBeDefined();
     const labels = daily!.items.map((i) => i.label);
-    expect(labels).toContain("Dashboard");
-    expect(labels).toContain("Returned checks");
+    expect(labels).toContain("MSB Daily book");
+    // Dashboard + Returned checks moved out of Daily (own entry /
+    // Money services respectively).
+    expect(labels).not.toContain("Dashboard");
+    expect(labels).not.toContain("Returned checks");
+  });
+
+  it("Returned checks lives in Money services; TV display in Displays", () => {
+    const groups = filterNavForRole(
+      "admin", ["return_checks.read"], ["module_check_cashing"],
+    );
+    const ms = groups.find((g) => g.title === "Money services");
+    expect(ms!.items.map((i) => i.label)).toContain("Returned checks");
+    const displays = groups.find((g) => g.title === "Displays");
+    expect(displays!.items.map((i) => i.label)).toEqual(["TV display"]);
+  });
+
+  it("superadmin nav carries no store-level modules", () => {
+    const labels = filterNavForRole("superadmin", [])
+      .flatMap((g) => g.items.map((i) => i.label));
+    for (const storeOnly of [
+      "MSB Daily book", "Day close", "Lottery", "Price book",
+    ]) {
+      expect(labels).not.toContain(storeOnly);
+    }
   });
 });
 
@@ -79,14 +119,14 @@ describe("module-flag gating (business-type bundles)", () => {
     expect(labels).not.toContain("Customers");
     expect(labels).not.toContain("ACH batches");
     expect(labels).toContain("Returned checks");
-    expect(labels).toContain("Daily book");
+    expect(labels).toContain("MSB Daily book");
   });
 
   it("hides Returned checks when check cashing is switched off", () => {
     const groups = filterNavForRole("admin", perms, []);
     const labels = groups.flatMap((g) => g.items.map((i) => i.label));
     expect(labels).not.toContain("Returned checks");
-    expect(labels).toContain("Daily book");
+    expect(labels).toContain("MSB Daily book");
   });
 
   it("shows them when module_money_services is on", () => {

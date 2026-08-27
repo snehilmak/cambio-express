@@ -34,64 +34,58 @@ export function sectionSlug(title: string): string {
 
 export const NAV: NavGroup[] = [
   {
+    // Dashboard as its own top-level destination (owner directive)
+    // — a direct-link group like Reports used to be, so the first
+    // sidebar click lands on the numbers, not a fly-out. Per-role
+    // variants because the landing route differs.
+    title: "Dashboard",
+    roles: ["admin", "employee"],
+    icon: iconDashboard(),
+    to: "/dashboard",
+    items: [],
+  },
+  {
+    title: "Dashboard",
+    roles: ["owner"],
+    icon: iconDashboard(),
+    to: "/owner/dashboard",
+    items: [],
+  },
+  {
+    // Daily operations. The store-level retail modules (Day close /
+    // Lottery / Price book) carry roles: superadmin is the platform
+    // operator, not a store — store modules stay off their nav
+    // (they can still reach any route directly for support).
     title: "Daily",
     icon: iconDaily(),
     items: [
       {
-        to: "/dashboard", label: "Dashboard",
-        roles: ["admin", "employee"],
-        icon: iconDashboard(),
-        desc: "Today's numbers at a glance.",
-      },
-      {
-        to: "/owner/dashboard", label: "Dashboard",
-        roles: ["owner"],
-        icon: iconDashboard(),
-        desc: "Rollup across all your stores.",
-      },
-      {
-        to: "/daily", label: "Daily book",
+        to: "/daily", label: "MSB Daily book",
         roles: ["admin", "employee"],
         perm: "daily_book.read",
         icon: iconDaily(),
-        desc: "Cash ledger and daily close-out.",
+        desc: "MSB cash ledger and daily close-out.",
       },
       {
         to: "/day-close", label: "Day close",
+        roles: ["admin", "employee"],
         flag: "module_day_close", perm: "day_close.read",
         icon: iconRegister(),
         desc: "Register totals and department sales.",
       },
       {
         to: "/lottery", label: "Lottery",
+        roles: ["admin", "employee"],
         flag: "module_lottery", perm: "lottery.read",
         icon: iconLottery(),
         desc: "Games, packs, and day-close counts.",
       },
       {
         to: "/price-book", label: "Price book",
+        roles: ["admin", "employee"],
         flag: "module_price_book", perm: "catalog.read",
         icon: iconPriceBook(),
         desc: "Items, prices, and vendors.",
-      },
-      {
-        to: "/return-checks", label: "Returned checks",
-        flag: "module_check_cashing",
-        roles: ["admin", "employee"],
-        perm: "return_checks.read",
-        icon: iconReturnChecks(),
-        desc: "Track bounced checks and recovery.",
-      },
-      {
-        // Storefront rate-board addon — admins configure the
-        // countries / rates / Fire-TV pairing, customers see the
-        // board running on the in-store TV.  Lives in Daily
-        // because it's part of the storefront operation, not the
-        // ledger/finance stack.
-        to: "/tv-display", label: "TV display",
-        roles: ["admin"],
-        icon: iconDevice(),
-        desc: "In-store rate board and pairing.",
       },
     ],
   },
@@ -127,6 +121,18 @@ export const NAV: NavGroup[] = [
         perm: "batches.read",
         icon: iconBatches(),
         desc: "Group transfers into ACH runs.",
+      },
+      {
+        // Check cashing is a money service — grouped here (owner
+        // directive) but on its own flag: plenty of c-stores cash
+        // checks without running transfers, so the group survives
+        // on this item alone when module_money_services is off.
+        to: "/return-checks", label: "Returned checks",
+        flag: "module_check_cashing",
+        roles: ["admin", "employee"],
+        perm: "return_checks.read",
+        icon: iconReturnChecks(),
+        desc: "Track bounced checks and recovery.",
       },
     ],
   },
@@ -192,16 +198,28 @@ export const NAV: NavGroup[] = [
     ],
   },
   {
-    // Reports — a DIRECT LINK to the Report Center (no fly-out menu).
-    // The Center itself surfaces every report by category, including
-    // Monthly P&L, the Audit log, and Data export — the entries that
-    // used to live here as sidebar sub-items. Clicking "Reports" goes
-    // straight to the Center; see `to` handling in SlimSidebar.
+    // Reports — a fly-out with the two report centers, kept fully
+    // separate (owner directive: MSB and back-office must not
+    // blur). Each center lists its own categories; the store
+    // center is flag-gated so MSB-profile stores never see it.
     title: "Reports",
     roles: ["admin"],
     icon: iconReports(),
-    to: "/reports",
-    items: [],
+    items: [
+      {
+        to: "/reports", label: "MSB Reports",
+        perm: "reports.read",
+        icon: iconTransfers(),
+        desc: "Money-services analytics and exports.",
+      },
+      {
+        to: "/store-reports", label: "Store Reports",
+        flag: "module_day_close",
+        perm: "reports.read",
+        icon: iconRegister(),
+        desc: "Back-office reports for the storefront.",
+      },
+    ],
   },
   {
     title: "Finance",
@@ -210,6 +228,21 @@ export const NAV: NavGroup[] = [
     items: [
       { to: "/bank",               label: "Bank sync",   perm: "bank_sync.read", icon: iconBank(),    desc: "Connect and reconcile accounts." },
       { to: "/bank-transactions",  label: "Bank transactions",   perm: "bank_sync.read", icon: iconBank(),    desc: "Categorize imported transactions." },
+    ],
+  },
+  {
+    // Displays — every customer-facing screen the store runs.
+    // TV display (rate board) today; Lottery and Restaurant
+    // displays join this group as they ship.
+    title: "Displays",
+    roles: ["admin"],
+    icon: iconDevice(),
+    items: [
+      {
+        to: "/tv-display", label: "TV display",
+        icon: iconDevice(),
+        desc: "In-store rate board and pairing.",
+      },
     ],
   },
   {

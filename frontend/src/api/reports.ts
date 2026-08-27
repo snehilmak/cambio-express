@@ -101,12 +101,13 @@ export interface ReportListResponse {
   categories: ReportListCategory[];
 }
 
-export function useReportList() {
+export function useReportList(collection: "msb" | "store" = "msb") {
   const identity = getCurrentIdentity();
   return useQuery<ReportListResponse>({
     enabled: identity?.user_id != null,
-    queryKey: ["reports", "index", identity?.user_id],
-    queryFn: () => api<ReportListResponse>("/api/v2/reports"),
+    queryKey: ["reports", "index", collection, identity?.user_id],
+    queryFn: () =>
+      api<ReportListResponse>(`/api/v2/reports?collection=${collection}`),
   });
 }
 
