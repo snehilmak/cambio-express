@@ -19,7 +19,7 @@ Validation rules (kept in sync with the legacy form):
     guard there. The Service also defends so any caller
     (programmatic, future tests) gets the same protection.
 """
-from typing import Optional
+from typing import Final, Optional
 
 from sqlalchemy.orm import Session
 
@@ -27,9 +27,40 @@ from api.Modules.Admin.Models import User
 from api.Modules.Admin.Repositories.users import (
     find_store_user_by_username,
 )
+from api.Modules.Billing.Services.feature_flags import MODULE_FLAG_KEYS
 
 
 VALID_ROLES = ("admin", "employee")
+
+# PATCH sentinel for update_store_user's module_access: "caller
+# didn't send the field" is distinct from "caller sent null"
+# (null = clear the restriction → all store modules).
+_UNSET: Final = object()
+
+
+class UnknownModuleError(ValueError):
+    """module_access contained a key that isn't a module flag."""
+
+
+def normalize_module_access(keys: Optional[list[str]]) -> Optional[str]:
+    """Validate + serialize per-user module grants (U-3).
+
+    None → None (no restriction: every module the store has).
+    A list → CSV of known module-flag keys, deduped, in
+    MODULE_FLAG_KEYS order; [] → "" (none of the optional
+    modules). Unknown keys raise UnknownModuleError so the
+    controller can 422 with the offending key named.
+    """
+    if keys is None:
+        return None
+    requested = {(key or "").strip() for key in keys}
+    requested.discard("")
+    unknown = requested - set(MODULE_FLAG_KEYS)
+    if unknown:
+        raise UnknownModuleError(
+            "Unknown module key(s): " + ", ".join(sorted(unknown)),
+        )
+    return ",".join(key for key in MODULE_FLAG_KEYS if key in requested)
 
 
 class UsernameTakenError(ValueError):
@@ -51,6 +82,7 @@ def create_store_user(
     db: Session, *, store_id: int,
     username: str, password: str,
     full_name: str = "", role: str = "employee",
+    module_access: Optional[list[str]] = None,
 ) -> User:
     """Insert a new active User row for the store. Caller commits.
     Raises UsernameTakenError on collision, ValueError on bad
@@ -79,6 +111,7 @@ def create_store_user(
         full_name=full_name,
         role=role,
         is_active=True,
+        module_access=normalize_module_access(module_access),
     )
     user.set_password(password)
     db.add(user)
@@ -93,6 +126,7 @@ def update_store_user(
     is_active: Optional[bool] = None,
     password: Optional[str] = None,
     actor_id: Optional[int] = None,
+    module_access: object = _UNSET,
 ) -> User:
     """Update editable fields. Each field is None → leave alone.
 
@@ -137,6 +171,13 @@ def update_store_user(
 
     if password is not None and password != "":
         user.set_password(password)
+
+    # PATCH semantics (distinct from the None-means-skip fields
+    # above): _UNSET = leave alone; None = clear the restriction
+    # (all store modules); a list = restrict to those modules.
+    if module_access is not _UNSET:
+        keys = module_access if isinstance(module_access, list) else None
+        setattr(user, "module_access", normalize_module_access(keys))
 
     db.flush()
     return user

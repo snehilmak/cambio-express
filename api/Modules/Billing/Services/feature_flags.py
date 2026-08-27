@@ -151,6 +151,29 @@ def enabled_module_flags(db: Session, store: Store | None) -> list[str]:
     ]
 
 
+def enabled_module_flags_for_user(
+    db: Session, store: Store | None, user: object | None,
+) -> list[str]:
+    """Store module flags intersected with the user's per-user
+    ``module_access`` grants (U-3). NULL module_access = every
+    module the store has; a CSV subset restricts what shows in the
+    nav/session. Only admin/employee are restricted — owner and
+    superadmin sessions always get the store's full set. UX gating
+    only: routes stay permission-gated via Casbin.
+
+    ``user`` is duck-typed (needs ``role`` + ``module_access``) so
+    this module doesn't grow a Tenancy import.
+    """
+    store_flags = enabled_module_flags(db, store)
+    if user is None or getattr(user, "role", None) not in ("admin", "employee"):
+        return store_flags
+    raw = getattr(user, "module_access", None)
+    if raw is None:
+        return store_flags
+    allowed = {key.strip() for key in str(raw).split(",") if key.strip()}
+    return [key for key in store_flags if key in allowed]
+
+
 def store_has_addon(store: Store | None, addon_key: str) -> bool:
     """Single predicate every add-on-gated route uses.
 

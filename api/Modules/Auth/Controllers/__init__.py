@@ -777,14 +777,22 @@ def session_status_route(
     currently ON (``features``) so the shell can decide which nav
     sections and routes to render — a convenience store doesn't see
     the money-transfer ledger it never uses. Store-less principals
-    (superadmin, owner) get every module."""
+    (superadmin, owner) get every module.
+
+    ``features`` is further intersected with the user's per-user
+    ``module_access`` grants (U-3) — an admin/employee restricted
+    to specific modules sees only those. Owners (including owners
+    switched into a store — sub resolves to the owner row) and
+    superadmin are never restricted."""
     from api.Modules.Billing.Services import store_gate_status
     from api.Modules.Billing.Services.feature_flags import (
-        enabled_module_flags,
+        enabled_module_flags_for_user,
     )
-    from api.Modules.Tenancy.Models import Store
+    from api.Modules.Tenancy.Models import Store, User
     store_id = claims.get("store_id")
     store = db.get(Store, int(store_id)) if store_id is not None else None
+    sub = claims.get("sub")
+    user = db.get(User, int(sub)) if sub is not None else None
     status = store_gate_status(store)
     return {
         "gated": bool(status["gated"]),
@@ -795,7 +803,7 @@ def session_status_route(
             (store.business_type or "msb_hybrid")
             if store is not None else ""
         ),
-        "features": enabled_module_flags(db, store),
+        "features": enabled_module_flags_for_user(db, store, user),
     }
 
 

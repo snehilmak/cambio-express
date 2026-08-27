@@ -11,6 +11,9 @@ class AdminUserRow(BaseModel):
     role:       str
     is_active:  bool
     created_at: str  # ISO timestamp; "" if missing
+    # None = every module the store has; a list restricts this
+    # user's visible modules (subset of MODULE_FLAG_KEYS).
+    module_access: list[str] | None
 
 
 class AdminUserListResponse(BaseModel):
@@ -34,6 +37,7 @@ class AdminUserCreateRequest(BaseModel):
     password:  str = Field(..., min_length=1, max_length=200)
     full_name: str = Field("", max_length=120)
     role:      str = Field("employee", min_length=1, max_length=20)
+    module_access: list[str] | None = Field(None, max_length=20)
 
 
 class AdminUserUpdateRequest(BaseModel):
@@ -49,6 +53,9 @@ class AdminUserUpdateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     full_name: str  | None = Field(None, max_length=120)
+    # PATCH semantics: omitted = unchanged; null = all modules;
+    # a list = restrict to those modules.
+    module_access: list[str] | None = Field(None, max_length=20)
     role:      str  | None = Field(None, min_length=1, max_length=20)
     is_active: bool | None = None
     password:  str  | None = Field(None, max_length=200)
