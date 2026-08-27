@@ -25,8 +25,8 @@ from __future__ import annotations
 from datetime import datetime
 
 from sqlalchemy import (
-    BigInteger, Boolean, Column, DateTime, ForeignKey, Integer,
-    String, UniqueConstraint,
+    BigInteger, Boolean, Column, Date, DateTime, Float, ForeignKey,
+    Integer, String, UniqueConstraint,
 )
 from sqlalchemy.orm import relationship
 
@@ -92,4 +92,91 @@ class PriceBookItem(Base):
     vendor     = relationship("Vendor")
 
 
-__all__ = ["POS_CODE_FORMATS", "PriceBookItem", "Vendor"]
+# Invoice lifecycle. Not a DB enum so a future state ("disputed",
+# "credited") lands without a migration.
+INVOICE_STATUSES = ("open", "paid")
+
+
+class PurchaseInvoice(Base):
+    __tablename__ = "purchase_invoice"
+    id             = Column(Integer, primary_key=True)
+    store_id       = Column(Integer, ForeignKey("store.id"), nullable=False, index=True)
+    vendor_id      = Column(
+        Integer, ForeignKey("vendor.id"), nullable=False, index=True,
+    )
+    # The vendor's invoice number as printed — the key the operator
+    # reconciles statements against. Unique per (store, vendor):
+    # different vendors reuse the same numbering ranges.
+    invoice_number = Column(String(60), nullable=False)
+    invoice_date   = Column(Date, nullable=False)
+    due_date       = Column(Date, nullable=True)
+    subtotal_cents = Column(BigInteger, nullable=False, default=0)
+    tax_cents      = Column(BigInteger, nullable=False, default=0)
+    # Freight, deposits, CRV, misc surcharges — anything on the
+    # paper that isn't merchandise or tax.
+    other_cents    = Column(BigInteger, nullable=False, default=0)
+    subtotal = DollarView("subtotal_cents")
+    tax      = DollarView("tax_cents")
+    other    = DollarView("other_cents")
+    status   = Column(String(16), nullable=False, default="open")
+    paid_on  = Column(Date, nullable=True)
+    notes      = Column(String(500), nullable=False, default="")
+    created_by = Column(Integer, ForeignKey("user.id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow,
+    )
+    __table_args__ = (
+        UniqueConstraint("store_id", "vendor_id", "invoice_number"),
+    )
+
+    vendor = relationship("Vendor")
+    lines  = relationship(
+        "PurchaseInvoiceLine", backref="invoice",
+        cascade="all, delete-orphan",
+    )
+
+    @property
+    def total_cents(self) -> int:
+        """Invoice total — derived, never stored (subtotal + tax +
+        other). Line items are supporting detail: their sum is NOT
+        forced to equal the subtotal (partial line entry is fine —
+        variance is surfaced, never blocked)."""
+        return (
+            int(self.subtotal_cents or 0)
+            + int(self.tax_cents or 0)
+            + int(self.other_cents or 0)
+        )
+
+
+class PurchaseInvoiceLine(Base):
+    __tablename__ = "purchase_invoice_line"
+    id         = Column(Integer, primary_key=True)
+    store_id   = Column(Integer, ForeignKey("store.id"), nullable=False, index=True)
+    invoice_id = Column(
+        Integer, ForeignKey("purchase_invoice.id"), nullable=False, index=True,
+    )
+    # Optional price-book link — misc lines (ice bags of CO2, a
+    # one-off charge) have no catalog item.
+    item_id     = Column(
+        Integer, ForeignKey("price_book_item.id"), nullable=True, index=True,
+    )
+    description = Column(String(160), nullable=False, default="")
+    # Quantity can be fractional (weighted goods, split cases) —
+    # Float like gallons/hourly_rate: a measure, not money.
+    quantity        = Column(Float, nullable=False, default=1.0)
+    unit_cost_cents = Column(BigInteger, nullable=False, default=0)
+    unit_cost       = DollarView("unit_cost_cents")
+    # Stored (not derived) so the operator can key the printed
+    # extended amount even when it rounds differently than
+    # quantity × unit cost.
+    line_total_cents = Column(BigInteger, nullable=False, default=0)
+    line_total       = DollarView("line_total_cents")
+
+    item = relationship("PriceBookItem")
+
+
+__all__ = [
+    "INVOICE_STATUSES", "POS_CODE_FORMATS", "PriceBookItem",
+    "PurchaseInvoice", "PurchaseInvoiceLine", "Vendor",
+]

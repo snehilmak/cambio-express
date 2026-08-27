@@ -10,11 +10,19 @@ Mounts at `/api/v2/catalog/*`:
                                   &include_inactive=1&page=&per_page=)
   POST /items                    create item
   PUT  /items/{id}               update item / deactivate
+  GET  /invoices                 paginated invoice list
+                                 (?q=&vendor_id=&status=)
+  GET  /invoices/{id}            invoice detail with lines
+  POST /invoices                 create invoice (+ optional
+                                 update_item_costs feedback)
+  PUT  /invoices/{id}            update invoice / replace lines
+  DELETE /invoices/{id}          delete invoice
 
 Cashiers (employees) hold catalog.read so they can look items up;
 catalog management (create/update) needs admin rights. Every
 mutation records an operator-audit row (invariant #7).
 """
+from datetime import date, datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
@@ -27,8 +35,19 @@ from api.Modules.Auth.Services.principal import (
     require_permission,
     resolve_store_scope,
 )
-from api.Modules.Catalog.Models import PriceBookItem, Vendor
+from api.Modules.Catalog.Models import (
+    PriceBookItem,
+    PurchaseInvoice,
+    Vendor,
+)
 from api.Modules.Catalog.Requests import (
+    InvoiceDetail,
+    InvoiceLineRow,
+    InvoiceListResponse,
+    InvoiceResponse,
+    InvoiceRow,
+    InvoiceUpdateRequest,
+    InvoiceWriteRequest,
     ItemListResponse,
     ItemResponse,
     ItemRow,
@@ -43,10 +62,14 @@ from api.Modules.Catalog.Requests import (
 from api.Modules.Catalog.Services import (
     CatalogConflictError,
     CatalogNotFoundError,
+    create_invoice,
     create_item,
     create_vendor,
+    delete_invoice,
+    invoices_query,
     items_query,
     list_vendors,
+    update_invoice,
     update_item,
     update_vendor,
 )
@@ -248,3 +271,198 @@ def update_item_route(
     )
     db.commit()
     return ItemResponse(item=_item_row(item))
+
+
+# ── Purchase invoices ──────────────────────────────────────
+
+
+def _parse_date(raw: str, field: str) -> date:
+    try:
+        return datetime.strptime(raw, "%Y-%m-%d").date()
+    except ValueError:
+        raise HTTPException(
+            status_code=422,
+            detail={"field": field, "message": "Use YYYY-MM-DD."},
+        )
+
+
+def _invoice_row(inv: PurchaseInvoice, *, with_lines: bool = False):
+    base = dict(
+        id=inv.id,
+        vendor_id=int(inv.vendor_id),
+        vendor_name=(inv.vendor.name or "") if inv.vendor else "",
+        invoice_number=inv.invoice_number or "",
+        invoice_date=inv.invoice_date.isoformat(),
+        due_date=inv.due_date.isoformat() if inv.due_date else None,
+        subtotal=inv.subtotal,
+        tax=inv.tax,
+        other=inv.other,
+        total=inv.total_cents / 100.0,
+        status=inv.status or "open",
+        paid_on=inv.paid_on.isoformat() if inv.paid_on else None,
+        notes=inv.notes or "",
+        line_count=len(inv.lines),
+    )
+    if not with_lines:
+        return InvoiceRow(**base)
+    return InvoiceDetail(
+        **base,
+        lines=[
+            InvoiceLineRow(
+                id=line.id,
+                item_id=line.item_id,
+                item_name=(line.item.name or "") if line.item else "",
+                description=line.description or "",
+                quantity=float(line.quantity or 0),
+                unit_cost=line.unit_cost,
+                line_total=line.line_total,
+            )
+            for line in inv.lines
+        ],
+    )
+
+
+def _invoice_dates_or_422(body) -> dict:
+    """Convert the request's YYYY-MM-DD strings to date objects,
+    dropping unset fields so the Service's PATCH semantics hold."""
+    out = body.model_dump(exclude_unset=False)
+    if out.get("invoice_date") is not None:
+        out["invoice_date"] = _parse_date(out["invoice_date"], "invoice_date")
+    if out.get("due_date") is not None:
+        out["due_date"] = _parse_date(out["due_date"], "due_date")
+    elif not getattr(body, "clear_due_date", False):
+        out.pop("due_date", None)
+    out.pop("clear_due_date", None)
+    if out.get("paid_on") is not None:
+        out["paid_on"] = _parse_date(out["paid_on"], "paid_on")
+    if out.get("lines") is not None:
+        out["lines"] = [dict(line) for line in out["lines"]]
+    return out
+
+
+@router.get("/invoices", response_model=InvoiceListResponse)
+def list_invoices_route(
+    q: str = Query("", max_length=60),
+    vendor_id: int | None = Query(None, ge=1),
+    status: str | None = Query(None, pattern="^(open|paid)$"),
+    pagination: PaginationParams = Depends(pagination_dep),
+    db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
+) -> InvoiceListResponse:
+    sid = resolve_store_scope(claims)
+    require_permission(claims, "catalog", "read")
+    payload = paginate(
+        invoices_query(db, sid, vendor_id=vendor_id, status=status, q=q),
+        pagination,
+        adapter=_invoice_row,
+    )
+    return InvoiceListResponse(
+        rows=payload["rows"],
+        total=payload["total"],
+        page=payload["page"],
+        total_pages=payload["total_pages"],
+    )
+
+
+@router.get("/invoices/{invoice_id}", response_model=InvoiceResponse)
+def get_invoice_route(
+    invoice_id: int = Path(..., ge=1),
+    db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
+) -> InvoiceResponse:
+    sid = resolve_store_scope(claims)
+    require_permission(claims, "catalog", "read")
+    invoice = (
+        db.query(PurchaseInvoice)
+          .filter_by(id=invoice_id, store_id=sid)
+          .first()
+    )
+    if invoice is None:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    return InvoiceResponse(
+        invoice=_invoice_row(invoice, with_lines=True),
+        items_cost_updated=0,
+    )
+
+
+@router.post("/invoices", response_model=InvoiceResponse, status_code=201)
+def create_invoice_route(
+    body: InvoiceWriteRequest,
+    db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
+) -> InvoiceResponse:
+    sid = resolve_store_scope(claims)
+    require_permission(claims, "catalog", "update")
+    try:
+        invoice, updated = create_invoice(
+            db, sid, _invoice_dates_or_422(body),
+            created_by=int(claims["sub"]),
+        )
+    except CatalogNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except CatalogConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    _audit(
+        db, claims=claims, action="create_purchase_invoice",
+        target_type="purchase_invoice", target_id=str(invoice.id),
+        summary=(
+            f"invoice {invoice.invoice_number} "
+            f"({(invoice.vendor.name or '') if invoice.vendor else ''}) "
+            f"${invoice.total_cents / 100.0:,.2f}"
+        ),
+    )
+    db.commit()
+    return InvoiceResponse(
+        invoice=_invoice_row(invoice, with_lines=True),
+        items_cost_updated=updated,
+    )
+
+
+@router.put("/invoices/{invoice_id}", response_model=InvoiceResponse)
+def update_invoice_route(
+    invoice_id: int = Path(..., ge=1),
+    body: InvoiceUpdateRequest = ...,
+    db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
+) -> InvoiceResponse:
+    sid = resolve_store_scope(claims)
+    require_permission(claims, "catalog", "update")
+    try:
+        invoice, updated = update_invoice(
+            db, sid, invoice_id, _invoice_dates_or_422(body),
+        )
+    except CatalogNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except CatalogConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    _audit(
+        db, claims=claims, action="update_purchase_invoice",
+        target_type="purchase_invoice", target_id=str(invoice.id),
+        summary=f"invoice {invoice.invoice_number} updated",
+    )
+    db.commit()
+    return InvoiceResponse(
+        invoice=_invoice_row(invoice, with_lines=True),
+        items_cost_updated=updated,
+    )
+
+
+@router.delete("/invoices/{invoice_id}")
+def delete_invoice_route(
+    invoice_id: int = Path(..., ge=1),
+    db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
+) -> dict:
+    sid = resolve_store_scope(claims)
+    require_permission(claims, "catalog", "update")
+    try:
+        invoice = delete_invoice(db, sid, invoice_id)
+    except CatalogNotFoundError:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    _audit(
+        db, claims=claims, action="delete_purchase_invoice",
+        target_type="purchase_invoice", target_id=str(invoice_id),
+        summary=f"invoice {invoice.invoice_number} deleted",
+    )
+    db.commit()
+    return {"ok": True}

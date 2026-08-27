@@ -4210,6 +4210,604 @@
         "title": "IntermexTxnRowResponse",
         "type": "object"
       },
+      "InvoiceDetail": {
+        "additionalProperties": false,
+        "properties": {
+          "due_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due Date"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "invoice_date": {
+            "title": "Invoice Date",
+            "type": "string"
+          },
+          "invoice_number": {
+            "title": "Invoice Number",
+            "type": "string"
+          },
+          "line_count": {
+            "title": "Line Count",
+            "type": "integer"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/InvoiceLineRow"
+            },
+            "title": "Lines",
+            "type": "array"
+          },
+          "notes": {
+            "title": "Notes",
+            "type": "string"
+          },
+          "other": {
+            "title": "Other",
+            "type": "number"
+          },
+          "paid_on": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Paid On"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "subtotal": {
+            "title": "Subtotal",
+            "type": "number"
+          },
+          "tax": {
+            "title": "Tax",
+            "type": "number"
+          },
+          "total": {
+            "title": "Total",
+            "type": "number"
+          },
+          "vendor_id": {
+            "title": "Vendor Id",
+            "type": "integer"
+          },
+          "vendor_name": {
+            "title": "Vendor Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "vendor_id",
+          "vendor_name",
+          "invoice_number",
+          "invoice_date",
+          "due_date",
+          "subtotal",
+          "tax",
+          "other",
+          "total",
+          "status",
+          "paid_on",
+          "notes",
+          "line_count",
+          "lines"
+        ],
+        "title": "InvoiceDetail",
+        "type": "object"
+      },
+      "InvoiceLineRow": {
+        "additionalProperties": false,
+        "properties": {
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "item_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Id"
+          },
+          "item_name": {
+            "title": "Item Name",
+            "type": "string"
+          },
+          "line_total": {
+            "title": "Line Total",
+            "type": "number"
+          },
+          "quantity": {
+            "title": "Quantity",
+            "type": "number"
+          },
+          "unit_cost": {
+            "title": "Unit Cost",
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "item_id",
+          "item_name",
+          "description",
+          "quantity",
+          "unit_cost",
+          "line_total"
+        ],
+        "title": "InvoiceLineRow",
+        "type": "object"
+      },
+      "InvoiceLineWrite": {
+        "additionalProperties": false,
+        "properties": {
+          "description": {
+            "default": "",
+            "maxLength": 160,
+            "title": "Description",
+            "type": "string"
+          },
+          "item_id": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Id"
+          },
+          "line_total": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Line Total"
+          },
+          "quantity": {
+            "default": 1,
+            "exclusiveMinimum": 0.0,
+            "title": "Quantity",
+            "type": "number"
+          },
+          "unit_cost": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Unit Cost",
+            "type": "number"
+          }
+        },
+        "title": "InvoiceLineWrite",
+        "type": "object"
+      },
+      "InvoiceListResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/InvoiceRow"
+            },
+            "title": "Rows",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          },
+          "total_pages": {
+            "title": "Total Pages",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "rows",
+          "total",
+          "page",
+          "total_pages"
+        ],
+        "title": "InvoiceListResponse",
+        "type": "object"
+      },
+      "InvoiceResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "invoice": {
+            "$ref": "#/components/schemas/InvoiceDetail"
+          },
+          "items_cost_updated": {
+            "title": "Items Cost Updated",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "invoice",
+          "items_cost_updated"
+        ],
+        "title": "InvoiceResponse",
+        "type": "object"
+      },
+      "InvoiceRow": {
+        "additionalProperties": false,
+        "properties": {
+          "due_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due Date"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "invoice_date": {
+            "title": "Invoice Date",
+            "type": "string"
+          },
+          "invoice_number": {
+            "title": "Invoice Number",
+            "type": "string"
+          },
+          "line_count": {
+            "title": "Line Count",
+            "type": "integer"
+          },
+          "notes": {
+            "title": "Notes",
+            "type": "string"
+          },
+          "other": {
+            "title": "Other",
+            "type": "number"
+          },
+          "paid_on": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Paid On"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "subtotal": {
+            "title": "Subtotal",
+            "type": "number"
+          },
+          "tax": {
+            "title": "Tax",
+            "type": "number"
+          },
+          "total": {
+            "title": "Total",
+            "type": "number"
+          },
+          "vendor_id": {
+            "title": "Vendor Id",
+            "type": "integer"
+          },
+          "vendor_name": {
+            "title": "Vendor Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "vendor_id",
+          "vendor_name",
+          "invoice_number",
+          "invoice_date",
+          "due_date",
+          "subtotal",
+          "tax",
+          "other",
+          "total",
+          "status",
+          "paid_on",
+          "notes",
+          "line_count"
+        ],
+        "title": "InvoiceRow",
+        "type": "object"
+      },
+      "InvoiceUpdateRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "clear_due_date": {
+            "default": false,
+            "title": "Clear Due Date",
+            "type": "boolean"
+          },
+          "due_date": {
+            "anyOf": [
+              {
+                "maxLength": 10,
+                "minLength": 10,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due Date"
+          },
+          "invoice_date": {
+            "anyOf": [
+              {
+                "maxLength": 10,
+                "minLength": 10,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Invoice Date"
+          },
+          "invoice_number": {
+            "anyOf": [
+              {
+                "maxLength": 60,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Invoice Number"
+          },
+          "lines": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/InvoiceLineWrite"
+                },
+                "maxItems": 200,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lines"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "other": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Other"
+          },
+          "paid_on": {
+            "anyOf": [
+              {
+                "maxLength": 10,
+                "minLength": 10,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Paid On"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "pattern": "^(open|paid)$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          },
+          "subtotal": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subtotal"
+          },
+          "tax": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tax"
+          },
+          "update_item_costs": {
+            "default": false,
+            "title": "Update Item Costs",
+            "type": "boolean"
+          },
+          "vendor_id": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vendor Id"
+          }
+        },
+        "title": "InvoiceUpdateRequest",
+        "type": "object"
+      },
+      "InvoiceWriteRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "due_date": {
+            "anyOf": [
+              {
+                "maxLength": 10,
+                "minLength": 10,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due Date"
+          },
+          "invoice_date": {
+            "maxLength": 10,
+            "minLength": 10,
+            "title": "Invoice Date",
+            "type": "string"
+          },
+          "invoice_number": {
+            "maxLength": 60,
+            "minLength": 1,
+            "title": "Invoice Number",
+            "type": "string"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/InvoiceLineWrite"
+            },
+            "maxItems": 200,
+            "title": "Lines",
+            "type": "array"
+          },
+          "notes": {
+            "default": "",
+            "maxLength": 500,
+            "title": "Notes",
+            "type": "string"
+          },
+          "other": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Other",
+            "type": "number"
+          },
+          "paid_on": {
+            "anyOf": [
+              {
+                "maxLength": 10,
+                "minLength": 10,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Paid On"
+          },
+          "status": {
+            "default": "open",
+            "pattern": "^(open|paid)$",
+            "title": "Status",
+            "type": "string"
+          },
+          "subtotal": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Subtotal",
+            "type": "number"
+          },
+          "tax": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Tax",
+            "type": "number"
+          },
+          "update_item_costs": {
+            "default": false,
+            "title": "Update Item Costs",
+            "type": "boolean"
+          },
+          "vendor_id": {
+            "minimum": 1.0,
+            "title": "Vendor Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "vendor_id",
+          "invoice_number",
+          "invoice_date"
+        ],
+        "title": "InvoiceWriteRequest",
+        "type": "object"
+      },
       "ItemListResponse": {
         "additionalProperties": false,
         "properties": {
@@ -19380,6 +19978,449 @@
         "summary": "Portal Route",
         "tags": [
           "billing"
+        ]
+      }
+    },
+    "/catalog/invoices": {
+      "get": {
+        "operationId": "list_invoices_route_catalog_invoices_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "default": "",
+              "maxLength": 60,
+              "title": "Q",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "vendor_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Vendor Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^(open|paid)$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "description": "1-based page number",
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "description": "1-based page number",
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Rows per page (1 to 200)",
+            "in": "query",
+            "name": "per_page",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "description": "Rows per page (1 to 200)",
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Per Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvoiceListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Invoices Route",
+        "tags": [
+          "catalog"
+        ]
+      },
+      "post": {
+        "operationId": "create_invoice_route_catalog_invoices_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InvoiceWriteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvoiceResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Invoice Route",
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/catalog/invoices/{invoice_id}": {
+      "delete": {
+        "operationId": "delete_invoice_route_catalog_invoices__invoice_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "invoice_id",
+            "required": true,
+            "schema": {
+              "minimum": 1,
+              "title": "Invoice Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Delete Invoice Route Catalog Invoices  Invoice Id  Delete",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Invoice Route",
+        "tags": [
+          "catalog"
+        ]
+      },
+      "get": {
+        "operationId": "get_invoice_route_catalog_invoices__invoice_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "invoice_id",
+            "required": true,
+            "schema": {
+              "minimum": 1,
+              "title": "Invoice Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvoiceResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Invoice Route",
+        "tags": [
+          "catalog"
+        ]
+      },
+      "put": {
+        "operationId": "update_invoice_route_catalog_invoices__invoice_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "invoice_id",
+            "required": true,
+            "schema": {
+              "minimum": 1,
+              "title": "Invoice Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InvoiceUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvoiceResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Invoice Route",
+        "tags": [
+          "catalog"
         ]
       }
     },

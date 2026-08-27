@@ -124,3 +124,111 @@ class ItemListResponse(BaseModel):
     total: int
     page: int
     total_pages: int
+
+
+# ── Purchase invoices ──────────────────────────────────────
+
+
+class InvoiceLineWrite(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    item_id:     int | None = Field(None, ge=1)
+    description: str = Field("", max_length=160)
+    quantity:    float = Field(1, gt=0)
+    unit_cost:   float = Field(0, ge=0)
+    # The printed extended amount — omit to derive quantity × cost.
+    line_total:  float | None = Field(None, ge=0)
+
+
+class InvoiceWriteRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    vendor_id:      int = Field(..., ge=1)
+    invoice_number: str = Field(..., min_length=1, max_length=60)
+    invoice_date:   str = Field(..., min_length=10, max_length=10)
+    due_date:       str | None = Field(None, min_length=10, max_length=10)
+    subtotal:       float = Field(0, ge=0)
+    tax:            float = Field(0, ge=0)
+    other:          float = Field(0, ge=0)
+    status:         str = Field("open", pattern="^(open|paid)$")
+    paid_on:        str | None = Field(None, min_length=10, max_length=10)
+    notes:          str = Field("", max_length=500)
+    lines:          list[InvoiceLineWrite] = Field(
+        default_factory=list, max_length=200,
+    )
+    # Push each linked line's unit cost onto its price-book item.
+    update_item_costs: bool = False
+
+
+class InvoiceUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    vendor_id:      int | None = Field(None, ge=1)
+    invoice_number: str | None = Field(None, min_length=1, max_length=60)
+    invoice_date:   str | None = Field(None, min_length=10, max_length=10)
+    due_date:       str | None = Field(None, min_length=10, max_length=10)
+    clear_due_date: bool = False
+    subtotal:       float | None = Field(None, ge=0)
+    tax:            float | None = Field(None, ge=0)
+    other:          float | None = Field(None, ge=0)
+    status:         str | None = Field(None, pattern="^(open|paid)$")
+    paid_on:        str | None = Field(None, min_length=10, max_length=10)
+    notes:          str | None = Field(None, max_length=500)
+    # Present = replace the full line set; absent = leave lines alone.
+    lines:          list[InvoiceLineWrite] | None = Field(
+        None, max_length=200,
+    )
+    update_item_costs: bool = False
+
+
+class InvoiceLineRow(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: int
+    item_id: int | None
+    item_name: str
+    description: str
+    quantity: float
+    unit_cost: float
+    line_total: float
+
+
+class InvoiceRow(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: int
+    vendor_id: int
+    vendor_name: str
+    invoice_number: str
+    invoice_date: str
+    due_date: str | None
+    subtotal: float
+    tax: float
+    other: float
+    total: float
+    status: str
+    paid_on: str | None
+    notes: str
+    line_count: int
+
+
+class InvoiceDetail(InvoiceRow):
+    lines: list[InvoiceLineRow]
+
+
+class InvoiceResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    invoice: InvoiceDetail
+    # How many price-book items had their cost updated by this
+    # write (0 unless update_item_costs was set).
+    items_cost_updated: int
+
+
+class InvoiceListResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    rows: list[InvoiceRow]
+    total: int
+    page: int
+    total_pages: int
