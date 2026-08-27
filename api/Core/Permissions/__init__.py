@@ -111,21 +111,68 @@ def reload_policy() -> None:
 
 # ── Internal helpers ───────────────────────────────────────
 
-def _resolve_grants(role: str, store_id: int) -> set[tuple[str, str]]:
-    """Effective (resource, action) grants for a role at a store."""
+def _global_grants(role: str) -> set[tuple[str, str]]:
+    """Global (resource, action) grants for a role — Casbin global
+    domain, falling back to RBAC_DEFAULTS when unseeded."""
     e = _get_enforcer()
-    dom = str(store_id)
-    store_rules = e.get_filtered_policy(0, role, dom)
-    if store_rules:
-        return {
-            (r[2], r[3]) for r in store_rules
-            if r[2] != _OVERRIDE_SENTINEL
-        }
     global_rules = e.get_filtered_policy(0, role, "global")
     if global_rules:
         return {(r[2], r[3]) for r in global_rules}
     defaults = RBAC_DEFAULTS.get(role, [])
     return {tuple(p.split(".", 1)) for p in defaults if "." in p}
+
+
+def _store_overlay(
+    store_rules: list[list[str]],
+) -> tuple[set[str], set[tuple[str, str]], bool]:
+    """Split a store domain's rows into (mentioned resources,
+    grants, legacy_all_off). ``__none__`` action rows mention a
+    resource with zero grants; the legacy ``__override_active__``
+    sentinel marks an old-format all-off save."""
+    mentioned: set[str] = set()
+    grants: set[tuple[str, str]] = set()
+    legacy_all_off = False
+    for r in store_rules:
+        resource, action = r[2], r[3]
+        if resource == _OVERRIDE_SENTINEL:
+            legacy_all_off = True
+            continue
+        mentioned.add(resource)
+        if action != _RESOURCE_NONE:
+            grants.add((resource, action))
+    return mentioned, grants, legacy_all_off
+
+
+def _resolve_grants(role: str, store_id: int) -> set[tuple[str, str]]:
+    """Effective (resource, action) grants for a role at a store.
+
+    Store overrides are a PER-RESOURCE overlay, not a wholesale
+    replacement: rows govern only the resources they mention (a
+    ``__none__`` marker mentions a resource with all actions off);
+    resources the override never mentions fall back to the global
+    defaults. This is what lets a NEW platform resource (lottery,
+    day_close, catalog…) reach stores whose override matrix was
+    saved before the resource existed — the old wholesale
+    semantics froze those stores out of every later resource.
+
+    Legacy compatibility: a pre-overlay all-off save is a lone
+    ``__override_active__`` sentinel → still means zero access.
+    A pre-overlay partial save has no markers, so its switched-off
+    resources fall back to global once; the next save re-freezes
+    them explicitly.
+    """
+    e = _get_enforcer()
+    store_rules = e.get_filtered_policy(0, role, str(store_id))
+    if not store_rules:
+        return _global_grants(role)
+    mentioned, grants, legacy_all_off = _store_overlay(store_rules)
+    if legacy_all_off and not mentioned:
+        return set()
+    return grants | {
+        (resource, action)
+        for resource, action in _global_grants(role)
+        if resource not in mentioned
+    }
 
 
 # ── Public read API ────────────────────────────────────────
@@ -202,30 +249,35 @@ def permissions_for(
 
 # ── Write API ──────────────────────────────────────────────
 
+# Legacy all-off marker (read-compat only — no longer written).
 _OVERRIDE_SENTINEL = "__override_active__"
+# Per-resource "mentioned with zero grants" marker. Every save
+# writes one for each current resource with no allowed action, so
+# the overlay knows "explicitly off" from "didn't exist yet".
+_RESOURCE_NONE = "__none__"
 
 
 def set_store_permissions(
     store_id: int, role: str,
     matrix: dict[str, dict[str, bool]],
 ) -> None:
-    """Replace all per-store permissions for a role.
-    A sentinel row marks that overrides exist even if all are off."""
+    """Replace the per-store overlay for a role. Every CURRENT
+    resource is written explicitly — grants, or a ``__none__``
+    marker when all its actions are off — so resources added to
+    the platform later fall back to global defaults until the
+    matrix is saved again (see ``_resolve_grants``)."""
     e = _get_enforcer()
     dom = str(store_id)
     e.remove_filtered_policy(0, role, dom)
-    has_any = False
-    for resource, actions in matrix.items():
-        if resource not in RBAC_RESOURCES:
-            continue
-        for action, allowed in actions.items():
-            if action not in RBAC_ACTIONS:
-                continue
-            if allowed:
+    for resource in RBAC_RESOURCES:
+        actions = matrix.get(resource, {})
+        any_allowed = False
+        for action in RBAC_ACTIONS:
+            if actions.get(action):
                 e.add_policy(role, dom, resource, action)
-                has_any = True
-    if not has_any:
-        e.add_policy(role, dom, _OVERRIDE_SENTINEL, _OVERRIDE_SENTINEL)
+                any_allowed = True
+        if not any_allowed:
+            e.add_policy(role, dom, resource, _RESOURCE_NONE)
     e.save_policy()
     reload_policy()
 
@@ -323,19 +375,11 @@ def get_permission_matrix(
         store_rules = e.get_filtered_policy(0, role, dom)
         if store_rules:
             has_overrides.append(role)
-            granted = {
-                (r[2], r[3]) for r in store_rules
-                if r[2] != _OVERRIDE_SENTINEL
-            }
+            # Same per-resource overlay as _resolve_grants, so the
+            # UI shows the grants that are actually enforced.
+            granted = _resolve_grants(role, store_id)
         else:
-            global_rules = e.get_filtered_policy(0, role, "global")
-            if global_rules:
-                granted = {(r[2], r[3]) for r in global_rules}
-            else:
-                granted = {
-                    tuple(p.split(".", 1))
-                    for p in RBAC_DEFAULTS.get(role, []) if "." in p
-                }
+            granted = _global_grants(role)
 
         matrix[role] = {}
         for resource in RBAC_RESOURCES:
