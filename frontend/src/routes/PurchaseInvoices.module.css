@@ -1,0 +1,72 @@
+/* Purchase invoices — page-specific treatments the kit primitives
+   don't cover (CLAUDE.md inline-styles-vs-modules). */
+
+.filtersRow {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  align-items: end;
+  margin-bottom: 0.75rem;
+}
+
+.searchField {
+  flex: 1;
+  min-width: 14rem;
+}
+
+.mono {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 0.85rem;
+}
+
+/* ── Form page ── */
+
+.formGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+@media (max-width: 30rem) {
+  .formGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Line-editor rows: code / description / qty / cost / total / remove */
+.lineRow {
+  display: grid;
+  grid-template-columns: 8rem 1fr 5rem 6rem 6rem auto;
+  gap: 0.5rem;
+  align-items: start;
+}
+
+@media (max-width: 48rem) {
+  .lineRow {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.lineMeta {
+  font-size: 0.78rem;
+  min-height: 1rem;
+}
+
+.formActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.totalsRow {
+  display: flex;
+  justify-content: flex-end;
+  gap: 1.5rem;
+  align-items: baseline;
+  flex-wrap: wrap;
+}
+
+.totalLabel {
+  font-size: 0.8rem;
+  font-weight: 600;
+}
