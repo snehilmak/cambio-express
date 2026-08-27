@@ -3550,12 +3550,14 @@ export interface paths {
         };
         /**
          * List Reports Route
-         * @description Per-store report-center categories for the admin Reports page.
+         * @description Per-store report-center categories.
          *
-         *     Mirrors the legacy /reports Jinja landing — same registry
-         *     (`_REPORT_CATEGORIES`), same View / Coming-soon split, same
-         *     drilldown URLs (still on Flask templates one PR-per-report
-         *     until each report individually migrates).
+         *     Two collections, kept fully separate (owner directive — MSB
+         *     and back-office must not blur):
+         *       * ``msb`` (default) — the original money-services Report
+         *         Center (transfers, ACH, senders, P&L, logs & exports).
+         *       * ``store`` — the retail back-office center (day close,
+         *         lottery, price book, store accounting).
          *
          *     Auth: any logged-in caller scoped to a store. Owners get the
          *     same admin-side category list when viewing through their own
@@ -18187,7 +18189,9 @@ export interface operations {
     };
     list_reports_route_reports_get: {
         parameters: {
-            query?: never;
+            query?: {
+                collection?: string;
+            };
             header?: {
                 authorization?: string | null;
             };

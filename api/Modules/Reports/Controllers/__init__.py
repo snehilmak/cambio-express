@@ -502,15 +502,18 @@ def _build_report_list(prefix: str = "") -> ReportListResponse:
 
 @router.get("", response_model=ReportListResponse)
 def list_reports_route(
+    collection: str = Query("msb", pattern="^(msb|store)$"),
     db: Session = Depends(get_db),  # noqa: ARG001 — kept for symmetry
     claims: dict[str, Any] = Depends(get_principal),
 ) -> ReportListResponse:
-    """Per-store report-center categories for the admin Reports page.
+    """Per-store report-center categories.
 
-    Mirrors the legacy /reports Jinja landing — same registry
-    (`_REPORT_CATEGORIES`), same View / Coming-soon split, same
-    drilldown URLs (still on Flask templates one PR-per-report
-    until each report individually migrates).
+    Two collections, kept fully separate (owner directive — MSB
+    and back-office must not blur):
+      * ``msb`` (default) — the original money-services Report
+        Center (transfers, ACH, senders, P&L, logs & exports).
+      * ``store`` — the retail back-office center (day close,
+        lottery, price book, store accounting).
 
     Auth: any logged-in caller scoped to a store. Owners get the
     same admin-side category list when viewing through their own
@@ -520,6 +523,25 @@ def list_reports_route(
             status_code=403,
             detail="Sign in as a store user to view reports.",
         )
+    if collection == "store":
+        from api.Modules.Reports.Services.categories import (
+            STORE_REPORT_CATEGORIES, resolved_categories,
+        )
+        resolved = resolved_categories(STORE_REPORT_CATEGORIES)
+        return ReportListResponse(categories=[
+            ReportCategory(
+                key=cat["key"], label=cat["label"], icon=cat["icon"],
+                reports=[
+                    ReportRow(
+                        key=r["key"], label=r["label"],
+                        description=r["description"],
+                        url=r.get("url"), status=r["status"],
+                    )
+                    for r in cat["reports"]
+                ],
+            )
+            for cat in resolved
+        ])
     return _build_report_list(prefix="")
 
 

@@ -420,3 +420,34 @@ def test_owner_report_list_excludes_admin_extras():
     assert "logs_exports" not in keys
     fin = next(c for c in resp.categories if c.key == "financial")
     assert all(r.key != "monthly_pl" for r in fin.reports)
+
+
+def test_store_report_collection_is_separate(authed_client):
+    """?collection=store returns the back-office center — day close /
+    lottery / price book / accounting — with none of the MSB
+    categories, and the default index carries none of the store
+    ones (owner directive: the two centers never blur)."""
+    resp = authed_client.get("/reports?collection=store")
+    assert resp.status_code == 200, resp.text
+    cats = {c["key"]: c for c in resp.json()["categories"]}
+    assert set(cats) == {
+        "store_sales", "lottery", "price_book", "store_accounting",
+    }
+
+    day_close = next(
+        r for r in cats["store_sales"]["reports"]
+        if r["key"] == "day_close_summary"
+    )
+    assert day_close["url"] == "/day-close"
+    assert day_close["status"] == "ready"
+    trends = next(
+        r for r in cats["store_sales"]["reports"]
+        if r["key"] == "department_trends"
+    )
+    assert trends["status"] == "coming_soon"
+
+    msb = {c["key"] for c in authed_client.get("/reports").json()["categories"]}
+    assert msb.isdisjoint(set(cats))
+
+    # Unknown collection values are rejected, not silently defaulted.
+    assert authed_client.get("/reports?collection=x").status_code == 422

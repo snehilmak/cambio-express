@@ -147,6 +147,76 @@ REPORT_CATEGORIES: list[dict[str, Any]] = [
 ]
 
 
+# ── Store (back-office) Report Center ───────────────────────
+#
+# The retail-pivot counterpart to REPORT_CATEGORIES: day-close,
+# lottery, price-book, and store-accounting surfaces, kept fully
+# separate from the MSB reports (owner directive — MSB and
+# back-office must not blur). Served by the same index route via
+# ``?collection=store``; ready rows carry literal SPA ``url``s
+# (no /app basename — the React Report Center adds it), rows
+# without a url render as Coming soon.
+
+STORE_REPORT_CATEGORIES: list[dict[str, Any]] = [
+    {
+        "key":   "store_sales",
+        "label": "Store Sales",
+        "icon":  '<svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg>',
+        "reports": [
+            {"key": "day_close_summary",
+             "label": "Day Close Summary",
+             "description": "Register totals, tenders, department sales, and drawer over/short by day.",
+             "url": "/day-close"},
+            {"key": "department_trends",
+             "label": "Department Sales Trends",
+             "description": "Department mix over time across register closes."},
+            {"key": "fuel_by_grade",
+             "label": "Fuel Sales by Grade",
+             "description": "Gallons and dollars per grade from register journal data."},
+        ],
+    },
+    {
+        "key":   "lottery",
+        "label": "Lottery",
+        "icon":  '<svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9V7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v2a2 2 0 0 0 0 6v2a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-2a2 2 0 0 0 0-6z"/><path d="M13 5v2"/><path d="M13 11v2"/><path d="M13 17v2"/></svg>',
+        "reports": [
+            {"key": "lottery_day_counts",
+             "label": "Lottery Day Counts",
+             "description": "Tickets sold and value per pack from the day-close counts.",
+             "url": "/lottery"},
+            {"key": "pack_settlement",
+             "label": "Pack Settlement History",
+             "description": "Settled and returned packs over a period."},
+        ],
+    },
+    {
+        "key":   "price_book",
+        "label": "Price Book",
+        "icon":  '<svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.6 13.4L11 3H4v7l9.6 10.4a2 2 0 0 0 2.8 0l4.2-4.2a2 2 0 0 0 0-2.8z"/><path d="M7.5 6.5h.01"/></svg>',
+        "reports": [
+            {"key": "price_book_items",
+             "label": "Price Book",
+             "description": "Every item with scan code, price, cost, department, and vendor.",
+             "url": "/price-book"},
+            {"key": "margin_by_department",
+             "label": "Margin by Department",
+             "description": "Retail vs. cost margins rolled up per department."},
+        ],
+    },
+    {
+        "key":   "store_accounting",
+        "label": "Accounting",
+        "icon":  '<svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>',
+        "reports": [
+            {"key": "journal_entries",
+             "label": "Journal Entries Export",
+             "description": "One balanced double-entry per business day (CSV) — imports into QuickBooks or Xero.",
+             "url": "/admin/data-export"},
+        ],
+    },
+]
+
+
 SUPERADMIN_REPORT_CATEGORIES: list[dict[str, Any]] = [
     {
         "key":   "platform_health",
@@ -399,6 +469,7 @@ def resolved_categories(registry: list[dict[str, Any]], endpoint_prefix: str = "
 
 __all__ = [
     "REPORT_CATEGORIES",
+    "STORE_REPORT_CATEGORIES",
     "SUPERADMIN_REPORT_CATEGORIES",
     "resolved_categories",
     "url_from_endpoint",

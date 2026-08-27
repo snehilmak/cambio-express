@@ -144,6 +144,26 @@ doubt, write it here rather than leaving it in chat.
 >   designed extension: a nullable `Department.parent_id` when the
 >   price book lands — extend that table, don't invent a second
 >   catalog.
+> - **MSB and back-office never blur in the UI** (owner directive,
+>   2026-08-27). Sidebar IA: Dashboard is its own top entry;
+>   "MSB Daily book" is the MSB ledger's name; Returned checks
+>   lives under Money services; customer-facing screens group
+>   under "Displays" (TV display now; Lottery / Restaurant
+>   displays later); Reports is a fly-out with two SEPARATE
+>   centers — "MSB Reports" (`/reports`, collection=msb) and
+>   "Store Reports" (`/store-reports`, collection=store, gated on
+>   module_day_close). New reports must go into exactly one
+>   collection. Superadmin is the platform operator, not a store:
+>   store-level modules (MSB Daily book / Day close / Lottery /
+>   Price book) carry roles admin+employee and never appear in
+>   superadmin nav (routes stay reachable for support).
+> - **Two-tier deployment (PROPOSED, awaiting owner go)**:
+>   dinerobook.com pins to a promoted `release` branch for live
+>   MSB customers; a second Render service + DB on a back-office
+>   subdomain auto-deploys `main` (~$15–25/mo — spend needs
+>   explicit approval, like Redis). Do NOT fork the codebase at
+>   #854: prod DB is already migrated past it, and module flags
+>   already hide back-office surfaces from MSB stores.
 
 **Phase 0 — Foundations** (each its own PR):
 1. ✅ SHIPPED — `business_type` on Store (cstore / gas_station /
