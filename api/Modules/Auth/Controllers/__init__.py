@@ -1925,6 +1925,7 @@ def my_stores_route(
           .order_by(Store.name)
           .all()
     ) if ids else []
+    home_id = owner.store_id
     return MyStoresResponse(stores=[
         SwitchableStoreRow(
             store_id=s.id,
@@ -1932,6 +1933,7 @@ def my_stores_route(
             slug=s.slug or "",
             address=s.address or "",
             is_current=(current is not None and int(current) == s.id),
+            is_home=(home_id is not None and home_id == s.id),
         )
         for s in stores
     ])

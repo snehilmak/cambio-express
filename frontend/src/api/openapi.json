@@ -11274,6 +11274,10 @@
             "title": "Is Current",
             "type": "boolean"
           },
+          "is_home": {
+            "title": "Is Home",
+            "type": "boolean"
+          },
           "name": {
             "title": "Name",
             "type": "string"
@@ -11292,7 +11296,8 @@
           "name",
           "slug",
           "address",
-          "is_current"
+          "is_current",
+          "is_home"
         ],
         "title": "SwitchableStoreRow",
         "type": "object"

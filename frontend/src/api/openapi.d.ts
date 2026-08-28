@@ -11022,6 +11022,8 @@ export interface components {
             address: string;
             /** Is Current */
             is_current: boolean;
+            /** Is Home */
+            is_home: boolean;
             /** Name */
             name: string;
             /** Slug */

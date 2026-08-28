@@ -62,6 +62,10 @@ def test_my_stores_and_switch_roundtrip(client):
     assert set(by_id) == {home_id, sib_id}
     assert by_id[sib_id]["name"] == "Los Hermanos"
     assert by_id[sib_id]["address"].startswith("Los Hermanos Rd")
+    # is_home marks the owner's own store — the SPA's post-login
+    # auto-enter target when no store is remembered (U-4a).
+    assert by_id[home_id]["is_home"] is True
+    assert by_id[sib_id]["is_home"] is False
 
     # Enter the sibling store → store-scoped ADMIN token.
     resp = client.post("/api/v2/auth/switch-store", headers=_headers(token),

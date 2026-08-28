@@ -16,6 +16,10 @@ class SwitchableStoreRow(BaseModel):
     # The store the caller's current token is scoped to (if any) —
     # the modal marks it with the active radio.
     is_current: bool
+    # The owner's home store (User.store_id) — the deterministic
+    # auto-enter target after login when no store is remembered.
+    # All-false for legacy owners created without a home store.
+    is_home: bool
 
 
 class MyStoresResponse(BaseModel):

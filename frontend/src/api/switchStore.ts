@@ -67,6 +67,35 @@ export async function returnToOwnerView(): Promise<void> {
   }
 }
 
+/** Owner just logged in (U-4a, single-dashboard rule): drop them
+ *  straight into a store so their landing view is the same one
+ *  their team sees. Preference: the store remembered on this
+ *  device → the owner's home store → the first switchable store.
+ *  Returns false when the owner has no active stores (legacy
+ *  connect-code owners) — the caller falls back to the owner
+ *  overview. */
+export async function autoEnterOwnerStore(): Promise<boolean> {
+  let rows: SwitchableStoreRow[];
+  try {
+    const body = await api<MyStoresResponse>("/api/v2/auth/my-stores");
+    rows = body.stores;
+  } catch {
+    return false;
+  }
+  if (rows.length === 0) return false;
+  const remembered = rememberedStoreId();
+  const target =
+    rows.find((s) => s.store_id === remembered)
+    ?? rows.find((s) => s.is_home)
+    ?? rows[0];
+  try {
+    await switchStore(target.store_id);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function rememberedStoreId(): number | null {
   try {
     const raw = window.localStorage.getItem(ACTIVE_STORE_KEY);
