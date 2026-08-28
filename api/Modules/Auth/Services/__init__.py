@@ -75,7 +75,7 @@ from api.Modules.Auth.Services.signup import (
     SignupConflictError,
     SignupResult,
     create_owner,
-    create_store_and_admin,
+    create_store_and_owner,
 )
 from api.Modules.Auth.Services.totp import (
     RECOVERY_CODES_PER_USER,
@@ -115,7 +115,7 @@ __all__ = [
     "consume_password_reset_token",
     "consume_recovery_code",
     "create_owner",
-    "create_store_and_admin",
+    "create_store_and_owner",
     "decode_access_token",
     "decode_passkey_register_token",
     "decode_pending_2fa_token",

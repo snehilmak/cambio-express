@@ -66,7 +66,7 @@ from api.Modules.Auth.Services import (
     confirm_recovery_codes_saved,
     consume_password_reset_token,
     create_owner,
-    create_store_and_admin,
+    create_store_and_owner,
     decode_access_token,
     finalize_2fa_with_recovery_code,
     finalize_2fa_with_totp,
@@ -1236,7 +1236,7 @@ def signup_route(
         if ref is not None:
             referred_by_code_id = ref.id
     try:
-        result = create_store_and_admin(
+        result = create_store_and_owner(
             db,
             store_name=store_name,
             email=email,
@@ -1255,22 +1255,22 @@ def signup_route(
     # Issue a refresh token first (mints the session_id), then the
     # access JWT (which embeds the session_id). Same flow the
     # password-login path uses via ``_to_login_response``.
-    perms = permissions_for(result.admin.role, db, store_id=result.store.id)
+    perms = permissions_for(result.owner.role, db, store_id=result.store.id)
     from api.Modules.Auth.Services.refresh import (
         DEFAULT_REFRESH_TOKEN_TTL_SECONDS, issue as _issue_refresh,
     )
     issued_rt = _issue_refresh(
-        db, user_id=result.admin.id,
+        db, user_id=result.owner.id,
         user_agent=_client_user_agent(request),
         ip_address=_client_ip_address(request),
     )
     issuer = JWTIssuer(
-        sub=result.admin.id,
-        role=result.admin.role,
+        sub=result.owner.id,
+        role=result.owner.role,
         store_id=result.store.id,
         permissions=perms,
-        full_name=result.admin.full_name or "",
-        username=result.admin.username,
+        full_name=result.owner.full_name or "",
+        username=result.owner.username,
         session_id=issued_rt.session_id,
     )
     token = issue_access_token(issuer)
@@ -1283,10 +1283,10 @@ def signup_route(
     return SignupResponse(
         access_token=token,
         expires_in=DEFAULT_ACCESS_TOKEN_TTL_SECONDS,
-        user_id=result.admin.id,
-        username=result.admin.username,
-        full_name=result.admin.full_name or "",
-        role=result.admin.role,
+        user_id=result.owner.id,
+        username=result.owner.username,
+        full_name=result.owner.full_name or "",
+        role=result.owner.role,
         store_id=result.store.id,
         permissions=perms,
     )
@@ -1388,7 +1388,7 @@ def referral_preview_route(
     when the code isn't recognised — matches the legacy Jinja
     behaviour where an unknown code silently dropped without a
     banner. The actual application-of-credit happens at signup
-    time inside `create_store_and_admin`."""
+    time inside `create_store_and_owner`."""
     from api.Modules.Billing.Services import lookup_referral_code
     ref = lookup_referral_code(db, (code or "").strip().upper())
     if ref is None:
