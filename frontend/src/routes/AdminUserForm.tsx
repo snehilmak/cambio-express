@@ -6,6 +6,7 @@ import {
   createAdminUser, updateAdminUser, useAdminUser,
   type AdminUserCreateBody, type AdminUserUpdateBody,
 } from "../api/admin";
+import { useSessionStatus } from "../api/account";
 import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
 import {
@@ -22,11 +23,29 @@ interface UserDraft {
   role:      string;
   is_active: boolean;
   password:  string;
+  // U-3 per-user module grants: restrict=false → all store
+  // modules (module_access null); restrict=true → only `modules`.
+  restrict:  boolean;
+  modules:   string[];
 }
 
 function makeBlankUser(): UserDraft {
-  return { username: "", full_name: "", role: "employee", is_active: true, password: "" };
+  return {
+    username: "", full_name: "", role: "employee", is_active: true,
+    password: "", restrict: false, modules: [],
+  };
 }
+
+// Human labels for the store-module flags (keys mirror the
+// backend's MODULE_FLAG_KEYS; the checkbox list only renders keys
+// present in the store's session-status `features`).
+const MODULE_LABELS: Record<string, string> = {
+  module_money_services: "Money services (transfers, batches, senders)",
+  module_lottery:        "Lottery",
+  module_day_close:      "Day close",
+  module_check_cashing:  "Check cashing & returned checks",
+  module_price_book:     "Price book & purchases",
+};
 
 // /app/admin/users/new and /app/admin/users/:uid/edit — combined
 // create + edit form. Mirrors the legacy admin_user_form.html
@@ -44,7 +63,8 @@ export default function AdminUserForm() {
   const navigate    = useNavigate();
   const identity    = getCurrentIdentity();
 
-  const detail = useAdminUser(isEdit ? uid : null);
+  const detail  = useAdminUser(isEdit ? uid : null);
+  const session = useSessionStatus();
 
   // Form state — three sources hydrate it: the detail response on
   // edit, blank defaults on create.
@@ -64,6 +84,8 @@ export default function AdminUserForm() {
       role:      u.role || "employee",
       is_active: u.is_active,
       password:  "",
+      restrict:  u.module_access != null,
+      modules:   u.module_access ?? [],
     };
     // eslint-disable-next-line react-hooks/set-state-in-effect -- hydrate local editable draft + dirty baseline from server-fetched user record on edit
     setDraft(hydrated);
@@ -129,11 +151,13 @@ export default function AdminUserForm() {
     setServerError(null);
     setFieldErrors({});
     try {
+      const moduleAccess = draft.restrict ? draft.modules : null;
       if (isEdit) {
         const body: AdminUserUpdateBody = {
           full_name: draft.full_name,
           role:      draft.role,
           is_active: draft.is_active,
+          module_access: moduleAccess,
         };
         if (draft.password) body.password = draft.password;
         await updateAdminUser(uid, body);
@@ -143,6 +167,7 @@ export default function AdminUserForm() {
           password:  draft.password,
           full_name: draft.full_name,
           role:      draft.role,
+          module_access: moduleAccess,
         };
         await createAdminUser(body);
       }
@@ -234,6 +259,63 @@ export default function AdminUserForm() {
               <option value="employee">Employee (Transfer only)</option>
               <option value="admin">Super Admin (Full access)</option>
             </Select>
+          </Field>
+
+          <Field
+            label="Module access"
+            error={fieldErrors.module_access}
+            hint="Which parts of the app this user sees. Restricting hides modules from their navigation — it doesn't change their role permissions."
+          >
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.45rem" }}>
+              <label className={styles.checkboxRow}>
+                <input
+                  type="radio" name="module-access-mode"
+                  checked={!draft.restrict}
+                  onChange={() => set("restrict", false)}
+                  disabled={busy}
+                />
+                <span className={styles.checkboxLabel}>
+                  All store modules
+                </span>
+              </label>
+              <label className={styles.checkboxRow}>
+                <input
+                  type="radio" name="module-access-mode"
+                  checked={draft.restrict}
+                  onChange={() => set("restrict", true)}
+                  disabled={busy}
+                />
+                <span className={styles.checkboxLabel}>
+                  Only selected modules
+                </span>
+              </label>
+              {draft.restrict && (
+                <div style={{
+                  display: "flex", flexDirection: "column",
+                  gap: "0.35rem", paddingLeft: "1.6rem",
+                }}>
+                  {(session.data?.features ?? Object.keys(MODULE_LABELS))
+                    .map((key) => (
+                      <label key={key} className={styles.checkboxRow}>
+                        <input
+                          type="checkbox"
+                          checked={draft.modules.includes(key)}
+                          onChange={(e) => set(
+                            "modules",
+                            e.target.checked
+                              ? [...draft.modules, key]
+                              : draft.modules.filter((k) => k !== key),
+                          )}
+                          disabled={busy}
+                        />
+                        <span className={styles.checkboxLabel}>
+                          {MODULE_LABELS[key] ?? key}
+                        </span>
+                      </label>
+                    ))}
+                </div>
+              )}
+            </div>
           </Field>
 
           <Field

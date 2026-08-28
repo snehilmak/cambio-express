@@ -92,6 +92,9 @@ export interface AdminUserRow {
   role:       string;
   is_active:  boolean;
   created_at: string;
+  // null = every module the store has; a list restricts this
+  // user's visible modules (U-3).
+  module_access: string[] | null;
 }
 
 export interface AdminUserListResponse {
@@ -107,6 +110,7 @@ export interface AdminUserCreateBody {
   password:   string;
   full_name?: string;
   role?:      string;
+  module_access?: string[] | null;
 }
 
 export interface AdminUserUpdateBody {
@@ -114,6 +118,9 @@ export interface AdminUserUpdateBody {
   role?:      string;
   is_active?: boolean;
   password?:  string;
+  // PATCH semantics: omitted = unchanged; null = all modules;
+  // a list = restrict to those modules.
+  module_access?: string[] | null;
 }
 
 export function useAdminUsers() {

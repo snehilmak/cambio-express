@@ -697,6 +697,14 @@ def export_admin_audit_log_csv_route(
 
 
 def _user_row(u) -> AdminUserRow:
+    # module_access CSV → list: NULL = None (all store modules),
+    # "" = [] (none of the optional modules) — see U-3 semantics
+    # on the User model.
+    raw_access = getattr(u, "module_access", None)
+    module_access = (
+        None if raw_access is None
+        else [k for k in raw_access.split(",") if k]
+    )
     return AdminUserRow(
         id=u.id,
         username=u.username or "",
@@ -704,6 +712,7 @@ def _user_row(u) -> AdminUserRow:
         role=u.role or "employee",
         is_active=bool(u.is_active),
         created_at=u.created_at.isoformat() if u.created_at else "",
+        module_access=module_access,
     )
 
 
@@ -789,6 +798,7 @@ def create_user_route(
             password=body.password,
             full_name=body.full_name,
             role=body.role,
+            module_access=body.module_access,
         )
     except UsernameTakenError as exc:
         raise HTTPException(
@@ -850,6 +860,11 @@ def update_user_route(
     actor_id_raw = claims.get("sub")
     actor_id = int(actor_id_raw) if actor_id_raw is not None else None
     try:
+        update_kwargs: dict[str, Any] = {}
+        if "module_access" in fields:
+            # PATCH semantics: only forward when the client sent
+            # the field — omitted must not clear an existing grant.
+            update_kwargs["module_access"] = fields["module_access"]
         update_store_user(
             db, user,
             full_name=fields.get("full_name"),
@@ -857,6 +872,7 @@ def update_user_route(
             is_active=fields.get("is_active"),
             password=fields.get("password"),
             actor_id=actor_id,
+            **update_kwargs,
         )
     except SelfDemotionError as exc:
         # Surface as a field error — SPA renders inline next to

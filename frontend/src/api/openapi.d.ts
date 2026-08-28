@@ -1425,6 +1425,12 @@ export interface paths {
          *     sections and routes to render — a convenience store doesn't see
          *     the money-transfer ledger it never uses. Store-less principals
          *     (superadmin, owner) get every module.
+         *
+         *     ``features`` is further intersected with the user's per-user
+         *     ``module_access`` grants (U-3) — an admin/employee restricted
+         *     to specific modules sees only those. Owners (including owners
+         *     switched into a store — sub resolves to the owner row) and
+         *     superadmin are never restricted.
          */
         get: operations["session_status_route_auth_session_status_get"];
         put?: never;
@@ -5882,6 +5888,8 @@ export interface components {
              * @default
              */
             full_name: string;
+            /** Module Access */
+            module_access?: string[] | null;
             /** Password */
             password: string;
             /**
@@ -5914,6 +5922,8 @@ export interface components {
             id: number;
             /** Is Active */
             is_active: boolean;
+            /** Module Access */
+            module_access: string[] | null;
             /** Role */
             role: string;
             /** Username */
@@ -5934,6 +5944,8 @@ export interface components {
             full_name?: string | null;
             /** Is Active */
             is_active?: boolean | null;
+            /** Module Access */
+            module_access?: string[] | null;
             /** Password */
             password?: string | null;
             /** Role */

@@ -231,6 +231,12 @@ class User(Base):
     # per-user (not per-device) so the preference follows the user
     # across browsers / devices. Logged-out pages always render dark.
     theme_preference = Column(String(8), default="dark")
+    # Per-user module access (U-3): NULL = every module the store
+    # has (the default); a comma-separated subset of
+    # MODULE_FLAG_KEYS restricts what this user's nav/session
+    # shows. UX gating like the store flags — routes stay
+    # permission-gated. Owners/superadmin are never restricted.
+    module_access = Column(String(300), nullable=True)
     # Notification preferences. Opt-out (default True) for the one we
     # ship in v1 — a trial-ending reminder. Adding more toggles is one
     # column per channel here + the matching sender.

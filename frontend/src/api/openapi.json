@@ -436,6 +436,21 @@
             "title": "Full Name",
             "type": "string"
           },
+          "module_access": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 20,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Module Access"
+          },
           "password": {
             "maxLength": 200,
             "minLength": 1,
@@ -513,6 +528,20 @@
             "title": "Is Active",
             "type": "boolean"
           },
+          "module_access": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Module Access"
+          },
           "role": {
             "title": "Role",
             "type": "string"
@@ -528,7 +557,8 @@
           "full_name",
           "role",
           "is_active",
-          "created_at"
+          "created_at",
+          "module_access"
         ],
         "title": "AdminUserRow",
         "type": "object"
@@ -559,6 +589,21 @@
               }
             ],
             "title": "Is Active"
+          },
+          "module_access": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 20,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Module Access"
           },
           "password": {
             "anyOf": [
@@ -18033,7 +18078,7 @@
     },
     "/auth/session-status": {
       "get": {
-        "description": "Store-gate status for the authed user's SPA shell (PR C).\n\nEvery authed role calls this on app load so the chrome can decide\nwhether to gate the user out of the app to a \"re-subscribe\" /\n\"suspended\" screen. Read-only \u2014 no login/token logic, no writes.\n\nReturns ``{gated, reason, plan, store_name}``:\n  * ``gated``  \u2014 True when the store is frozen or its subscription\n    has fully lapsed (see ``store_gate_status``).\n  * ``reason`` \u2014 \"frozen\" | \"subscription\" | \"\".\n  * ``plan``   \u2014 the store's plan slug (for the re-subscribe copy).\n  * ``store_name`` \u2014 shown on the gate screen.\n\nA superadmin (no ``store_id``) is never gated \u2014 they operate the\nplatform, not a store.\n\nAlso carries the store's ``business_type`` and the module flags\ncurrently ON (``features``) so the shell can decide which nav\nsections and routes to render \u2014 a convenience store doesn't see\nthe money-transfer ledger it never uses. Store-less principals\n(superadmin, owner) get every module.",
+        "description": "Store-gate status for the authed user's SPA shell (PR C).\n\nEvery authed role calls this on app load so the chrome can decide\nwhether to gate the user out of the app to a \"re-subscribe\" /\n\"suspended\" screen. Read-only \u2014 no login/token logic, no writes.\n\nReturns ``{gated, reason, plan, store_name}``:\n  * ``gated``  \u2014 True when the store is frozen or its subscription\n    has fully lapsed (see ``store_gate_status``).\n  * ``reason`` \u2014 \"frozen\" | \"subscription\" | \"\".\n  * ``plan``   \u2014 the store's plan slug (for the re-subscribe copy).\n  * ``store_name`` \u2014 shown on the gate screen.\n\nA superadmin (no ``store_id``) is never gated \u2014 they operate the\nplatform, not a store.\n\nAlso carries the store's ``business_type`` and the module flags\ncurrently ON (``features``) so the shell can decide which nav\nsections and routes to render \u2014 a convenience store doesn't see\nthe money-transfer ledger it never uses. Store-less principals\n(superadmin, owner) get every module.\n\n``features`` is further intersected with the user's per-user\n``module_access`` grants (U-3) \u2014 an admin/employee restricted\nto specific modules sees only those. Owners (including owners\nswitched into a store \u2014 sub resolves to the owner row) and\nsuperadmin are never restricted.",
         "operationId": "session_status_route_auth_session_status_get",
         "parameters": [
           {
