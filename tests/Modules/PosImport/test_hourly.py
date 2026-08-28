@@ -203,3 +203,67 @@ def test_item_movement_rebuild_and_report(client, test_store_id):
         headers=h,
     ).json()
     assert body["rows"][0]["in_price_book"] is True
+
+
+# ── NAXML price-book export (G-4, beta) ─────────────────────
+
+
+def test_pricebook_export_shape_and_filters(client, test_store_id):
+    """The export carries every active item as an ITTData record
+    (POSCode + format, 40-char description, sell price, reverse-
+    mapped merchandise code, ActiveFlag); changed_since filters;
+    an empty selection 422s instead of shipping a blank file."""
+    from defusedxml import ElementTree as SafeET
+
+    h = _admin(client, test_store_id)
+    dept = _mk_department(client, h, "Snacks G4")
+    _map_codes(client, h, {"41": dept["id"]})
+
+    made = client.post(
+        "/api/v2/catalog/items", headers=h,
+        json={
+            "pos_code": "049000042566", "name": "Coke 20oz",
+            "price": 2.79, "department_id": dept["id"],
+        },
+    )
+    assert made.status_code == 201, made.text
+    client.post(
+        "/api/v2/catalog/items", headers=h,
+        json={
+            "pos_code": "7", "name": "Fountain drink",
+            "pos_code_format": "plu", "price": 1.29,
+        },
+    )
+
+    resp = client.get(
+        "/api/v2/posimport/naxml/pricebook-export", headers=h,
+    )
+    assert resp.status_code == 200, resp.get_data(as_text=True)
+    assert resp.headers["Content-Disposition"].startswith("attachment")
+    root = SafeET.fromstring(resp.get_data(as_text=True))
+    assert root.tag == "NAXML-MaintenanceRequest"
+    assert root.find(".//VendorName").text == "DineroBook"
+
+    records = {
+        r.find(".//POSCode").text: r
+        for r in root.findall(".//ITTData")
+    }
+    coke = records["049000042566"]
+    assert coke.find(".//POSCodeFormat").get("format") == "upcA"
+    assert coke.find(".//Description").text == "Coke 20oz"
+    assert coke.find(".//RegularSellPrice").text == "2.79"
+    # Reverse-mapped from the department's merchandise code.
+    assert coke.find(".//MerchandiseCode").text == "41"
+    assert coke.find(".//ActiveFlag").get("value") == "yes"
+
+    plu = records["7"]
+    assert plu.find(".//POSCodeFormat").get("format") == "plu"
+    assert plu.find(".//MerchandiseCode") is None
+
+    # A future changed_since date matches nothing → 422, no file.
+    empty = client.get(
+        "/api/v2/posimport/naxml/pricebook-export"
+        "?changed_since=2099-01-01",
+        headers=h,
+    )
+    assert empty.status_code == 422

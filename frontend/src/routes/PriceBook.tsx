@@ -126,6 +126,16 @@ function ItemsTab() {
             >
               Seed from register
             </Button>
+            <a
+              href="/api/v2/posimport/naxml/pricebook-export"
+              download
+              style={{ textDecoration: "none" }}
+              title="Download the price book as a NAXML ItemMaintenance file for Gilbarco Passport's back-office import (beta — the write-back half of the register loop)."
+            >
+              <Button size="sm" tone="secondary" type="button">
+                Export for register
+              </Button>
+            </a>
             <Button size="sm" onClick={() => setAdding(true)}>
               + Add item
             </Button>
