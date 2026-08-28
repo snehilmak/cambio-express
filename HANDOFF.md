@@ -296,11 +296,50 @@ changes which store it shows.
   owner-context; rules in Auth INVARIANTS.md). SPA: topbar store
   chip + Switch Store modal; silent refresh re-enters the
   remembered store ("db.owner_active_store").
-- U-3 — per-user module access grants (owner gives users
-  specific module access).
-- U-4 — owner-first signup + login unification (retire the
-  separate owner login/surfaces; owner overview becomes a page
-  inside the one dashboard).
+- ✅ U-3 (PR #882) — per-user module access grants:
+  `User.module_access` CSV (NULL = all store modules, "" = none),
+  intersected with the store's module flags in
+  `/auth/session-status`; edited from the Add/Edit User form
+  ("All store modules" vs "Only selected modules"). UX gating
+  only — routes stay Casbin-gated; owner + superadmin sessions
+  are never restricted.
+- ✅ U-4a (PR #883) — owner login lands IN a store (remembered →
+  home → first) via the my-stores/switch-store flow; `is_home`
+  on the my-stores row is the deterministic pick. Owner overview
+  stays reachable via the switcher's "Owner overview".
+- ✅ U-4b — owner-first signup: `/signup` creates a
+  (Store, OWNER user) pair — `create_store_and_owner` sets the
+  store as the owner's home + writes a `StoreOwnerLink` row, and
+  the SPA auto-enters the new store after signup. The username
+  collision check widened to ANY existing user (cross-store
+  login is first-match-by-username). Legacy `/signup/owner`
+  (owner without a store, invite-code oversight) still works but
+  is unlinked from the signup page.
+- ✅ U-5a — owner adds a new store from the Switch Store modal's
+  "+ Add store" button (POST /auth/my-stores: trial window +
+  StoreOwnerLink, no User row, owner_add_store audit).
+- ✅ U-5b — superadmin concierge onboarding: create-store gains
+  `initial_role` (admin | owner — owner mirrors self-service
+  signup), and GET/POST/DELETE
+  `/superadmin/stores/{id}/owner-links` connect/disconnect
+  existing owner logins per customer instruction (audited;
+  home-store link protected). Store drill shows an "Owners"
+  section; the create form has an "Initial user role" picker.
+- **Billing stance for multi-store owners (decided in chat,
+  2026-08-28):** subscriptions stay PER STORE. Superadmin-created
+  stores have no trial timestamps → "exempt" (never gated) until
+  a plan is set via the edit form / comp flows, or the owner
+  enters the store and subscribes through normal Stripe checkout.
+  Owner-added stores start their own 7-day trial. Consolidated
+  owner-level billing (one invoice, quantity-based Stripe sub) is
+  a FUTURE project gated on a pricing/packaging decision from the
+  owner — don't build it without that.
+- Remaining U-track follow-ups (unscoped): fold the /owner/*
+  umbrella pages into the store shell for switched-in owners
+  (today they require bouncing back to the base owner token);
+  surface per-user module grants on the owner's cross-store
+  Team Users page; decide whether legacy store admins created
+  pre-U-4b get an upgrade path to owner accounts.
 
 **Phase 2+ (not yet scoped in detail):** inventory basics; fuel module (needs a
 gas-station design partner first); Modisoft/Cronysoft migration

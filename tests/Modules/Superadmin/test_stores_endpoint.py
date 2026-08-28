@@ -162,7 +162,8 @@ def test_create_records_audit(client):
         )
         assert row is not None
         assert row.target_type == "store"
-        assert row.details == "new-branch"
+        # Details carry the slug + the initial user's role (U-5b).
+        assert row.details == "new-branch (initial admin)"
 
 
 def test_create_seeds_admin_user(client):

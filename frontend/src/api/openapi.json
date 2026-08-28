@@ -10646,6 +10646,74 @@
         "title": "SuperadminAuditRow",
         "type": "object"
       },
+      "SuperadminOwnerLinkCreateRequest": {
+        "additionalProperties": false,
+        "description": "POST body for /superadmin/stores/{id}/owner-links \u2014 connect\nan existing owner login to a store on the customer's\ninstruction (concierge onboarding).",
+        "properties": {
+          "owner_username": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Owner Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "owner_username"
+        ],
+        "title": "SuperadminOwnerLinkCreateRequest",
+        "type": "object"
+      },
+      "SuperadminOwnerLinkListResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/SuperadminOwnerLinkRow"
+            },
+            "title": "Rows",
+            "type": "array"
+          }
+        },
+        "required": [
+          "rows"
+        ],
+        "title": "SuperadminOwnerLinkListResponse",
+        "type": "object"
+      },
+      "SuperadminOwnerLinkRow": {
+        "additionalProperties": false,
+        "properties": {
+          "full_name": {
+            "title": "Full Name",
+            "type": "string"
+          },
+          "is_active": {
+            "title": "Is Active",
+            "type": "boolean"
+          },
+          "linked_at": {
+            "title": "Linked At",
+            "type": "string"
+          },
+          "owner_id": {
+            "title": "Owner Id",
+            "type": "integer"
+          },
+          "username": {
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "owner_id",
+          "username",
+          "full_name",
+          "is_active",
+          "linked_at"
+        ],
+        "title": "SuperadminOwnerLinkRow",
+        "type": "object"
+      },
       "SuperadminReportCategory": {
         "additionalProperties": false,
         "description": "Group of related reports \u2014 Platform Health / Revenue /\nStripe / Trial Funnel / Feature Adoption / Support. The\n`icon` is an inline stroke SVG matching the rest of the\nsidebar/nav iconography (CLAUDE.md design system).",
@@ -10777,6 +10845,12 @@
             "default": "",
             "maxLength": 120,
             "title": "Email",
+            "type": "string"
+          },
+          "initial_role": {
+            "default": "admin",
+            "pattern": "^(admin|owner)$",
+            "title": "Initial Role",
             "type": "string"
           },
           "name": {
@@ -33296,6 +33370,252 @@
           }
         },
         "summary": "Freeze Store Route",
+        "tags": [
+          "superadmin"
+        ]
+      }
+    },
+    "/superadmin/stores/{store_id}/owner-links": {
+      "get": {
+        "description": "Owners connected to this store (home-store links included).",
+        "operationId": "store_owner_links_route_superadmin_stores__store_id__owner_links_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "store_id",
+            "required": true,
+            "schema": {
+              "minimum": 1,
+              "title": "Store Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuperadminOwnerLinkListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Store Owner Links Route",
+        "tags": [
+          "superadmin"
+        ]
+      },
+      "post": {
+        "description": "Connect an existing owner login to this store. The target\nuser must be role=owner and active; duplicates return 409.",
+        "operationId": "store_owner_link_create_route_superadmin_stores__store_id__owner_links_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "store_id",
+            "required": true,
+            "schema": {
+              "minimum": 1,
+              "title": "Store Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SuperadminOwnerLinkCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuperadminOwnerLinkListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Store Owner Link Create Route",
+        "tags": [
+          "superadmin"
+        ]
+      }
+    },
+    "/superadmin/stores/{store_id}/owner-links/{owner_id}": {
+      "delete": {
+        "description": "Disconnect an owner from a store (on customer instruction).\nWon't remove an owner's link to their HOME store \u2014 that pairing\nis the account's anchor; deactivate the owner instead.",
+        "operationId": "store_owner_link_delete_route_superadmin_stores__store_id__owner_links__owner_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "store_id",
+            "required": true,
+            "schema": {
+              "minimum": 1,
+              "title": "Store Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "owner_id",
+            "required": true,
+            "schema": {
+              "minimum": 1,
+              "title": "Owner Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuperadminOwnerLinkListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Store Owner Link Delete Route",
         "tags": [
           "superadmin"
         ]

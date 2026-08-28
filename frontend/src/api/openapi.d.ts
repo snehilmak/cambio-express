@@ -4775,6 +4775,53 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/superadmin/stores/{store_id}/owner-links": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Store Owner Links Route
+         * @description Owners connected to this store (home-store links included).
+         */
+        get: operations["store_owner_links_route_superadmin_stores__store_id__owner_links_get"];
+        put?: never;
+        /**
+         * Store Owner Link Create Route
+         * @description Connect an existing owner login to this store. The target
+         *     user must be role=owner and active; duplicates return 409.
+         */
+        post: operations["store_owner_link_create_route_superadmin_stores__store_id__owner_links_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/superadmin/stores/{store_id}/owner-links/{owner_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Store Owner Link Delete Route
+         * @description Disconnect an owner from a store (on customer instruction).
+         *     Won't remove an owner's link to their HOME store — that pairing
+         *     is the account's anchor; deactivate the owner instead.
+         */
+        delete: operations["store_owner_link_delete_route_superadmin_stores__store_id__owner_links__owner_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/superadmin/stores/{store_id}/permissions": {
         parameters: {
             query?: never;
@@ -10729,6 +10776,34 @@ export interface components {
             target_type: string;
         };
         /**
+         * SuperadminOwnerLinkCreateRequest
+         * @description POST body for /superadmin/stores/{id}/owner-links — connect
+         *     an existing owner login to a store on the customer's
+         *     instruction (concierge onboarding).
+         */
+        SuperadminOwnerLinkCreateRequest: {
+            /** Owner Username */
+            owner_username: string;
+        };
+        /** SuperadminOwnerLinkListResponse */
+        SuperadminOwnerLinkListResponse: {
+            /** Rows */
+            rows: components["schemas"]["SuperadminOwnerLinkRow"][];
+        };
+        /** SuperadminOwnerLinkRow */
+        SuperadminOwnerLinkRow: {
+            /** Full Name */
+            full_name: string;
+            /** Is Active */
+            is_active: boolean;
+            /** Linked At */
+            linked_at: string;
+            /** Owner Id */
+            owner_id: number;
+            /** Username */
+            username: string;
+        };
+        /**
          * SuperadminReportCategory
          * @description Group of related reports — Platform Health / Revenue /
          *     Stripe / Trial Funnel / Feature Adoption / Support. The
@@ -10816,6 +10891,11 @@ export interface components {
              * @default
              */
             email: string;
+            /**
+             * Initial Role
+             * @default admin
+             */
+            initial_role: string;
             /** Name */
             name: string;
             /**
@@ -21183,6 +21263,116 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SuperadminStoreFreezeResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    store_owner_links_route_superadmin_stores__store_id__owner_links_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                store_id: number;
+            };
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SuperadminOwnerLinkListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    store_owner_link_create_route_superadmin_stores__store_id__owner_links_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                store_id: number;
+            };
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SuperadminOwnerLinkCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SuperadminOwnerLinkListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    store_owner_link_delete_route_superadmin_stores__store_id__owner_links__owner_id__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                store_id: number;
+                owner_id: number;
+            };
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SuperadminOwnerLinkListResponse"];
                 };
             };
             /** @description Validation Error */

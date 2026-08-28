@@ -77,6 +77,7 @@ export default function SuperadminStoreForm() {
 
   // Initial admin user — create only.
   const [adminName,     setAdminName]     = useState("Store Admin");
+  const [initialRole,   setInitialRole]   = useState("admin");
   const [adminUsername, setAdminUsername] = useState("admin");
   const [adminPassword, setAdminPassword] = useState("");
 
@@ -256,6 +257,7 @@ export default function SuperadminStoreForm() {
           admin_username: adminUsername.trim() || "admin",
           admin_name:     adminName.trim() || "Store Admin",
           admin_password: adminPassword,
+          initial_role:   initialRole,
         };
         await createSuperadminStore(body);
         queryClient.invalidateQueries({ queryKey: ["superadmin", "stores"] });
@@ -431,6 +433,22 @@ export default function SuperadminStoreForm() {
                     }}
                     disabled={busy}
                   />
+                </Field>
+
+                <Field
+                  label="Initial user role"
+                  hint={initialRole === "owner"
+                    ? "Owner: this login can switch stores, connect more locations, and manage users — use for concierge onboarding."
+                    : "Admin: a store-scoped login (the legacy default)."}
+                >
+                  <Select
+                    value={initialRole}
+                    onChange={(e) => setInitialRole(e.target.value)}
+                    disabled={busy}
+                  >
+                    <option value="admin">Store admin</option>
+                    <option value="owner">Owner (recommended)</option>
+                  </Select>
                 </Field>
 
                 <Field

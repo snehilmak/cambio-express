@@ -8,6 +8,9 @@ from api.Modules.Superadmin.Requests.discounts import (
     DiscountCodeToggleRequest,
 )
 from api.Modules.Superadmin.Requests.stores import (
+    SuperadminOwnerLinkCreateRequest,
+    SuperadminOwnerLinkListResponse,
+    SuperadminOwnerLinkRow,
     SuperadminStoreCreateRequest,
     SuperadminStoreCreditRequest,
     SuperadminStoreCreditResponse,
@@ -158,6 +161,9 @@ __all__ = [
     "SuperadminReportCategory",
     "SuperadminReportListResponse",
     "SuperadminReportRow",
+    "SuperadminOwnerLinkCreateRequest",
+    "SuperadminOwnerLinkListResponse",
+    "SuperadminOwnerLinkRow",
     "SuperadminStoreCreateRequest",
     "SuperadminStoreCreditRequest",
     "SuperadminStoreCreditResponse",

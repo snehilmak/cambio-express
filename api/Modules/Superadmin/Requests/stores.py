@@ -103,8 +103,39 @@ class SuperadminStoreCreateRequest(BaseModel):
     admin_username: str = Field("admin",       min_length=1, max_length=80)
     admin_name:     str = Field("Store Admin", max_length=120)
     admin_password: str = Field(..., min_length=1, max_length=200)
+    # U-5b concierge onboarding: "owner" makes the initial user a
+    # role=owner with this store as their home (plus the
+    # StoreOwnerLink row) — the same shape self-service signup
+    # creates — so the customer gets store switching + user
+    # management from day one. "admin" keeps the legacy behavior.
+    initial_role: str = Field("admin", pattern="^(admin|owner)$")
 
     _v_email = field_validator("email")(_validate_optional_email)
+
+
+class SuperadminOwnerLinkRow(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    owner_id:  int
+    username:  str
+    full_name: str
+    is_active: bool
+    linked_at: str  # ISO; "" when unknown
+
+
+class SuperadminOwnerLinkListResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    rows: list[SuperadminOwnerLinkRow]
+
+
+class SuperadminOwnerLinkCreateRequest(BaseModel):
+    """POST body for /superadmin/stores/{id}/owner-links — connect
+    an existing owner login to a store on the customer's
+    instruction (concierge onboarding)."""
+    model_config = ConfigDict(extra="forbid")
+
+    owner_username: str = Field(..., min_length=1, max_length=255)
 
 
 class SuperadminStoreUpdateRequest(BaseModel):
