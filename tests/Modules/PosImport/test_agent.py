@@ -159,3 +159,126 @@ def test_employee_denied_key_and_staged_surfaces(client, test_store_id):
     assert client.get(
         "/api/v2/posimport/staged", headers=emp_h,
     ).status_code == 403
+
+
+# ── Auto-commit on day roll (G-1) ───────────────────────────
+
+
+def test_auto_commit_books_day_when_it_rolls(client, test_store_id):
+    """With mapping in place, the first upload carrying a NEWER
+    business date auto-books the completed prior day — no operator
+    click. The audit row attributes the booking to the agent."""
+    h = _admin(client, test_store_id)
+    key = _issue_key(client, h)["key"]
+    misc = _mk_department(client, h, "Misc G1")
+    _map_codes(client, h, {"17": misc["id"]})
+
+    _agent_upload(client, key, "G1-D1-001.xml", _sale(
+        business_date="2024-11-01",
+    ))
+    # Same-day second file: day hasn't rolled — nothing books.
+    _agent_upload(client, key, "G1-D1-002.xml", _sale(
+        business_date="2024-11-01",
+    ))
+    day = client.get("/api/v2/dayclose/day/2024-11-01", headers=h).json()
+    assert day["closes"] == []
+
+    # First file of Nov 2 = Nov 1 rolled → Nov 1 auto-books.
+    _agent_upload(client, key, "G1-D2-001.xml", _sale(
+        business_date="2024-11-02",
+    ))
+    day = client.get("/api/v2/dayclose/day/2024-11-01", headers=h).json()
+    assert len(day["closes"]) == 1
+    assert day["closes"][0]["source"] == "gilbarco"
+
+    # The staged list shows it committed; Nov 2 is still open.
+    days = {
+        d["business_date"]: d["committed"]
+        for d in client.get(
+            "/api/v2/posimport/staged", headers=h,
+        ).json()["days"]
+    }
+    assert days["2024-11-01"] is True
+    assert days["2024-11-02"] is False
+
+    from api.Modules.Audit.Models import OperatorAuditLog
+    from tests._app import db, db_session
+    with db_session():
+        row = (
+            db.session.query(OperatorAuditLog)
+            .filter_by(
+                store_id=test_store_id,
+                action="commit_pos_import_auto",
+                target_id="2024-11-01",
+            )
+            .one()
+        )
+        assert row.user_id is None
+        assert row.user_name == "Gilbarco site agent"
+
+
+def test_auto_commit_gates(client, test_store_id):
+    """Unmapped codes hold a rolled day (it books after mapping on
+    the next upload); a day with manual closes is never doubled;
+    days outside the lookback window stay a manual warm start."""
+    h = _admin(client, test_store_id)
+    key = _issue_key(client, h)["key"]
+
+    # Rolled but unmapped ("909") → stays staged.
+    _agent_upload(client, key, "G2-D1-001.xml", _sale(
+        business_date="2024-12-01", merch="909",
+    ))
+    _agent_upload(client, key, "G2-D2-001.xml", _sale(
+        business_date="2024-12-02", merch="909",
+    ))
+    assert client.get(
+        "/api/v2/dayclose/day/2024-12-01", headers=h,
+    ).json()["closes"] == []
+
+    # Mapping lands → the NEXT upload books the held day.
+    dept = _mk_department(client, h, "Misc G2")
+    _map_codes(client, h, {"909": dept["id"]})
+    _agent_upload(client, key, "G2-D2-002.xml", _sale(
+        business_date="2024-12-02", merch="909",
+    ))
+    assert len(client.get(
+        "/api/v2/dayclose/day/2024-12-01", headers=h,
+    ).json()["closes"]) == 1
+
+    # A day with MANUAL closes is skipped even after it rolls.
+    from api.Modules.DayClose.Services import upsert_register_close
+    from tests._app import db, db_session
+    from datetime import date
+    with db_session():
+        upsert_register_close(
+            db.session, test_store_id, date(2024, 12, 3),
+            register_label="Register 1", shift_label="",
+            gross_sales=10.0, sales_tax=0.0, cash_total=10.0,
+            card_total=0.0, other_total=0.0, cash_counted=None,
+            notes="", department_sales={}, created_by=None,
+            source="manual",
+        )
+        db.session.commit()
+    _agent_upload(client, key, "G2-D3-001.xml", _sale(
+        business_date="2024-12-03", merch="909",
+    ))
+    _agent_upload(client, key, "G2-D4-001.xml", _sale(
+        business_date="2024-12-04", merch="909",
+    ))
+    closes = client.get(
+        "/api/v2/dayclose/day/2024-12-03", headers=h,
+    ).json()["closes"]
+    assert len(closes) == 1
+    assert closes[0]["source"] == "manual"
+
+    # A rolled day OUTSIDE the lookback window (fresh-install
+    # backlog) is not auto-booked.
+    _agent_upload(client, key, "G2-OLD-001.xml", _sale(
+        business_date="2024-06-01", merch="909",
+    ))
+    _agent_upload(client, key, "G2-D5-001.xml", _sale(
+        business_date="2024-12-05", merch="909",
+    ))
+    assert client.get(
+        "/api/v2/dayclose/day/2024-06-01", headers=h,
+    ).json()["closes"] == []

@@ -230,6 +230,116 @@ def staged_days(db: Session, store_id: int) -> list[StagedDay]:
     return out
 
 
+AUTO_COMMIT_LOOKBACK_DAYS = 3
+
+
+def auto_commit_rolled_days(db: Session, store_id: int) -> list:
+    """Auto-book recently ROLLED business days (G-1 — the
+    hands-off ingestion loop). Called after each agent upload; a
+    day D is booked only when every gate passes:
+
+      * a staged file with a NEWER business date exists — the
+        site's day has rolled (Passport's BusinessDate advances at
+        the site day close, so this is the authoritative "day D is
+        complete" signal),
+      * D has NO RegisterClose rows from ANY source — manual
+        entries are never doubled up, and late files for an
+        already-booked day stay a manual re-commit (which replaces
+        idempotently),
+      * no file for D has a parse error (a parser fix re-parses
+        history — don't book a known-partial day),
+      * D is inside a short lookback window — the backlog from a
+        fresh agent install stays a reviewed, manual warm start,
+      * every merchandise code is mapped (commit_business_day's
+        gate) — an unmapped day is skipped silently and retried on
+        the next upload, so mapping completion is all an operator
+        needs to do.
+
+    Each booked day writes a system operator-audit row. Caller
+    commits. Returns the CommitDayResult list (empty = nothing was
+    ready)."""
+    from datetime import timedelta
+
+    from api.Modules.Audit.Services import record_operator_action
+    from api.Modules.PosImport.Services.ingest import (
+        PosImportError,
+        commit_business_day,
+    )
+
+    latest = (
+        db.query(func.max(PosJournalFile.business_date))
+        .filter(
+            PosJournalFile.store_id == store_id,
+            PosJournalFile.business_date.isnot(None),
+        )
+        .scalar()
+    )
+    if latest is None:
+        return []
+    window_start = latest - timedelta(days=AUTO_COMMIT_LOOKBACK_DAYS)
+    candidates = [
+        d for (d,) in db.query(PosJournalFile.business_date)
+        .filter(
+            PosJournalFile.store_id == store_id,
+            PosJournalFile.business_date.isnot(None),
+            PosJournalFile.business_date < latest,
+            PosJournalFile.business_date >= window_start,
+        )
+        .distinct()
+        .all()
+    ]
+    if not candidates:
+        return []
+    booked_dates = {
+        d for (d,) in db.query(RegisterClose.report_date)
+        .filter(
+            RegisterClose.store_id == store_id,
+            RegisterClose.report_date.in_(candidates),
+        )
+        .distinct()
+        .all()
+    }
+    error_dates = {
+        d for (d,) in db.query(PosJournalFile.business_date)
+        .filter(
+            PosJournalFile.store_id == store_id,
+            PosJournalFile.business_date.in_(candidates),
+            PosJournalFile.parse_error != "",
+        )
+        .distinct()
+        .all()
+    }
+    results = []
+    for day in sorted(candidates):
+        if day in booked_dates or day in error_dates:
+            continue
+        events = staged_events_for_day(db, store_id, day)
+        try:
+            result = commit_business_day(
+                db, store_id, day, events=events, created_by=None,
+            )
+        except PosImportError:
+            # Unmapped codes (or an empty day) — leave it staged;
+            # the next upload retries after the operator maps.
+            continue
+        record_operator_action(
+            db,
+            store_id=store_id,
+            user_id=None,
+            user_name="Gilbarco site agent",
+            user_role="system",
+            target_type="register_close",
+            target_id=day.isoformat(),
+            action="commit_pos_import_auto",
+            summary=(
+                f"auto-booked rolled day {day.isoformat()}: "
+                f"{result.closes_written} register close(s)"
+            ),
+        )
+        results.append(result)
+    return results
+
+
 def staged_events_for_day(
     db: Session, store_id: int, day: date,
 ) -> list[PjrEvent]:
