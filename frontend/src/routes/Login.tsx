@@ -5,17 +5,13 @@ import { LoginChrome } from "../components/LoginChrome";
 import chrome from "../components/LoginChrome.module.css";
 import { Alert, Button, Field, Input, Pill } from "../components/ui";
 import { api, ApiError } from "../lib/api";
-import { setAccessToken } from "../lib/auth";
+import { persistLoginResponse } from "../lib/auth";
+import { autoEnterOwnerStore } from "../api/switchStore";
 import styles from "./Login.module.css";
 import { BRAND_NAME } from "../lib/brand";
+import type { components } from "../api/openapi";
 
-interface LoginResponse {
-  access_token: string;
-  requires_totp: boolean;
-  pending_token: string | null;
-  has_recovery_codes: boolean;
-  enroll_required?: boolean;
-}
+type LoginResponse = components["schemas"]["LoginResponse"];
 
 interface LocationState {
   from?: string;
@@ -40,8 +36,29 @@ export default function Login() {
   const location = useLocation();
   const stateDest = (location.state as LocationState | null)?.from;
 
-  function finishLogin(token: string) {
-    setAccessToken(token);
+  async function finishLogin(result: LoginResponse) {
+    persistLoginResponse({
+      user_id:     result.user_id,
+      username:    result.username ?? "",
+      full_name:   result.full_name ?? "",
+      role:        result.role ?? "",
+      store_id:    result.store_id ?? null,
+      permissions: result.permissions ?? [],
+      refresh_jti: result.refresh_jti ?? undefined,
+    });
+    // Single-dashboard rule (U-4a): an owner lands inside a store —
+    // the same view their team sees — not on a separate owner
+    // surface. Remembered store → home store → first store; the
+    // owner overview stays reachable via the store switcher. Only
+    // an owner with no active stores falls back to the overview.
+    if (result.role === "owner") {
+      const entered = await autoEnterOwnerStore();
+      navigate(
+        entered ? (stateDest || "/dashboard") : "/owner/dashboard",
+        { replace: true },
+      );
+      return;
+    }
     navigate(stateDest || "/dashboard", { replace: true });
   }
 
@@ -64,10 +81,10 @@ export default function Login() {
         }
         setPending({
           pending_token: result.pending_token,
-          has_recovery_codes: result.has_recovery_codes,
+          has_recovery_codes: result.has_recovery_codes ?? false,
         });
       } else {
-        finishLogin(result.access_token);
+        await finishLogin(result);
       }
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Network error. Please try again.");
@@ -219,7 +236,7 @@ function SecondFactor({
   state, onSuccess, onCancel,
 }: {
   state: PendingState;
-  onSuccess: (token: string) => void;
+  onSuccess: (result: LoginResponse) => void | Promise<void>;
   onCancel: () => void;
 }) {
   const [mode, setMode]   = useState<"totp" | "recovery">("totp");
@@ -240,7 +257,7 @@ function SecondFactor({
         json: { pending_token: state.pending_token, code: code.trim() },
       });
       if (result.access_token) {
-        onSuccess(result.access_token);
+        await onSuccess(result);
       } else {
         setError("Server returned an unexpected response.");
       }

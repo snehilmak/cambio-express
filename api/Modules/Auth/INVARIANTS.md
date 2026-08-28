@@ -259,6 +259,13 @@ a **store-scoped admin token** for the selected store. Rules:
 - Refresh re-mints from the User row (base owner token) — the SPA
   re-enters the remembered store after refresh; the server never
   persists switch state.
+- **Post-login auto-enter (U-4a) is purely client-side.** After an
+  owner login the SPA calls `/auth/my-stores` and then the normal
+  `/auth/switch-store` (remembered store → `is_home` store → first
+  store) so the owner lands on the same store dashboard their team
+  sees. No new token path exists for this — `is_home` on the
+  my-stores row is data only, and an owner with zero active stores
+  simply stays on the base owner token (owner overview).
 
 
 ## TOTP enrollment + verification
