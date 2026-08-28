@@ -55,7 +55,7 @@ STORE_OWNED_MODELS: list[str] = [
     # the POS merchandise mapping FKs departments too.
     # Catalog: invoice lines FK invoices + items; invoices FK
     # vendors; items FK departments + vendors — purge in that order.
-    "DepartmentSale", "RegisterClose", "PosMerchandiseMap",
+    "DepartmentSale", "HourlySale", "RegisterClose", "PosMerchandiseMap",
     "PurchaseInvoiceLine", "PurchaseInvoice",
     "PriceBookItem", "Vendor", "Department",
     # POS import: agent keys + staged journal files (store-scoped).
@@ -118,7 +118,7 @@ def _store_owned_models() -> list[tuple[type, str]]:
         LotteryDayCount, LotteryGame, LotteryPack,
     )
     from api.Modules.DayClose.Models import (
-        Department, DepartmentSale, RegisterClose,
+        Department, DepartmentSale, HourlySale, RegisterClose,
     )
     from api.Modules.PosImport.Models import (
         PosAgentCredential, PosJournalFile, PosMerchandiseMap,
@@ -151,6 +151,7 @@ def _store_owned_models() -> list[tuple[type, str]]:
         # Day close: sale lines FK closes + departments — lines
         # first; the POS mapping FKs departments too.
         (DepartmentSale, "store_id"),
+        (HourlySale, "store_id"),
         (RegisterClose, "store_id"),
         (PosMerchandiseMap, "store_id"),
         # Catalog: invoice lines → invoices → items → vendors,

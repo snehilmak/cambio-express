@@ -43,8 +43,13 @@ def _doc(event_xml: str) -> str:
 
 def _sale(business_date="2024-10-14", register="1", merch="17",
           amount="2.99", tax_collected="0.25", tender_code="cash",
-          tendered="4.00", change="-0.76"):
+          tendered="4.00", change="-0.76", event_dt=None):
+    # event_dt: optional ISO timestamp -> <EventDateTime> (G-3).
+    dt_el = (
+        f"<EventDateTime>{event_dt}</EventDateTime>" if event_dt else ""
+    )
     return _doc(f"""<SaleEvent>
+    {dt_el}
     <CashierID>91</CashierID>
     <RegisterID>{register}</RegisterID>
     <TillID>1310</TillID>

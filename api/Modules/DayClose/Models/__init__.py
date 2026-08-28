@@ -163,4 +163,26 @@ class DepartmentSale(Base):
     department = relationship("Department")
 
 
-__all__ = ["Department", "DepartmentSale", "RegisterClose"]
+class HourlySale(Base):
+    """Store-level net sales per clock hour of one business day
+    (G-3 — the dashboard's hourly-sales chart). Fed live by the
+    Gilbarco agent as each journal file arrives, and rebuilt from
+    the staged originals whenever the day is (re)committed, so the
+    booked history is always self-consistent. ``source`` scopes
+    rows the same way RegisterClose.source does — a future POS
+    integration writes its own rows without colliding."""
+
+    __tablename__ = "hourly_sale"
+    id           = Column(Integer, primary_key=True)
+    store_id     = Column(Integer, ForeignKey("store.id"), nullable=False, index=True)
+    report_date  = Column(Date, nullable=False, index=True)
+    hour         = Column(Integer, nullable=False)  # 0..23
+    amount_cents = Column(BigInteger, nullable=False, default=0)
+    amount       = DollarView("amount_cents")
+    source       = Column(String(20), nullable=False, default="gilbarco")
+    __table_args__ = (
+        UniqueConstraint("store_id", "report_date", "hour", "source"),
+    )
+
+
+__all__ = ["Department", "DepartmentSale", "HourlySale", "RegisterClose"]

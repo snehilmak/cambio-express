@@ -73,6 +73,15 @@ export interface LotterySnapshot {
 // Generic store blocks (D-1). sales/purchases are null when the
 // matching module (day_close / price_book) is off; clocked_in is
 // universal.
+export interface HourlyBlock {
+  current_date: string;
+  previous_date: string | null;
+  current: number[];   // 24 hour buckets
+  previous: number[] | null;
+  current_total: number;
+  previous_total: number | null;
+}
+
 export interface SalesBlock {
   today: number;
   yesterday: number;
@@ -81,6 +90,9 @@ export interface SalesBlock {
   d15: number;
   d30: number;
   trend: Array<{ date: string; amount: number }>;
+  // Hourly chart data (G-3) — null until the store has hourly
+  // buckets (fed by the Gilbarco agent).
+  hourly: HourlyBlock | null;
 }
 
 export interface PurchasesBlock {

@@ -341,6 +341,59 @@ function AdminPanel({ d }: { d: AdminDashboard }) {
         </Section>
       )}
 
+      {d.sales?.hourly && (
+        <Section
+          title="Hourly sales"
+          actions={
+            <span style={{
+              fontSize: fontSize.sm, color: tokens.textMuted,
+              fontFamily: tokens.fontMono,
+            }}>
+              {d.sales.hourly.previous_total != null
+                && `Prev ${fmtUsd(d.sales.hourly.previous_total)} · `}
+              Current {fmtUsd(d.sales.hourly.current_total)}
+            </span>
+          }
+        >
+          <Card>
+            <div style={{ height: "16rem" }}>
+              <Line
+                data={{
+                  labels: Array.from({ length: 24 }, (_, h) => String(h)),
+                  datasets: [
+                    ...(d.sales.hourly.previous
+                      ? [{
+                          label: `Previous (${shortDate(d.sales.hourly.previous_date ?? "")})`,
+                          data: d.sales.hourly.previous,
+                          borderColor: chartSeries().neutral,
+                          borderDash: [6, 4],
+                          backgroundColor: "transparent",
+                          fill: false,
+                          tension: 0.25,
+                          pointRadius: 0,
+                        }]
+                      : []),
+                    {
+                      label: `Current (${shortDate(d.sales.hourly.current_date)})`,
+                      data: d.sales.hourly.current,
+                      borderColor: chartSeries().accent,
+                      backgroundColor: seriesFill("positive", 0.12),
+                      fill: true,
+                      tension: 0.25,
+                      pointRadius: 0,
+                    },
+                  ],
+                }}
+                options={{
+                  ...moneyChartOptions("Sales"),
+                  maintainAspectRatio: false,
+                }}
+              />
+            </div>
+          </Card>
+        </Section>
+      )}
+
       {d.clocked_in.length > 0 && (
         <Section
           title={`Clocked in (${d.clocked_in.length})`}
