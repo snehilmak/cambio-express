@@ -3453,6 +3453,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/posimport/item-movement": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Item Movement Route
+         * @description Item movement (G-2): per-item net quantity + dollars over a
+         *     date range, from the booked journal data. Sorted by dollars
+         *     descending — the top-sellers view. ``q`` matches description
+         *     substring or scan-code prefix, mirroring the price-book
+         *     search.
+         */
+        get: operations["item_movement_route_posimport_item_movement_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/posimport/mapping": {
         parameters: {
             query?: never;
@@ -8083,6 +8107,42 @@ export interface components {
             total: number;
             /** Total Pages */
             total_pages: number;
+        };
+        /** ItemMovementResponse */
+        ItemMovementResponse: {
+            /** End */
+            end: string;
+            /** Page */
+            page: number;
+            /** Rows */
+            rows: components["schemas"]["ItemMovementRow"][];
+            /** Start */
+            start: string;
+            /** Total */
+            total: number;
+            /** Total Amount */
+            total_amount: number;
+            /** Total Pages */
+            total_pages: number;
+            /** Total Quantity */
+            total_quantity: number;
+        };
+        /** ItemMovementRow */
+        ItemMovementRow: {
+            /** Amount */
+            amount: number;
+            /** Avg Price */
+            avg_price: number;
+            /** Description */
+            description: string;
+            /** In Price Book */
+            in_price_book: boolean;
+            /** Merchandise Code */
+            merchandise_code: string;
+            /** Pos Code */
+            pos_code: string;
+            /** Quantity */
+            quantity: number;
         };
         /** ItemResponse */
         ItemResponse: {
@@ -18610,6 +18670,47 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AgentUploadResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    item_movement_route_posimport_item_movement_get: {
+        parameters: {
+            query: {
+                /** @description YYYY-MM-DD */
+                start: string;
+                /** @description YYYY-MM-DD */
+                end: string;
+                q?: string;
+                page?: number;
+                per_page?: number;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemMovementResponse"];
                 };
             };
             /** @description Validation Error */

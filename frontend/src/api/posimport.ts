@@ -113,3 +113,27 @@ export async function commitPriceBookSeed(): Promise<PriceBookSeedResult> {
     method: "POST",
   });
 }
+
+// ── Item movement (G-2) ──────────────────────────────────────
+
+export type ItemMovement =
+  components["schemas"]["ItemMovementResponse"];
+
+export function useItemMovement(params: {
+  start: string; end: string; q: string; page: number;
+}) {
+  return useQuery<ItemMovement>({
+    enabled: Boolean(params.start && params.end),
+    queryKey: ["posimport", "item-movement", params],
+    queryFn: () => {
+      const p = new URLSearchParams({
+        start: params.start, end: params.end,
+        page: String(params.page),
+      });
+      if (params.q) p.set("q", params.q);
+      return api<ItemMovement>(
+        `/api/v2/posimport/item-movement?${p.toString()}`,
+      );
+    },
+  });
+}

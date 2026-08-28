@@ -24,7 +24,10 @@ import binascii
 from datetime import datetime
 from typing import Any
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Path, Request
+from fastapi import (
+    APIRouter, Depends, Header, HTTPException, Path, Query as FQuery,
+    Request,
+)
 from sqlalchemy.orm import Session
 
 from api.Core.Database import get_db
@@ -44,6 +47,8 @@ from api.Modules.PosImport.Requests import (
     FuelGradeRow,
     ImportDepartmentRow,
     ImportRegisterRow,
+    ItemMovementResponse,
+    ItemMovementRow,
     MappingListResponse,
     MappingRow,
     MappingWriteRequest,
@@ -498,4 +503,107 @@ def commit_staged_route(
         day=result.day.isoformat(),
         closes_written=result.closes_written,
         registers=result.registers,
+    )
+
+
+@router.get("/item-movement", response_model=ItemMovementResponse)
+def item_movement_route(
+    start: str = FQuery(..., description="YYYY-MM-DD"),
+    end: str = FQuery(..., description="YYYY-MM-DD"),
+    q: str = FQuery("", max_length=80),
+    page: int = FQuery(1, ge=1),
+    per_page: int = FQuery(50, ge=1, le=200),
+    db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
+) -> ItemMovementResponse:
+    """Item movement (G-2): per-item net quantity + dollars over a
+    date range, from the booked journal data. Sorted by dollars
+    descending — the top-sellers view. ``q`` matches description
+    substring or scan-code prefix, mirroring the price-book
+    search."""
+    sid = resolve_store_scope(claims)
+    require_permission(claims, "reports", "read")
+    try:
+        start_d = datetime.strptime(start, "%Y-%m-%d").date()
+        end_d = datetime.strptime(end, "%Y-%m-%d").date()
+    except ValueError:
+        raise HTTPException(
+            status_code=422, detail="Dates must be YYYY-MM-DD.",
+        )
+    if end_d < start_d:
+        raise HTTPException(
+            status_code=422, detail="end must not be before start.",
+        )
+    if (end_d - start_d).days > 366:
+        raise HTTPException(
+            status_code=422, detail="Range is limited to one year.",
+        )
+
+    from sqlalchemy import func as _f
+
+    from api.Modules.Catalog.Models import PriceBookItem
+    from api.Modules.PosImport.Models import PosItemDaySale
+
+    base = (
+        db.query(
+            PosItemDaySale.pos_code,
+            _f.max(PosItemDaySale.description),
+            _f.max(PosItemDaySale.merchandise_code),
+            _f.coalesce(_f.sum(PosItemDaySale.quantity), 0.0),
+            _f.coalesce(_f.sum(PosItemDaySale.amount_cents), 0),
+        )
+        .filter(
+            PosItemDaySale.store_id == sid,
+            PosItemDaySale.business_date >= start_d,
+            PosItemDaySale.business_date <= end_d,
+        )
+        .group_by(PosItemDaySale.pos_code)
+    )
+    needle = q.strip().lower()
+    if needle:
+        base = base.having(
+            _f.lower(_f.max(PosItemDaySale.description)).contains(needle)
+            | PosItemDaySale.pos_code.startswith(needle),
+        )
+    rows = base.all()
+
+    known_codes = {
+        c for (c,) in db.query(PriceBookItem.pos_code)
+        .filter(
+            PriceBookItem.store_id == sid,
+            PriceBookItem.pos_code.in_([r[0] for r in rows]),
+        )
+        .all()
+    } if rows else set()
+
+    rows.sort(key=lambda r: -int(r[4] or 0))
+    total_qty = round(sum(float(r[3] or 0) for r in rows), 3)
+    total_amount = round(sum(int(r[4] or 0) for r in rows) / 100.0, 2)
+    total = len(rows)
+    total_pages = max(1, -(-total // per_page)) if total else 1
+    page = min(page, total_pages)
+    window = rows[(page - 1) * per_page:page * per_page]
+    return ItemMovementResponse(
+        rows=[
+            ItemMovementRow(
+                pos_code=r[0],
+                description=r[1] or "",
+                merchandise_code=r[2] or "",
+                quantity=round(float(r[3] or 0), 3),
+                amount=round(int(r[4] or 0) / 100.0, 2),
+                avg_price=(
+                    round(int(r[4] or 0) / 100.0 / float(r[3]), 2)
+                    if float(r[3] or 0) > 0 else 0.0
+                ),
+                in_price_book=r[0] in known_codes,
+            )
+            for r in window
+        ],
+        total=total,
+        page=page,
+        total_pages=total_pages,
+        start=start_d.isoformat(),
+        end=end_d.isoformat(),
+        total_quantity=total_qty,
+        total_amount=total_amount,
     )

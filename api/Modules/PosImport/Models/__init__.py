@@ -14,8 +14,8 @@ from __future__ import annotations
 from datetime import datetime
 
 from sqlalchemy import (
-    Column, Date, DateTime, ForeignKey, Integer, LargeBinary, String,
-    UniqueConstraint,
+    BigInteger, Column, Date, DateTime, Float, ForeignKey, Integer,
+    LargeBinary, String, UniqueConstraint,
 )
 from sqlalchemy.orm import relationship
 
@@ -77,4 +77,30 @@ class PosJournalFile(Base):
     )
 
 
-__all__ = ["PosAgentCredential", "PosJournalFile", "PosMerchandiseMap"]
+class PosItemDaySale(Base):
+    """Per-item net sales for one business day (G-2 — item
+    movement). Rebuilt from the staged journal originals at every
+    day (re)commit, same self-healing posture as HourlySale.
+    ``pos_code`` is the scan code as sold; rows exist whether or
+    not the code is in the price book yet (the movement report
+    joins opportunistically). Fuel lines are excluded — fuel is
+    grade-level volume, not shelf movement."""
+
+    __tablename__ = "pos_item_day_sale"
+    id               = Column(Integer, primary_key=True)
+    store_id         = Column(Integer, ForeignKey("store.id"), nullable=False, index=True)
+    business_date    = Column(Date, nullable=False, index=True)
+    pos_code         = Column(String(30), nullable=False)
+    description      = Column(String(160), nullable=False, default="")
+    merchandise_code = Column(String(20), nullable=False, default="")
+    quantity         = Column(Float, nullable=False, default=0.0)
+    amount_cents     = Column(BigInteger, nullable=False, default=0)
+    __table_args__ = (
+        UniqueConstraint("store_id", "business_date", "pos_code"),
+    )
+
+
+__all__ = [
+    "PosAgentCredential", "PosItemDaySale", "PosJournalFile",
+    "PosMerchandiseMap",
+]

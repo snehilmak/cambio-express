@@ -201,3 +201,28 @@ class PriceBookSeedResponse(BaseModel):
 
     created: int
     skipped_existing: int
+
+
+class ItemMovementRow(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    pos_code: str
+    description: str
+    merchandise_code: str
+    quantity: float
+    amount: float
+    avg_price: float
+    in_price_book: bool
+
+
+class ItemMovementResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    rows: list[ItemMovementRow]
+    total: int
+    page: int
+    total_pages: int
+    start: str
+    end: str
+    total_quantity: float
+    total_amount: float

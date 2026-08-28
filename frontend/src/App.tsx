@@ -46,6 +46,7 @@ const EditDailyBook = lazy(() => import("./routes/EditDailyBook"));
 const EditMonthly = lazy(() => import("./routes/EditMonthly"));
 const EditTransfer = lazy(() => import("./routes/EditTransfer"));
 const ForgotPassword = lazy(() => import("./routes/ForgotPassword"));
+const ItemMovement = lazy(() => import("./routes/ItemMovement"));
 const Login = lazy(() => import("./routes/Login"));
 const LoginStore = lazy(() => import("./routes/LoginStore"));
 const Monthly = lazy(() => import("./routes/Monthly"));
@@ -240,6 +241,7 @@ export default function App() {
           <Route path="daily/edit"       element={<RequirePermission resource="daily_book" action="update"><EditDailyBook /></RequirePermission>} />
           <Route path="reports"          element={<RequirePermission resource="reports" action="read"><Reports /></RequirePermission>} />
           <Route path="store-reports"    element={<RequirePermission resource="reports" action="read"><Reports collection="store" /></RequirePermission>} />
+          <Route path="store-reports/item-movement" element={<RequirePermission resource="reports" action="read"><ItemMovement /></RequirePermission>} />
           <Route path="reports/sales-by-company"      element={<RequirePermission resource="reports" action="read"><SalesByCompany /></RequirePermission>} />
           <Route path="reports/sales-by-service-type" element={<RequirePermission resource="reports" action="read"><SalesByService /></RequirePermission>} />
           <Route path="reports/sales-by-employee"     element={<RequirePermission resource="reports" action="read"><SalesByEmployee /></RequirePermission>} />

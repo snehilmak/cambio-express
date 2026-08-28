@@ -59,7 +59,7 @@ STORE_OWNED_MODELS: list[str] = [
     "PurchaseInvoiceLine", "PurchaseInvoice",
     "PriceBookItem", "Vendor", "Department",
     # POS import: agent keys + staged journal files (store-scoped).
-    "PosAgentCredential", "PosJournalFile",
+    "PosAgentCredential", "PosItemDaySale", "PosJournalFile",
     # TimeClockEntry + TimeClockShift + StoreEmployeePasskey must
     # purge before StoreEmployee (all FK to it).
     "TimeClockEntry",
@@ -121,7 +121,8 @@ def _store_owned_models() -> list[tuple[type, str]]:
         Department, DepartmentSale, HourlySale, RegisterClose,
     )
     from api.Modules.PosImport.Models import (
-        PosAgentCredential, PosJournalFile, PosMerchandiseMap,
+        PosAgentCredential, PosItemDaySale, PosJournalFile,
+        PosMerchandiseMap,
     )
     from api.Modules.Catalog.Models import (
         PriceBookItem, PurchaseInvoice, PurchaseInvoiceLine, Vendor,
@@ -162,6 +163,7 @@ def _store_owned_models() -> list[tuple[type, str]]:
         (Vendor, "store_id"),
         (Department, "store_id"),
         (PosAgentCredential, "store_id"),
+        (PosItemDaySale, "store_id"),
         (PosJournalFile, "store_id"),
         # BankTransaction + BankRule must purge before StripeBankAccount
         # — both FK to it.
