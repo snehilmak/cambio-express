@@ -50,6 +50,9 @@ export interface SuperadminStoreCreateBody {
   admin_username?: string;
   admin_name?: string;
   admin_password: string;
+  // U-5b: "owner" makes the initial user a role=owner with this
+  // store as home (+ StoreOwnerLink) — concierge onboarding.
+  initial_role?: string;
 }
 
 // PATCH body — every field optional. Only keys present are applied.
@@ -481,5 +484,49 @@ export async function bulkStoreAction(
   return api<{ ok: boolean; count: number; results: Array<Record<string, unknown>> }>(
     `/api/v2/superadmin/bulk-action`,
     { method: "POST", json: { store_ids, action, days } },
+  );
+}
+
+
+// ── Owner links (U-5b concierge onboarding) ────────────────
+
+export interface SuperadminOwnerLinkRow {
+  owner_id:  number;
+  username:  string;
+  full_name: string;
+  is_active: boolean;
+  linked_at: string;
+}
+
+export interface SuperadminOwnerLinkListResponse {
+  rows: SuperadminOwnerLinkRow[];
+}
+
+export function useStoreOwnerLinks(storeId: number | undefined) {
+  return useQuery<SuperadminOwnerLinkListResponse>({
+    enabled: storeId != null,
+    queryKey: ["superadmin", "store", storeId, "owner-links"],
+    queryFn: () =>
+      api<SuperadminOwnerLinkListResponse>(
+        `/api/v2/superadmin/stores/${storeId}/owner-links`,
+      ),
+  });
+}
+
+export async function linkOwnerToStore(
+  storeId: number, ownerUsername: string,
+): Promise<SuperadminOwnerLinkListResponse> {
+  return api<SuperadminOwnerLinkListResponse>(
+    `/api/v2/superadmin/stores/${storeId}/owner-links`,
+    { method: "POST", json: { owner_username: ownerUsername } },
+  );
+}
+
+export async function unlinkOwnerFromStore(
+  storeId: number, ownerId: number,
+): Promise<SuperadminOwnerLinkListResponse> {
+  return api<SuperadminOwnerLinkListResponse>(
+    `/api/v2/superadmin/stores/${storeId}/owner-links/${ownerId}`,
+    { method: "DELETE" },
   );
 }

@@ -4,7 +4,10 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ApiError } from "../lib/api";
 import { fmtMoney2 } from "../lib/formatters";
-import { creditStore, emailStore, extendTrial, freezeStore, toggleStoreActive, unfreezeStore } from "../api/superadmin";
+import {
+  creditStore, emailStore, extendTrial, freezeStore, linkOwnerToStore,
+  toggleStoreActive, unfreezeStore, unlinkOwnerFromStore, useStoreOwnerLinks,
+} from "../api/superadmin";
 import { getCurrentIdentity } from "../lib/auth";
 import {
   Alert, Breadcrumbs, Button, ButtonLink, Card, Checkbox, EmptyState,
@@ -251,6 +254,8 @@ export default function SuperadminStoreDrill() {
               </Card>
             </Section>
           </div>
+
+          <OwnerLinksSection storeId={storeId} />
 
           {data.roster.length > 0 && (
             <Section title={`Employee roster (${data.roster.length})`}>
@@ -651,5 +656,111 @@ function StorePermissionsPanel({ storeId, storeName }: { storeId: number; storeN
         </div>
       )}
     </Card>
+  );
+}
+
+
+// ── Owner links (U-5b concierge onboarding) ────────────────
+//
+// "We create the logins and connect the stores to the owner login
+// on the customer's instruction" — list the owners connected to
+// this store, connect an existing owner by username, disconnect
+// on request. Home-store links are protected server-side.
+
+function OwnerLinksSection({ storeId }: { storeId: number | undefined }) {
+  const links = useStoreOwnerLinks(storeId);
+  const qc = useQueryClient();
+  const toast = useToast();
+  const [username, setUsername] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  function refresh() {
+    void qc.invalidateQueries({
+      queryKey: ["superadmin", "store", storeId, "owner-links"],
+    });
+  }
+
+  async function add() {
+    if (storeId == null || !username.trim()) return;
+    setBusy(true); setError(null);
+    try {
+      await linkOwnerToStore(storeId, username.trim());
+      setUsername("");
+      refresh();
+      toast({ message: "Owner connected.", tone: "success" });
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not connect the owner.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function remove(ownerId: number, name: string) {
+    if (storeId == null) return;
+    setBusy(true); setError(null);
+    try {
+      await unlinkOwnerFromStore(storeId, ownerId);
+      refresh();
+      toast({ message: `${name} disconnected.`, tone: "success" });
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not disconnect the owner.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const rows = links.data?.rows ?? [];
+  return (
+    <Section title={`Owners (${rows.length})`}>
+      <Card>
+        {error && <Alert tone="error">{error}</Alert>}
+        {links.isLoading && <Loading />}
+        {rows.length === 0 && !links.isLoading && (
+          <EmptyState
+            title="No owner connected."
+            body="Connect an existing owner login below, or create the store's initial user as an owner."
+          />
+        )}
+        {rows.map((r) => (
+          <div key={r.owner_id} className={styles.teamRow}>
+            <div>
+              <div className={styles.teamName}>{r.full_name || r.username}</div>
+              <div className={styles.teamMeta}>
+                {r.username}
+                {r.linked_at ? ` · linked ${r.linked_at.slice(0, 10)}` : ""}
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: "0.35rem", alignItems: "center" }}>
+              {!r.is_active && <Pill tone="negative">disabled</Pill>}
+              <Button
+                size="sm" tone="danger" disabled={busy}
+                onClick={() => { void remove(r.owner_id, r.username); }}
+              >
+                Disconnect
+              </Button>
+            </div>
+          </div>
+        ))}
+        <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.75rem", alignItems: "flex-end" }}>
+          <div style={{ flex: 1 }}>
+            <Field label="Connect an owner by username">
+              <Input
+                placeholder="owner@example.com"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                disabled={busy}
+              />
+            </Field>
+          </div>
+          <Button
+            tone="primary" disabled={busy || !username.trim()}
+            onClick={() => { void add(); }}
+          >
+            Connect
+          </Button>
+        </div>
+      </Card>
+    </Section>
   );
 }

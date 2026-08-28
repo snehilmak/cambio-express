@@ -34,6 +34,9 @@ from api.Modules.Superadmin.Requests import (
     SuperadminReportCategory,
     SuperadminReportListResponse,
     SuperadminReportRow,
+    SuperadminOwnerLinkCreateRequest,
+    SuperadminOwnerLinkListResponse,
+    SuperadminOwnerLinkRow,
     SuperadminStoreCreateRequest,
     SuperadminStoreCreditRequest,
     SuperadminStoreCreditResponse,
@@ -1085,16 +1088,162 @@ def create_store_route(
         store_id=s.id,
         username=body.admin_username.strip(),
         full_name=body.admin_name.strip(),
-        role="admin",
+        role=body.initial_role,
     )
     a.set_password(body.admin_password)
     db.add(a)
+    if body.initial_role == "owner":
+        # Concierge onboarding (U-5b): mirror self-service signup —
+        # the owner's home store also gets a StoreOwnerLink row so
+        # the umbrella + sibling-store logic see it.
+        from api.Modules.Tenancy.Models import StoreOwnerLink
+        db.flush()
+        db.add(StoreOwnerLink(owner_id=a.id, store_id=s.id))
     _audit_and_commit(
         db, user, "create_store",
         target_id=str(s.id),
-        details=s.slug,
+        details=f"{s.slug} (initial {body.initial_role})",
     )
     return SuperadminStoreDetailResponse(store=_adapt_detail(s))
+
+
+# ── Owner links (U-5b concierge onboarding) ─────────────────
+#
+# "We the software company create the logins and connect the
+# stores to the owner login on the customer's instruction." The
+# invite-code dance stays for self-service; these routes let the
+# superadmin do the connection directly, audited.
+
+
+@router.get(
+    "/stores/{store_id}/owner-links",
+    response_model=SuperadminOwnerLinkListResponse,
+)
+def store_owner_links_route(
+    store_id: int = Path(..., ge=1),
+    db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
+) -> SuperadminOwnerLinkListResponse:
+    """Owners connected to this store (home-store links included)."""
+    resolve_superadmin_user(db, claims)
+    from api.Modules.Tenancy.Models import Store, StoreOwnerLink
+    store = db.get(Store, store_id)
+    if store is None:
+        raise HTTPException(status_code=404, detail="Store not found")
+    rows = (
+        db.query(StoreOwnerLink, User)
+          .join(User, User.id == StoreOwnerLink.owner_id)
+          .filter(StoreOwnerLink.store_id == store_id)
+          .order_by(User.username)
+          .all()
+    )
+    return SuperadminOwnerLinkListResponse(rows=[
+        SuperadminOwnerLinkRow(
+            owner_id=u.id,
+            username=u.username or "",
+            full_name=u.full_name or "",
+            is_active=bool(u.is_active),
+            linked_at=link.linked_at.isoformat() if link.linked_at else "",
+        )
+        for link, u in rows
+    ])
+
+
+@router.post(
+    "/stores/{store_id}/owner-links",
+    response_model=SuperadminOwnerLinkListResponse, status_code=201,
+)
+def store_owner_link_create_route(
+    store_id: int = Path(..., ge=1),
+    body: SuperadminOwnerLinkCreateRequest = ...,
+    db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
+) -> SuperadminOwnerLinkListResponse:
+    """Connect an existing owner login to this store. The target
+    user must be role=owner and active; duplicates return 409."""
+    user = resolve_superadmin_user(db, claims)
+    from api.Modules.Tenancy.Models import Store, StoreOwnerLink
+    store = db.get(Store, store_id)
+    if store is None:
+        raise HTTPException(status_code=404, detail="Store not found")
+    uname = body.owner_username.strip().lower()
+    owner = (
+        db.query(User)
+          .filter(User.username == uname, User.role == "owner")
+          .first()
+    )
+    if owner is None or not owner.is_active:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "field": "owner_username",
+                "message": "No active owner account with that username.",
+            },
+        )
+    existing = (
+        db.query(StoreOwnerLink)
+          .filter_by(owner_id=owner.id, store_id=store_id)
+          .first()
+    )
+    if existing is not None:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "field": "owner_username",
+                "message": "That owner is already connected to this store.",
+            },
+        )
+    db.add(StoreOwnerLink(owner_id=owner.id, store_id=store_id))
+    _audit_and_commit(
+        db, user, "link_owner",
+        target_id=str(store_id),
+        details=f"owner {owner.username} -> store {store.slug}",
+    )
+    return store_owner_links_route(store_id=store_id, db=db, claims=claims)
+
+
+@router.delete(
+    "/stores/{store_id}/owner-links/{owner_id}",
+    response_model=SuperadminOwnerLinkListResponse,
+)
+def store_owner_link_delete_route(
+    store_id: int = Path(..., ge=1),
+    owner_id: int = Path(..., ge=1),
+    db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
+) -> SuperadminOwnerLinkListResponse:
+    """Disconnect an owner from a store (on customer instruction).
+    Won't remove an owner's link to their HOME store — that pairing
+    is the account's anchor; deactivate the owner instead."""
+    user = resolve_superadmin_user(db, claims)
+    from api.Modules.Tenancy.Models import Store, StoreOwnerLink
+    store = db.get(Store, store_id)
+    if store is None:
+        raise HTTPException(status_code=404, detail="Store not found")
+    link = (
+        db.query(StoreOwnerLink)
+          .filter_by(owner_id=owner_id, store_id=store_id)
+          .first()
+    )
+    if link is None:
+        raise HTTPException(status_code=404, detail="Link not found")
+    target = db.get(User, owner_id)
+    if target is not None and target.store_id == store_id:
+        raise HTTPException(
+            status_code=422,
+            detail="This is the owner's home store — deactivate the "
+                   "owner account instead of unlinking it.",
+        )
+    db.delete(link)
+    _audit_and_commit(
+        db, user, "unlink_owner",
+        target_id=str(store_id),
+        details=(
+            f"owner {(target.username if target else owner_id)} "
+            f"-x- store {store.slug}"
+        ),
+    )
+    return store_owner_links_route(store_id=store_id, db=db, claims=claims)
 
 
 @router.patch(
