@@ -23,6 +23,11 @@ export interface IdentityClaims {
   role: string;
   store_id: number | null;
   permissions: string[];
+  // Owner-context marker: set when this session is an owner who
+  // switched INTO a store (role becomes "admin" for that store,
+  // but the chrome keeps offering the store switcher). Absent on
+  // ordinary admin/employee sessions.
+  owner_id?: number | null;
 }
 
 
@@ -102,6 +107,7 @@ export function persistLoginResponse(body: {
   store_id: number | null;
   permissions: string[];
   refresh_jti?: string;
+  owner_id?: number | null;
 }): void {
   _write({
     user_id: body.user_id,
@@ -110,6 +116,7 @@ export function persistLoginResponse(body: {
     role: body.role,
     store_id: body.store_id,
     permissions: body.permissions,
+    owner_id: body.owner_id ?? null,
   });
   if (body.refresh_jti) {
     persistRefreshFallback(body.refresh_jti);

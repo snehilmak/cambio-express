@@ -233,6 +233,34 @@ scoped page. Pinned by `test_login_cross_store_*` and
 `test_verify_password_cross_store_*` in `test_login_service.py`.
 
 
+### Owner store-switching (`/auth/switch-store`) — derived tokens
+
+The single-dashboard principle (owner directive, 2026-08-27): an
+owner ENTERS a store and sees exactly the same store view as the
+users they create. `/auth/switch-store` implements it by minting
+a **store-scoped admin token** for the selected store. Rules:
+
+- The derived token is minted ONLY from an already-full access
+  token (`get_principal` refuses pending/`purpose` tokens) whose
+  subject is an **active `role=owner` user**; the target store
+  must be in the owner's umbrella (`StoreOwnerLink` rows ∪ the
+  owner's own home `store_id`) and active. This is NOT a
+  privilege escalation: the owner owns the store.
+- The derived token carries `role=admin`, `store_id=<target>`,
+  the admin permission set for that store, `sub=<owner user id>`
+  (audit rows attribute to the owner), and an **`owner_id` claim**
+  marking it owner-context — the SPA keeps offering the switcher,
+  and `/auth/switch-store` accepts re-switching from it.
+- `issue_access_token(extra=…)` merges auxiliary claims but can
+  NEVER override reserved claims (`sub`/`role`/`store_id`/
+  `perms`/`exp`/…) or set `purpose`.
+- Every switch writes an `owner_enter_store` operator-audit row
+  at the target store.
+- Refresh re-mints from the User row (base owner token) — the SPA
+  re-enters the remembered store after refresh; the server never
+  persists switch state.
+
+
 ## TOTP enrollment + verification
 
 For roles where `needs_totp(user)` is True:

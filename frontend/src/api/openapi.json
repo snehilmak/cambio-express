@@ -6439,6 +6439,23 @@
         "title": "MyActivityRow",
         "type": "object"
       },
+      "MyStoresResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "stores": {
+            "items": {
+              "$ref": "#/components/schemas/SwitchableStoreRow"
+            },
+            "title": "Stores",
+            "type": "array"
+          }
+        },
+        "required": [
+          "stores"
+        ],
+        "title": "MyStoresResponse",
+        "type": "object"
+      },
       "NaxmlCommitRequest": {
         "additionalProperties": false,
         "properties": {
@@ -11122,6 +11139,117 @@
           }
         },
         "title": "SuperadminStoreUpdateRequest",
+        "type": "object"
+      },
+      "SwitchStoreRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "store_id": {
+            "minimum": 1.0,
+            "title": "Store Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "store_id"
+        ],
+        "title": "SwitchStoreRequest",
+        "type": "object"
+      },
+      "SwitchStoreResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "access_token": {
+            "title": "Access Token",
+            "type": "string"
+          },
+          "expires_in": {
+            "title": "Expires In",
+            "type": "integer"
+          },
+          "full_name": {
+            "title": "Full Name",
+            "type": "string"
+          },
+          "owner_id": {
+            "title": "Owner Id",
+            "type": "integer"
+          },
+          "permissions": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Permissions",
+            "type": "array"
+          },
+          "role": {
+            "title": "Role",
+            "type": "string"
+          },
+          "store_id": {
+            "title": "Store Id",
+            "type": "integer"
+          },
+          "store_name": {
+            "title": "Store Name",
+            "type": "string"
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "integer"
+          },
+          "username": {
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "access_token",
+          "store_id",
+          "store_name",
+          "role",
+          "expires_in",
+          "user_id",
+          "username",
+          "full_name",
+          "permissions",
+          "owner_id"
+        ],
+        "title": "SwitchStoreResponse",
+        "type": "object"
+      },
+      "SwitchableStoreRow": {
+        "additionalProperties": false,
+        "properties": {
+          "address": {
+            "title": "Address",
+            "type": "string"
+          },
+          "is_current": {
+            "title": "Is Current",
+            "type": "boolean"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "slug": {
+            "title": "Slug",
+            "type": "string"
+          },
+          "store_id": {
+            "title": "Store Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "store_id",
+          "name",
+          "slug",
+          "address",
+          "is_current"
+        ],
+        "title": "SwitchableStoreRow",
         "type": "object"
       },
       "TVDisplayBankRow": {
@@ -16920,6 +17048,72 @@
         ]
       }
     },
+    "/auth/my-stores": {
+      "get": {
+        "description": "The stores this owner can switch into \u2014 feeds the Switch\nStore modal (name + address search happens client-side).",
+        "operationId": "my_stores_route_auth_my_stores_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MyStoresResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "My Stores Route",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
     "/auth/notifications": {
       "get": {
         "description": "Per-user notification preferences. Powers\n/app/account/notifications. `trial_toggle_applies` tells the\nSPA whether the Trial-ending toggle should render as\ninteractive or as a greyed-out informational row.",
@@ -18234,6 +18428,82 @@
           }
         },
         "summary": "Store By Slug Route",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/auth/switch-store": {
+      "post": {
+        "description": "Enter one of the owner's stores: issue a store-scoped admin\ntoken so the owner gets the exact store view their team sees.",
+        "operationId": "switch_store_route_auth_switch_store_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SwitchStoreRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SwitchStoreResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Switch Store Route",
         "tags": [
           "auth"
         ]
