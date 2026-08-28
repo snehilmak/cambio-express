@@ -348,6 +348,43 @@ changes which store it shows.
   Team Users page; decide whether legacy store admins created
   pre-U-4b get an upgrade path to owner accounts.
 
+**G-track — Gilbarco integration completion (owner-directed
+2026-08-28, "whatever else might be required for integration with
+gilbarco"; all shipped, PRs #889–#892):** the full loop on top of
+the P1-9 ingestion: agent pushes each transaction as written →
+hourly chart updates live → day books itself when the register's
+day rolls → item movement accumulates → price changes export back
+to the register.
+- ✅ G-1 (#889) — auto-book ROLLED business days on agent upload:
+  newer BusinessDate = day complete; gates (all leave the day
+  staged for manual handling): mapping complete, no closes from
+  ANY source on the date, no parse errors, 3-day lookback (fresh-
+  install backlog stays a reviewed warm start). System audit row
+  (`commit_pos_import_auto`, user_id NULL).
+- ✅ G-3 (#890) — hourly sales: `PjrEvent.event_hour` (defensive
+  across EventDateTime / EventStartDateTime / JournalHeader
+  BeginTime; None just mutes the chart), `DayClose.HourlySale`
+  (net pre-tax, source-scoped, retention-registered), live
+  per-upload increments + commit-time rebuild (self-healing),
+  dashboard hourly chart (current solid vs previous dashed).
+- ✅ G-2 (#891) — item movement: `PosItemDaySale` rebuilt from
+  staged originals at each (re)commit (cancelled lines skipped at
+  parse, refunds net out, fuel/code-less excluded);
+  `GET /posimport/item-movement` + Store Reports → Item Movement
+  page with an `in_price_book` flag. Foundation for inventory.
+- ✅ G-4 (#892, BETA) — NAXML ItemMaintenance export
+  (`GET /posimport/naxml/pricebook-export`, price-book "Export
+  for register" button; `changed_since` for deltas; merchandise
+  code reverse-mapped from the operator's mapping). BETA: the
+  journal parser is ground-truthed, Passport's IMPORT tolerances
+  are not — the operator applies the file manually until a real
+  site validates it; the agent does NOT auto-apply yet.
+- Open items needing the owner / a live site: real-site
+  validation of the timestamp tags + the G-4 import shape, THEN
+  agent auto-apply; R2 go/no-go for item images (phase-2 item
+  editor is otherwise parked pending POS integration by owner
+  decision 2026-08-28).
+
 **Phase 2+ (not yet scoped in detail):** inventory basics; fuel module (needs a
 gas-station design partner first); Modisoft/Cronysoft migration
 importers; public API/webhooks GA; loyalty / scan-data rebates;
