@@ -404,7 +404,7 @@ function AgentSection() {
       title={
         <>
           Automatic uploads
-          <InfoTip text="Install the DineroBook site agent on the store's back-office PC and it pushes every journal file here the moment the register writes it. Issue an agent key below — it's shown exactly once. Days appear as they accumulate; book each one when you're ready." />
+          <InfoTip text="Install the DineroBook site agent on the store's back-office PC and it pushes every journal file here the moment the register writes it. Issue an agent key below — it's shown exactly once. Once your merchandise codes are mapped, each business day books itself automatically as soon as the register's day rolls; days with unmapped codes (or older backlog) wait here for you to book manually." />
         </>
       }
     >

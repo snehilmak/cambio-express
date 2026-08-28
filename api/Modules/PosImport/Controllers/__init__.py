@@ -365,6 +365,15 @@ def agent_upload_route(
         )
     except PosImportError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
+    # G-1: a fresh file may mean the business day just rolled —
+    # auto-book any completed, fully-mapped prior day. Gates and
+    # audit live in the service; one cheap max() query when
+    # nothing is ready.
+    if not result.duplicate and result.file.business_date is not None:
+        from api.Modules.PosImport.Services.agent import (
+            auto_commit_rolled_days,
+        )
+        auto_commit_rolled_days(db, int(cred.store_id))
     db.commit()
     return AgentUploadResponse(
         staged=not result.duplicate,
