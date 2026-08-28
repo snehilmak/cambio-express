@@ -79,6 +79,19 @@ class PriceBookItem(Base):
     cost            = DollarView("cost_cents")
     is_taxable      = Column(Boolean, default=True, nullable=False)
     is_active       = Column(Boolean, default=True, nullable=False)
+    # Item-editor parity phase 1 (P2-5). item_number = the vendor's
+    # ordering number as printed on invoices; size = pack/size label
+    # ("12oz", "POUND"). Case fields power the unit-cost derivation
+    # (case_cost / case_size, displayed at 4 decimals client-side —
+    # cost_cents stays the rounded stored value the rollups use).
+    item_number     = Column(String(40), nullable=False, default="")
+    size            = Column(String(40), nullable=False, default="")
+    case_size       = Column(Integer, nullable=True)
+    case_cost_cents = Column(BigInteger, nullable=True)
+    case_cost       = DollarView("case_cost_cents")
+    # EBT/SNAP-eligible — feeds labels/exports; the POS is still the
+    # enforcement point until POS integration lands.
+    is_ebt          = Column(Boolean, default=False, nullable=False)
     # Provenance: "manual" or an import source like "gilbarco".
     # Display only — imported items stay editable like any other.
     source          = Column(String(20), nullable=False, default="manual")

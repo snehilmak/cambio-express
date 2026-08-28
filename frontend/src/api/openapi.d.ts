@@ -8090,6 +8090,10 @@ export interface components {
         };
         /** ItemRow */
         ItemRow: {
+            /** Case Cost */
+            case_cost: number | null;
+            /** Case Size */
+            case_size: number | null;
             /** Cost */
             cost: number;
             /** Department Id */
@@ -8100,8 +8104,12 @@ export interface components {
             id: number;
             /** Is Active */
             is_active: boolean;
+            /** Is Ebt */
+            is_ebt: boolean;
             /** Is Taxable */
             is_taxable: boolean;
+            /** Item Number */
+            item_number: string;
             /** Name */
             name: string;
             /** Pos Code */
@@ -8110,6 +8118,8 @@ export interface components {
             pos_code_format: string;
             /** Price */
             price: number;
+            /** Size */
+            size: string;
             /** Source */
             source: string;
             /** Vendor Id */
@@ -8119,14 +8129,22 @@ export interface components {
         };
         /** ItemUpdateRequest */
         ItemUpdateRequest: {
+            /** Case Cost */
+            case_cost?: number | null;
+            /** Case Size */
+            case_size?: number | null;
             /** Cost */
             cost?: number | null;
             /** Department Id */
             department_id?: number | null;
             /** Is Active */
             is_active?: boolean | null;
+            /** Is Ebt */
+            is_ebt?: boolean | null;
             /** Is Taxable */
             is_taxable?: boolean | null;
+            /** Item Number */
+            item_number?: string | null;
             /** Name */
             name?: string | null;
             /** Pos Code */
@@ -8135,11 +8153,17 @@ export interface components {
             pos_code_format?: string | null;
             /** Price */
             price?: number | null;
+            /** Size */
+            size?: string | null;
             /** Vendor Id */
             vendor_id?: number | null;
         };
         /** ItemWriteRequest */
         ItemWriteRequest: {
+            /** Case Cost */
+            case_cost?: number | null;
+            /** Case Size */
+            case_size?: number | null;
             /**
              * Cost
              * @default 0
@@ -8148,10 +8172,20 @@ export interface components {
             /** Department Id */
             department_id?: number | null;
             /**
+             * Is Ebt
+             * @default false
+             */
+            is_ebt: boolean;
+            /**
              * Is Taxable
              * @default true
              */
             is_taxable: boolean;
+            /**
+             * Item Number
+             * @default
+             */
+            item_number: string;
             /** Name */
             name: string;
             /** Pos Code */
@@ -8166,6 +8200,11 @@ export interface components {
              * @default 0
              */
             price: number;
+            /**
+             * Size
+             * @default
+             */
+            size: string;
             /** Vendor Id */
             vendor_id?: number | null;
         };

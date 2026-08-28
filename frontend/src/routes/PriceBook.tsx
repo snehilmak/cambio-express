@@ -486,8 +486,47 @@ function ItemForm({
     existing && existing.cost > 0 ? String(existing.cost) : "",
   );
   const [taxable, setTaxable] = useState(existing?.is_taxable ?? true);
+  // Item-editor parity (P2-5): vendor item #, size label, case
+  // pack, EBT, margin helper.
+  const [itemNumber, setItemNumber] = useState(existing?.item_number ?? "");
+  const [size, setSize] = useState(existing?.size ?? "");
+  const [caseSize, setCaseSize] = useState(
+    existing?.case_size != null ? String(existing.case_size) : "",
+  );
+  const [caseCost, setCaseCost] = useState(
+    existing?.case_cost != null ? String(existing.case_cost) : "",
+  );
+  const [ebt, setEbt] = useState(existing?.is_ebt ?? false);
+  const [marginGoal, setMarginGoal] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Cronysoft-style Department → Sub Department cascade. The flat
+  // department list carries parent_id; departmentId always holds
+  // the LEAF that gets stored on the item (a sub-department when
+  // one is picked, else the parent). Both selects derive from it.
+  const parents = departments.filter((d) => d.parent_id == null);
+  const currentDept = departments.find(
+    (d) => String(d.id) === departmentId,
+  );
+  const parentSel =
+    currentDept == null
+      ? ""
+      : String(currentDept.parent_id ?? currentDept.id);
+  const subSel = currentDept?.parent_id != null ? departmentId : "";
+  const subs = departments.filter(
+    (d) => parentSel !== "" && d.parent_id === Number(parentSel),
+  );
+
+  // Derived numbers for the pricing helpers.
+  const priceNum = Number.parseFloat(price) || 0;
+  const costNum = Number.parseFloat(cost) || 0;
+  const caseSizeNum = Number.parseInt(caseSize, 10) || 0;
+  const caseCostNum = Number.parseFloat(caseCost) || 0;
+  const unitFromCase =
+    caseSizeNum > 0 && caseCostNum > 0 ? caseCostNum / caseSizeNum : null;
+  const margin =
+    priceNum > 0 ? ((priceNum - costNum) / priceNum) * 100 : null;
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -506,6 +545,12 @@ function ItemForm({
           price: Number.parseFloat(price) || 0,
           cost: Number.parseFloat(cost) || 0,
           is_taxable: taxable,
+          item_number: itemNumber.trim(),
+          size: size.trim(),
+          // 0 clears the nullable case fields server-side.
+          case_size: caseSizeNum > 0 ? caseSizeNum : 0,
+          case_cost: caseCostNum > 0 ? caseCostNum : 0,
+          is_ebt: ebt,
         });
       } else {
         await createItem({
@@ -517,6 +562,11 @@ function ItemForm({
           price: Number.parseFloat(price) || 0,
           cost: Number.parseFloat(cost) || 0,
           is_taxable: taxable,
+          item_number: itemNumber.trim(),
+          size: size.trim(),
+          case_size: caseSizeNum > 0 ? caseSizeNum : null,
+          case_cost: caseCostNum > 0 ? caseCostNum : null,
+          is_ebt: ebt,
         });
       }
       onDone();
@@ -563,11 +613,27 @@ function ItemForm({
       <div className={styles.fieldGrid}>
         <Field label="Department (optional)">
           <Select
-            value={departmentId}
+            value={parentSel}
             onChange={(e) => setDepartmentId(e.target.value)}
           >
             <option value="">None</option>
-            {departments.map((d) => (
+            {parents.map((d) => (
+              <option key={d.id} value={d.id}>{d.name}</option>
+            ))}
+          </Select>
+        </Field>
+        <Field label="Sub-department">
+          <Select
+            value={subSel}
+            disabled={subs.length === 0}
+            onChange={(e) =>
+              setDepartmentId(e.target.value || parentSel)
+            }
+          >
+            <option value="">
+              {subs.length === 0 ? "—" : "None"}
+            </option>
+            {subs.map((d) => (
               <option key={d.id} value={d.id}>{d.name}</option>
             ))}
           </Select>
@@ -583,28 +649,121 @@ function ItemForm({
             ))}
           </Select>
         </Field>
-        <Field label="Retail price">
+        <Field label="Sales tax">
+          <Select
+            value={taxable ? "1" : ""}
+            onChange={(e) => setTaxable(e.target.value === "1")}
+          >
+            <option value="1">Taxable</option>
+            <option value="">Not taxable</option>
+          </Select>
+        </Field>
+        <Field label="Item # (optional)">
+          <Input
+            type="text" value={itemNumber} maxLength={40}
+            placeholder="Vendor order number"
+            onChange={(e) => setItemNumber(e.target.value)}
+          />
+        </Field>
+        <Field label="Item size (optional)">
+          <Input
+            type="text" value={size} maxLength={40}
+            placeholder="12oz / POUND / 6-pack"
+            onChange={(e) => setSize(e.target.value)}
+          />
+        </Field>
+        <Field label="Case size">
+          <Input
+            type="number" min={0} step="1" value={caseSize}
+            placeholder="Units per case"
+            onChange={(e) => setCaseSize(e.target.value)}
+          />
+        </Field>
+        <Field
+          label="Case cost"
+          hint={
+            unitFromCase != null
+              ? `Unit cost from case: $${unitFromCase.toFixed(4)}`
+              : undefined
+          }
+        >
+          <Input
+            type="number" min={0} step="0.01" value={caseCost}
+            onChange={(e) => setCaseCost(e.target.value)}
+          />
+        </Field>
+        <Field
+          label="Unit cost (optional)"
+          hint={
+            unitFromCase != null && cost === ""
+              ? "Empty — saves as $0; use the case-derived value?"
+              : undefined
+          }
+        >
+          <div style={{ display: "flex", gap: "0.4rem" }}>
+            <Input
+              type="number" min={0} step="0.01" value={cost}
+              onChange={(e) => setCost(e.target.value)}
+            />
+            {unitFromCase != null && (
+              <Button
+                type="button" tone="secondary" size="sm"
+                onClick={() => setCost(unitFromCase.toFixed(2))}
+              >
+                Use case
+              </Button>
+            )}
+          </div>
+        </Field>
+        <Field
+          label="Retail price"
+          hint={
+            margin != null
+              ? `Margin: ${margin.toFixed(2)}%`
+              : undefined
+          }
+        >
           <Input
             type="number" min={0} step="0.01" value={price} required
             onChange={(e) => setPrice(e.target.value)}
           />
         </Field>
-        <Field label="Cost (optional)">
-          <Input
-            type="number" min={0} step="0.01" value={cost}
-            onChange={(e) => setCost(e.target.value)}
-          />
+        <Field
+          label="Margin goal %"
+          hint="Sets the retail price from the unit cost."
+        >
+          <div style={{ display: "flex", gap: "0.4rem" }}>
+            <Input
+              type="number" min={0} max={99} step="0.01"
+              value={marginGoal}
+              placeholder="e.g. 40"
+              onChange={(e) => setMarginGoal(e.target.value)}
+            />
+            <Button
+              type="button" tone="secondary" size="sm"
+              disabled={
+                costNum <= 0
+                || !(Number.parseFloat(marginGoal) > 0)
+                || Number.parseFloat(marginGoal) >= 100
+              }
+              onClick={() => {
+                const g = Number.parseFloat(marginGoal);
+                setPrice((costNum / (1 - g / 100)).toFixed(2));
+              }}
+            >
+              Apply
+            </Button>
+          </div>
         </Field>
       </div>
-      <Field label="Sales tax">
-        <Select
-          value={taxable ? "1" : ""}
-          onChange={(e) => setTaxable(e.target.value === "1")}
-        >
-          <option value="1">Taxable</option>
-          <option value="">Not taxable</option>
-        </Select>
-      </Field>
+      <label className={styles.ebtRow}>
+        <input
+          type="checkbox"
+          checked={ebt}
+          onChange={(e) => setEbt(e.target.checked)}
+        />
+        <span>EBT / SNAP eligible</span>
+      </label>
       <div className={styles.modalActions}>
         <Button tone="secondary" type="button" onClick={onClose}>
           Cancel

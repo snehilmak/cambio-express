@@ -4901,6 +4901,28 @@
       "ItemRow": {
         "additionalProperties": false,
         "properties": {
+          "case_cost": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Case Cost"
+          },
+          "case_size": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Case Size"
+          },
           "cost": {
             "title": "Cost",
             "type": "number"
@@ -4928,9 +4950,17 @@
             "title": "Is Active",
             "type": "boolean"
           },
+          "is_ebt": {
+            "title": "Is Ebt",
+            "type": "boolean"
+          },
           "is_taxable": {
             "title": "Is Taxable",
             "type": "boolean"
+          },
+          "item_number": {
+            "title": "Item Number",
+            "type": "string"
           },
           "name": {
             "title": "Name",
@@ -4947,6 +4977,10 @@
           "price": {
             "title": "Price",
             "type": "number"
+          },
+          "size": {
+            "title": "Size",
+            "type": "string"
           },
           "source": {
             "title": "Source",
@@ -4981,7 +5015,12 @@
           "cost",
           "is_taxable",
           "is_active",
-          "source"
+          "source",
+          "item_number",
+          "size",
+          "case_size",
+          "case_cost",
+          "is_ebt"
         ],
         "title": "ItemRow",
         "type": "object"
@@ -4989,6 +5028,30 @@
       "ItemUpdateRequest": {
         "additionalProperties": false,
         "properties": {
+          "case_cost": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Case Cost"
+          },
+          "case_size": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Case Size"
+          },
           "cost": {
             "anyOf": [
               {
@@ -5024,6 +5087,17 @@
             ],
             "title": "Is Active"
           },
+          "is_ebt": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Ebt"
+          },
           "is_taxable": {
             "anyOf": [
               {
@@ -5034,6 +5108,18 @@
               }
             ],
             "title": "Is Taxable"
+          },
+          "item_number": {
+            "anyOf": [
+              {
+                "maxLength": 40,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Number"
           },
           "name": {
             "anyOf": [
@@ -5085,6 +5171,18 @@
             ],
             "title": "Price"
           },
+          "size": {
+            "anyOf": [
+              {
+                "maxLength": 40,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Size"
+          },
           "vendor_id": {
             "anyOf": [
               {
@@ -5104,6 +5202,30 @@
       "ItemWriteRequest": {
         "additionalProperties": false,
         "properties": {
+          "case_cost": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Case Cost"
+          },
+          "case_size": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Case Size"
+          },
           "cost": {
             "default": 0,
             "minimum": 0.0,
@@ -5122,10 +5244,21 @@
             ],
             "title": "Department Id"
           },
+          "is_ebt": {
+            "default": false,
+            "title": "Is Ebt",
+            "type": "boolean"
+          },
           "is_taxable": {
             "default": true,
             "title": "Is Taxable",
             "type": "boolean"
+          },
+          "item_number": {
+            "default": "",
+            "maxLength": 40,
+            "title": "Item Number",
+            "type": "string"
           },
           "name": {
             "maxLength": 160,
@@ -5150,6 +5283,12 @@
             "minimum": 0.0,
             "title": "Price",
             "type": "number"
+          },
+          "size": {
+            "default": "",
+            "maxLength": 40,
+            "title": "Size",
+            "type": "string"
           },
           "vendor_id": {
             "anyOf": [

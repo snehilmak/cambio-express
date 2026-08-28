@@ -123,6 +123,16 @@ def _item_row(i: PriceBookItem) -> ItemRow:
         is_taxable=bool(i.is_taxable),
         is_active=bool(i.is_active),
         source=i.source or "manual",
+        item_number=i.item_number or "",
+        size=i.size or "",
+        case_size=i.case_size,
+        # Read the cents column directly: the DollarView maps NULL
+        # to 0.0, but the API contract wants null = "not tracked".
+        case_cost=(
+            None if i.case_cost_cents is None
+            else i.case_cost_cents / 100.0
+        ),
+        is_ebt=bool(i.is_ebt),
     )
 
 
