@@ -134,3 +134,72 @@ def test_dashboard_hourly_block(client, test_store_id):
     assert hourly["current_total"] == 1400.0
     assert hourly["previous"][9] == 400.0
     assert hourly["previous_total"] == 400.0
+
+
+# ── Item movement (G-2) ─────────────────────────────────────
+
+
+def test_item_movement_rebuild_and_report(client, test_store_id):
+    """Committing a day builds per-item movement rows; the report
+    endpoint aggregates a range, top dollars first, and flags
+    codes missing from the price book."""
+    h = _admin(client, test_store_id)
+    key = _issue_key(client, h)["key"]
+    dept = _mk_department(client, h, "Misc M1")
+    _map_codes(client, h, {"17": dept["id"]})
+
+    # Two sales of the same item (POSCode 2, $2.99) on one day.
+    _agent_upload(client, key, "M1-001.xml", _sale(
+        business_date="2025-02-01", event_dt="2025-02-01T10:00:00",
+    ))
+    _agent_upload(client, key, "M1-002.xml", _sale(
+        business_date="2025-02-01", event_dt="2025-02-01T11:00:00",
+    ))
+    # Day rolls → auto-commit books it (movement rebuilds too).
+    _agent_upload(client, key, "M1-D2-001.xml", _sale(
+        business_date="2025-02-02", event_dt="2025-02-02T08:00:00",
+    ))
+
+    resp = client.get(
+        "/api/v2/posimport/item-movement"
+        "?start=2025-02-01&end=2025-02-01",
+        headers=h,
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["total"] == 1
+    row = body["rows"][0]
+    assert row["pos_code"] == "2"
+    assert row["description"] == "7lb ice bag"
+    assert row["quantity"] == 2.0
+    assert row["amount"] == 5.98
+    assert row["avg_price"] == 2.99
+    assert row["in_price_book"] is False
+    assert body["total_amount"] == 5.98
+
+    # Search matches description substring; misses return empty.
+    hit = client.get(
+        "/api/v2/posimport/item-movement"
+        "?start=2025-02-01&end=2025-02-01&q=ice",
+        headers=h,
+    ).json()
+    assert hit["total"] == 1
+    miss = client.get(
+        "/api/v2/posimport/item-movement"
+        "?start=2025-02-01&end=2025-02-01&q=zzz",
+        headers=h,
+    ).json()
+    assert miss["total"] == 0
+
+    # Once the code exists in the price book, the flag flips.
+    created = client.post(
+        "/api/v2/catalog/items", headers=h,
+        json={"pos_code": "2", "name": "7lb ice bag", "price": 2.99},
+    )
+    assert created.status_code == 201, created.text
+    body = client.get(
+        "/api/v2/posimport/item-movement"
+        "?start=2025-02-01&end=2025-02-01",
+        headers=h,
+    ).json()
+    assert body["rows"][0]["in_price_book"] is True

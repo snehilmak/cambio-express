@@ -4885,6 +4885,102 @@
         "title": "ItemListResponse",
         "type": "object"
       },
+      "ItemMovementResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "end": {
+            "title": "End",
+            "type": "string"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/ItemMovementRow"
+            },
+            "title": "Rows",
+            "type": "array"
+          },
+          "start": {
+            "title": "Start",
+            "type": "string"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          },
+          "total_amount": {
+            "title": "Total Amount",
+            "type": "number"
+          },
+          "total_pages": {
+            "title": "Total Pages",
+            "type": "integer"
+          },
+          "total_quantity": {
+            "title": "Total Quantity",
+            "type": "number"
+          }
+        },
+        "required": [
+          "rows",
+          "total",
+          "page",
+          "total_pages",
+          "start",
+          "end",
+          "total_quantity",
+          "total_amount"
+        ],
+        "title": "ItemMovementResponse",
+        "type": "object"
+      },
+      "ItemMovementRow": {
+        "additionalProperties": false,
+        "properties": {
+          "amount": {
+            "title": "Amount",
+            "type": "number"
+          },
+          "avg_price": {
+            "title": "Avg Price",
+            "type": "number"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "in_price_book": {
+            "title": "In Price Book",
+            "type": "boolean"
+          },
+          "merchandise_code": {
+            "title": "Merchandise Code",
+            "type": "string"
+          },
+          "pos_code": {
+            "title": "Pos Code",
+            "type": "string"
+          },
+          "quantity": {
+            "title": "Quantity",
+            "type": "number"
+          }
+        },
+        "required": [
+          "pos_code",
+          "description",
+          "merchandise_code",
+          "quantity",
+          "amount",
+          "avg_price",
+          "in_price_book"
+        ],
+        "title": "ItemMovementRow",
+        "type": "object"
+      },
       "ItemResponse": {
         "additionalProperties": false,
         "properties": {
@@ -27117,6 +27213,128 @@
           }
         },
         "summary": "Agent Upload Route",
+        "tags": [
+          "posimport"
+        ]
+      }
+    },
+    "/posimport/item-movement": {
+      "get": {
+        "description": "Item movement (G-2): per-item net quantity + dollars over a\ndate range, from the booked journal data. Sorted by dollars\ndescending \u2014 the top-sellers view. ``q`` matches description\nsubstring or scan-code prefix, mirroring the price-book\nsearch.",
+        "operationId": "item_movement_route_posimport_item_movement_get",
+        "parameters": [
+          {
+            "description": "YYYY-MM-DD",
+            "in": "query",
+            "name": "start",
+            "required": true,
+            "schema": {
+              "description": "YYYY-MM-DD",
+              "title": "Start",
+              "type": "string"
+            }
+          },
+          {
+            "description": "YYYY-MM-DD",
+            "in": "query",
+            "name": "end",
+            "required": true,
+            "schema": {
+              "description": "YYYY-MM-DD",
+              "title": "End",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "default": "",
+              "maxLength": 80,
+              "title": "Q",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "per_page",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Per Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ItemMovementResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Item Movement Route",
         "tags": [
           "posimport"
         ]

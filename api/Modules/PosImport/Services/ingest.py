@@ -207,6 +207,55 @@ def rebuild_hourly_sales(
     return len(sums)
 
 
+def rebuild_item_day_sales(
+    db: Session, store_id: int, day: date, events: list[PjrEvent],
+) -> int:
+    """Replace the day's per-item movement rows from its events
+    (G-2). Same delete-and-rebuild posture as the hourly buckets:
+    every (re)commit makes the stored movement the exact sum of
+    the staged originals. Cancelled lines never reach ``items``
+    (skipped at parse), refund quantities/amounts are negative
+    end-to-end so they net out, and fuel/code-less lines are
+    excluded (fuel is grade volume; a code-less line can't be
+    tracked as an item)."""
+    from api.Modules.PosImport.Models import PosItemDaySale
+
+    qty: dict[str, float] = {}
+    cents: dict[str, int] = {}
+    desc: dict[str, str] = {}
+    merch: dict[str, str] = {}
+    for e in events:
+        if e.kind not in ("sale", "refund") or e.business_date != day:
+            continue
+        for line in e.items:
+            if line.is_fuel or not line.pos_code:
+                continue
+            code = line.pos_code
+            qty[code] = qty.get(code, 0.0) + float(line.quantity or 0)
+            cents[code] = cents.get(code, 0) + int(line.amount_cents or 0)
+            if line.description:
+                desc[code] = line.description
+            if line.merchandise_code:
+                merch[code] = line.merchandise_code
+    (
+        db.query(PosItemDaySale)
+        .filter_by(store_id=store_id, business_date=day)
+        .delete()
+    )
+    for code in sorted(cents):
+        db.add(PosItemDaySale(
+            store_id=store_id,
+            business_date=day,
+            pos_code=code,
+            description=desc.get(code, "")[:160],
+            merchandise_code=merch.get(code, "")[:20],
+            quantity=round(qty.get(code, 0.0), 3),
+            amount_cents=cents[code],
+        ))
+    db.flush()
+    return len(cents)
+
+
 @dataclass
 class CommitDayResult:
     day: date
@@ -267,6 +316,7 @@ def commit_business_day(
         )
         registers.append(label)
     rebuild_hourly_sales(db, store_id, day, events)
+    rebuild_item_day_sales(db, store_id, day, events)
     return CommitDayResult(
         day=day, closes_written=len(days), registers=registers,
     )
@@ -276,5 +326,6 @@ __all__ = [
     "CommitDayResult", "IMPORT_SOURCE", "LoadedPayload",
     "MAX_PAYLOAD_BYTES", "PosImportError", "commit_business_day",
     "list_mappings", "load_pjr_payload", "mapping_status",
-    "rebuild_hourly_sales", "register_label_for", "set_mappings",
+    "rebuild_hourly_sales", "rebuild_item_day_sales",
+    "register_label_for", "set_mappings",
 ]
