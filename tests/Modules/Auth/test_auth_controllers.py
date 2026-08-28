@@ -705,9 +705,9 @@ def test_change_password_requires_jwt(api_client):
 
 
 def test_signup_creates_store_and_returns_token(client):
-    """Self-service signup creates the (Store, admin User) pair
-    and returns a JWT scoped to the new store. The SPA can drop
-    straight onto the dashboard."""
+    """Owner-first signup (U-4b): creates the (Store, OWNER User)
+    pair and returns an owner JWT with the new store as home. The
+    SPA then auto-enters the store via /auth/switch-store."""
     resp = client.post(
         "/api/v2/auth/signup",
         json={
@@ -720,18 +720,30 @@ def test_signup_creates_store_and_returns_token(client):
     assert resp.status_code == 201, resp.get_data(as_text=True)
     body = resp.get_json()
     assert body["access_token"]
-    assert body["role"] == "admin"
+    assert body["role"] == "owner"
     assert body["username"] == "owner@new-cambio.com"
     assert body["store_id"] is not None
-    assert "store.admin" in body["permissions"]
+    headers = {"Authorization": f"Bearer {body['access_token']}"}
 
     # The JWT is immediately usable on /auth/me.
-    me = client.get(
-        "/api/v2/auth/me",
-        headers={"Authorization": f"Bearer {body['access_token']}"},
-    )
+    me = client.get("/api/v2/auth/me", headers=headers)
     assert me.status_code == 200
     assert me.get_json()["username"] == "owner@new-cambio.com"
+
+    # …and the auto-enter flow works right away: the new store is
+    # switchable (it's the owner's home store) and switching mints
+    # a store-scoped admin token.
+    stores = client.get(
+        "/api/v2/auth/my-stores", headers=headers,
+    ).get_json()["stores"]
+    assert [s for s in stores if s["is_home"]], stores
+    switched = client.post(
+        "/api/v2/auth/switch-store", headers=headers,
+        json={"store_id": body["store_id"]},
+    )
+    assert switched.status_code == 200, switched.get_data(as_text=True)
+    assert switched.get_json()["role"] == "admin"
+    assert "store.admin" in switched.get_json()["permissions"]
 
 
 def test_signup_rejects_duplicate_email(client, test_store_id):  # noqa: ARG001

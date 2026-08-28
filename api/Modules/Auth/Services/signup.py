@@ -1,13 +1,15 @@
 """Self-service signup Service.
 
-Creates a `(Store, admin User)` pair from a signup form submission.
-The Flask `/signup` route handles the form-level validation +
-ref-code resolution + flash messages; this Service does the
-unique-slug allocation, the row inserts, and the trial-window
-defaults.
+Owner-first signup (U-4b, owner directive): `/signup` creates a
+`(Store, OWNER User)` pair — the person who signs up owns the
+store, sees everything, and creates admin/employee users under
+them from inside it. The owner's `store_id` is their home store
+and a `StoreOwnerLink` row is written so the owner umbrella +
+sibling-store logic treat the home store like any linked store.
 
-Owner signup (`/signup/owner`) doesn't run through here — it has
-its own flow (no store creation; just an Owner User).
+Legacy owner signup (`/signup/owner`, no store creation) still
+runs through `create_owner` for owners who only oversee existing
+stores via invite codes; the SPA no longer links to it.
 """
 from dataclasses import dataclass
 from datetime import timedelta
@@ -16,6 +18,7 @@ from slugify import slugify
 from sqlalchemy.orm import Session
 
 from api.Modules.Auth.Models import Store, User
+from api.Modules.Tenancy.Models import StoreOwnerLink
 from api.Core.Clock import utc_now
 
 
@@ -34,7 +37,7 @@ class SignupConflictError(ValueError):
 @dataclass
 class SignupResult:
     store: Store
-    admin: User
+    owner: User
 
 
 def _allocate_unique_slug(db: Session, store_name: str) -> str:
@@ -96,7 +99,7 @@ def create_owner(
     return OwnerSignupResult(owner=owner)
 
 
-def create_store_and_admin(
+def create_store_and_owner(
     db: Session,
     *,
     store_name: str,
@@ -108,26 +111,31 @@ def create_store_and_admin(
     grace_days: int = DEFAULT_GRACE_DAYS,
     business_type: str = "msb_hybrid",
 ) -> SignupResult:
-    """Create a fresh Store + admin User pair.
+    """Create a fresh Store + OWNER User pair (U-4b).
+
+    The signer-up becomes a `role="owner"` user whose `store_id`
+    is the new store (their home store), plus a `StoreOwnerLink`
+    row so sibling-store logic (customer upsert, rollups) sees
+    the home store without special-casing. They enter the store
+    through `/auth/switch-store` (the SPA auto-enters after
+    signup) and manage users from inside it.
 
     Caller is responsible for committing the surrounding
     transaction. We `flush()` so the Store gets an id before the
     User insert references it.
 
     `email` and `store_name` should already be normalised (stripped,
-    `email.lower()`). The Service doesn't re-trim — that's a Flask
-    presentation concern that the route handles before the call.
+    `email.lower()`). The Service doesn't re-trim — that's a
+    presentation concern the route handles before the call.
 
-    Raises `SignupConflictError` if a per-store admin with the same
-    email already exists. The legacy route's existence check used
-    `User.store_id.isnot(None)` so we mirror that here (the
-    `superadmin` user has `store_id IS NULL` and isn't considered a
-    collision).
+    Raises `SignupConflictError` when ANY existing user holds this
+    username — per-store users AND store-less rows (legacy owners,
+    superadmin). The cross-store login lookup is first-match-by-
+    username, so a duplicate would shadow an account.
     """
     existing = (
         db.query(User)
           .filter(User.username == email)
-          .filter(User.store_id.isnot(None))
           .first()
     )
     if existing is not None:
@@ -150,11 +158,13 @@ def create_store_and_admin(
     db.add(store)
     db.flush()  # so store.id exists for the User FK
 
-    admin = User(
+    owner = User(
         store_id=store.id, username=email,
-        full_name=store_name, role="admin",
+        full_name=store_name, role="owner",
     )
-    admin.set_password(password)
-    db.add(admin)
+    owner.set_password(password)
+    db.add(owner)
     db.flush()
-    return SignupResult(store=store, admin=admin)
+    db.add(StoreOwnerLink(owner_id=owner.id, store_id=store.id))
+    db.flush()
+    return SignupResult(store=store, owner=owner)

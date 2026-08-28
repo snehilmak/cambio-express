@@ -3,13 +3,16 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
 import { AuthChrome, StatusPill } from "../components/AuthChrome";
 import { previewReferral, signup, type ReferralPreview } from "../api/account";
+import { autoEnterOwnerStore } from "../api/switchStore";
 import { ApiError } from "../lib/api";
-import { setAccessToken } from "../lib/auth";
+import { persistLoginResponse } from "../lib/auth";
 import styles from "./auth.module.css";
 
-// Self-service signup at /app/signup. Creates a store + admin user
-// + JWT in one POST. Optional ?ref= preview reads /referral/<code>
-// to show the inline "$X off" banner before the user submits.
+// Owner-first signup at /app/signup (U-4b). Creates a store + its
+// OWNER user + JWT in one POST, then auto-enters the new store so
+// the first thing the owner sees is the same dashboard their team
+// will see. Optional ?ref= preview reads /referral/<code> to show
+// the inline "$X off" banner before the user submits.
 export default function Signup() {
   const navigate = useNavigate();
   const [params] = useSearchParams();
@@ -59,7 +62,12 @@ export default function Signup() {
         ref_code:   refCode.trim().toUpperCase(),
         business_type: bizType,
       });
-      setAccessToken(result.access_token);
+      persistLoginResponse(result);
+      // Enter the brand-new store right away (single-dashboard
+      // rule) — a failure still lands somewhere sane: /home
+      // bounces to /dashboard, whose owner fallback shows the
+      // owner overview.
+      await autoEnterOwnerStore();
       navigate("/home", { replace: true });
     } catch (err) {
       if (err instanceof ApiError) {
@@ -181,9 +189,6 @@ export default function Signup() {
 
       <div className={styles.loginPrompt}>
         Already have an account? <Link to="/login">Sign in</Link>
-      </div>
-      <div className={styles.loginPrompt} style={{ marginTop: 10 }}>
-        Own multiple locations? <a href="/signup/owner">Sign up as an owner →</a>
       </div>
     </AuthChrome>
   );
