@@ -187,3 +187,56 @@ def test_price_book_bundle_by_business_type(client, test_store_id):
             assert store_feature_enabled(
                 db.session, store, "module_price_book",
             ) is expected, btype
+
+
+# ── Item-editor parity fields (P2-5 phase 1) ────────────────
+
+
+def test_item_editor_fields_roundtrip(client, test_store_id):
+    """item_number / size / case fields / EBT persist on create,
+    PATCH individually, and clear via the 0 sentinel."""
+    h = _admin(client, test_store_id)
+    item = _mk_item(
+        client, h, pos_code="345", name="ROOTS GINGER ( POUND )",
+        item_number="4612", size="POUND",
+        case_size=30, case_cost=45.00, is_ebt=True, cost=1.50,
+    )
+    assert item["item_number"] == "4612"
+    assert item["size"] == "POUND"
+    assert item["case_size"] == 30
+    assert item["case_cost"] == 45.00
+    assert item["is_ebt"] is True
+
+    # Omitted fields stay put; sent fields change.
+    patched = client.put(
+        f"/api/v2/catalog/items/{item['id']}", headers=h,
+        json={"size": "LB", "is_ebt": False},
+    )
+    assert patched.status_code == 200, patched.text
+    row = patched.json()["item"]
+    assert row["size"] == "LB"
+    assert row["is_ebt"] is False
+    assert row["item_number"] == "4612"
+    assert row["case_size"] == 30
+
+    # 0 clears the nullable case fields.
+    cleared = client.put(
+        f"/api/v2/catalog/items/{item['id']}", headers=h,
+        json={"case_size": 0, "case_cost": 0},
+    )
+    assert cleared.status_code == 200
+    row = cleared.json()["item"]
+    assert row["case_size"] is None
+    assert row["case_cost"] is None
+
+
+def test_item_editor_fields_default_empty(client, test_store_id):
+    """Items created without the new fields keep safe defaults —
+    imports and old clients are unaffected."""
+    h = _admin(client, test_store_id)
+    item = _mk_item(client, h, pos_code="777", name="Plain item")
+    assert item["item_number"] == ""
+    assert item["size"] == ""
+    assert item["case_size"] is None
+    assert item["case_cost"] is None
+    assert item["is_ebt"] is False

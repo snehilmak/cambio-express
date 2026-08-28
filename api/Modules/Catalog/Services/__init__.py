@@ -208,6 +208,17 @@ def create_item(
         cost_cents=to_cents(fields.get("cost") or 0),
         is_taxable=bool(fields.get("is_taxable", True)),
         source=source,
+        item_number=str(fields.get("item_number") or "").strip(),
+        size=str(fields.get("size") or "").strip(),
+        case_size=(
+            int(fields["case_size"])
+            if fields.get("case_size") else None
+        ),
+        case_cost_cents=(
+            to_cents(fields["case_cost"])
+            if fields.get("case_cost") is not None else None
+        ),
+        is_ebt=bool(fields.get("is_ebt", False)),
     )
     db.add(item)
     db.flush()
@@ -257,6 +268,20 @@ def update_item(
         item.is_taxable = bool(changes["is_taxable"])
     if changes.get("is_active") is not None:
         item.is_active = bool(changes["is_active"])
+    if changes.get("item_number") is not None:
+        item.item_number = str(changes["item_number"]).strip()
+    if changes.get("size") is not None:
+        item.size = str(changes["size"]).strip()
+    # 0 = explicit clear for the nullable case fields (None = leave
+    # unchanged) — same sentinel as the optional FKs above.
+    if changes.get("case_size") is not None:
+        cs = int(changes["case_size"])
+        item.case_size = None if cs == 0 else cs
+    if changes.get("case_cost") is not None:
+        cc = float(changes["case_cost"])
+        item.case_cost_cents = None if cc == 0 else to_cents(cc)
+    if changes.get("is_ebt") is not None:
+        item.is_ebt = bool(changes["is_ebt"])
     db.flush()
     return item
 

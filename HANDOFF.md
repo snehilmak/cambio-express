@@ -157,13 +157,20 @@ doubt, write it here rather than leaving it in chat.
 >   store-level modules (MSB Daily book / Day close / Lottery /
 >   Price book) carry roles admin+employee and never appear in
 >   superadmin nav (routes stay reachable for support).
-> - **Two-tier deployment (PROPOSED, awaiting owner go)**:
->   dinerobook.com pins to a promoted `release` branch for live
->   MSB customers; a second Render service + DB on a back-office
->   subdomain auto-deploys `main` (~$15–25/mo — spend needs
->   explicit approval, like Redis). Do NOT fork the codebase at
->   #854: prod DB is already migrated past it, and module flags
->   already hide back-office surfaces from MSB stores.
+> - **Two-tier deployment: PARKED (owner decision, 2026-08-28)**
+>   — "we will park the 2 tier development for now we will push
+>   things on this." Everything ships to the single dinerobook.com
+>   deployment; module flags keep MSB stores' UX clean. The
+>   proposal (release-branch pinning + second service, ~$15–25/mo)
+>   stays available if the owner revisits. Do NOT fork the
+>   codebase at #854: prod DB is already migrated past it.
+> - **Billing: fixed per-store subscriptions (owner decision,
+>   2026-08-28)** — no consolidated owner-level billing. Signup
+>   discounts run through what already exists: superadmin-minted
+>   `DiscountCode`s (synced to Stripe coupon + promotion code,
+>   customer enters the code at checkout via
+>   `allow_promotion_codes=True`) plus referral codes (`?ref=` on
+>   signup → $50/$100 credits, invariant #12).
 
 **Phase 0 — Foundations** (each its own PR):
 1. ✅ SHIPPED — `business_type` on Store (cstore / gas_station /

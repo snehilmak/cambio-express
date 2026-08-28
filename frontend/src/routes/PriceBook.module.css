@@ -53,3 +53,13 @@
   font-family: "JetBrains Mono", ui-monospace, monospace;
   font-size: 0.85rem;
 }
+
+/* EBT/SNAP checkbox row on the item form (P2-5). */
+.ebtRow {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  color: var(--db-text);
+  cursor: pointer;
+}

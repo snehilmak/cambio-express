@@ -74,6 +74,13 @@ class ItemWriteRequest(BaseModel):
     price:           float = Field(0, ge=0)
     cost:            float = Field(0, ge=0)
     is_taxable:      bool = True
+    # Item-editor parity (P2-5): vendor ordering number, size
+    # label, case pack fields, EBT eligibility.
+    item_number:     str = Field("", max_length=40)
+    size:            str = Field("", max_length=40)
+    case_size:       int | None = Field(None, ge=1)
+    case_cost:       float | None = Field(None, ge=0)
+    is_ebt:          bool = False
 
 
 class ItemUpdateRequest(BaseModel):
@@ -91,6 +98,13 @@ class ItemUpdateRequest(BaseModel):
     cost:            float | None = Field(None, ge=0)
     is_taxable:      bool | None = None
     is_active:       bool | None = None
+    item_number:     str | None = Field(None, max_length=40)
+    size:            str | None = Field(None, max_length=40)
+    # 0 clears case_size / case_cost (None = leave unchanged),
+    # mirroring the FK-clear sentinel above.
+    case_size:       int | None = Field(None, ge=0)
+    case_cost:       float | None = Field(None, ge=0)
+    is_ebt:          bool | None = None
 
 
 class ItemRow(BaseModel):
@@ -109,6 +123,11 @@ class ItemRow(BaseModel):
     is_taxable: bool
     is_active: bool
     source: str
+    item_number: str
+    size: str
+    case_size: int | None
+    case_cost: float | None
+    is_ebt: bool
 
 
 class ItemResponse(BaseModel):
