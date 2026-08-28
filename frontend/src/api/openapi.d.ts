@@ -1108,7 +1108,17 @@ export interface paths {
          */
         get: operations["my_stores_route_auth_my_stores_get"];
         put?: never;
-        post?: never;
+        /**
+         * Owner Add Store Route
+         * @description An existing owner adds a NEW store under their umbrella
+         *     (U-5a — the Switch Store modal's "+" button). Creates the
+         *     Store with the standard trial window + the StoreOwnerLink
+         *     row; no User row — the owner enters via /auth/switch-store
+         *     and builds that store's team from inside it. Accepts base
+         *     owner tokens AND owner-context store tokens (same rule as
+         *     switching).
+         */
+        post: operations["owner_add_store_route_auth_my_stores_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1333,7 +1343,7 @@ export interface paths {
          *     when the code isn't recognised — matches the legacy Jinja
          *     behaviour where an unknown code silently dropped without a
          *     banner. The actual application-of-credit happens at signup
-         *     time inside `create_store_and_admin`.
+         *     time inside `create_store_and_owner`.
          */
         get: operations["referral_preview_route_auth_referral__code__get"];
         put?: never;
@@ -8974,6 +8984,32 @@ export interface components {
             notify_trial_reminders_push?: boolean | null;
         };
         /**
+         * OwnerAddStoreRequest
+         * @description POST body for /auth/my-stores — an existing owner adds a new
+         *     store under their umbrella (U-5a, the switcher's "+" button).
+         *     The new store gets its own trial window; subscriptions stay
+         *     per store.
+         */
+        OwnerAddStoreRequest: {
+            /**
+             * Address
+             * @default
+             */
+            address: string;
+            /**
+             * Business Type
+             * @default cstore
+             */
+            business_type: string;
+            /** Name */
+            name: string;
+            /**
+             * Phone
+             * @default
+             */
+            phone: string;
+        };
+        /**
          * OwnerBulkAddUserRequest
          * @description POST body for ``/owner/bulk-add-user``. Creates the same
          *     login (username + password) at every store in ``store_ids``
@@ -13929,6 +13965,43 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MyStoresResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    owner_add_store_route_auth_my_stores_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OwnerAddStoreRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SwitchableStoreRow"];
                 };
             };
             /** @description Validation Error */

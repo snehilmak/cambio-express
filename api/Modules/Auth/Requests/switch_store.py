@@ -34,6 +34,23 @@ class SwitchStoreRequest(BaseModel):
     store_id: int = Field(..., ge=1)
 
 
+class OwnerAddStoreRequest(BaseModel):
+    """POST body for /auth/my-stores — an existing owner adds a new
+    store under their umbrella (U-5a, the switcher's "+" button).
+    The new store gets its own trial window; subscriptions stay
+    per store."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(..., min_length=1, max_length=120)
+    business_type: str = Field(
+        "cstore",
+        pattern="^(cstore|gas_station|grocery|msb_hybrid)$",
+    )
+    phone:   str = Field("", max_length=40)
+    address: str = Field("", max_length=240)
+
+
 class SwitchStoreResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

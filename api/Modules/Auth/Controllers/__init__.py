@@ -30,6 +30,7 @@ from api.Modules.Auth.Requests import (
     MyActivityResponse,
     MyActivityRow,
     MyStoresResponse,
+    OwnerAddStoreRequest,
     NotificationsResponse,
     NotificationsUpdateRequest,
     OwnerSignupRequest,
@@ -1937,6 +1938,61 @@ def my_stores_route(
         )
         for s in stores
     ])
+
+
+@router.post(
+    "/my-stores", response_model=SwitchableStoreRow, status_code=201,
+)
+@_rate_limiter.limit("10/hour")
+def owner_add_store_route(
+    request: Request,
+    body: OwnerAddStoreRequest,
+    db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
+) -> SwitchableStoreRow:
+    """An existing owner adds a NEW store under their umbrella
+    (U-5a — the Switch Store modal's "+" button). Creates the
+    Store with the standard trial window + the StoreOwnerLink
+    row; no User row — the owner enters via /auth/switch-store
+    and builds that store's team from inside it. Accepts base
+    owner tokens AND owner-context store tokens (same rule as
+    switching)."""
+    from api.Modules.Audit.Services import record_operator_action
+    from api.Modules.Auth.Services import create_store_for_owner
+    owner = _resolve_switching_owner(db, claims)
+    name = (body.name or "").strip()
+    if not name:
+        raise HTTPException(
+            status_code=422,
+            detail={"field": "name", "message": "Store name is required."},
+        )
+    store = create_store_for_owner(
+        db, owner,
+        store_name=name,
+        business_type=body.business_type,
+        phone=(body.phone or "").strip(),
+        address=(body.address or "").strip(),
+    )
+    record_operator_action(
+        db,
+        store_id=store.id,
+        user_id=owner.id,
+        user_name=owner.full_name or owner.username or "",
+        user_role="owner",
+        target_type="store",
+        action="owner_add_store",
+        target_id=str(store.id),
+        summary=f"owner created store {store.name or store.id}",
+    )
+    db.commit()
+    return SwitchableStoreRow(
+        store_id=store.id,
+        name=store.name or "",
+        slug=store.slug or "",
+        address=store.address or "",
+        is_current=False,
+        is_home=False,
+    )
 
 
 @router.post("/switch-store", response_model=SwitchStoreResponse)

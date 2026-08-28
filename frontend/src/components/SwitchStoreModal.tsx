@@ -3,13 +3,14 @@ import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 
 import {
-  favoriteStoreIds, returnToOwnerView, switchStore, toggleFavoriteStore,
-  useMyStores,
+  addOwnerStore, favoriteStoreIds, returnToOwnerView, switchStore,
+  toggleFavoriteStore, useMyStores,
 } from "../api/switchStore";
 import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
 import {
-  Alert, Button, EmptyState, Input, Loading, Modal, Pill, useToast,
+  Alert, Button, EmptyState, Field, Input, Loading, Modal, Pill, Select,
+  useToast,
 } from "./ui";
 import styles from "./SwitchStoreModal.module.css";
 
@@ -43,6 +44,11 @@ function SwitchStoreBody({ onClose }: { onClose: () => void }) {
   const [favs, setFavs] = useState(favoriteStoreIds);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // U-5a "+" add-store view (competitor parity): a small inline
+  // form replaces the list; on create we enter the new store.
+  const [adding, setAdding] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newType, setNewType] = useState("cstore");
 
   const rows = (stores.data?.stores ?? []).filter((s) => {
     if (tab === "favorites" && !favs.has(s.store_id)) return false;
@@ -72,6 +78,24 @@ function SwitchStoreBody({ onClose }: { onClose: () => void }) {
     }
   }
 
+  async function createStore() {
+    const name = newName.trim();
+    if (!name) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const row = await addOwnerStore({ name, business_type: newType });
+      await qc.invalidateQueries({ queryKey: ["auth", "my-stores"] });
+      toast({ message: `${row.name} created.`, tone: "success" });
+      await enter(row.store_id);
+    } catch (err) {
+      setError(
+        err instanceof ApiError ? err.message : "Could not create the store.",
+      );
+      setBusy(false);
+    }
+  }
+
   async function toOwnerView() {
     setBusy(true);
     setError(null);
@@ -85,6 +109,53 @@ function SwitchStoreBody({ onClose }: { onClose: () => void }) {
     } finally {
       setBusy(false);
     }
+  }
+
+  if (adding) {
+    return (
+      <div className={styles.body}>
+        {error && <Alert tone="error">{error}</Alert>}
+        <Field label="Store name">
+          <Input
+            autoFocus
+            placeholder="e.g. Lamar #2"
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            disabled={busy}
+          />
+        </Field>
+        <Field
+          label="Business type"
+          hint="The new store starts its own 7-day trial and is added to your umbrella right away."
+        >
+          <Select
+            value={newType}
+            onChange={(e) => setNewType(e.target.value)}
+            disabled={busy}
+          >
+            <option value="cstore">Convenience store</option>
+            <option value="gas_station">Gas station</option>
+            <option value="grocery">Grocery store</option>
+            <option value="msb_hybrid">Money services / hybrid</option>
+          </Select>
+        </Field>
+        <div className={styles.footer}>
+          <Button
+            tone="primary" size="sm"
+            disabled={busy || !newName.trim()}
+            onClick={() => { void createStore(); }}
+          >
+            {busy ? "Creating…" : "Create & enter →"}
+          </Button>
+          <Button
+            tone="secondary" size="sm" disabled={busy}
+            onClick={() => { setAdding(false); setError(null); }}
+          >
+            Cancel
+          </Button>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -110,6 +181,13 @@ function SwitchStoreBody({ onClose }: { onClose: () => void }) {
           onClick={() => setTab("favorites")}
         >
           ★ Favorites ({favCount})
+        </Button>
+        <Button
+          size="sm" tone="secondary"
+          aria-label="Add a new store"
+          onClick={() => { setAdding(true); setError(null); }}
+        >
+          + Add store
         </Button>
       </div>
       {stores.isLoading && <Loading />}

@@ -6893,6 +6893,41 @@
         "title": "NotificationsUpdateRequest",
         "type": "object"
       },
+      "OwnerAddStoreRequest": {
+        "additionalProperties": false,
+        "description": "POST body for /auth/my-stores \u2014 an existing owner adds a new\nstore under their umbrella (U-5a, the switcher's \"+\" button).\nThe new store gets its own trial window; subscriptions stay\nper store.",
+        "properties": {
+          "address": {
+            "default": "",
+            "maxLength": 240,
+            "title": "Address",
+            "type": "string"
+          },
+          "business_type": {
+            "default": "cstore",
+            "pattern": "^(cstore|gas_station|grocery|msb_hybrid)$",
+            "title": "Business Type",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "phone": {
+            "default": "",
+            "maxLength": 40,
+            "title": "Phone",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "OwnerAddStoreRequest",
+        "type": "object"
+      },
       "OwnerBulkAddUserRequest": {
         "additionalProperties": false,
         "description": "POST body for ``/owner/bulk-add-user``. Creates the same\nlogin (username + password) at every store in ``store_ids``\nthat's actually in the owner's umbrella. Stores outside the\numbrella are reported as ``rejected`` rather than 403'd so\nthe operator sees the full result table.",
@@ -17162,6 +17197,80 @@
         "tags": [
           "auth"
         ]
+      },
+      "post": {
+        "description": "An existing owner adds a NEW store under their umbrella\n(U-5a \u2014 the Switch Store modal's \"+\" button). Creates the\nStore with the standard trial window + the StoreOwnerLink\nrow; no User row \u2014 the owner enters via /auth/switch-store\nand builds that store's team from inside it. Accepts base\nowner tokens AND owner-context store tokens (same rule as\nswitching).",
+        "operationId": "owner_add_store_route_auth_my_stores_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OwnerAddStoreRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SwitchableStoreRow"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Owner Add Store Route",
+        "tags": [
+          "auth"
+        ]
       }
     },
     "/auth/notifications": {
@@ -17946,7 +18055,7 @@
     },
     "/auth/referral/{code}": {
       "get": {
-        "description": "Resolve a referral code so the SPA's /signup page can show\nthe green '$X off your first paid month' banner. Returns 404\nwhen the code isn't recognised \u2014 matches the legacy Jinja\nbehaviour where an unknown code silently dropped without a\nbanner. The actual application-of-credit happens at signup\ntime inside `create_store_and_admin`.",
+        "description": "Resolve a referral code so the SPA's /signup page can show\nthe green '$X off your first paid month' banner. Returns 404\nwhen the code isn't recognised \u2014 matches the legacy Jinja\nbehaviour where an unknown code silently dropped without a\nbanner. The actual application-of-credit happens at signup\ntime inside `create_store_and_owner`.",
         "operationId": "referral_preview_route_auth_referral__code__get",
         "parameters": [
           {

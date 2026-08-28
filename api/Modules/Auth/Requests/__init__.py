@@ -39,6 +39,7 @@ from api.Modules.Auth.Requests.push import (
 )
 from api.Modules.Auth.Requests.switch_store import (
     MyStoresResponse,
+    OwnerAddStoreRequest,
     SwitchableStoreRow,
     SwitchStoreRequest,
     SwitchStoreResponse,
@@ -60,6 +61,7 @@ __all__ = [
     "MyActivityResponse",
     "MyActivityRow",
     "MyStoresResponse",
+    "OwnerAddStoreRequest",
     "NotificationsResponse",
     "NotificationsUpdateRequest",
     "OwnerSignupRequest",

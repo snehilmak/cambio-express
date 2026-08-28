@@ -35,6 +35,20 @@ export function useMyStores(enabled: boolean) {
   });
 }
 
+/** U-5a: add a NEW store under the owner's umbrella (the modal's
+ *  "+" button). Returns the created row; the caller usually enters
+ *  it right away via switchStore(). */
+export async function addOwnerStore(body: {
+  name: string;
+  business_type: string;
+  phone?: string;
+  address?: string;
+}): Promise<SwitchableStoreRow> {
+  return api<SwitchableStoreRow>("/api/v2/auth/my-stores", {
+    method: "POST", json: body,
+  });
+}
+
 export async function switchStore(
   storeId: number,
 ): Promise<SwitchStoreResult> {
