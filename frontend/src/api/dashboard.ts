@@ -70,12 +70,42 @@ export interface LotterySnapshot {
   active_packs: number;
 }
 
+// Generic store blocks (D-1). sales/purchases are null when the
+// matching module (day_close / price_book) is off; clocked_in is
+// universal.
+export interface SalesBlock {
+  today: number;
+  yesterday: number;
+  month_to_date: number;
+  d7: number;
+  d15: number;
+  d30: number;
+  trend: Array<{ date: string; amount: number }>;
+}
+
+export interface PurchasesBlock {
+  today: number;
+  d7: number;
+  d15: number;
+  d30: number;
+  open_count: number;
+  open_total: number;
+}
+
+export interface ClockedInRow {
+  name: string;
+  clock_in_at: string | null;
+}
+
 export interface AdminDashboard {
   role: "admin";
   today: string;
   modules: string[];
   day_close: DayCloseSnapshot | null;
   lottery: LotterySnapshot | null;
+  sales: SalesBlock | null;
+  purchases: PurchasesBlock | null;
+  clocked_in: ClockedInRow[];
   kpis: AdminDashboardKpis;
   company_stats: CompanyStat[];
   recent_transfers: DashboardTransferRow[];

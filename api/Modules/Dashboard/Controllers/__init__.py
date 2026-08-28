@@ -109,6 +109,147 @@ def _lottery_snapshot(
     }
 
 
+def _sales_block(
+    db: Session, store_id: int, today: date,
+) -> dict[str, Any]:
+    """Store-sales rollup from day-close register totals (D-1,
+    generic store dashboard). All sums in dollars. ``trend`` is
+    the last 14 calendar days, zero-filled, oldest first — feeds
+    the daily-sales line chart."""
+    from datetime import timedelta
+
+    from sqlalchemy import func
+
+    from api.Modules.DayClose.Models import RegisterClose
+
+    def _sum_between(start: date, end: date) -> float:
+        cents = (
+            db.query(func.coalesce(
+                func.sum(RegisterClose.gross_sales_cents), 0,
+            ))
+            .filter(
+                RegisterClose.store_id == store_id,
+                RegisterClose.report_date >= start,
+                RegisterClose.report_date <= end,
+            )
+            .scalar()
+        )
+        return float(cents or 0) / 100.0
+
+    month_start = date(today.year, today.month, 1)
+    trend_start = today - timedelta(days=13)
+    rows = (
+        db.query(
+            RegisterClose.report_date,
+            func.coalesce(func.sum(RegisterClose.gross_sales_cents), 0),
+        )
+        .filter(
+            RegisterClose.store_id == store_id,
+            RegisterClose.report_date >= trend_start,
+            RegisterClose.report_date <= today,
+        )
+        .group_by(RegisterClose.report_date)
+        .all()
+    )
+    by_day = {r[0]: float(r[1] or 0) / 100.0 for r in rows}
+    trend = [
+        {
+            "date": (trend_start + timedelta(days=i)).isoformat(),
+            "amount": by_day.get(trend_start + timedelta(days=i), 0.0),
+        }
+        for i in range(14)
+    ]
+    return {
+        "today": _sum_between(today, today),
+        "yesterday": _sum_between(
+            today - timedelta(days=1), today - timedelta(days=1),
+        ),
+        "month_to_date": _sum_between(month_start, today),
+        "d7": _sum_between(today - timedelta(days=6), today),
+        "d15": _sum_between(today - timedelta(days=14), today),
+        "d30": _sum_between(today - timedelta(days=29), today),
+        "trend": trend,
+    }
+
+
+def _purchases_block(
+    db: Session, store_id: int, today: date,
+) -> dict[str, Any]:
+    """Purchase-invoice rollup (module_price_book). Totals are the
+    derived subtotal + tax + other, summed in SQL."""
+    from datetime import timedelta
+
+    from sqlalchemy import func
+
+    from api.Modules.Catalog.Models import PurchaseInvoice
+
+    total_expr = func.coalesce(func.sum(
+        PurchaseInvoice.subtotal_cents
+        + PurchaseInvoice.tax_cents
+        + PurchaseInvoice.other_cents,
+    ), 0)
+
+    def _sum_since(start: date) -> float:
+        cents = (
+            db.query(total_expr)
+            .filter(
+                PurchaseInvoice.store_id == store_id,
+                PurchaseInvoice.invoice_date >= start,
+                PurchaseInvoice.invoice_date <= today,
+            )
+            .scalar()
+        )
+        return float(cents or 0) / 100.0
+
+    open_q = (
+        db.query(func.count(PurchaseInvoice.id), total_expr)
+        .filter(
+            PurchaseInvoice.store_id == store_id,
+            PurchaseInvoice.status == "open",
+        )
+        .one()
+    )
+    return {
+        "today": _sum_since(today),
+        "d7": _sum_since(today - timedelta(days=6)),
+        "d15": _sum_since(today - timedelta(days=14)),
+        "d30": _sum_since(today - timedelta(days=29)),
+        "open_count": int(open_q[0] or 0),
+        "open_total": float(open_q[1] or 0) / 100.0,
+    }
+
+
+def _clocked_in_block(db: Session, store_id: int) -> list[dict[str, Any]]:
+    """Who is on the clock right now — open TimeClockEntry rows
+    (clock_out_at IS NULL) joined to the roster for names."""
+    from api.Modules.Tenancy.Models import StoreEmployee
+    from api.Modules.TimeClock.Models import TimeClockEntry
+
+    rows = (
+        db.query(TimeClockEntry, StoreEmployee)
+        .join(
+            StoreEmployee,
+            StoreEmployee.id == TimeClockEntry.store_employee_id,
+        )
+        .filter(
+            TimeClockEntry.store_id == store_id,
+            TimeClockEntry.clock_out_at.is_(None),
+        )
+        .order_by(TimeClockEntry.clock_in_at)
+        .all()
+    )
+    return [
+        {
+            "name": emp.name or "",
+            "clock_in_at": (
+                entry.clock_in_at.isoformat()
+                if entry.clock_in_at else None
+            ),
+        }
+        for entry, emp in rows
+    ]
+
+
 def _admin_summary(db: Session, store_id: int) -> dict[str, Any]:
     from api.Modules.BankSync.Models import StripeBankAccount
     from api.Modules.Batches.Models import ACHBatch
@@ -187,6 +328,19 @@ def _admin_summary(db: Session, store_id: int) -> dict[str, Any]:
         if "module_lottery" in modules else None
     )
 
+    # Generic store blocks (D-1): sales-first dashboard. Each block
+    # renders only when its module is on; clocked-in is universal
+    # (the time clock isn't module-gated).
+    sales = (
+        _sales_block(db, store_id, today)
+        if "module_day_close" in modules else None
+    )
+    purchases = (
+        _purchases_block(db, store_id, today)
+        if "module_price_book" in modules else None
+    )
+    clocked_in = _clocked_in_block(db, store_id)
+
     today_report = (
         db.query(DailyReport)
         .filter_by(store_id=store_id, report_date=today).first()
@@ -207,6 +361,9 @@ def _admin_summary(db: Session, store_id: int) -> dict[str, Any]:
         "modules": modules,
         "day_close": day_close,
         "lottery": lottery,
+        "sales": sales,
+        "purchases": purchases,
+        "clocked_in": clocked_in,
         "kpis": {
             "total_transfers": total_transfers,
             "today_transfers": today_transfers,

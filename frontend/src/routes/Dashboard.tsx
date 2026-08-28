@@ -1,4 +1,9 @@
 import { Link, Navigate } from "react-router-dom";
+import {
+  CategoryScale, Chart as ChartJS, Filler, LinearScale, LineElement,
+  PointElement, Tooltip as ChartTooltip,
+} from "chart.js";
+import { Line } from "react-chartjs-2";
 
 import {
   useDashboardSummary,
@@ -6,6 +11,12 @@ import {
   type EmployeeDashboard,
   type DashboardSummary,
 } from "../api/dashboard";
+import { chartSeries, moneyChartOptions, seriesFill } from "../lib/chartOptions";
+
+ChartJS.register(
+  CategoryScale, LinearScale, PointElement, LineElement, Filler,
+  ChartTooltip,
+);
 import { useStoreInfo } from "../api/account";
 import {
   ButtonLink,
@@ -134,36 +145,20 @@ function Body({ summary }: { summary: DashboardSummary }) {
 
 function AdminPanel({ d }: { d: AdminDashboard }) {
   const monthName = monthShort(d.today);
-  // Module-driven layout (P1-10): each enabled module contributes
-  // its own KPIs/sections; disabled modules disappear entirely.
+  // Module-driven layout (P1-10 → D-1): the dashboard leads with
+  // generic STORE numbers (sales, purchases, labor); each module
+  // contributes its section; money services is one module section
+  // among many, not the headline.
   const ms = d.modules.includes("module_money_services");
+  const hasTrend = d.sales?.trend.some((t) => t.amount > 0) ?? false;
   return (
     <>
       <KpiGrid>
-        {ms && (
-          <>
-            <KpiCard label="Total transfers" value={d.kpis.total_transfers.toLocaleString()} sub="All time" />
-            <KpiCard
-              label="Today's transfers"
-              value={d.kpis.today_transfers.toLocaleString()}
-              sub={fmtShortDate(d.today)}
-              tone="positive"
-            />
-            <KpiCard
-              label="Unreconciled ACH"
-              value={d.kpis.pending_ach.toLocaleString()}
-              sub={d.kpis.pending_ach > 0 ? "Needs attention" : "All clear"}
-              tone={d.kpis.pending_ach > 0 ? "negative" : "positive"}
-            />
-          </>
-        )}
-        {d.day_close && (
+        {d.sales && (
           <>
             <KpiCard
-              label={`Store sales (${shortDate(d.day_close.date)})`}
-              value={`$${d.day_close.gross_sales.toLocaleString(undefined, {
-                minimumFractionDigits: 2, maximumFractionDigits: 2,
-              })}`}
+              label="Today's sales"
+              value={fmtUsd(d.sales.today)}
               sub={
                 <Link to="/day-close" className="ds-link" style={{ color: tokens.accent }}>
                   Open day close →
@@ -172,31 +167,41 @@ function AdminPanel({ d }: { d: AdminDashboard }) {
               tone="positive"
             />
             <KpiCard
-              label="Drawer over / short"
-              value={
-                d.day_close.over_short == null
-                  ? "—"
-                  : `$${d.day_close.over_short.toFixed(2)}`
-              }
-              sub={
-                d.day_close.uncounted_drawers > 0
-                  ? `${d.day_close.uncounted_drawers} drawer(s) uncounted`
-                  : "All drawers counted"
-              }
-              tone={
-                d.day_close.uncounted_drawers > 0
-                || (d.day_close.over_short ?? 0) !== 0
-                  ? "warning" : "positive"
-              }
+              label="Yesterday's sales"
+              value={fmtUsd(d.sales.yesterday)}
+              sub={fmtShortDate(d.today)}
+            />
+            <KpiCard
+              label={`Sales (${monthName} to date)`}
+              value={fmtUsd(d.sales.month_to_date)}
+              tone="positive"
             />
           </>
+        )}
+        {d.day_close && (
+          <KpiCard
+            label="Drawer over / short"
+            value={
+              d.day_close.over_short == null
+                ? "—"
+                : `$${d.day_close.over_short.toFixed(2)}`
+            }
+            sub={
+              d.day_close.uncounted_drawers > 0
+                ? `${d.day_close.uncounted_drawers} drawer(s) uncounted`
+                : "All drawers counted"
+            }
+            tone={
+              d.day_close.uncounted_drawers > 0
+              || (d.day_close.over_short ?? 0) !== 0
+                ? "warning" : "positive"
+            }
+          />
         )}
         {d.lottery && (
           <KpiCard
             label={`Lottery (${shortDate(d.lottery.date)})`}
-            value={`$${d.lottery.value.toLocaleString(undefined, {
-              minimumFractionDigits: 2, maximumFractionDigits: 2,
-            })}`}
+            value={fmtUsd(d.lottery.value)}
             sub={
               d.lottery.uncounted_active_packs > 0
                 ? `${d.lottery.uncounted_active_packs} pack(s) uncounted`
@@ -207,19 +212,31 @@ function AdminPanel({ d }: { d: AdminDashboard }) {
             }
           />
         )}
+        {d.purchases && (
+          <KpiCard
+            label="Purchases (30d)"
+            value={fmtUsd(d.purchases.d30)}
+            sub={
+              <Link to="/purchase-invoices" className="ds-link" style={{ color: tokens.accent }}>
+                {d.purchases.open_count > 0
+                  ? `${d.purchases.open_count} open · ${fmtUsd(d.purchases.open_total)} →`
+                  : "All invoices paid →"}
+              </Link>
+            }
+            tone={d.purchases.open_count > 0 ? "warning" : "positive"}
+          />
+        )}
         <KpiCard
-          label="Today's daily book"
-          value={d.kpis.today_report_entered ? "Entered" : "Pending"}
+          label="Clocked in now"
+          value={d.clocked_in.length.toLocaleString()}
           sub={
-            <Link
-              to={`/daily/edit?date=${d.today}`}
-              className="ds-link"
-              style={{ color: tokens.accent }}
-            >
-              {d.kpis.today_report_entered ? "Edit report" : "Enter now →"}
+            <Link to="/admin/timeclock" className="ds-link" style={{ color: tokens.accent }}>
+              {d.clocked_in.length > 0
+                ? d.clocked_in.map((c) => c.name).slice(0, 3).join(", ")
+                : "Open time clock →"}
             </Link>
           }
-          tone={d.kpis.today_report_entered ? "positive" : "warning"}
+          tone={d.clocked_in.length > 0 ? "positive" : "neutral"}
         />
         <KpiCard
           label="Bank sync"
@@ -241,7 +258,7 @@ function AdminPanel({ d }: { d: AdminDashboard }) {
               </Link>
             )
           }
-          tone={d.stripe_accounts.length > 0 ? "positive" : "negative"}
+          tone={d.stripe_accounts.length > 0 ? "positive" : "neutral"}
         />
         {d.kpis.net_income_month != null && (
           <KpiCard
@@ -256,6 +273,95 @@ function AdminPanel({ d }: { d: AdminDashboard }) {
           />
         )}
       </KpiGrid>
+
+      {(d.sales || d.purchases) && (
+        <Section title="Sales & purchases">
+          <Card>
+            <Table>
+              <thead>
+                <tr>
+                  <th style={dashThStyle}>Days</th>
+                  {d.sales && <th style={dashThStyle}>Sales</th>}
+                  {d.purchases && <th style={dashThStyle}>Purchases</th>}
+                </tr>
+              </thead>
+              <tbody>
+                {([
+                  ["Last 24 hrs", d.sales?.today, d.purchases?.today],
+                  ["7 days", d.sales?.d7, d.purchases?.d7],
+                  ["15 days", d.sales?.d15, d.purchases?.d15],
+                  ["30 days", d.sales?.d30, d.purchases?.d30],
+                ] as Array<[string, number | undefined, number | undefined]>).map(
+                  ([label, sales, purchases]) => (
+                    <tr key={label}>
+                      <td style={dashTdStyle}>{label}</td>
+                      {d.sales && (
+                        <td style={{ ...dashTdStyle, fontFamily: tokens.fontMono }}>
+                          {fmtUsd(sales ?? 0)}
+                        </td>
+                      )}
+                      {d.purchases && (
+                        <td style={{ ...dashTdStyle, fontFamily: tokens.fontMono }}>
+                          {fmtUsd(purchases ?? 0)}
+                        </td>
+                      )}
+                    </tr>
+                  ),
+                )}
+              </tbody>
+            </Table>
+          </Card>
+        </Section>
+      )}
+
+      {d.sales && hasTrend && (
+        <Section title="Daily sales — last 14 days">
+          <Card>
+            <div style={{ height: "16rem" }}>
+              <Line
+                data={{
+                  labels: d.sales.trend.map((t) => shortDate(t.date)),
+                  datasets: [{
+                    label: "Sales ($)",
+                    data: d.sales.trend.map((t) => t.amount),
+                    borderColor: chartSeries().accent,
+                    backgroundColor: seriesFill("positive", 0.1),
+                    fill: true,
+                    tension: 0.25,
+                    pointRadius: 0,
+                  }],
+                }}
+                options={{
+                  ...moneyChartOptions("Sales"),
+                  maintainAspectRatio: false,
+                }}
+              />
+            </div>
+          </Card>
+        </Section>
+      )}
+
+      {d.clocked_in.length > 0 && (
+        <Section
+          title={`Clocked in (${d.clocked_in.length})`}
+          actions={
+            <ButtonLink href="/admin/timeclock" tone="secondary" size="sm">
+              Time clock
+            </ButtonLink>
+          }
+        >
+          <Card>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: space.md }}>
+              {d.clocked_in.map((c) => (
+                <Pill key={`${c.name}-${c.clock_in_at}`} tone="accent">
+                  {c.name}
+                  {c.clock_in_at ? ` · since ${shortTime(c.clock_in_at)}` : ""}
+                </Pill>
+              ))}
+            </div>
+          </Card>
+        </Section>
+      )}
 
       {d.day_close && d.day_close.top_departments.length > 0 && (
         <Section title={`Department sales (${shortDate(d.day_close.date)})`}>
@@ -281,6 +387,40 @@ function AdminPanel({ d }: { d: AdminDashboard }) {
             ))}
           </div>
         </Section>
+      )}
+
+      {ms && (
+      <Section title="Money services">
+        <KpiGrid>
+          <KpiCard label="Total transfers" value={d.kpis.total_transfers.toLocaleString()} sub="All time" />
+          <KpiCard
+            label="Today's transfers"
+            value={d.kpis.today_transfers.toLocaleString()}
+            sub={fmtShortDate(d.today)}
+            tone="positive"
+          />
+          <KpiCard
+            label="Unreconciled ACH"
+            value={d.kpis.pending_ach.toLocaleString()}
+            sub={d.kpis.pending_ach > 0 ? "Needs attention" : "All clear"}
+            tone={d.kpis.pending_ach > 0 ? "negative" : "positive"}
+          />
+          <KpiCard
+            label="Today's MSB daily book"
+            value={d.kpis.today_report_entered ? "Entered" : "Pending"}
+            sub={
+              <Link
+                to={`/daily/edit?date=${d.today}`}
+                className="ds-link"
+                style={{ color: tokens.accent }}
+              >
+                {d.kpis.today_report_entered ? "Edit report" : "Enter now →"}
+              </Link>
+            }
+            tone={d.kpis.today_report_entered ? "positive" : "warning"}
+          />
+        </KpiGrid>
+      </Section>
       )}
 
       {ms && (
@@ -768,6 +908,12 @@ function StatusPill({ value }: { value: string }) {
   return <Pill tone={tone as "accent" | "warning" | "negative" | "neutral"}>{value}</Pill>;
 }
 
+
+function fmtUsd(v: number) {
+  return `$${v.toLocaleString(undefined, {
+    minimumFractionDigits: 2, maximumFractionDigits: 2,
+  })}`;
+}
 
 function shortDate(iso: string) {
   const d = new Date(iso + "T00:00:00");
