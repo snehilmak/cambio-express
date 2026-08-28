@@ -76,6 +76,7 @@ from api.Modules.Auth.Services.signup import (
     SignupResult,
     create_owner,
     create_store_and_owner,
+    create_store_for_owner,
 )
 from api.Modules.Auth.Services.totp import (
     RECOVERY_CODES_PER_USER,
@@ -116,6 +117,7 @@ __all__ = [
     "consume_recovery_code",
     "create_owner",
     "create_store_and_owner",
+    "create_store_for_owner",
     "decode_access_token",
     "decode_passkey_register_token",
     "decode_pending_2fa_token",

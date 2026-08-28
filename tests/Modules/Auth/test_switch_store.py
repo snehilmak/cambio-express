@@ -130,3 +130,61 @@ def test_non_owner_cannot_switch(client, test_store_id):
         "/api/v2/auth/switch-store", headers=_headers(token),
         json={"store_id": test_store_id},
     ).status_code == 403
+
+
+def test_owner_adds_new_store_and_enters_it(client):
+    """U-5a: POST /auth/my-stores creates a new store under the
+    owner (trial window + StoreOwnerLink, no User row), it shows
+    up in the switcher, and switch-store enters it."""
+    owner_id, home_id, username, password = _make_owner(
+        username="expand-boss@example.com",
+    )
+    token = _login_owner(client, username, password)
+
+    created = client.post(
+        "/api/v2/auth/my-stores", headers=_headers(token),
+        json={"name": "Second Location", "business_type": "gas_station"},
+    )
+    assert created.status_code == 201, created.text
+    new_id = created.json()["store_id"]
+    assert new_id != home_id
+
+    from api.Modules.Tenancy.Models import Store, StoreOwnerLink, User
+    with db_session():
+        s = db.session.get(Store, new_id)
+        assert s.plan == "trial" and s.trial_ends_at is not None
+        assert s.business_type == "gas_station"
+        assert db.session.query(StoreOwnerLink).filter_by(
+            owner_id=owner_id, store_id=new_id,
+        ).first() is not None
+        # No user rows were created for the new store.
+        assert db.session.query(User).filter_by(
+            store_id=new_id,
+        ).count() == 0
+
+    listed = client.get(
+        "/api/v2/auth/my-stores", headers=_headers(token),
+    ).json()["stores"]
+    assert new_id in {s["store_id"] for s in listed}
+
+    entered = client.post(
+        "/api/v2/auth/switch-store", headers=_headers(token),
+        json={"store_id": new_id},
+    )
+    assert entered.status_code == 200
+    assert entered.json()["role"] == "admin"
+
+    from api.Modules.Audit.Models import OperatorAuditLog
+    with db_session():
+        assert db.session.query(OperatorAuditLog).filter_by(
+            action="owner_add_store", store_id=new_id,
+        ).count() == 1
+
+
+def test_non_owner_cannot_add_store(client, test_store_id):
+    from tests.conftest import login_admin
+    token = login_admin(client, test_store_id)
+    assert client.post(
+        "/api/v2/auth/my-stores", headers=_headers(token),
+        json={"name": "Rogue Store"},
+    ).status_code == 403

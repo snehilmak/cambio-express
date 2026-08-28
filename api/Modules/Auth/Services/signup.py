@@ -168,3 +168,43 @@ def create_store_and_owner(
     db.add(StoreOwnerLink(owner_id=owner.id, store_id=store.id))
     db.flush()
     return SignupResult(store=store, owner=owner)
+
+
+def create_store_for_owner(
+    db: Session, owner: User, *,
+    store_name: str,
+    business_type: str = "cstore",
+    phone: str = "",
+    address: str = "",
+    trial_days: int = DEFAULT_TRIAL_DAYS,
+    grace_days: int = DEFAULT_GRACE_DAYS,
+) -> Store:
+    """Add another store under an EXISTING owner (U-5a).
+
+    Same trial-window defaults as a fresh signup — subscriptions
+    are per store, so the new location gets its own 7-day trial
+    and subscribes on its own — plus the `StoreOwnerLink` row that
+    puts it in the owner's umbrella (switcher, sibling-store
+    customer upsert, rollups). No User row is created: the owner
+    enters the store via /auth/switch-store and creates that
+    store's team from inside it.
+
+    Caller commits. `store_name` should be pre-stripped.
+    """
+    slug = _allocate_unique_slug(db, store_name)
+    now = utc_now()
+    trial_end = now + timedelta(days=trial_days)
+    grace_end = trial_end + timedelta(days=grace_days)
+    store = Store(
+        name=store_name, slug=slug,
+        email=owner.username or "",
+        phone=phone, address=address,
+        plan="trial",
+        business_type=business_type,
+        trial_ends_at=trial_end, grace_ends_at=grace_end,
+    )
+    db.add(store)
+    db.flush()
+    db.add(StoreOwnerLink(owner_id=owner.id, store_id=store.id))
+    db.flush()
+    return store
