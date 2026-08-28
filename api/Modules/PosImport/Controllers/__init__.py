@@ -28,6 +28,7 @@ from fastapi import (
     APIRouter, Depends, Header, HTTPException, Path, Query as FQuery,
     Request,
 )
+from fastapi.responses import Response as PlainResponse
 from sqlalchemy.orm import Session
 
 from api.Core.Database import get_db
@@ -606,4 +607,52 @@ def item_movement_route(
         end=end_d.isoformat(),
         total_quantity=total_qty,
         total_amount=total_amount,
+    )
+
+
+@router.get("/naxml/pricebook-export")
+def pricebook_export_route(
+    changed_since: str = FQuery(
+        "", description="YYYY-MM-DD — only items updated on/after",
+    ),
+    db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
+) -> "PlainResponse":
+    """Download the price book as a NAXML ItemMaintenance file
+    (G-4, BETA) for Gilbarco Passport's back-office import — the
+    write-back half of the loop. ``changed_since`` limits to
+    recent edits ("send today's price changes"); omitted exports
+    the full book. Read-only: no audit row (invariant #7 covers
+    mutations)."""
+    sid = resolve_store_scope(claims)
+    require_permission(claims, "catalog", "read")
+    since = None
+    if changed_since.strip():
+        try:
+            since = datetime.strptime(changed_since.strip(), "%Y-%m-%d")
+        except ValueError:
+            raise HTTPException(
+                status_code=422,
+                detail="changed_since must be YYYY-MM-DD.",
+            )
+    from api.Modules.PosImport.Services.naxml_export import export_items
+    xml, count = export_items(db, sid, changed_since=since)
+    if count == 0:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "No active items match — nothing to export."
+                if since else "The price book has no active items."
+            ),
+        )
+    stamp = datetime.utcnow().strftime("%Y%m%d")
+    return PlainResponse(
+        content=xml,
+        media_type="application/xml",
+        headers={
+            "Content-Disposition": (
+                f'attachment; filename="dinerobook-pricebook-{stamp}.xml"'
+            ),
+            "X-Item-Count": str(count),
+        },
     )
