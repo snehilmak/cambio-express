@@ -173,6 +173,40 @@ def register_label_for(register_key: str) -> str:
     return f"Register {register_key}" if register_key else "Register"
 
 
+def rebuild_hourly_sales(
+    db: Session, store_id: int, day: date, events: list[PjrEvent],
+) -> int:
+    """Replace the day's HourlySale rows from its events (G-3).
+    Runs at every (re)commit so booked history is always the sum
+    of the staged originals — the live per-upload increments in
+    ``agent.stage_journal_file`` are a running preview this
+    rebuild self-heals. Events without a clock hour are skipped
+    (they still count toward day totals, just not the chart)."""
+    from api.Modules.DayClose.Models import HourlySale
+
+    sums: dict[int, int] = {}
+    for e in events:
+        if e.kind not in ("sale", "refund"):
+            continue
+        if e.business_date != day or e.event_hour is None:
+            continue
+        sums[e.event_hour] = sums.get(e.event_hour, 0) + e.net_cents
+    (
+        db.query(HourlySale)
+        .filter_by(
+            store_id=store_id, report_date=day, source=IMPORT_SOURCE,
+        )
+        .delete()
+    )
+    for hour, cents in sorted(sums.items()):
+        db.add(HourlySale(
+            store_id=store_id, report_date=day, hour=hour,
+            amount_cents=cents, source=IMPORT_SOURCE,
+        ))
+    db.flush()
+    return len(sums)
+
+
 @dataclass
 class CommitDayResult:
     day: date
@@ -232,6 +266,7 @@ def commit_business_day(
             source=IMPORT_SOURCE,
         )
         registers.append(label)
+    rebuild_hourly_sales(db, store_id, day, events)
     return CommitDayResult(
         day=day, closes_written=len(days), registers=registers,
     )
@@ -241,5 +276,5 @@ __all__ = [
     "CommitDayResult", "IMPORT_SOURCE", "LoadedPayload",
     "MAX_PAYLOAD_BYTES", "PosImportError", "commit_business_day",
     "list_mappings", "load_pjr_payload", "mapping_status",
-    "register_label_for", "set_mappings",
+    "rebuild_hourly_sales", "register_label_for", "set_mappings",
 ]

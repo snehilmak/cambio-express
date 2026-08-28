@@ -110,6 +110,11 @@ class PjrEvent:
     till_id: str
     transaction_id: str
     outside: bool = False
+    # Clock hour 0-23 of the event (G-3, hourly sales). Sourced
+    # from the first timestamp the file offers (see _event_hour);
+    # None when the file carries none — hourly charts simply skip
+    # such events, day totals are unaffected.
+    event_hour: int | None = None
     items: list[PjrItemLine] = field(default_factory=list)
     tenders: list[PjrTender] = field(default_factory=list)
     gross_cents: int = 0
@@ -160,6 +165,37 @@ def _date(el, tag: str) -> date | None:
         raise PosJournalParseError(
             f"Bad date {raw!r} in <{tag}>",
         )
+
+
+def _event_hour(root, event_el) -> int | None:
+    """Best-effort clock hour for the event (G-3). Sites vary in
+    which timestamp the journal carries, so try candidates in
+    priority order and degrade to None — a missing hour only mutes
+    the hourly chart, never a day total:
+
+      1. event-level <EventDateTime> / <EventStartDateTime>
+         (ISO "2024-10-14T13:45:12"),
+      2. the JournalHeader's <BeginTime> ("13:45:12") — one file
+         per event, so the header time is the event time.
+    """
+    for tag in ("EventDateTime", "EventStartDateTime"):
+        raw = _text(event_el, tag)
+        if "T" in raw:
+            try:
+                hour = int(raw.split("T", 1)[1][:2])
+            except ValueError:
+                continue
+            if 0 <= hour <= 23:
+                return hour
+    raw = _text(root, "BeginTime")
+    if raw and ":" in raw:
+        try:
+            hour = int(raw.split(":", 1)[0])
+        except ValueError:
+            return None
+        if 0 <= hour <= 23:
+            return hour
+    return None
 
 
 def _parse_item_line(line_el) -> list[PjrItemLine]:
@@ -228,6 +264,7 @@ def parse_pjr(data: bytes | str) -> PjrEvent:
         outside=(
             outside_el is not None and outside_el.get("value") == "yes"
         ),
+        event_hour=_event_hour(root, event_el),
     )
 
     # Register open/close detail (OtherEvent): opening drawer cash.

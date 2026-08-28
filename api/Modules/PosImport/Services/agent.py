@@ -145,12 +145,48 @@ def stage_journal_file(
     business_date: date | None = None
     event_kind = ""
     parse_error = ""
+    event = None
     try:
         event = parse_pjr(content)
         business_date = event.business_date
         event_kind = event.kind
     except PosJournalParseError as exc:
         parse_error = str(exc)[:255]
+
+    # G-3 live hourly preview: increment the hour bucket as each
+    # sale/refund arrives so the dashboard's hourly chart tracks
+    # the CURRENT business day in near-real-time. Commit rebuilds
+    # the day from the staged originals, self-healing any drift
+    # (e.g. an upload that raced or a later parser fix). Runs
+    # only for brand-new files — the duplicate short-circuit above
+    # already returned, so retries never double-count.
+    if (
+        event is not None
+        and event.kind in ("sale", "refund")
+        and business_date is not None
+        and event.event_hour is not None
+    ):
+        from api.Modules.DayClose.Models import HourlySale
+        from api.Modules.PosImport.Services.ingest import IMPORT_SOURCE
+        bucket = (
+            db.query(HourlySale)
+            .filter_by(
+                store_id=store_id, report_date=business_date,
+                hour=event.event_hour, source=IMPORT_SOURCE,
+            )
+            .first()
+        )
+        if bucket is None:
+            db.add(HourlySale(
+                store_id=store_id, report_date=business_date,
+                hour=event.event_hour,
+                amount_cents=event.net_cents,
+                source=IMPORT_SOURCE,
+            ))
+        else:
+            bucket.amount_cents = (
+                int(bucket.amount_cents or 0) + event.net_cents
+            )
 
     row = PosJournalFile(
         store_id=store_id,

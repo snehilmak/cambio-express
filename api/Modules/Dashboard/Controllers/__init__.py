@@ -169,6 +169,53 @@ def _sales_block(
         "d15": _sum_between(today - timedelta(days=14), today),
         "d30": _sum_between(today - timedelta(days=29), today),
         "trend": trend,
+        "hourly": _hourly_block(db, store_id),
+    }
+
+
+def _hourly_block(db: Session, store_id: int) -> dict[str, Any] | None:
+    """Hourly-sales chart data (G-3): the two most recent business
+    days with hour buckets — "current" is live for an in-progress
+    day (the Gilbarco agent increments buckets per transaction).
+    None until the store has any hourly data."""
+    from api.Modules.DayClose.Models import HourlySale
+
+    dates = [
+        d for (d,) in db.query(HourlySale.report_date)
+        .filter_by(store_id=store_id)
+        .distinct()
+        .order_by(HourlySale.report_date.desc())
+        .limit(2)
+        .all()
+    ]
+    if not dates:
+        return None
+    rows = (
+        db.query(HourlySale)
+        .filter(
+            HourlySale.store_id == store_id,
+            HourlySale.report_date.in_(dates),
+        )
+        .all()
+    )
+
+    def _series(day: date) -> list[float]:
+        arr = [0.0] * 24
+        for r in rows:
+            if r.report_date == day and 0 <= int(r.hour) <= 23:
+                arr[int(r.hour)] += float(r.amount_cents or 0) / 100.0
+        return arr
+
+    current, previous = dates[0], (dates[1] if len(dates) > 1 else None)
+    cur = _series(current)
+    prev = _series(previous) if previous else None
+    return {
+        "current_date": current.isoformat(),
+        "previous_date": previous.isoformat() if previous else None,
+        "current": cur,
+        "previous": prev,
+        "current_total": round(sum(cur), 2),
+        "previous_total": round(sum(prev), 2) if prev else None,
     }
 
 
