@@ -38,11 +38,17 @@ from typing import Any
 from api.Core.Clock import utc_now
 
 
-def permissions_for(role: str, db: "Session | None" = None, store_id: "int | None" = None) -> list[str]:
-    """Permission claim list for a role. Delegates to Casbin.
-    The ``db`` param is accepted for backward compat but unused."""
+def permissions_for(
+    role: str, db: "Session | None" = None,
+    store_id: "int | None" = None,
+    user_id: "int | None" = None,
+) -> list[str]:
+    """Permission claim list for a principal. Delegates to Casbin.
+    ``user_id`` applies the per-user overlay (R-1) so restricted
+    users' tokens carry only their effective perms. The ``db``
+    param is accepted for backward compat but unused."""
     from api.Core.Permissions import permissions_for as _casbin_perms
-    return _casbin_perms(role, store_id=store_id)
+    return _casbin_perms(role, store_id=store_id, user_id=user_id)
 
 
 @dataclass
@@ -89,7 +95,9 @@ class TotpEnrollmentRequired(Exception):
 
 
 def _issue_full_login(user: User, db: "Session | None" = None) -> LoginResult:
-    perms = permissions_for(user.role, db, store_id=user.store_id)
+    perms = permissions_for(
+        user.role, db, store_id=user.store_id, user_id=user.id,
+    )
     issuer = JWTIssuer(
         sub=user.id,
         role=user.role,

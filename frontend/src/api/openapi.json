@@ -520,6 +520,11 @@
             "title": "Full Name",
             "type": "string"
           },
+          "has_custom_permissions": {
+            "default": false,
+            "title": "Has Custom Permissions",
+            "type": "boolean"
+          },
           "id": {
             "title": "Id",
             "type": "integer"
@@ -16394,6 +16399,248 @@
         ]
       }
     },
+    "/admin/users/{user_id}/permissions": {
+      "delete": {
+        "description": "Remove the user's custom-access overlay \u2014 back to their\nrole's permissions.",
+        "operationId": "clear_user_permissions_route_admin_users__user_id__permissions_delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "minimum": 1,
+              "title": "User Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Clear User Permissions Route Admin Users  User Id  Permissions Delete",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Clear User Permissions Route",
+        "tags": [
+          "admin"
+        ]
+      },
+      "get": {
+        "description": "Effective permission matrix for one user (their overlay\napplied over the role layers) + whether an overlay exists.",
+        "operationId": "get_user_permissions_route_admin_users__user_id__permissions_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "minimum": 1,
+              "title": "User Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get User Permissions Route Admin Users  User Id  Permissions Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get User Permissions Route",
+        "tags": [
+          "admin"
+        ]
+      },
+      "put": {
+        "description": "Replace the user's custom-access overlay with the submitted\nresource \u00d7 action matrix.",
+        "operationId": "set_user_permissions_route_admin_users__user_id__permissions_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "minimum": 1,
+              "title": "User Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Body",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Set User Permissions Route Admin Users  User Id  Permissions Put",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Set User Permissions Route",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
     "/announcements": {
       "get": {
         "description": "Every announcement, newest first. Includes inactive + expired\nrows so the superadmin has the full history; the SPA can dim\nthe rows where `is_visible` is False.",
@@ -27623,6 +27870,82 @@
           }
         },
         "summary": "Preview Naxml Route",
+        "tags": [
+          "posimport"
+        ]
+      }
+    },
+    "/posimport/naxml/pricebook-export": {
+      "get": {
+        "description": "Download the price book as a NAXML ItemMaintenance file\n(G-4, BETA) for Gilbarco Passport's back-office import \u2014 the\nwrite-back half of the loop. ``changed_since`` limits to\nrecent edits (\"send today's price changes\"); omitted exports\nthe full book. Read-only: no audit row (invariant #7 covers\nmutations).",
+        "operationId": "pricebook_export_route_posimport_naxml_pricebook_export_get",
+        "parameters": [
+          {
+            "description": "YYYY-MM-DD \u2014 only items updated on/after",
+            "in": "query",
+            "name": "changed_since",
+            "required": false,
+            "schema": {
+              "default": "",
+              "description": "YYYY-MM-DD \u2014 only items updated on/after",
+              "title": "Changed Since",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Pricebook Export Route",
         "tags": [
           "posimport"
         ]

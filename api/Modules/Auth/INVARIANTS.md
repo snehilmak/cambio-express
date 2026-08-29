@@ -76,20 +76,51 @@ of truth has two layers:
    via the per-store-permissions UI; live enforcement reads them
    on every request (no JWT-staleness anymore).
 
-Resolution order in `_resolve_grants(role, store_id)`:
-1. Per-store rules (domain matches) → **per-resource overlay**:
-   they govern only the resources they mention. A save writes
-   every CURRENT resource explicitly — grant rows, or a
-   `__none__` marker row when all of a resource's actions are
-   off — so "explicitly off" is distinguishable from "resource
-   didn't exist when this matrix was saved".
-2. Global rules (domain = "global") → fallback for resources the
+Resolution order (R-1 added the per-USER layer on top):
+1. **Per-user overlay** — rows whose subject is `user:<id>` in
+   the store's domain (written by `set_user_permissions`, read
+   in `resolve_user_grants(user_id, role, store_id)`). Same
+   per-resource mention semantics as the store layer: user rows
+   govern only the resources they mention (`__none__` = all
+   actions off); unmentioned resources fall through to the
+   role's resolved grants. **This is a SECURITY boundary** —
+   unlike `User.module_access`, which only hides nav (UX). The
+   "custom access" user (e.g. HR + money services but no
+   financials) is expressed here.
+2. Per-store role rules (domain matches) → **per-resource
+   overlay**: they govern only the resources they mention. A
+   save writes every CURRENT resource explicitly — grant rows,
+   or a `__none__` marker row when all of a resource's actions
+   are off — so "explicitly off" is distinguishable from
+   "resource didn't exist when this matrix was saved".
+3. Global rules (domain = "global") → fallback for resources the
    store overlay never mentions. **This is what lets a NEW
    platform resource (lottery, day_close, catalog…) reach stores
    whose matrix predates it** — the old wholesale-replacement
    semantics froze such stores out of every later resource (the
    "admin can't see new modules" bug).
-3. `RBAC_DEFAULTS` hardcoded → boot-time/Casbin-down fallback
+4. `RBAC_DEFAULTS` hardcoded → boot-time/Casbin-down fallback
+
+Per-user overlay contract (R-1):
+- `principal.has_permission` threads `claims["sub"]` into
+  `check_permission(..., user_id=…)`, so overlays are enforced
+  LIVE on every request — not only baked into the token.
+- JWT baking passes `user_id` at login, refresh, and signup
+  (`permissions_for(role, store_id=…, user_id=…)`), so a
+  restricted user's `perms` claim never exceeds their overlay.
+- **Owner switch-store tokens deliberately skip the overlay**
+  (`permissions_for("admin", store_id=…)`, role-only): owners
+  entering their own store are never restricted, and no code
+  path writes overlay rows for owner user ids.
+- Every overlay write (`PUT`/`DELETE /admin/users/{id}/
+  permissions`) must: 404 opaquely cross-store, refuse
+  self-edit, write an audit entry, and call
+  `invalidate_sessions_for_user` so tokens carrying the old
+  perms die immediately.
+- Dashboard summary blocks are permission-gated per resource
+  (`_admin_summary` / `_employee_summary`) — an overlay that
+  denies e.g. `day_close.read` removes the numbers from the
+  landing payload itself, not just the UI.
 
 Legacy compatibility: a lone `__override_active__` sentinel row
 (the old all-off save format) still means zero access; old

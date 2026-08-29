@@ -175,13 +175,82 @@ def _resolve_grants(role: str, store_id: int) -> set[tuple[str, str]]:
     }
 
 
+# ── Per-user overlay (R-1) ─────────────────────────────────
+#
+# A third layer ABOVE the role layers: rows whose subject is
+# ``user:<id>`` in the store's domain. Same per-resource overlay
+# semantics as the store layer — user rows govern only the
+# resources they mention (a ``__none__`` marker mentions a
+# resource with zero grants); unmentioned resources fall back to
+# the role's resolved grants. This is what makes "Amber gets
+# time clock + transfers but can't see any numbers" expressible
+# without forking the role system, and it is a SECURITY boundary
+# (unlike ``User.module_access``, which is nav-only UX gating).
+
+
+def _user_subject(user_id: int) -> str:
+    return f"user:{int(user_id)}"
+
+
+def _user_overlay(
+    user_id: int, store_id: int,
+) -> tuple[set[str], set[tuple[str, str]]]:
+    """(mentioned resources, grants) from the user's own rows."""
+    e = _get_enforcer()
+    rules = e.get_filtered_policy(
+        0, _user_subject(user_id), str(store_id),
+    )
+    mentioned: set[str] = set()
+    grants: set[tuple[str, str]] = set()
+    for r in rules:
+        resource, action = r[2], r[3]
+        mentioned.add(resource)
+        if action != _RESOURCE_NONE:
+            grants.add((resource, action))
+    return mentioned, grants
+
+
+def resolve_user_grants(
+    user_id: int, role: str, store_id: int,
+) -> set[tuple[str, str]]:
+    """Effective grants for one USER at a store: the user's own
+    overlay where it speaks, the role's resolved grants where it
+    doesn't."""
+    mentioned, grants = _user_overlay(user_id, store_id)
+    role_grants = _resolve_grants(role, store_id)
+    if not mentioned:
+        return role_grants
+    return grants | {
+        (resource, action)
+        for resource, action in role_grants
+        if resource not in mentioned
+    }
+
+
+def user_has_custom_permissions(user_id: int, store_id: int) -> bool:
+    """True when the user carries any overlay rows at this store."""
+    try:
+        e = _get_enforcer()
+        return bool(e.get_filtered_policy(
+            0, _user_subject(user_id), str(store_id),
+        ))
+    except Exception:
+        return False
+
+
 # ── Public read API ────────────────────────────────────────
 
 def check_permission(
     role: str, store_id: int | None,
     resource: str, action: str,
+    user_id: int | None = None,
 ) -> bool:
     """Live permission check. Superadmin always passes.
+
+    ``user_id`` (when provided with a store scope) applies the
+    per-user overlay above the role layers — callers that omit it
+    get pure role resolution, so pre-R-1 call sites keep their
+    exact behavior.
 
     If Casbin throws, we fall back to ``RBAC_DEFAULTS`` so a
     permission-system fault doesn't lock everyone out. The
@@ -193,6 +262,10 @@ def check_permission(
     if store_id is None:
         return f"{resource}.{action}" in RBAC_DEFAULTS.get(role, [])
     try:
+        if user_id is not None:
+            return (resource, action) in resolve_user_grants(
+                int(user_id), role, store_id,
+            )
         return (resource, action) in _resolve_grants(role, store_id)
     except Exception as exc:
         _log.warning(
@@ -220,10 +293,15 @@ def require_permission(
 
 
 def permissions_for(
-    role: str, store_id: int | None = None, **_kw: Any,
+    role: str, store_id: int | None = None,
+    user_id: int | None = None, **_kw: Any,
 ) -> list[str]:
-    """Full permission list for a role. Used for JWT claims.
+    """Full permission list for a principal. Used for JWT claims.
     Accepts **kwargs for backward compat (old callers pass db=).
+
+    ``user_id`` (with a store scope) bakes the per-user overlay
+    into the list, so a restricted user's token never carries
+    perms their overlay denies. Role-only callers are unchanged.
 
     If Casbin throws (DB connection issue, missing table, etc.)
     we fall back to ``RBAC_DEFAULTS`` so login never 500s on a
@@ -236,7 +314,10 @@ def permissions_for(
     if store_id is None:
         return legacy + list(RBAC_DEFAULTS.get(role, []))
     try:
-        grants = _resolve_grants(role, store_id)
+        if user_id is not None:
+            grants = resolve_user_grants(int(user_id), role, store_id)
+        else:
+            grants = _resolve_grants(role, store_id)
         return legacy + [f"{r}.{a}" for r, a in grants]
     except Exception as exc:
         _log.warning(
@@ -307,6 +388,65 @@ def reset_store_to_defaults(store_id: int, role: str) -> None:
     e.remove_filtered_policy(0, role, str(store_id))
     e.save_policy()
     reload_policy()
+
+
+def set_user_permissions(
+    store_id: int, user_id: int,
+    matrix: dict[str, dict[str, bool]],
+) -> None:
+    """Replace the per-USER overlay at a store. Same explicit-write
+    contract as ``set_store_permissions``: every CURRENT resource
+    gets grants or a ``__none__`` marker, so resources added to the
+    platform later fall back to the user's role until the matrix is
+    saved again. This is a SECURITY write — callers must audit it
+    and revoke the user's live sessions so old JWT perms die."""
+    e = _get_enforcer()
+    sub, dom = _user_subject(user_id), str(store_id)
+    e.remove_filtered_policy(0, sub, dom)
+    for resource in RBAC_RESOURCES:
+        actions = matrix.get(resource, {})
+        any_allowed = False
+        for action in RBAC_ACTIONS:
+            if actions.get(action):
+                e.add_policy(sub, dom, resource, action)
+                any_allowed = True
+        if not any_allowed:
+            e.add_policy(sub, dom, resource, _RESOURCE_NONE)
+    e.save_policy()
+    reload_policy()
+
+
+def clear_user_permissions(store_id: int, user_id: int) -> None:
+    """Remove the per-user overlay — the user goes back to pure
+    role resolution. Also a session-revoking security write."""
+    e = _get_enforcer()
+    e.remove_filtered_policy(0, _user_subject(user_id), str(store_id))
+    e.save_policy()
+    reload_policy()
+
+
+def get_user_permission_matrix(
+    user_id: int, role: str, store_id: int,
+) -> dict:
+    """Resolved effective matrix for one user (overlay applied over
+    the role layers) plus whether an overlay exists — feeds the
+    per-user access editor in the admin user form."""
+    granted = resolve_user_grants(user_id, role, store_id)
+    matrix: dict[str, dict[str, bool]] = {}
+    for resource in RBAC_RESOURCES:
+        matrix[resource] = {
+            action: (resource, action) in granted
+            for action in RBAC_ACTIONS
+        }
+    return {
+        "user_id": user_id,
+        "role": role,
+        "store_id": store_id,
+        "resources": RBAC_RESOURCES,
+        "actions": RBAC_ACTIONS,
+        "matrix": matrix,
+        "has_custom": user_has_custom_permissions(user_id, store_id),
+    }
 
 
 def seed_defaults() -> None:

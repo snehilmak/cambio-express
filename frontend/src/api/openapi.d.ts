@@ -675,6 +675,37 @@ export interface paths {
         patch: operations["update_user_route_admin_users__user_id__patch"];
         trace?: never;
     };
+    "/admin/users/{user_id}/permissions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get User Permissions Route
+         * @description Effective permission matrix for one user (their overlay
+         *     applied over the role layers) + whether an overlay exists.
+         */
+        get: operations["get_user_permissions_route_admin_users__user_id__permissions_get"];
+        /**
+         * Set User Permissions Route
+         * @description Replace the user's custom-access overlay with the submitted
+         *     resource × action matrix.
+         */
+        put: operations["set_user_permissions_route_admin_users__user_id__permissions_put"];
+        post?: never;
+        /**
+         * Clear User Permissions Route
+         * @description Remove the user's custom-access overlay — back to their
+         *     role's permissions.
+         */
+        delete: operations["clear_user_permissions_route_admin_users__user_id__permissions_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/announcements": {
         parameters: {
             query?: never;
@@ -3529,6 +3560,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/posimport/naxml/pricebook-export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Pricebook Export Route
+         * @description Download the price book as a NAXML ItemMaintenance file
+         *     (G-4, BETA) for Gilbarco Passport's back-office import — the
+         *     write-back half of the loop. ``changed_since`` limits to
+         *     recent edits ("send today's price changes"); omitted exports
+         *     the full book. Read-only: no audit row (invariant #7 covers
+         *     mutations).
+         */
+        get: operations["pricebook_export_route_posimport_naxml_pricebook_export_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/posimport/pricebook/commit": {
         parameters: {
             query?: never;
@@ -5999,6 +6055,11 @@ export interface components {
             created_at: string;
             /** Full Name */
             full_name: string;
+            /**
+             * Has Custom Permissions
+             * @default false
+             */
+            has_custom_permissions: boolean;
             /** Id */
             id: number;
             /** Is Active */
@@ -13510,6 +13571,123 @@ export interface operations {
             };
         };
     };
+    get_user_permissions_route_admin_users__user_id__permissions_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                user_id: number;
+            };
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_user_permissions_route_admin_users__user_id__permissions_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                user_id: number;
+            };
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clear_user_permissions_route_admin_users__user_id__permissions_delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                user_id: number;
+            };
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_route_announcements_get: {
         parameters: {
             query?: never;
@@ -18855,6 +19033,42 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["NaxmlPreviewResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    pricebook_export_route_posimport_naxml_pricebook_export_get: {
+        parameters: {
+            query?: {
+                /** @description YYYY-MM-DD — only items updated on/after */
+                changed_since?: string;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */

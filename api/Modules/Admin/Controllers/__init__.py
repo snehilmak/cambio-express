@@ -705,6 +705,7 @@ def _user_row(u) -> AdminUserRow:
         None if raw_access is None
         else [k for k in raw_access.split(",") if k]
     )
+    from api.Core.Permissions import user_has_custom_permissions
     return AdminUserRow(
         id=u.id,
         username=u.username or "",
@@ -713,6 +714,10 @@ def _user_row(u) -> AdminUserRow:
         is_active=bool(u.is_active),
         created_at=u.created_at.isoformat() if u.created_at else "",
         module_access=module_access,
+        has_custom_permissions=(
+            user_has_custom_permissions(u.id, u.store_id)
+            if u.store_id is not None else False
+        ),
     )
 
 
@@ -900,6 +905,122 @@ def update_user_route(
     )
     db.commit()
     return _user_row(user)
+
+
+# ── Per-user permission overlays (R-1) ─────────────────────
+#
+# Custom access for ONE user — a Casbin overlay above their
+# role's grants (see api/Core/Permissions "Per-user overlay").
+# This is a SECURITY boundary, unlike module_access which only
+# hides nav. Guards on every write: opaque cross-store 404,
+# no self-edit (can't lock yourself out — or quietly grant
+# yourself more), audit entry, and the target's live sessions
+# are revoked so old JWT perms die with the change.
+
+
+def _find_permission_target(db, claims, store_id: int, user_id: int):
+    """Resolve + guard the target user for the overlay routes."""
+    user = find_store_user(db, store_id, user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    sub = claims.get("sub")
+    if sub is not None and int(sub) == user.id:
+        raise HTTPException(
+            status_code=422,
+            detail="You cannot edit your own access.",
+        )
+    return user
+
+
+@router.get("/users/{user_id}/permissions")
+def get_user_permissions_route(
+    user_id: int = Path(..., ge=1),
+    db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
+) -> dict:
+    """Effective permission matrix for one user (their overlay
+    applied over the role layers) + whether an overlay exists."""
+    require_permission(claims, "users", "read")
+    store_id = resolve_store_scope(claims)
+    user = find_store_user(db, store_id, user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    from api.Core.Permissions import get_user_permission_matrix
+    return get_user_permission_matrix(
+        user.id, user.role or "employee", store_id,
+    )
+
+
+@router.put("/users/{user_id}/permissions")
+def set_user_permissions_route(
+    body: dict,
+    user_id: int = Path(..., ge=1),
+    db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
+) -> dict:
+    """Replace the user's custom-access overlay with the submitted
+    resource × action matrix."""
+    require_permission(claims, "users", "update")
+    store_id = resolve_store_scope(claims)
+    user = _find_permission_target(db, claims, store_id, user_id)
+    matrix = body.get("matrix")
+    if not isinstance(matrix, dict):
+        raise HTTPException(
+            status_code=422, detail="Body must carry a matrix object.",
+        )
+    from api.Core.Permissions import (
+        get_user_permission_matrix, set_user_permissions,
+    )
+    set_user_permissions(store_id, user.id, matrix)
+    _audit_user_action(
+        db, claims=claims, action="set_user_permissions",
+        target_user=user,
+        summary=(
+            f"set custom access for {user.username!r} "
+            "(per-user permission overlay)"
+        ),
+    )
+    from api.Modules.Auth.Services.principal import (
+        invalidate_sessions_for_user,
+    )
+    invalidate_sessions_for_user(db, user.id)
+    db.commit()
+    return get_user_permission_matrix(
+        user.id, user.role or "employee", store_id,
+    )
+
+
+@router.delete("/users/{user_id}/permissions")
+def clear_user_permissions_route(
+    user_id: int = Path(..., ge=1),
+    db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
+) -> dict:
+    """Remove the user's custom-access overlay — back to their
+    role's permissions."""
+    require_permission(claims, "users", "update")
+    store_id = resolve_store_scope(claims)
+    user = _find_permission_target(db, claims, store_id, user_id)
+    from api.Core.Permissions import (
+        clear_user_permissions, get_user_permission_matrix,
+    )
+    clear_user_permissions(store_id, user.id)
+    _audit_user_action(
+        db, claims=claims, action="clear_user_permissions",
+        target_user=user,
+        summary=(
+            f"cleared custom access for {user.username!r} "
+            "(back to role permissions)"
+        ),
+    )
+    from api.Modules.Auth.Services.principal import (
+        invalidate_sessions_for_user,
+    )
+    invalidate_sessions_for_user(db, user.id)
+    db.commit()
+    return get_user_permission_matrix(
+        user.id, user.role or "employee", store_id,
+    )
 
 
 # ── Referrals (paid-plan self-service share + earn) ─────────
