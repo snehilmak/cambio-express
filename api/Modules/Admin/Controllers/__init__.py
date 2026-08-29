@@ -812,12 +812,20 @@ def create_user_route(
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
+    custom = ""
+    if body.permissions is not None:
+        # R-2: write the custom-access overlay in the same request
+        # the operator submitted it from — a brand-new user has no
+        # sessions to revoke yet.
+        from api.Core.Permissions import set_user_permissions
+        set_user_permissions(store_id, user.id, body.permissions)
+        custom = " with custom access"
     _audit_user_action(
         db, claims=claims, action="create",
         target_user=user,
         summary=(
             f"created {user.role} user "
-            f"{user.username!r}"
+            f"{user.username!r}{custom}"
         ),
     )
     db.commit()

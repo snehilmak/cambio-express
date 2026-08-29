@@ -1,21 +1,26 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
-  createAdminUser, updateAdminUser, useAdminUser,
-  type AdminUserCreateBody, type AdminUserUpdateBody,
+  clearAdminUserPermissions, createAdminUser, setAdminUserPermissions,
+  updateAdminUser, useAdminUser, useAdminUserPermissions,
+  type AdminUserCreateBody, type AdminUserUpdateBody, type PermMatrix,
 } from "../api/admin";
 import { useSessionStatus } from "../api/account";
-import { ApiError } from "../lib/api";
+import { api, ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
 import {
   Breadcrumbs,
-  Alert, Button, Card, ConfirmDialog, ErrorState, Field, Input, Loading,
-  PageHeader, PageShell, Select, space,
+  Alert, Button, Card, Checkbox, ConfirmDialog, ErrorState, Field, Input,
+  Loading, PageHeader, PageShell, Select, space,
 } from "../components/ui";
 import { useUnsavedGuard } from "../lib/useUnsavedGuard";
 import styles from "./AdminUserForm.module.css";
+
+// R-2 access presets. "role" = no overlay (pure role permissions);
+// the others seed a custom-access matrix the operator can tweak.
+type AccessMode = "role" | "hr" | "bookkeeper" | "custom";
 
 interface UserDraft {
   username:  string;
@@ -27,13 +32,83 @@ interface UserDraft {
   // modules (module_access null); restrict=true → only `modules`.
   restrict:  boolean;
   modules:   string[];
+  // R-1/R-2 custom access: access="role" → no overlay; anything
+  // else carries the resource×action matrix in `perm`.
+  access:    AccessMode;
+  perm:      PermMatrix | null;
 }
 
 function makeBlankUser(): UserDraft {
   return {
     username: "", full_name: "", role: "employee", is_active: true,
     password: "", restrict: false, modules: [],
+    access: "role", perm: null,
   };
+}
+
+// Fallbacks only while the live lists load — the permission
+// endpoints return the authoritative resources/actions.
+const FALLBACK_RESOURCES = [
+  "transfers", "customers", "daily_book", "monthly", "batches",
+  "bank_sync", "reports", "settings", "users", "time_clock",
+  "return_checks", "lottery", "day_close", "catalog",
+];
+const FALLBACK_ACTIONS = ["create", "read", "update", "delete"];
+
+const RESOURCE_LABELS: Record<string, string> = {
+  transfers: "Money transfers",
+  customers: "Customers",
+  daily_book: "Daily book",
+  monthly: "Monthly P&L",
+  batches: "ACH batches",
+  bank_sync: "Bank sync",
+  reports: "Reports",
+  settings: "Settings",
+  users: "Users / Team",
+  time_clock: "Time clock (HR)",
+  return_checks: "Returned checks",
+  lottery: "Lottery",
+  day_close: "Day close",
+  catalog: "Price book & purchases",
+};
+
+const ACTION_LABELS: Record<string, string> = {
+  create: "Create", read: "View", update: "Edit", delete: "Delete",
+};
+
+function emptyMatrix(resources: string[], actions: string[]): PermMatrix {
+  const m: PermMatrix = {};
+  for (const r of resources) {
+    m[r] = {};
+    for (const a of actions) m[r][a] = false;
+  }
+  return m;
+}
+
+// HR & payroll: run the time clock, see the roster — nothing else.
+function hrMatrix(resources: string[], actions: string[]): PermMatrix {
+  const m = emptyMatrix(resources, actions);
+  if (m.time_clock) for (const a of actions) m.time_clock[a] = true;
+  if (m.users) m.users.read = true;
+  return m;
+}
+
+// Bookkeeper: view every ledger, move no money, change nothing.
+function bookkeeperMatrix(
+  resources: string[], actions: string[],
+): PermMatrix {
+  const m = emptyMatrix(resources, actions);
+  for (const r of resources) {
+    if (r === "settings" || r === "users") continue;
+    if (m[r]) m[r].read = true;
+  }
+  return m;
+}
+
+interface StorePermissionsPayload {
+  resources: string[];
+  actions: string[];
+  matrix: Record<string, PermMatrix>;
 }
 
 // Human labels for the store-module flags (keys mirror the
@@ -65,6 +140,15 @@ export default function AdminUserForm() {
 
   const detail  = useAdminUser(isEdit ? uid : null);
   const session = useSessionStatus();
+  const userPerms = useAdminUserPermissions(isEdit ? uid : null);
+  // Role matrices seed the "Custom" editor on create; shares the
+  // Store Permissions page's cache key + payload shape.
+  const storePerms = useQuery<StorePermissionsPayload>({
+    enabled: identity?.role === "admin" || identity?.role === "owner",
+    queryKey: ["store-permissions"],
+    queryFn: () =>
+      api<StorePermissionsPayload>("/api/v2/admin/store-permissions"),
+  });
 
   // Form state — three sources hydrate it: the detail response on
   // edit, blank defaults on create.
@@ -78,7 +162,7 @@ export default function AdminUserForm() {
   useEffect(() => {
     if (!isEdit || !detail.data) return;
     const u = detail.data.user;
-    const hydrated: UserDraft = {
+    const fields = {
       username:  u.username,
       full_name: u.full_name,
       role:      u.role || "employee",
@@ -87,10 +171,25 @@ export default function AdminUserForm() {
       restrict:  u.module_access != null,
       modules:   u.module_access ?? [],
     };
+    // Merge (don't replace) so the perms effect below and this one
+    // can hydrate independently in either order.
     // eslint-disable-next-line react-hooks/set-state-in-effect -- hydrate local editable draft + dirty baseline from server-fetched user record on edit
-    setDraft(hydrated);
-    setBaseline(hydrated);
+    setDraft((d) => ({ ...d, ...fields }));
+    setBaseline((b) => ({ ...b, ...fields }));
   }, [isEdit, detail.data]);
+
+  useEffect(() => {
+    if (!isEdit || !userPerms.data) return;
+    const p = userPerms.data.has_custom
+      ? {
+          access: "custom" as const,
+          perm: structuredClone(userPerms.data.matrix),
+        }
+      : { access: "role" as const, perm: null };
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- hydrate the custom-access half of the draft from the R-1 overlay endpoint
+    setDraft((d) => ({ ...d, ...p }));
+    setBaseline((b) => ({ ...b, ...p }));
+  }, [isEdit, userPerms.data]);
 
   const isDirty = JSON.stringify(draft) !== JSON.stringify(baseline);
   const guard = useUnsavedGuard(isDirty && !busy, {
@@ -111,6 +210,48 @@ export default function AdminUserForm() {
         const next = { ...e }; delete next[key as string]; return next;
       });
     }
+  }
+
+  const resources =
+    userPerms.data?.resources
+    ?? storePerms.data?.resources
+    ?? FALLBACK_RESOURCES;
+  const actions =
+    userPerms.data?.actions
+    ?? storePerms.data?.actions
+    ?? FALLBACK_ACTIONS;
+
+  function seedCustomMatrix(): PermMatrix {
+    // Start "Custom" from what the user can do TODAY: their
+    // resolved matrix on edit, their role's store matrix on create.
+    if (isEdit && userPerms.data) {
+      return structuredClone(userPerms.data.matrix);
+    }
+    const roleMatrix = storePerms.data?.matrix?.[draft.role];
+    if (roleMatrix) return structuredClone(roleMatrix);
+    return emptyMatrix(resources, actions);
+  }
+
+  function setAccess(mode: AccessMode) {
+    setDraft((d) => {
+      let perm = d.perm;
+      if (mode === "hr") perm = hrMatrix(resources, actions);
+      else if (mode === "bookkeeper") perm = bookkeeperMatrix(resources, actions);
+      else if (mode === "custom") perm = perm ?? seedCustomMatrix();
+      else perm = null;
+      return { ...d, access: mode, perm };
+    });
+  }
+
+  function togglePerm(resource: string, action: string) {
+    setDraft((d) => {
+      if (!d.perm) return d;
+      const perm = structuredClone(d.perm);
+      perm[resource] = perm[resource] ?? {};
+      perm[resource][action] = !perm[resource][action];
+      // Hand-editing any box means the matrix is theirs now.
+      return { ...d, access: "custom", perm };
+    });
   }
 
   if (
@@ -152,6 +293,7 @@ export default function AdminUserForm() {
     setFieldErrors({});
     try {
       const moduleAccess = draft.restrict ? draft.modules : null;
+      const wantsCustom = draft.access !== "role" && draft.perm != null;
       if (isEdit) {
         const body: AdminUserUpdateBody = {
           full_name: draft.full_name,
@@ -161,6 +303,22 @@ export default function AdminUserForm() {
         };
         if (draft.password) body.password = draft.password;
         await updateAdminUser(uid, body);
+        // Custom access saves through the R-1 overlay endpoints —
+        // only when it actually changed (each write revokes the
+        // user's sessions, so no-op saves shouldn't log them out).
+        if (!isSelf) {
+          const hadCustom = baseline.access !== "role";
+          const permChanged =
+            wantsCustom !== hadCustom
+            || (wantsCustom
+                && JSON.stringify(draft.perm)
+                   !== JSON.stringify(baseline.perm));
+          if (permChanged && wantsCustom && draft.perm) {
+            await setAdminUserPermissions(uid, draft.perm);
+          } else if (permChanged && !wantsCustom && hadCustom) {
+            await clearAdminUserPermissions(uid);
+          }
+        }
       } else {
         const body: AdminUserCreateBody = {
           username:  draft.username.trim(),
@@ -169,6 +327,7 @@ export default function AdminUserForm() {
           role:      draft.role,
           module_access: moduleAccess,
         };
+        if (wantsCustom && draft.perm) body.permissions = draft.perm;
         await createAdminUser(body);
       }
       // Invalidate roster + this user's detail cache so the next
@@ -261,10 +420,66 @@ export default function AdminUserForm() {
             </Select>
           </Field>
 
+          {!isSelf && (
+            <Field
+              label="Access"
+              hint="What this user can actually do — enforced on every request, not just hidden in the UI. Pick a preset or customize per area."
+            >
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
+                <Select
+                  value={draft.access}
+                  onChange={(e) => setAccess(e.target.value as AccessMode)}
+                  disabled={busy}
+                >
+                  <option value="role">
+                    {draft.role === "admin"
+                      ? "Full access (role default)"
+                      : "Standard employee access (role default)"}
+                  </option>
+                  <option value="hr">HR &amp; payroll — time clock only, no financials</option>
+                  <option value="bookkeeper">Bookkeeper — view books, move no money</option>
+                  <option value="custom">Custom — pick exactly what they can do</option>
+                </Select>
+                {draft.access !== "role" && draft.perm && (
+                  <div style={{ overflowX: "auto" }}>
+                    <table className={styles.matrix}>
+                      <thead>
+                        <tr>
+                          <th>Area</th>
+                          {actions.map((a) => (
+                            <th key={a}>{ACTION_LABELS[a] ?? a}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {resources.map((resource) => (
+                          <tr key={resource}>
+                            <td>{RESOURCE_LABELS[resource] ?? resource}</td>
+                            {actions.map((action) => (
+                              <td key={action}>
+                                <div className={styles.checkCell}>
+                                  <Checkbox
+                                    checked={draft.perm?.[resource]?.[action] ?? false}
+                                    onChange={() => togglePerm(resource, action)}
+                                    disabled={busy}
+                                  >{""}</Checkbox>
+                                </div>
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </Field>
+          )}
+
           <Field
             label="Module access"
             error={fieldErrors.module_access}
-            hint="Which parts of the app this user sees. Restricting hides modules from their navigation — it doesn't change their role permissions."
+            hint="Which parts of the app this user sees. Restricting hides modules from their navigation — use Access above to change what they can actually do."
           >
             <div style={{ display: "flex", flexDirection: "column", gap: "0.45rem" }}>
               <label className={styles.checkboxRow}>

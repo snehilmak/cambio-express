@@ -6029,6 +6029,12 @@ export interface components {
             module_access?: string[] | null;
             /** Password */
             password: string;
+            /** Permissions */
+            permissions?: {
+                [key: string]: {
+                    [key: string]: boolean;
+                };
+            } | null;
             /**
              * Role
              * @default employee

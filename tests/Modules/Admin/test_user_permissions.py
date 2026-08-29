@@ -350,3 +350,59 @@ def test_dashboard_hides_numbers_for_restricted_admin(
         assert isinstance(summary["clocked_in"], list)
     finally:
         clear_user_permissions(test_store_id, uid)
+
+
+# ── R-2: overlay written at creation time ───────────────────
+
+
+def test_create_user_with_permissions_matrix(client, test_store_id):
+    """POST /admin/users with a `permissions` matrix writes the
+    overlay atomically with the account — the first login already
+    carries only the custom perms."""
+    from api.Core.Permissions import clear_user_permissions, user_has_custom_permissions
+
+    token = login_admin(client, test_store_id)
+    made = client.post(
+        "/api/v2/admin/users", headers=_headers(token),
+        json={
+            "username": "r2_amber_new",
+            "password": "newpass1234",
+            "full_name": "Amber",
+            "role": "employee",
+            "permissions": HR_ONLY,
+        },
+    )
+    assert made.status_code == 201, made.get_data(as_text=True)
+    row = made.get_json()
+    assert row["has_custom_permissions"] is True
+    uid = row["id"]
+    try:
+        assert user_has_custom_permissions(uid, test_store_id) is True
+        login = client.post(
+            "/api/v2/auth/login",
+            json={
+                "username": "r2_amber_new",
+                "password": "newpass1234",
+                "store_id": test_store_id,
+            },
+        ).get_json()
+        assert "time_clock.read" in login["permissions"]
+        assert "transfers.read" not in login["permissions"]
+    finally:
+        clear_user_permissions(test_store_id, uid)
+
+
+def test_create_user_without_permissions_has_no_overlay(
+    client, test_store_id,
+):
+    token = login_admin(client, test_store_id)
+    made = client.post(
+        "/api/v2/admin/users", headers=_headers(token),
+        json={
+            "username": "r2_plain_new",
+            "password": "newpass1234",
+            "role": "employee",
+        },
+    )
+    assert made.status_code == 201
+    assert made.get_json()["has_custom_permissions"] is False
