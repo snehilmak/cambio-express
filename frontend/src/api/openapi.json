@@ -457,6 +457,23 @@
             "title": "Password",
             "type": "string"
           },
+          "permissions": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "additionalProperties": {
+                    "type": "boolean"
+                  },
+                  "type": "object"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Permissions"
+          },
           "role": {
             "default": "employee",
             "maxLength": 20,

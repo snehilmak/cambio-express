@@ -385,6 +385,35 @@ to the register.
   editor is otherwise parked pending POS integration by owner
   decision 2026-08-28).
 
+**R-track — per-user permissions perfection (owner-directed
+2026-08-29, "permissions and roles to be perfect… custom user with
+custom access… can't see any numbers"; PRs #894 R-1 + R-2):**
+custom access per USER, layered above roles, as a real security
+boundary (unlike `User.module_access`, which stays nav-only UX).
+- ✅ R-1 (#894) — Casbin overlay rows `user:<id>` in the store
+  domain, same per-resource mention semantics as the U-1 store
+  overlay; `check_permission`/`permissions_for` take `user_id`;
+  live enforcement threads the JWT sub; perms baked at
+  login/refresh/signup; owner switch-store tokens stay role-only
+  (owners never restricted). Endpoints GET/PUT/DELETE
+  `/admin/users/{id}/permissions` (self-edit 422, cross-store
+  404, audit + per-user session revocation). Dashboard summary
+  blocks + peak-hours are permission-gated per resource — the
+  "no numbers" payload guarantee. Resolution order + write
+  contract documented in Auth INVARIANTS.md.
+- ✅ R-2 — user-form Access section: presets (role default /
+  HR & payroll / bookkeeper read-only / custom) seeding a
+  resource×action matrix editor; `permissions` accepted on user
+  create (overlay written atomically, first login already
+  restricted); edit saves diff-only via the R-1 endpoints so
+  no-op saves don't revoke the user's sessions; roster shows a
+  "Custom access" pill (`has_custom_permissions` on
+  AdminUserRow).
+- Follow-ups if wanted: expose per-user access on the OWNER
+  cross-store Team Users page; named reusable custom roles
+  ("save this matrix as a role"); per-user overlays surfaced in
+  the superadmin store detail.
+
 **Phase 2+ (not yet scoped in detail):** inventory basics; fuel module (needs a
 gas-station design partner first); Modisoft/Cronysoft migration
 importers; public API/webhooks GA; loyalty / scan-data rebates;

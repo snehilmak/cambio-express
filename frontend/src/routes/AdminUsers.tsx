@@ -120,6 +120,12 @@ function UserTable({
               <Pill tone={u.role === "admin" ? "accent" : "info"}>
                 {u.role === "admin" ? "Super Admin" : "Employee"}
               </Pill>
+              {u.has_custom_permissions && (
+                <>
+                  {" "}
+                  <Pill tone="neutral">Custom access</Pill>
+                </>
+              )}
             </td>
             <td style={tdStyle}>
               <Pill tone={u.is_active ? "accent" : "negative"}>

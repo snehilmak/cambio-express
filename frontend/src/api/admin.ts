@@ -95,6 +95,9 @@ export interface AdminUserRow {
   // null = every module the store has; a list restricts this
   // user's visible modules (U-3).
   module_access: string[] | null;
+  // R-1: true when the user carries a custom-access permission
+  // overlay instead of pure role permissions.
+  has_custom_permissions: boolean;
 }
 
 export interface AdminUserListResponse {
@@ -111,6 +114,9 @@ export interface AdminUserCreateBody {
   full_name?: string;
   role?:      string;
   module_access?: string[] | null;
+  // R-2: custom-access overlay written at creation time.
+  // Omitted/null = pure role permissions.
+  permissions?: PermMatrix | null;
 }
 
 export interface AdminUserUpdateBody {
@@ -157,5 +163,47 @@ export async function updateAdminUser(
   return api<AdminUserRow>(
     `/api/v2/admin/users/${uid}`,
     { method: "PATCH", json: body },
+  );
+}
+
+// ── Per-user custom access (R-1 overlay) ───────────────────
+
+/** resource → action → allowed */
+export type PermMatrix = Record<string, Record<string, boolean>>;
+
+export interface UserPermissionMatrix {
+  user_id:   number;
+  role:      string;
+  store_id:  number;
+  resources: string[];
+  actions:   string[];
+  matrix:    PermMatrix;
+  has_custom: boolean;
+}
+
+export function useAdminUserPermissions(uid: number | null) {
+  return useQuery<UserPermissionMatrix>({
+    enabled: uid != null && Number.isFinite(uid),
+    queryKey: ["admin", "users", "permissions", uid],
+    queryFn: () =>
+      api<UserPermissionMatrix>(`/api/v2/admin/users/${uid}/permissions`),
+  });
+}
+
+export async function setAdminUserPermissions(
+  uid: number, matrix: PermMatrix,
+): Promise<UserPermissionMatrix> {
+  return api<UserPermissionMatrix>(
+    `/api/v2/admin/users/${uid}/permissions`,
+    { method: "PUT", json: { matrix } },
+  );
+}
+
+export async function clearAdminUserPermissions(
+  uid: number,
+): Promise<UserPermissionMatrix> {
+  return api<UserPermissionMatrix>(
+    `/api/v2/admin/users/${uid}/permissions`,
+    { method: "DELETE" },
   );
 }

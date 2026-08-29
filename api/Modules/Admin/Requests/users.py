@@ -41,6 +41,9 @@ class AdminUserCreateRequest(BaseModel):
     full_name: str = Field("", max_length=120)
     role:      str = Field("employee", min_length=1, max_length=20)
     module_access: list[str] | None = Field(None, max_length=20)
+    # R-2: optional custom-access overlay written at creation time
+    # (resource → action → bool). None = pure role permissions.
+    permissions: dict[str, dict[str, bool]] | None = None
 
 
 class AdminUserUpdateRequest(BaseModel):
