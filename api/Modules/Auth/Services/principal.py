@@ -78,12 +78,16 @@ def resolve_superadmin_user(db: Session, claims: dict[str, Any]) -> User:
 
 def has_permission(claims: dict[str, Any], resource: str, action: str) -> bool:
     """Live permission check via Casbin. Permission changes take
-    effect immediately — no JWT refresh needed."""
+    effect immediately — no JWT refresh needed. The JWT subject is
+    threaded through so per-user overlays (R-1) are enforced live,
+    not just baked into the token at login."""
     if claims.get("role") == "superadmin":
         return True
     from api.Core.Permissions import check_permission
+    sub = claims.get("sub")
     return check_permission(
         claims.get("role", ""), claims.get("store_id"), resource, action,
+        user_id=int(sub) if sub is not None else None,
     )
 
 
@@ -112,6 +116,21 @@ def invalidate_sessions_for_role(db: Session, store_id: int, role: str) -> None:
                 User.is_active.is_(True),
             )
         ),
+        RefreshToken.revoked_at.is_(None),
+        RefreshToken.expires_at > now,
+    ).update({"revoked_at": now}, synchronize_session="fetch")
+    db.flush()
+
+
+def invalidate_sessions_for_user(db: Session, user_id: int) -> None:
+    """Revoke ONE user's active refresh tokens — the per-user twin
+    of ``invalidate_sessions_for_role``. Called whenever a user's
+    custom permission overlay is written or cleared, so a token
+    baked with the old perms can't outlive the change."""
+    from api.Modules.Auth.Models import RefreshToken
+    now = utc_now()
+    db.query(RefreshToken).filter(
+        RefreshToken.user_id == int(user_id),
         RefreshToken.revoked_at.is_(None),
         RefreshToken.expires_at > now,
     ).update({"revoked_at": now}, synchronize_session="fetch")

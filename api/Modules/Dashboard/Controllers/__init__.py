@@ -297,7 +297,9 @@ def _clocked_in_block(db: Session, store_id: int) -> list[dict[str, Any]]:
     ]
 
 
-def _admin_summary(db: Session, store_id: int) -> dict[str, Any]:
+def _admin_summary(
+    db: Session, store_id: int, claims: dict[str, Any],
+) -> dict[str, Any]:
     from api.Modules.BankSync.Models import StripeBankAccount
     from api.Modules.Batches.Models import ACHBatch
     from api.Modules.Billing.Services.feature_flags import (
@@ -318,8 +320,19 @@ def _admin_summary(db: Session, store_id: int) -> dict[str, Any]:
 
     # The dashboard is module-driven (P1-10): each enabled module
     # contributes its section; disabled modules cost zero queries.
+    # R-1 layers permission gates on top: a block renders only when
+    # the principal can READ its backing resource, so a user with a
+    # custom overlay ("no numbers") gets no financial payloads at
+    # all — this is enforcement, not just hidden UI.
+    from api.Modules.Auth.Services.principal import has_permission
+
+    def _can(resource: str) -> bool:
+        return has_permission(claims, resource, "read")
+
     modules = enabled_module_flags(db, store)
-    money_services = "module_money_services" in modules
+    money_services = (
+        "module_money_services" in modules and _can("transfers")
+    )
 
     total_transfers = today_transfers = pending_ach = 0
     recent_transfers: list[Any] = []
@@ -368,39 +381,50 @@ def _admin_summary(db: Session, store_id: int) -> dict[str, Any]:
 
     day_close = (
         _day_close_snapshot(db, store_id, today)
-        if "module_day_close" in modules else None
+        if "module_day_close" in modules and _can("day_close")
+        else None
     )
     lottery = (
         _lottery_snapshot(db, store_id, today)
-        if "module_lottery" in modules else None
+        if "module_lottery" in modules and _can("lottery")
+        else None
     )
 
     # Generic store blocks (D-1): sales-first dashboard. Each block
-    # renders only when its module is on; clocked-in is universal
-    # (the time clock isn't module-gated).
+    # renders only when its module is on AND the principal can read
+    # its resource; clocked-in follows time_clock.read (the time
+    # clock isn't module-gated).
     sales = (
         _sales_block(db, store_id, today)
-        if "module_day_close" in modules else None
+        if "module_day_close" in modules and _can("day_close")
+        else None
     )
     purchases = (
         _purchases_block(db, store_id, today)
-        if "module_price_book" in modules else None
+        if "module_price_book" in modules and _can("catalog")
+        else None
     )
-    clocked_in = _clocked_in_block(db, store_id)
+    clocked_in = (
+        _clocked_in_block(db, store_id)
+        if _can("time_clock") else []
+    )
 
     today_report = (
         db.query(DailyReport)
         .filter_by(store_id=store_id, report_date=today).first()
+        if _can("daily_book") else None
     )
     month_report = (
         db.query(MonthlyFinancial).filter_by(
             store_id=store_id, year=today.year, month=today.month,
         ).first()
+        if _can("monthly") else None
     )
     stripe_accounts = (
         db.query(StripeBankAccount)
         .filter_by(store_id=store_id, enabled=True)
         .order_by(StripeBankAccount.connected_at.desc()).limit(3).all()
+        if _can("bank_sync") else []
     )
 
     return {
@@ -457,17 +481,24 @@ def _admin_summary(db: Session, store_id: int) -> dict[str, Any]:
     }
 
 
-def _employee_summary(db: Session, store_id: int) -> dict[str, Any]:
+def _employee_summary(
+    db: Session, store_id: int, claims: dict[str, Any],
+) -> dict[str, Any]:
+    from api.Modules.Auth.Services.principal import has_permission
     from api.Modules.Billing.Services.feature_flags import (
         enabled_module_flags,
     )
     from api.Modules.Tenancy.Models import Store
     from api.Modules.Transfers.Models import Transfer
+
+    def _can(resource: str) -> bool:
+        return has_permission(claims, resource, "read")
+
     today = date.today()
     store = db.get(Store, store_id)
     modules = enabled_module_flags(db, store)
     rows = []
-    if "module_money_services" in modules:
+    if "module_money_services" in modules and _can("transfers"):
         rows = (
             db.query(Transfer)
             .filter_by(store_id=store_id, send_date=today)
@@ -478,11 +509,13 @@ def _employee_summary(db: Session, store_id: int) -> dict[str, Any]:
         "modules": modules,
         "day_close": (
             _day_close_snapshot(db, store_id, today)
-            if "module_day_close" in modules else None
+            if "module_day_close" in modules and _can("day_close")
+            else None
         ),
         "lottery": (
             _lottery_snapshot(db, store_id, today)
-            if "module_lottery" in modules else None
+            if "module_lottery" in modules and _can("lottery")
+            else None
         ),
         "today_transfers": [
             {
@@ -602,9 +635,15 @@ def dashboard_summary(
             detail="No store context — owners use /api/v2/owner/*.",
         )
     if role == "admin":
-        return {"role": "admin", **_admin_summary(db, int(store_id))}
+        return {
+            "role": "admin",
+            **_admin_summary(db, int(store_id), claims),
+        }
     if role == "employee":
-        return {"role": "employee", **_employee_summary(db, int(store_id))}
+        return {
+            "role": "employee",
+            **_employee_summary(db, int(store_id), claims),
+        }
     raise HTTPException(
         status_code=403,
         detail=f"Dashboard not available for role={role!r}.",
@@ -635,6 +674,10 @@ def dashboard_peak_hours(
         )
     if role not in ("admin", "employee", "owner", "superadmin"):
         raise HTTPException(status_code=403, detail="Role not allowed.")
+    # Heatmap is transfer data — same read gate as the transfer
+    # ledger (R-1: per-user overlays enforce here too).
+    from api.Modules.Auth.Services.principal import require_permission
+    require_permission(claims, "transfers", "read")
     if days < 1 or days > 365:
         raise HTTPException(
             status_code=422,

@@ -14,6 +14,9 @@ class AdminUserRow(BaseModel):
     # None = every module the store has; a list restricts this
     # user's visible modules (subset of MODULE_FLAG_KEYS).
     module_access: list[str] | None
+    # True when the user carries a per-user permission overlay
+    # (R-1) — custom access instead of their role's defaults.
+    has_custom_permissions: bool = False
 
 
 class AdminUserListResponse(BaseModel):
