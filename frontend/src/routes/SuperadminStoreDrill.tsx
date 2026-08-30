@@ -10,11 +10,12 @@ import {
 } from "../api/superadmin";
 import { getCurrentIdentity } from "../lib/auth";
 import {
-  Alert, Breadcrumbs, Button, ButtonLink, Card, Checkbox, EmptyState,
+  Alert, Breadcrumbs, Button, ButtonLink, Card, EmptyState,
   ErrorState, Field, Input, KpiCard, KpiGrid, Loading, Modal,
   PageHeader, PageShell, Pill, Section, SectionTitle, Table, tdStyle,
   Textarea, thStyle, useToast,
 } from "../components/ui";
+import { PermissionMatrixTable } from "../components/PermissionMatrixTable";
 import { useApiErrorToast } from "../lib/useApiErrorToast";
 import { formatDate } from "../lib/datetime";
 import styles from "./SuperadminStoreDrill.module.css";
@@ -528,13 +529,6 @@ interface PermMatrix {
   has_overrides: string[];
 }
 
-const RESOURCE_LABELS: Record<string, string> = {
-  transfers: "Transfers", customers: "Customers", daily_book: "Daily book",
-  monthly: "Monthly P&L", batches: "ACH batches", bank_sync: "Bank sync",
-  reports: "Reports", settings: "Settings", users: "Users / Team",
-  time_clock: "Time clock", return_checks: "Returned checks",
-};
-
 function StorePermissionsPanel({ storeId, storeName }: { storeId: number; storeName: string }) {
   const qc = useQueryClient();
   const toast = useToast();
@@ -619,32 +613,13 @@ function StorePermissionsPanel({ storeId, storeName }: { storeId: number; storeN
               </Button>
             )}
           </div>
-          <div style={{ overflowX: "auto" }}>
-            <table className={styles.permMatrix}>
-              <thead>
-                <tr>
-                  <th>Resource</th>
-                  {draft.actions.map((a) => <th key={a}>{a}</th>)}
-                </tr>
-              </thead>
-              <tbody>
-                {draft.resources.map((resource) => (
-                  <tr key={resource}>
-                    <td>{RESOURCE_LABELS[resource] ?? resource}</td>
-                    {draft.actions.map((action) => (
-                      <td key={action} style={{ textAlign: "center" }}>
-                        <Checkbox
-                          checked={draft.matrix[role][resource][action]}
-                          onChange={() => toggle(role, resource, action)}
-                          aria-label={`${action} — ${RESOURCE_LABELS[resource] ?? resource} (${role})`}
-                        />
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <PermissionMatrixTable
+            resources={draft.resources}
+            actions={draft.actions}
+            checked={(resource, action) => draft.matrix[role][resource][action]}
+            onToggle={(resource, action) => toggle(role, resource, action)}
+            ariaContext={role}
+          />
         </div>
       ))}
       {isDirty && (

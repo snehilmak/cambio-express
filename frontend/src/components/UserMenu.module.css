@@ -7,12 +7,6 @@
  * the design system and honors `prefers-reduced-motion: reduce`.
  */
 
-.wrap {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-}
-
 .avatarBtn {
   width: 2.1rem;
   height: 2.1rem;
@@ -47,10 +41,9 @@
   letter-spacing: 0;
 }
 
+/* Positioned by Radix DropdownMenu (portal + align="end"),
+ * so no absolute-position rules here — just the panel look. */
 .dropdown {
-  position: absolute;
-  top: calc(100% + 0.5rem);
-  right: 0;
   min-width: 14rem;
   background: var(--db-surface-2, #141414);
   border: 1px solid var(--db-border, #262626);
@@ -120,7 +113,8 @@
 }
 
 .item:hover,
-.item:focus-visible {
+.item:focus-visible,
+.item[data-highlighted] {
   background: var(--db-fill-subtle, rgba(255, 255, 255, 0.04));
   color: var(--db-text, #f5f5f5);
   outline: none;
@@ -135,7 +129,8 @@
  * tone="negative">` — stops the previous rgba(255, 59, 48, ...)
  * drift toward iOS-red. */
 .signOut:hover,
-.signOut:focus-visible {
+.signOut:focus-visible,
+.signOut[data-highlighted] {
   color: var(--db-tone-error-fg, #ff4d6d);
   background: var(--db-tone-error-bg, rgba(255, 77, 109, 0.08));
 }

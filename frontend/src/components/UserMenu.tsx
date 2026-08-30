@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 import type { getCurrentIdentity } from "../lib/auth";
 import styles from "./UserMenu.module.css";
@@ -10,10 +11,13 @@ import styles from "./UserMenu.module.css";
 // the avatar dropdown was the only entry point to the per-user
 // account screens.
 //
-// Click outside / Escape closes the menu. The menu uses CSS-based
-// fade-scale-in animation via the `.ds-popover` class from
-// `components/ui/ui.css` — honors `prefers-reduced-motion`
-// automatically through the global rule in `static/content.css`.
+// Built on Radix DropdownMenu (UI-STANDARDS §5: overlay behavior
+// comes from a headless primitive, never hand-rolled) — Radix
+// owns outside-click, Escape, focus return, and arrow-key
+// navigation. The panel keeps the CSS fade-scale-in via the
+// `.ds-popover` class from `components/ui/ui.css`, which honors
+// `prefers-reduced-motion` through the global rule in
+// `static/content.css`.
 
 type Identity = ReturnType<typeof getCurrentIdentity>;
 
@@ -24,88 +28,61 @@ export function UserMenu({
   onSignOut: () => void;
 }) {
   const [open, setOpen] = useState(false);
-  const wrapRef = useRef<HTMLDivElement>(null);
-
-  // Click-outside-to-close. Wrap-ref covers both the avatar
-  // button and the dropdown panel since they share a parent.
-  useEffect(() => {
-    if (!open) return;
-    function onDocClick(e: MouseEvent) {
-      if (!wrapRef.current) return;
-      if (!wrapRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    }
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") setOpen(false);
-    }
-    document.addEventListener("mousedown", onDocClick);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDocClick);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [open]);
+  const navigate = useNavigate();
 
   const username = identity?.username || "";
   const initial = (username[0] || "·").toUpperCase();
   const role = identity?.role || "";
 
   return (
-    <div className={styles.wrap} ref={wrapRef}>
-      <button
-        type="button"
-        className={styles.avatarBtn}
-        aria-haspopup="menu"
-        aria-expanded={open}
-        aria-label={`User menu for ${username || "current user"}`}
-        onClick={() => setOpen((v) => !v)}
-      >
-        <span className={styles.avatar}>{initial}</span>
-      </button>
-      {open && (
-        <div className={`${styles.dropdown} ds-popover`} role="menu">
+    <DropdownMenu.Root open={open} onOpenChange={setOpen}>
+      <DropdownMenu.Trigger asChild>
+        <button
+          type="button"
+          className={styles.avatarBtn}
+          aria-label={`User menu for ${username || "current user"}`}
+        >
+          <span className={styles.avatar}>{initial}</span>
+        </button>
+      </DropdownMenu.Trigger>
+      <DropdownMenu.Portal>
+        <DropdownMenu.Content
+          className={`${styles.dropdown} ds-popover`}
+          align="end"
+          sideOffset={6}
+        >
           <div className={styles.identityRow}>
             <div className={styles.username}>{username || "—"}</div>
             {role && (
               <div className={styles.rolePill}>{role}</div>
             )}
           </div>
-          <div className={styles.divider} />
-          <Link
-            to="/settings/profile"
+          <DropdownMenu.Separator className={styles.divider} />
+          <DropdownMenu.Item
             className={styles.item}
-            role="menuitem"
-            onClick={() => setOpen(false)}
+            onSelect={() => navigate("/settings/profile")}
           >
             <ProfileIcon />
             <span>Profile</span>
-          </Link>
-          <Link
-            to="/account/notifications"
+          </DropdownMenu.Item>
+          <DropdownMenu.Item
             className={styles.item}
-            role="menuitem"
-            onClick={() => setOpen(false)}
+            onSelect={() => navigate("/account/notifications")}
           >
             <BellIcon />
             <span>Notifications</span>
-          </Link>
-          <div className={styles.divider} />
-          <button
-            type="button"
+          </DropdownMenu.Item>
+          <DropdownMenu.Separator className={styles.divider} />
+          <DropdownMenu.Item
             className={`${styles.item} ${styles.signOut}`}
-            role="menuitem"
-            onClick={() => {
-              setOpen(false);
-              onSignOut();
-            }}
+            onSelect={onSignOut}
           >
             <SignOutIcon />
             <span>Sign out</span>
-          </button>
-        </div>
-      )}
-    </div>
+          </DropdownMenu.Item>
+        </DropdownMenu.Content>
+      </DropdownMenu.Portal>
+    </DropdownMenu.Root>
   );
 }
 

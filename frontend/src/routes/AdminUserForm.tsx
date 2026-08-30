@@ -16,6 +16,7 @@ import {
   Loading, PageHeader, PageShell, Select, space,
   useToast,
 } from "../components/ui";
+import { PermissionMatrixTable } from "../components/PermissionMatrixTable";
 import { useUnsavedGuard } from "../lib/useUnsavedGuard";
 import styles from "./AdminUserForm.module.css";
 
@@ -55,27 +56,6 @@ const FALLBACK_RESOURCES = [
   "return_checks", "lottery", "day_close", "catalog",
 ];
 const FALLBACK_ACTIONS = ["create", "read", "update", "delete"];
-
-const RESOURCE_LABELS: Record<string, string> = {
-  transfers: "Money transfers",
-  customers: "Customers",
-  daily_book: "Daily book",
-  monthly: "Monthly P&L",
-  batches: "ACH batches",
-  bank_sync: "Bank sync",
-  reports: "Reports",
-  settings: "Settings",
-  users: "Users / Team",
-  time_clock: "Time clock (HR)",
-  return_checks: "Returned checks",
-  lottery: "Lottery",
-  day_close: "Day close",
-  catalog: "Price book & purchases",
-};
-
-const ACTION_LABELS: Record<string, string> = {
-  create: "Create", read: "View", update: "Edit", delete: "Delete",
-};
 
 function emptyMatrix(resources: string[], actions: string[]): PermMatrix {
   const m: PermMatrix = {};
@@ -447,37 +427,14 @@ export default function AdminUserForm() {
                   <option value="custom">Custom — pick exactly what they can do</option>
                 </Select>
                 {draft.access !== "role" && draft.perm && (
-                  <div style={{ overflowX: "auto" }}>
-                    <table className={styles.matrix}>
-                      <thead>
-                        <tr>
-                          <th>Area</th>
-                          {actions.map((a) => (
-                            <th key={a}>{ACTION_LABELS[a] ?? a}</th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {resources.map((resource) => (
-                          <tr key={resource}>
-                            <td>{RESOURCE_LABELS[resource] ?? resource}</td>
-                            {actions.map((action) => (
-                              <td key={action}>
-                                <div className={styles.checkCell}>
-                                  <Checkbox
-                                    checked={draft.perm?.[resource]?.[action] ?? false}
-                                    onChange={() => togglePerm(resource, action)}
-                                    disabled={busy}
-                                    aria-label={`${ACTION_LABELS[action] ?? action} — ${RESOURCE_LABELS[resource] ?? resource}`}
-                                  />
-                                </div>
-                              </td>
-                            ))}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                  <PermissionMatrixTable
+                    resources={resources}
+                    actions={actions}
+                    checked={(resource, action) => draft.perm?.[resource]?.[action] ?? false}
+                    onToggle={togglePerm}
+                    disabled={busy}
+                    resourceHeader="Area"
+                  />
                 )}
               </div>
             </Field>

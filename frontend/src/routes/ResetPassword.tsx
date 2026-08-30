@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
 import { AuthChrome, StatusPill } from "../components/AuthChrome";
+import { Alert, Button, ButtonLink, Field, Input } from "../components/ui";
 import { resetPassword } from "../api/account";
 import { ApiError } from "../lib/api";
 import styles from "./auth.module.css";
@@ -64,9 +65,9 @@ export default function ResetPassword() {
             This link doesn't include a token. Request a new reset link
             and we'll email you a fresh one.
           </div>
-          <Link to="/forgot-password" className={`${styles.submitBtn} ${styles.submitLink}`}>
+          <ButtonLink to="/forgot-password" tone="primary" size="lg" style={{ width: "100%" }}>
             Request a new link
-          </Link>
+          </ButtonLink>
           <Link to="/login" className={styles.backLink}>← Back to sign in</Link>
         </>
       ) : done ? (
@@ -76,13 +77,14 @@ export default function ResetPassword() {
           <div className={styles.cardSub}>
             You can now sign in with your new password.
           </div>
-          <button
-            type="button"
-            className={styles.submitBtn}
+          <Button
+            tone="primary"
+            size="lg"
+            style={{ width: "100%" }}
             onClick={() => navigate("/login")}
           >
             Sign in →
-          </button>
+          </Button>
         </>
       ) : (
         <>
@@ -90,13 +92,11 @@ export default function ResetPassword() {
           <div className={styles.cardTitle}>Set a new password</div>
           <div className={styles.cardSub}>Choose something at least 8 characters long.</div>
 
-          {error && <div className={styles.errorMsg}>{error}</div>}
+          <form onSubmit={onSubmit} style={{ display: "flex", flexDirection: "column", gap: "0.95rem" }}>
+            {error && <Alert tone="error">{error}</Alert>}
 
-          <form onSubmit={onSubmit}>
-            <div className={styles.field}>
-              <label className={styles.label}>New password</label>
-              <input
-                className={styles.input}
+            <Field label="New password">
+              <Input
                 type="password"
                 autoComplete="new-password"
                 minLength={8}
@@ -107,11 +107,9 @@ export default function ResetPassword() {
                 required
                 autoFocus
               />
-            </div>
-            <div className={styles.field}>
-              <label className={styles.label}>Confirm new password</label>
-              <input
-                className={styles.input}
+            </Field>
+            <Field label="Confirm new password">
+              <Input
                 type="password"
                 autoComplete="new-password"
                 minLength={8}
@@ -121,14 +119,17 @@ export default function ResetPassword() {
                 disabled={busy}
                 required
               />
-            </div>
-            <button
+            </Field>
+            <Button
               type="submit"
-              className={`${styles.submitBtn}${busy ? ` ${styles.isBusy}` : ""}`}
+              tone="primary"
+              size="lg"
+              busy={busy}
               disabled={busy || !pw || !confirm}
+              style={{ width: "100%" }}
             >
               {busy ? "Saving…" : "Update password"}
-            </button>
+            </Button>
           </form>
           <Link to="/login" className={styles.backLink}>← Back to sign in</Link>
         </>

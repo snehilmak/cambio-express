@@ -74,7 +74,29 @@ same tone on every screen:
 | Date | `formatDate`; `fmtDateCompact` in dense tables | `.slice(0, 10)` (wrong calendar date for US stores on UTC timestamps) |
 | Counts | `fmtNumber` | — |
 
-## 5. Layout & styling (recap — details in CLAUDE.md)
+## 5. Overlay & interaction behavior — headless primitives, never hand-rolled
+
+Anything with open/close/dismiss/focus behavior is built on a
+headless primitive INSIDE the kit — we style it; we never
+re-implement outside-click, Escape handling, focus trapping, or
+keyboard navigation ourselves (that's where a11y bugs breed):
+
+| Behavior | Base | Kit surface |
+|---|---|---|
+| Modal / confirm | `@radix-ui/react-dialog` | `<Modal>` / `<ConfirmDialog>` |
+| Bottom sheet (mobile row actions) | Radix Dialog | `<RowActions>` |
+| Dropdown / popover menu | `@radix-ui/react-dropdown-menu` | `UserMenu` (pattern) |
+| Tooltip | `@radix-ui/react-tooltip` | `<Tooltip>` / `<InfoTip>` |
+| Command palette | `cmdk` | `CommandPalette` |
+| Date picker | `react-day-picker` | `<DateInput>` |
+| Form boolean controls | **native `<input>`** (deliberate — best form-library + a11y compat; do NOT swap for Radix Switch/Checkbox) | `<Checkbox>` / `<Switch>` |
+
+Routes never import `@radix-ui/*` directly — they use the kit
+component. Need a new overlay kind? Add the Radix-based primitive
+to the kit first, styled with `--db-*` tokens and the `.ds-popover`
+motion class, then use it.
+
+## 6. Layout & styling (recap — details in CLAUDE.md)
 
 - Kit primitives first; page-specific leftovers in a co-located
   `<Route>.module.css`. No bottom-of-file `CSSProperties` constants,
@@ -86,7 +108,7 @@ same tone on every screen:
 - Steppers (prev/next day/month) and other widgets used by 2+ routes
   get extracted to the kit — two copies is the threshold.
 
-## 6. Enforcement
+## 7. Enforcement
 
 - PR review checklist: any `<select>` with 2 boolean-shaped options,
   any `window.confirm`, any `toFixed(2)` on money, any `.slice(0,10)`
