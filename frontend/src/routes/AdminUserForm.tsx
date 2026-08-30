@@ -462,7 +462,8 @@ export default function AdminUserForm() {
                                     checked={draft.perm?.[resource]?.[action] ?? false}
                                     onChange={() => togglePerm(resource, action)}
                                     disabled={busy}
-                                  >{""}</Checkbox>
+                                    aria-label={`${ACTION_LABELS[action] ?? action} — ${RESOURCE_LABELS[resource] ?? resource}`}
+                                  />
                                 </div>
                               </td>
                             ))}
@@ -482,28 +483,13 @@ export default function AdminUserForm() {
             hint="Which parts of the app this user sees. Restricting hides modules from their navigation — use Access above to change what they can actually do."
           >
             <div style={{ display: "flex", flexDirection: "column", gap: "0.45rem" }}>
-              <label className={styles.checkboxRow}>
-                <input
-                  type="radio" name="module-access-mode"
-                  checked={!draft.restrict}
-                  onChange={() => set("restrict", false)}
-                  disabled={busy}
-                />
-                <span className={styles.checkboxLabel}>
-                  All store modules
-                </span>
-              </label>
-              <label className={styles.checkboxRow}>
-                <input
-                  type="radio" name="module-access-mode"
-                  checked={draft.restrict}
-                  onChange={() => set("restrict", true)}
-                  disabled={busy}
-                />
-                <span className={styles.checkboxLabel}>
-                  Only selected modules
-                </span>
-              </label>
+              <Checkbox
+                checked={draft.restrict}
+                onChange={(v) => set("restrict", v)}
+                disabled={busy}
+              >
+                Only selected modules (default: all store modules)
+              </Checkbox>
               {draft.restrict && (
                 <div style={{
                   display: "flex", flexDirection: "column",
@@ -511,22 +497,19 @@ export default function AdminUserForm() {
                 }}>
                   {(session.data?.features ?? Object.keys(MODULE_LABELS))
                     .map((key) => (
-                      <label key={key} className={styles.checkboxRow}>
-                        <input
-                          type="checkbox"
-                          checked={draft.modules.includes(key)}
-                          onChange={(e) => set(
-                            "modules",
-                            e.target.checked
-                              ? [...draft.modules, key]
-                              : draft.modules.filter((k) => k !== key),
-                          )}
-                          disabled={busy}
-                        />
-                        <span className={styles.checkboxLabel}>
-                          {MODULE_LABELS[key] ?? key}
-                        </span>
-                      </label>
+                      <Checkbox
+                        key={key}
+                        checked={draft.modules.includes(key)}
+                        onChange={(v) => set(
+                          "modules",
+                          v
+                            ? [...draft.modules, key]
+                            : draft.modules.filter((k) => k !== key),
+                        )}
+                        disabled={busy}
+                      >
+                        {MODULE_LABELS[key] ?? key}
+                      </Checkbox>
                     ))}
                 </div>
               )}
@@ -557,17 +540,13 @@ export default function AdminUserForm() {
               error={fieldErrors.is_active}
               hint={isSelf ? "You can't deactivate your own account. Ask another admin to do it." : undefined}
             >
-              <label className={styles.checkboxRow}>
-                <input
-                  type="checkbox"
-                  checked={draft.is_active}
-                  onChange={(e) => set("is_active", e.target.checked)}
-                  disabled={busy || isSelf}
-                />
-                <span className={styles.checkboxLabel}>
-                  Account is active
-                </span>
-              </label>
+              <Checkbox
+                checked={draft.is_active}
+                onChange={(v) => set("is_active", v)}
+                disabled={busy || isSelf}
+              >
+                Account is active
+              </Checkbox>
             </Field>
           )}
 

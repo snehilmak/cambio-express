@@ -174,7 +174,8 @@ export default function OwnerStorePermissions() {
                               checked={draft.matrix[role][resource][action]}
                               onChange={() => toggle(role, resource, action)}
                               disabled={!canEdit}
-                            >{""}</Checkbox>
+                              aria-label={`${action} — ${resource} (${role})`}
+                            />
                           </div>
                         </td>
                       ))}

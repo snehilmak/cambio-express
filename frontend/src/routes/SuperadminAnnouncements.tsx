@@ -11,7 +11,7 @@ import {
 } from "../api/announcements";
 import {
   Breadcrumbs,
-  Alert, Button, Card, ConfirmDialog, Empty, Field,
+  Alert, Button, Card, Checkbox, ConfirmDialog, Empty, Field,
   Input, PageHeader, PageShell, Pill, SectionTitle, Select, Table,
   TableStates, Textarea, tdStyle, thStyle, type PillTone,
 } from "../components/ui";
@@ -188,14 +188,9 @@ function CreateForm({ onCreated }: { onCreated: () => void }) {
             />
           </Field>
           <Field label="Email blast">
-            <label className={styles.checkRow}>
-              <input
-                type="checkbox"
-                checked={broadcast}
-                onChange={(e) => setBroadcast(e.target.checked)}
-              />
-              <span>Also email opted-in users</span>
-            </label>
+            <Checkbox checked={broadcast} onChange={setBroadcast}>
+              Also email opted-in users
+            </Checkbox>
           </Field>
         </div>
         <Field label="Audience">
@@ -277,15 +272,15 @@ function StorePicker({
           <span className={styles.helpText}>No stores match.</span>
         ) : (
           shown.map((s) => (
-            <label key={s.store_id} className={styles.storeOption}>
-              <input
-                type="checkbox"
-                checked={selected.has(s.store_id)}
-                onChange={() => toggle(s.store_id)}
-              />
-              <span>{s.name}</span>
+            <Checkbox
+              key={s.store_id}
+              checked={selected.has(s.store_id)}
+              onChange={() => toggle(s.store_id)}
+              style={{ alignItems: "center", width: "100%" }}
+            >
+              {s.name}{" "}
               <Pill tone="neutral">{s.plan}</Pill>
-            </label>
+            </Checkbox>
           ))
         )}
       </div>

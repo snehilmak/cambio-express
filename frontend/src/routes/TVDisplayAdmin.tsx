@@ -16,7 +16,7 @@ import { formatTimestamp } from "../lib/datetime";
 import {
   Button, ButtonLink, Card, ConfirmDialog, ErrorState, Field,
   IconButton, Input, Loading, PageShell, Section, Select,
-  TabsBar, TabsLink,
+  Switch, TabsBar, TabsLink,
 } from "../components/ui";
 import styles from "./TVDisplayAdmin.module.css";
 
@@ -57,11 +57,6 @@ const ORIENTATION_OPTIONS = [
   { value: "landscape", label: "Landscape (16:9)" },
   { value: "portrait",  label: "Portrait (vertical TV)" },
 ];
-const THEME_OPTIONS = [
-  { value: "light", label: "Light (high readability)" },
-  { value: "dark",  label: "Dark (low-light room)" },
-];
-
 function flagEmoji(iso2: string): string {
   if (!iso2 || iso2.length !== 2) return "";
   const code = iso2.toUpperCase();
@@ -580,15 +575,18 @@ function SettingsAndStatsGrid({
                   ))}
                 </Select>
               </Field>
-              <Field label="Board theme">
-                <Select
-                  value={draft.theme}
-                  onChange={(e) => setDraft((d) => ({ ...d, theme: e.target.value }))}
+              <Field
+                label="Board theme"
+                hint="Dark reads best in low-light rooms; light maximizes daytime readability."
+              >
+                <Switch
+                  checked={draft.theme === "dark"}
+                  onChange={(on) =>
+                    setDraft((d) => ({ ...d, theme: on ? "dark" : "light" }))
+                  }
                 >
-                  {THEME_OPTIONS.map((o) => (
-                    <option key={o.value} value={o.value}>{o.label}</option>
-                  ))}
-                </Select>
+                  {draft.theme === "dark" ? "Dark" : "Light"}
+                </Switch>
               </Field>
             </div>
             <div style={{ marginTop: 16, display: "flex", justifyContent: "flex-end", gap: 12, alignItems: "center" }}>

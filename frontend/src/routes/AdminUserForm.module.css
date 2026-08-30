@@ -20,18 +20,6 @@
   font-family: var(--db-font-display, "Space Grotesk", sans-serif);
 }
 
-.checkboxRow {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  cursor: pointer;
-}
-
-.checkboxLabel {
-  font-size: 0.92rem;
-  color: var(--db-text, #e5e5e5);
-}
-
 /* R-2 custom-access matrix — same treatment as the Store
  * Permissions page's table, scoped to this form. */
 .matrix {

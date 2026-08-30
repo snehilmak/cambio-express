@@ -9,8 +9,8 @@ import { getCurrentIdentity } from "../lib/auth";
 import {
   Breadcrumbs,
   Alert, Button, Card, Checkbox, Empty, ErrorState, Field, Input,
-  Loading, PageHeader, PageShell, Pill, Section, Select, Table,
-  tdStyle, thStyle,
+  Loading, PageHeader, PageShell, Pill, Section, Select, Switch,
+  Table, tdStyle, thStyle,
 } from "../components/ui";
 import styles from "./OwnerCrossStoreDefaults.module.css";
 
@@ -201,14 +201,13 @@ export default function OwnerCrossStoreDefaults() {
                 Block transfers outside business hours
               </Checkbox>
               {applyEnforceHours && (
-                <Field label="State">
-                  <Select
-                    value={enforceHours ? "on" : "off"}
-                    onChange={(e) => setEnforceHours(e.target.value === "on")}
-                  >
-                    <option value="off">Off (default)</option>
-                    <option value="on">On — refuse out-of-hours saves</option>
-                  </Select>
+                <Field
+                  label="State"
+                  hint="When on, out-of-hours transfer saves are refused."
+                >
+                  <Switch checked={enforceHours} onChange={setEnforceHours}>
+                    {enforceHours ? "On" : "Off (default)"}
+                  </Switch>
                 </Field>
               )}
 
@@ -216,14 +215,13 @@ export default function OwnerCrossStoreDefaults() {
                 Require passkey on time-clock punches
               </Checkbox>
               {applyPasskey && (
-                <Field label="State">
-                  <Select
-                    value={passkeyOn ? "on" : "off"}
-                    onChange={(e) => setPasskeyOn(e.target.value === "on")}
-                  >
-                    <option value="off">Off (default)</option>
-                    <option value="on">On — refuse punches without passkey</option>
-                  </Select>
+                <Field
+                  label="State"
+                  hint="When on, punches without a passkey are refused."
+                >
+                  <Switch checked={passkeyOn} onChange={setPasskeyOn}>
+                    {passkeyOn ? "On" : "Off (default)"}
+                  </Switch>
                 </Field>
               )}
 

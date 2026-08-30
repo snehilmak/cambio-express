@@ -11,8 +11,8 @@ import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
 import {
   Breadcrumbs,
-  Alert, Button, Card, ConfirmDialog, DateInput, Field, FormActions, Input, Loading,
-  MoneyInput, PageHeader, PageShell, Select, Textarea,
+  Alert, Button, Card, Checkbox, ConfirmDialog, DateInput, Field, FormActions,
+  Input, Loading, MoneyInput, PageHeader, PageShell, Select, Textarea,
 } from "../components/ui";
 import { useUnsavedGuard } from "../lib/useUnsavedGuard";
 import styles from "./BatchForm.module.css";
@@ -189,13 +189,12 @@ export default function BatchForm() {
               </Select>
             </Field>
             <Field label="Reconciled">
-              <Select
-                value={form.reconciled ? "yes" : "no"}
-                onChange={(e) => set("reconciled", e.target.value === "yes")}
+              <Checkbox
+                checked={form.reconciled}
+                onChange={(v) => set("reconciled", v)}
               >
-                <option value="no">No</option>
-                <option value="yes">Yes</option>
-              </Select>
+                Batch is reconciled
+              </Checkbox>
             </Field>
             <Field label="Transfer dates (optional)">
               <Input type="text"

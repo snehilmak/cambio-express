@@ -11,13 +11,6 @@
   .formActions { grid-column: span 1; }
 }
 
-.checkRow {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.85rem;
-}
-
 .formActions {
   grid-column: span 2;
   display: flex;

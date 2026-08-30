@@ -18,6 +18,7 @@ import {
   Alert,
   Button,
   Card,
+  Checkbox,
   EmptyState,
   Field,
   Input,
@@ -349,10 +350,9 @@ function CreateFlagForm({
         <Field label="Description">
           <Textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} />
         </Field>
-        <label style={{ display: "flex", gap: "0.5rem", alignItems: "center", fontSize: "0.88rem" }}>
-          <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
+        <Checkbox checked={enabled} onChange={setEnabled}>
           Enabled by default
-        </label>
+        </Checkbox>
         <div style={{ display: "flex", gap: "0.5rem" }}>
           <Button type="submit" busy={busy}>Create</Button>
           <Button tone="secondary" onClick={onCancel} type="button">Cancel</Button>

@@ -7,8 +7,8 @@ import {
 } from "../api/tvDisplay";
 import {
   Breadcrumbs,
-  Button, ButtonLink, Card, ErrorState, Field, Input, Loading, PageHeader,
-  PageShell, Table, tdStyle, thStyle,
+  Button, ButtonLink, Card, Checkbox, ErrorState, Field, Input,
+  Loading, PageHeader, PageShell, Table, tdStyle, thStyle,
 } from "../components/ui";
 import styles from "./TVDisplayCountry.module.css";
 
@@ -256,16 +256,15 @@ function BankRow({
         </td>
       ))}
       <td style={tdStyle}>
-        <label className={styles.deleteLabel}>
-          <input
-            type="checkbox"
-            name={`bank-${bank.id}-delete`}
-            value="1"
-            checked={toDelete}
-            onChange={toggleDelete}
-          />
+        <Checkbox
+          name={`bank-${bank.id}-delete`}
+          value="1"
+          checked={toDelete}
+          onChange={toggleDelete}
+          style={{ alignItems: "center" }}
+        >
           delete
-        </label>
+        </Checkbox>
       </td>
     </tr>
   );

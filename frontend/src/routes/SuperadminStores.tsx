@@ -166,7 +166,10 @@ function StoresTable({ rows, selected, onToggle, onToggleAll }: {
       <thead>
         <tr>
           <th style={thStyle}>
-            <Checkbox checked={allSelected} onChange={onToggleAll}>{""}</Checkbox>
+            <Checkbox
+              checked={allSelected} onChange={onToggleAll}
+              aria-label="Select all stores"
+            />
           </th>
           {[
             "Store",
@@ -188,7 +191,8 @@ function StoresTable({ rows, selected, onToggle, onToggleAll }: {
               <Checkbox
                 checked={selected.has(r.store_id)}
                 onChange={() => onToggle(r.store_id)}
-              >{""}</Checkbox>
+                aria-label={`Select ${r.name}`}
+              />
             </td>
             <td style={tdStyle}>
               <div className={styles.storeName}>{r.name}</div>

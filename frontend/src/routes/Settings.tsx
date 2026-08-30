@@ -316,19 +316,15 @@ function ProfileCard() {
           label={<>Appearance<InfoTip text="Follows you to every browser you sign in on. The topbar toggle is a quicker shortcut for the same setting." /></>}
           error={fieldErrors.theme_preference}
         >
-          <Select
-            value={draft.theme_preference ?? "dark"}
-            onChange={(e) =>
-              set(
-                "theme_preference",
-                e.target.value as "dark" | "light",
-              )
+          <Switch
+            checked={(draft.theme_preference ?? "dark") === "light"}
+            onChange={(on) =>
+              set("theme_preference", on ? "light" : "dark")
             }
             disabled={busy}
           >
-            <option value="dark">Dark (default)</option>
-            <option value="light">Light</option>
-          </Select>
+            Light theme (dark is the default)
+          </Switch>
         </Field>
 
         <hr className={styles.profileHr} />

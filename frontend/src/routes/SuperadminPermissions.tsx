@@ -193,7 +193,8 @@ export default function SuperadminPermissions() {
                             <Checkbox
                               checked={draft.matrix[role][resource][action]}
                               onChange={() => toggle(role, resource, action)}
-                            >{""}</Checkbox>
+                              aria-label={`${action} — ${resource} (${role})`}
+                            />
                           </div>
                         </td>
                       ))}
@@ -202,7 +203,8 @@ export default function SuperadminPermissions() {
                           <Checkbox
                             checked={allChecked}
                             onChange={() => toggleAllForRole(role, resource, !allChecked)}
-                          >{""}</Checkbox>
+                            aria-label={`All actions — ${resource} (${role})`}
+                          />
                         </div>
                       </td>
                     </tr>

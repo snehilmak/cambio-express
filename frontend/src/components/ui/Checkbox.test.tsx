@@ -34,6 +34,24 @@ describe("<Checkbox>", () => {
     expect(screen.getByRole("checkbox")).toBeChecked();
   });
 
+  it("supports label-less use via aria-label (matrix cells)", async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    render(
+      <Checkbox
+        checked={false} onChange={onChange}
+        aria-label="read — transfers (admin)"
+      />,
+    );
+    const box = screen.getByRole("checkbox", {
+      name: "read — transfers (admin)",
+    });
+    await user.click(box);
+    expect(onChange).toHaveBeenCalledWith(true);
+    // No visible label span is rendered.
+    expect(box.parentElement?.querySelector("span")).toBeNull();
+  });
+
   it("respects disabled", async () => {
     const user = userEvent.setup();
     const onChange = vi.fn();

@@ -635,7 +635,8 @@ function StorePermissionsPanel({ storeId, storeName }: { storeId: number; storeN
                         <Checkbox
                           checked={draft.matrix[role][resource][action]}
                           onChange={() => toggle(role, resource, action)}
-                        >{""}</Checkbox>
+                          aria-label={`${action} — ${RESOURCE_LABELS[resource] ?? resource} (${role})`}
+                        />
                       </td>
                     ))}
                   </tr>

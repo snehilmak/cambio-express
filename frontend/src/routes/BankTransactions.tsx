@@ -15,7 +15,7 @@ import {
 } from "../api/bankSync";
 import {
   Alert, Breadcrumbs, Button, ButtonLink,
-  Card, DateInput, Empty, Field, Input, KpiCard, KpiGrid,
+  Card, Checkbox, DateInput, Empty, Field, Input, KpiCard, KpiGrid,
   monoStyle, PageHeader, PageShell, Pager, Select, Table, TableStates,
   tdStyle, thStyle,
 } from "../components/ui";
@@ -186,16 +186,14 @@ export default function BankTransactions() {
             />
           </Field>
           <Field label="Filter">
-            <label className={styles.checkboxRow}>
-              <input
-                type="checkbox"
-                checked={filters.uncategorized_only}
-                onChange={(e) =>
-                  setParam("uncategorized_only", e.target.checked ? "1" : "")
-                }
-              />
-              <span>Uncategorized only</span>
-            </label>
+            <Checkbox
+              checked={filters.uncategorized_only}
+              onChange={(v) =>
+                setParam("uncategorized_only", v ? "1" : "")
+              }
+            >
+              Uncategorized only
+            </Checkbox>
           </Field>
         </div>
 
