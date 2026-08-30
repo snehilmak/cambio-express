@@ -3541,6 +3541,308 @@
         "title": "DiscountCodeToggleRequest",
         "type": "object"
       },
+      "EmployeeCreateRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "address_line1": {
+            "default": "",
+            "maxLength": 255,
+            "title": "Address Line1",
+            "type": "string"
+          },
+          "address_line2": {
+            "default": "",
+            "maxLength": 255,
+            "title": "Address Line2",
+            "type": "string"
+          },
+          "date_of_birth": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date Of Birth"
+          },
+          "email": {
+            "default": "",
+            "maxLength": 255,
+            "title": "Email",
+            "type": "string"
+          },
+          "hired_on": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hired On"
+          },
+          "hourly_rate": {
+            "default": 0.0,
+            "maximum": 10000.0,
+            "minimum": 0.0,
+            "title": "Hourly Rate",
+            "type": "number"
+          },
+          "name": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "payroll_schedule": {
+            "default": "",
+            "maxLength": 20,
+            "title": "Payroll Schedule",
+            "type": "string"
+          },
+          "phone": {
+            "default": "",
+            "maxLength": 40,
+            "title": "Phone",
+            "type": "string"
+          },
+          "user_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Id"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "EmployeeCreateRequest",
+        "type": "object"
+      },
+      "EmployeeLinkRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "user_id": {
+            "minimum": 1.0,
+            "title": "User Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "user_id"
+        ],
+        "title": "EmployeeLinkRequest",
+        "type": "object"
+      },
+      "EmployeeLoginInfo": {
+        "additionalProperties": false,
+        "description": "The login half of a person, when one is linked.",
+        "properties": {
+          "has_custom_permissions": {
+            "title": "Has Custom Permissions",
+            "type": "boolean"
+          },
+          "is_active": {
+            "title": "Is Active",
+            "type": "boolean"
+          },
+          "role": {
+            "title": "Role",
+            "type": "string"
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "integer"
+          },
+          "username": {
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "user_id",
+          "username",
+          "role",
+          "is_active",
+          "has_custom_permissions"
+        ],
+        "title": "EmployeeLoginInfo",
+        "type": "object"
+      },
+      "EmployeeUpdateRequest": {
+        "additionalProperties": false,
+        "description": "PATCH semantics \u2014 omitted fields stay unchanged. The two\n``clear_*`` flags reset the nullable dates (None can't be the\nclear sentinel on an optional field).",
+        "properties": {
+          "address_line1": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Address Line1"
+          },
+          "address_line2": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Address Line2"
+          },
+          "clear_date_of_birth": {
+            "default": false,
+            "title": "Clear Date Of Birth",
+            "type": "boolean"
+          },
+          "clear_hired_on": {
+            "default": false,
+            "title": "Clear Hired On",
+            "type": "boolean"
+          },
+          "date_of_birth": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date Of Birth"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "hired_on": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hired On"
+          },
+          "hourly_rate": {
+            "anyOf": [
+              {
+                "maximum": 10000.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hourly Rate"
+          },
+          "is_active": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Active"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "payroll_schedule": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Payroll Schedule"
+          },
+          "phone": {
+            "anyOf": [
+              {
+                "maxLength": 40,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phone"
+          }
+        },
+        "title": "EmployeeUpdateRequest",
+        "type": "object"
+      },
+      "EmployeesListResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "login_only": {
+            "items": {
+              "$ref": "#/components/schemas/LoginOnlyRow"
+            },
+            "title": "Login Only",
+            "type": "array"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/api__Modules__Admin__Requests__employees__EmployeeRow"
+            },
+            "title": "Rows",
+            "type": "array"
+          }
+        },
+        "required": [
+          "rows",
+          "login_only"
+        ],
+        "title": "EmployeesListResponse",
+        "type": "object"
+      },
       "FeatureFlagCreateRequest": {
         "additionalProperties": false,
         "description": "POST body for /feature-flags. Mirrors the legacy\n/superadmin/features/new form. `key` is slug-style \u2014 lowercase\nletters, digits, underscores; the convention is `addon_<thing>`\nfor paid add-ons or `<feature>` for general toggles.",
@@ -5584,6 +5886,41 @@
           "password"
         ],
         "title": "LoginCrossStoreRequest",
+        "type": "object"
+      },
+      "LoginOnlyRow": {
+        "additionalProperties": false,
+        "description": "A store login with no HR record yet \u2014 shown in the hub with\nLink / Create-record actions so it can't go invisible.",
+        "properties": {
+          "full_name": {
+            "title": "Full Name",
+            "type": "string"
+          },
+          "is_active": {
+            "title": "Is Active",
+            "type": "boolean"
+          },
+          "role": {
+            "title": "Role",
+            "type": "string"
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "integer"
+          },
+          "username": {
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "user_id",
+          "username",
+          "full_name",
+          "role",
+          "is_active"
+        ],
+        "title": "LoginOnlyRow",
         "type": "object"
       },
       "LoginRequest": {
@@ -13349,6 +13686,95 @@
         "title": "VendorWriteRequest",
         "type": "object"
       },
+      "api__Modules__Admin__Requests__employees__EmployeeRow": {
+        "additionalProperties": false,
+        "properties": {
+          "address_line1": {
+            "title": "Address Line1",
+            "type": "string"
+          },
+          "address_line2": {
+            "title": "Address Line2",
+            "type": "string"
+          },
+          "date_of_birth": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date Of Birth"
+          },
+          "email": {
+            "title": "Email",
+            "type": "string"
+          },
+          "hired_on": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hired On"
+          },
+          "hourly_rate": {
+            "title": "Hourly Rate",
+            "type": "number"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "is_active": {
+            "title": "Is Active",
+            "type": "boolean"
+          },
+          "login": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EmployeeLoginInfo"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "payroll_schedule": {
+            "title": "Payroll Schedule",
+            "type": "string"
+          },
+          "phone": {
+            "title": "Phone",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "is_active",
+          "hourly_rate",
+          "hired_on",
+          "date_of_birth",
+          "email",
+          "phone",
+          "address_line1",
+          "address_line2",
+          "payroll_schedule",
+          "login"
+        ],
+        "title": "EmployeeRow",
+        "type": "object"
+      },
       "api__Modules__Customers__Requests__customers__CustomerRow": {
         "additionalProperties": false,
         "description": "One row in the autocomplete picker. The JSON keys match the\nlegacy `Customer.to_dict()` output 1:1.",
@@ -13869,6 +14295,390 @@
           }
         },
         "summary": "Export Admin Audit Log Csv Route",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/employees": {
+      "get": {
+        "description": "Everyone at the store: HR records (with linked login info)\nplus login-only accounts awaiting an HR record.",
+        "operationId": "list_employees_route_admin_employees_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmployeesListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Employees Route",
+        "tags": [
+          "admin"
+        ]
+      },
+      "post": {
+        "operationId": "create_employee_route_admin_employees_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmployeeCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/api__Modules__Admin__Requests__employees__EmployeeRow"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Employee Route",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/employees/{employee_id}": {
+      "patch": {
+        "operationId": "update_employee_route_admin_employees__employee_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "employee_id",
+            "required": true,
+            "schema": {
+              "minimum": 1,
+              "title": "Employee Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmployeeUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/api__Modules__Admin__Requests__employees__EmployeeRow"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Employee Route",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/employees/{employee_id}/link": {
+      "delete": {
+        "description": "Detach the login. The User account stays active \u2014 deactivate\nit via the login section if the person should lose access.",
+        "operationId": "unlink_employee_login_route_admin_employees__employee_id__link_delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "employee_id",
+            "required": true,
+            "schema": {
+              "minimum": 1,
+              "title": "Employee Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/api__Modules__Admin__Requests__employees__EmployeeRow"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Unlink Employee Login Route",
+        "tags": [
+          "admin"
+        ]
+      },
+      "post": {
+        "description": "Attach a login account to this person (1:1).",
+        "operationId": "link_employee_login_route_admin_employees__employee_id__link_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "employee_id",
+            "required": true,
+            "schema": {
+              "minimum": 1,
+              "title": "Employee Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmployeeLinkRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/api__Modules__Admin__Requests__employees__EmployeeRow"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Link Employee Login Route",
         "tags": [
           "admin"
         ]

@@ -101,6 +101,70 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/employees": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Employees Route
+         * @description Everyone at the store: HR records (with linked login info)
+         *     plus login-only accounts awaiting an HR record.
+         */
+        get: operations["list_employees_route_admin_employees_get"];
+        put?: never;
+        /** Create Employee Route */
+        post: operations["create_employee_route_admin_employees_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/employees/{employee_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update Employee Route */
+        patch: operations["update_employee_route_admin_employees__employee_id__patch"];
+        trace?: never;
+    };
+    "/admin/employees/{employee_id}/link": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Link Employee Login Route
+         * @description Attach a login account to this person (1:1).
+         */
+        post: operations["link_employee_login_route_admin_employees__employee_id__link_post"];
+        /**
+         * Unlink Employee Login Route
+         * @description Detach the login. The User account stays active — deactivate
+         *     it via the login section if the person should lose access.
+         */
+        delete: operations["unlink_employee_login_route_admin_employees__employee_id__link_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/redeem-connect-code": {
         parameters: {
             query?: never;
@@ -7670,6 +7734,113 @@ export interface components {
             /** Is Active */
             is_active: boolean;
         };
+        /** EmployeeCreateRequest */
+        EmployeeCreateRequest: {
+            /**
+             * Address Line1
+             * @default
+             */
+            address_line1: string;
+            /**
+             * Address Line2
+             * @default
+             */
+            address_line2: string;
+            /** Date Of Birth */
+            date_of_birth?: string | null;
+            /**
+             * Email
+             * @default
+             */
+            email: string;
+            /** Hired On */
+            hired_on?: string | null;
+            /**
+             * Hourly Rate
+             * @default 0
+             */
+            hourly_rate: number;
+            /** Name */
+            name: string;
+            /**
+             * Payroll Schedule
+             * @default
+             */
+            payroll_schedule: string;
+            /**
+             * Phone
+             * @default
+             */
+            phone: string;
+            /** User Id */
+            user_id?: number | null;
+        };
+        /** EmployeeLinkRequest */
+        EmployeeLinkRequest: {
+            /** User Id */
+            user_id: number;
+        };
+        /**
+         * EmployeeLoginInfo
+         * @description The login half of a person, when one is linked.
+         */
+        EmployeeLoginInfo: {
+            /** Has Custom Permissions */
+            has_custom_permissions: boolean;
+            /** Is Active */
+            is_active: boolean;
+            /** Role */
+            role: string;
+            /** User Id */
+            user_id: number;
+            /** Username */
+            username: string;
+        };
+        /**
+         * EmployeeUpdateRequest
+         * @description PATCH semantics — omitted fields stay unchanged. The two
+         *     ``clear_*`` flags reset the nullable dates (None can't be the
+         *     clear sentinel on an optional field).
+         */
+        EmployeeUpdateRequest: {
+            /** Address Line1 */
+            address_line1?: string | null;
+            /** Address Line2 */
+            address_line2?: string | null;
+            /**
+             * Clear Date Of Birth
+             * @default false
+             */
+            clear_date_of_birth: boolean;
+            /**
+             * Clear Hired On
+             * @default false
+             */
+            clear_hired_on: boolean;
+            /** Date Of Birth */
+            date_of_birth?: string | null;
+            /** Email */
+            email?: string | null;
+            /** Hired On */
+            hired_on?: string | null;
+            /** Hourly Rate */
+            hourly_rate?: number | null;
+            /** Is Active */
+            is_active?: boolean | null;
+            /** Name */
+            name?: string | null;
+            /** Payroll Schedule */
+            payroll_schedule?: string | null;
+            /** Phone */
+            phone?: string | null;
+        };
+        /** EmployeesListResponse */
+        EmployeesListResponse: {
+            /** Login Only */
+            login_only: components["schemas"]["LoginOnlyRow"][];
+            /** Rows */
+            rows: components["schemas"]["api__Modules__Admin__Requests__employees__EmployeeRow"][];
+        };
         /**
          * FeatureFlagCreateRequest
          * @description POST body for /feature-flags. Mirrors the legacy
@@ -8417,6 +8588,23 @@ export interface components {
         LoginCrossStoreRequest: {
             /** Password */
             password: string;
+            /** Username */
+            username: string;
+        };
+        /**
+         * LoginOnlyRow
+         * @description A store login with no HR record yet — shown in the hub with
+         *     Link / Create-record actions so it can't go invisible.
+         */
+        LoginOnlyRow: {
+            /** Full Name */
+            full_name: string;
+            /** Is Active */
+            is_active: boolean;
+            /** Role */
+            role: string;
+            /** User Id */
+            user_id: number;
             /** Username */
             username: string;
         };
@@ -12109,6 +12297,32 @@ export interface components {
              */
             phone: string;
         };
+        /** EmployeeRow */
+        api__Modules__Admin__Requests__employees__EmployeeRow: {
+            /** Address Line1 */
+            address_line1: string;
+            /** Address Line2 */
+            address_line2: string;
+            /** Date Of Birth */
+            date_of_birth: string | null;
+            /** Email */
+            email: string;
+            /** Hired On */
+            hired_on: string | null;
+            /** Hourly Rate */
+            hourly_rate: number;
+            /** Id */
+            id: number;
+            /** Is Active */
+            is_active: boolean;
+            login: components["schemas"]["EmployeeLoginInfo"] | null;
+            /** Name */
+            name: string;
+            /** Payroll Schedule */
+            payroll_schedule: string;
+            /** Phone */
+            phone: string;
+        };
         /**
          * CustomerRow
          * @description One row in the autocomplete picker. The JSON keys match the
@@ -12369,6 +12583,189 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_employees_route_admin_employees_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmployeesListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_employee_route_admin_employees_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EmployeeCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["api__Modules__Admin__Requests__employees__EmployeeRow"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_employee_route_admin_employees__employee_id__patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                employee_id: number;
+            };
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EmployeeUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["api__Modules__Admin__Requests__employees__EmployeeRow"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    link_employee_login_route_admin_employees__employee_id__link_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                employee_id: number;
+            };
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EmployeeLinkRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["api__Modules__Admin__Requests__employees__EmployeeRow"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    unlink_employee_login_route_admin_employees__employee_id__link_delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                employee_id: number;
+            };
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["api__Modules__Admin__Requests__employees__EmployeeRow"];
                 };
             };
             /** @description Validation Error */

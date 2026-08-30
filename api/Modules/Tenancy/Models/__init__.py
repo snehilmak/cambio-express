@@ -304,14 +304,22 @@ class User(Base):
 
 
 class StoreEmployee(Base):
-    """Admin-managed list of employee NAMES per store — not login
-    accounts.
+    """The per-store EMPLOYEE record — the HR half of a person
+    (E-1, unified Employees hub).
 
-    All in-store employees share a single login (the store's employee
-    User account). This table holds the roster of real people whose
-    names can be picked from the "Processed by" dropdown on the
-    transfer form. Admins deactivate (never delete) entries so
-    historical attribution survives.
+    Historically this was just a roster of names for the transfer
+    form's "Processed by" dropdown. It is now the canonical HR
+    record: payroll basics, personal/contact details, and an
+    OPTIONAL link to a login account (``user_id``). A person can
+    exist with no login (a cashier who only appears in attribution
+    dropdowns and the time clock); a login can exist briefly with
+    no HR record (shown as "login-only" in the Employees hub until
+    linked). Keeping HR data here — not on ``User`` — keeps
+    payroll/personal fields off the auth row and behind the same
+    ``users.*`` permission gates without entangling auth.
+
+    Admins deactivate (never delete) entries so historical
+    attribution survives.
     """
 
     __tablename__ = "store_employee"
@@ -326,6 +334,26 @@ class StoreEmployee(Base):
     # value from the Team settings page. A negative rate doesn't
     # make sense; the admin endpoint enforces ``>= 0``.
     hourly_rate = Column(Float, default=0.0, nullable=False)
+
+    # ── E-1: login link + HR/personal fields ──
+    # Optional 1:1 link to the person's login account. Unique so
+    # one User can never be two people; nullable because plenty of
+    # employees never sign in. ondelete SET NULL isn't declared —
+    # Users are soft-deactivated, never hard-deleted.
+    user_id = Column(
+        Integer, ForeignKey("user.id"), nullable=True, unique=True,
+        index=True,
+    )
+    hired_on      = Column(Date, nullable=True)
+    date_of_birth = Column(Date, nullable=True)
+    email         = Column(String(255), default="", nullable=False)
+    phone         = Column(String(40), default="", nullable=False)
+    address_line1 = Column(String(255), default="", nullable=False)
+    address_line2 = Column(String(255), default="", nullable=False)
+    # Display metadata for the payroll section (weekly / biweekly /
+    # semimonthly / monthly). Empty = not configured; validation
+    # lives in the Admin service, not the column.
+    payroll_schedule = Column(String(20), default="", nullable=False)
 
 
 class StoreOwnerLink(Base):
