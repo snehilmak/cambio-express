@@ -24,6 +24,7 @@ import {
   FormActions, Input, Loading, MoneyInput, PageHeader, PageShell, Pill,
   SectionTitle, Select, Table, Textarea, tdStyle, thStyle,
   type PillTone,
+  useToast,
 } from "../components/ui";
 import styles from "./ReturnCheckForm.module.css";
 
@@ -65,6 +66,7 @@ export default function ReturnCheckForm() {
   const isEdit = id !== undefined;
   const rcId = isEdit ? Number(id) : NaN;
   const navigate = useNavigate();
+  const toast = useToast();
   const identity = getCurrentIdentity();
 
   const detail = useReturnCheck(isEdit ? rcId : undefined);
@@ -137,6 +139,10 @@ export default function ReturnCheckForm() {
       };
       if (isEdit) await updateReturnCheck(rcId, body);
       else        await createReturnCheck(body);
+      toast({
+        message: isEdit ? "Return check updated." : "Return check recorded.",
+        tone: "success",
+      });
       navigate("/return-checks", { replace: true });
     } catch (err) {
       if (err instanceof ApiError) {

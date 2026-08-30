@@ -3,7 +3,9 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 
 import { LoginChrome } from "../components/LoginChrome";
 import chrome from "../components/LoginChrome.module.css";
-import { Alert, Button, Checkbox, Field, Input } from "../components/ui";
+import {
+  Alert, Button, Checkbox, Field, Input, Loading,
+} from "../components/ui";
 import { api, ApiError } from "../lib/api";
 import { setAccessToken } from "../lib/auth";
 import {
@@ -226,7 +228,7 @@ export function TwoFactorEnroll() {
       </p>
       {error && <Alert tone="error">{error}</Alert>}
       {!enrollment ? (
-        <Alert tone="info">Loading enrollment details…</Alert>
+        <Loading />
       ) : (
         <>
           <div

@@ -19,6 +19,7 @@ import {
   Button,
   Card,
   Checkbox,
+  ConfirmDialog,
   EmptyState,
   Field,
   Input,
@@ -118,6 +119,7 @@ function FlagRow({
   const toast = useToast();
   const toastApiError = useApiErrorToast();
   const [busy, setBusy] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   async function handleToggle() {
     setBusy(true);
@@ -133,7 +135,6 @@ function FlagRow({
   }
 
   async function handleDelete() {
-    if (!confirm(`Delete flag "${flag.key}"? This also removes all per-store overrides.`)) return;
     setBusy(true);
     try {
       await deleteFeatureFlag(flag.key);
@@ -143,6 +144,7 @@ function FlagRow({
       toastApiError(err, "Delete failed");
     } finally {
       setBusy(false);
+      setConfirmingDelete(false);
     }
   }
 
@@ -175,9 +177,20 @@ function FlagRow({
               },
               {
                 label: "Delete", tone: "danger",
-                onClick: handleDelete, disabled: busy,
+                onClick: () => setConfirmingDelete(true),
+                disabled: busy,
               },
             ]}
+          />
+          <ConfirmDialog
+            open={confirmingDelete}
+            title="Delete feature flag"
+            message={`Delete flag "${flag.key}"? This also removes all per-store overrides.`}
+            confirmLabel="Delete"
+            confirmTone="danger"
+            busy={busy}
+            onConfirm={() => { void handleDelete(); }}
+            onCancel={() => setConfirmingDelete(false)}
           />
         </td>
       </tr>

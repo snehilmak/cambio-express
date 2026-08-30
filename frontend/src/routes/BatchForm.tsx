@@ -13,6 +13,7 @@ import {
   Breadcrumbs,
   Alert, Button, Card, Checkbox, ConfirmDialog, DateInput, Field, FormActions,
   Input, Loading, MoneyInput, PageHeader, PageShell, Select, Textarea,
+  useToast,
 } from "../components/ui";
 import { useUnsavedGuard } from "../lib/useUnsavedGuard";
 import styles from "./BatchForm.module.css";
@@ -55,6 +56,7 @@ export default function BatchForm() {
   const isEdit = id !== undefined;
   const batchId = isEdit ? Number(id) : NaN;
   const navigate = useNavigate();
+  const toast = useToast();
   const identity = getCurrentIdentity();
 
   const detail = useBatch(isEdit ? batchId : undefined);
@@ -108,6 +110,10 @@ export default function BatchForm() {
       const result = isEdit
         ? await updateBatch(batchId, body)
         : await createBatch(body);
+      toast({
+        message: isEdit ? "Batch updated." : "Batch created.",
+        tone: "success",
+      });
       navigate(`/batches`, { replace: true });
       void result;
     } catch (err) {

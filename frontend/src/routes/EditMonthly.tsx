@@ -12,6 +12,7 @@ import {
   Breadcrumbs,
   Alert, Button, Card, ConfirmDialog, FormActions, Loading, MoneyInput,
   PageHeader, PageShell, Textarea,
+  useToast,
 } from "../components/ui";
 import { useUnsavedGuard } from "../lib/useUnsavedGuard";
 import styles from "./EditMonthly.module.css";
@@ -72,6 +73,7 @@ const SECTIONS: Array<"Income" | "Expenses" | "Cash flow"> = [
 
 export default function EditMonthly() {
   const navigate = useNavigate();
+  const toast = useToast();
   const identity = getCurrentIdentity();
   const [sp]     = useSearchParams();
   const year  = Number(sp.get("year"));
@@ -131,6 +133,7 @@ export default function EditMonthly() {
         }
       }
       await updateMonthly(year, month, body);
+      toast({ message: "Monthly P&L saved.", tone: "success" });
       navigate(`/monthly?year=${year}&month=${month}`, { replace: true });
     } catch (e) {
       setErr(e instanceof ApiError ? e.message : "Could not save P&L.");

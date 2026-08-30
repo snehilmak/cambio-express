@@ -16,7 +16,7 @@ import { formatTimestamp } from "../lib/datetime";
 import {
   Button, ButtonLink, Card, ConfirmDialog, ErrorState, Field,
   IconButton, Input, Loading, PageShell, Section, Select,
-  Switch, TabsBar, TabsLink,
+  Switch, TabsBar, TabsLink, useToast,
 } from "../components/ui";
 import styles from "./TVDisplayAdmin.module.css";
 
@@ -511,7 +511,7 @@ function SettingsAndStatsGrid({
     orientation: data.orientation || "auto",
     theme:       data.theme || "light",
   }));
-  const [saved, setSaved] = useState(false);
+  const toast = useToast();
 
   // Re-sync if the upstream data changes (e.g. after a save invalidation).
   useEffect(() => {
@@ -535,10 +535,8 @@ function SettingsAndStatsGrid({
 
   async function submit(e: FormEvent) {
     e.preventDefault();
-    setSaved(false);
     await onSave(draft);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+    toast({ message: "Display settings saved.", tone: "success" });
   }
 
   return (
@@ -590,7 +588,6 @@ function SettingsAndStatsGrid({
               </Field>
             </div>
             <div style={{ marginTop: 16, display: "flex", justifyContent: "flex-end", gap: 12, alignItems: "center" }}>
-              {saved && <span className={styles.savedFlash}>Saved</span>}
               <Button
                 type="submit"
                 busy={savePending}

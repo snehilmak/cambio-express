@@ -16,6 +16,7 @@ import {
   Field, InfoTip, Input,
   Loading, Modal, PageHeader, PageShell, Pill, RowActions, Select, space, Table,
   TableSkeleton, Textarea, tdStyle, thStyle, useToast,
+  Empty,
 } from "../components/ui";
 import { getCurrentIdentity } from "../lib/auth";
 import styles from "./AdminTimeClock.module.css";
@@ -503,7 +504,7 @@ function HistoryPanel({ entryId }: { entryId: number }) {
     );
   }
   if (!data || data.rows.length === 0) {
-    return <span className={styles.subtle}>No history yet.</span>;
+    return <Empty>No history yet.</Empty>;
   }
   return (
     <ul className={styles.historyList}>

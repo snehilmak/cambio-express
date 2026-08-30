@@ -187,10 +187,10 @@ function Hero({
 function HistoryTable({ rows }: { rows: ReferralRedemptionRow[] }) {
   if (rows.length === 0) {
     return (
-      <p className={styles.emptyTable}>
+      <Empty>
         No referrals yet. Share your code above — your first credit
         posts the moment someone subscribes.
-      </p>
+      </Empty>
     );
   }
   return (

@@ -26,6 +26,7 @@ import {
   Alert, Button, ButtonLink, Card, Checkbox, ConfirmDialog, ErrorState, Field,
   InfoTip, Input, Loading, PageHeader, PageShell, Pill, SectionTitle, Select,
   space, Switch, TabsBar, TabsLink, useToast,
+  Empty,
 } from "../components/ui";
 import styles from "./Settings.module.css";
 
@@ -481,7 +482,7 @@ function PasskeysCard() {
         />
       )}
       {data && data.passkeys.length === 0 && !isLoading && (
-        <p className={styles.muted}>No passkeys registered yet.</p>
+        <Empty>No passkeys registered yet.</Empty>
       )}
       {data && data.passkeys.length > 0 && (
         <ul className={styles.list}>

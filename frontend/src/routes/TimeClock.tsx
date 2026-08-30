@@ -16,8 +16,9 @@ import { getCurrentCoordinates } from "../lib/geolocation";
 import { passkeysSupported, performPasskeyAssert } from "../lib/webauthn";
 import {
   Breadcrumbs,
-  Alert, Button, Card, EmptyState, Empty, ErrorState, Field, InfoTip, Input,
+  Button, Card, EmptyState, Empty, ErrorState, Field, InfoTip, Input,
   Loading, PageHeader, PageShell, Select, Table, tdStyle, thStyle,
+  useToast,
 } from "../components/ui";
 import styles from "./TimeClock.module.css";
 
@@ -41,8 +42,7 @@ export default function TimeClock() {
 
   const [pickedEmpId, setPickedEmpId] = useState<number | "">("");
   const [notes, setNotes]             = useState("");
-  const [flash, setFlash]             =
-    useState<{ kind: "ok" | "err"; msg: string } | null>(null);
+  const toast = useToast();
 
   const openByEmp = useMemo(() => {
     const map = new Map<number, TimeClockEntryRow>();
@@ -72,7 +72,6 @@ export default function TimeClock() {
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
-    setFlash(null);
     if (pickedEmpId === "") return;
     const empId = Number(pickedEmpId);
     const empName =
@@ -112,21 +111,21 @@ export default function TimeClock() {
       }
       if (pickedIsOpen) {
         await clockOut.mutateAsync(punch);
-        setFlash({ kind: "ok", msg: `${empName} clocked out.` });
+        toast({ message: `${empName} clocked out.`, tone: "success" });
       } else {
         await clockIn.mutateAsync(punch);
-        setFlash({ kind: "ok", msg: `${empName} clocked in.` });
+        toast({ message: `${empName} clocked in.`, tone: "success" });
       }
       setNotes("");
       refresh();
     } catch (err) {
-      setFlash({
-        kind: "err",
-        msg: err instanceof ApiError
+      toast({
+        message: err instanceof ApiError
           ? err.message
           : err instanceof Error
             ? err.message
             : "Couldn't record the punch.",
+        tone: "error",
       });
     }
   }
@@ -208,11 +207,6 @@ export default function TimeClock() {
                 onChange={(e) => setNotes(e.target.value)}
               />
             </Field>
-            {flash && (
-              <Alert tone={flash.kind === "ok" ? "success" : "error"}>
-                {flash.msg}
-              </Alert>
-            )}
             <div className={styles.actions}>
               {pickedIsOpen && (
                 <Button
@@ -226,29 +220,28 @@ export default function TimeClock() {
                   }
                   onClick={async () => {
                     if (pickedEmpId === "") return;
-                    setFlash(null);
                     const empId = Number(pickedEmpId);
                     try {
                       if (pickedOnBreak) {
                         await stopBrk.mutateAsync({
                           store_employee_id: empId,
                         });
-                        setFlash({ kind: "ok", msg: "Back from break." });
+                        toast({ message: "Back from break.", tone: "success" });
                       } else {
                         await startBrk.mutateAsync({
                           store_employee_id: empId,
                         });
-                        setFlash({ kind: "ok", msg: "Break started." });
+                        toast({ message: "Break started.", tone: "success" });
                       }
                       refresh();
                     } catch (err) {
-                      setFlash({
-                        kind: "err",
-                        msg: err instanceof ApiError
+                      toast({
+                        message: err instanceof ApiError
                           ? err.message
                           : err instanceof Error
                             ? err.message
                             : "Couldn't update break.",
+                        tone: "error",
                       });
                     }
                   }}

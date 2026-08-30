@@ -4,7 +4,7 @@ import { api } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
 import { useUrlFilterState } from "../lib/useUrlFilterState";
 import {
-  Breadcrumbs, Card, EmptyState, Input, Loading, PageHeader, PageShell,
+  Breadcrumbs, Card, EmptyState, ErrorState, Input, Loading, PageHeader, PageShell,
   Pager, Pill, Table,
 } from "../components/ui";
 
@@ -40,7 +40,7 @@ function useOwnerUsers(storeId: number | null, q: string, page: number) {
 
 export default function OwnerUsers() {
   const filters = useUrlFilterState({ q: "" });
-  const { data, isLoading, isError } = useOwnerUsers(null, filters.params.q, filters.page);
+  const { data, isLoading, isError, refetch } = useOwnerUsers(null, filters.params.q, filters.page);
   const setPage = filters.setPage;
 
   return (
@@ -64,7 +64,12 @@ export default function OwnerUsers() {
       </div>
 
       {isLoading && <Loading />}
-      {isError && <EmptyState title="Error" body="Could not load users." />}
+      {isError && (
+        <ErrorState
+          message="Could not load users."
+          onRetry={() => { void refetch(); }}
+        />
+      )}
 
       {data && data.rows.length === 0 && (
         <EmptyState title="No users found" body="No matching users across your stores." />

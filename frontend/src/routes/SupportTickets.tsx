@@ -11,6 +11,7 @@ import {
   Alert, Breadcrumbs, Button, Card, EmptyState, ErrorState, Field,
   Input, Loading, PageHeader, PageShell, Pill, Section, Select,
   Table, tdStyle, Textarea, thStyle,
+  useToast,
 } from "../components/ui";
 import styles from "./SupportTickets.module.css";
 
@@ -34,13 +35,13 @@ export default function SupportTickets() {
 function SupportTicketsInner() {
   const tickets = useMyTickets();
   const qc = useQueryClient();
+  const toast = useToast();
   const [showForm, setShowForm] = useState(false);
   const [category, setCategory] = useState("question");
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -52,8 +53,10 @@ function SupportTicketsInner() {
       setSubject("");
       setBody("");
       setShowForm(false);
-      setSuccess(true);
-      setTimeout(() => setSuccess(false), 4000);
+      toast({
+        message: "Ticket submitted — we'll get back to you soon.",
+        tone: "success",
+      });
       void qc.invalidateQueries({ queryKey: ["tickets"] });
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not submit ticket.");
@@ -78,7 +81,6 @@ function SupportTicketsInner() {
         }
       />
 
-      {success && <Alert tone="success">Ticket submitted — we'll get back to you soon.</Alert>}
       {error && <Alert tone="error">{error}</Alert>}
 
       {showForm && (

@@ -14,6 +14,7 @@ import {
   Alert, Button, Card, Checkbox, ConfirmDialog, Empty, Field,
   Input, PageHeader, PageShell, Pill, SectionTitle, Select, Table,
   TableStates, Textarea, tdStyle, thStyle, type PillTone,
+  Loading,
 } from "../components/ui";
 import { useSuperadminStores } from "../api/superadmin";
 import { ApiError } from "../lib/api";
@@ -256,7 +257,7 @@ function StorePicker({
     onChange(next);
   }
 
-  if (isLoading) return <p className={styles.helpText}>Loading stores…</p>;
+  if (isLoading) return <Loading />;
   if (isError) return <Alert tone="error">Could not load stores.</Alert>;
 
   return (

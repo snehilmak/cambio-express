@@ -14,6 +14,7 @@ import {
   Breadcrumbs,
   Button, Card, ConfirmDialog, ErrorState, Loading, PageHeader, PageShell,
   Section, Table, tdStyle, thStyle,
+  Empty,
 } from "../components/ui";
 import styles from "./OwnerConnect.module.css";
 
@@ -208,10 +209,10 @@ export default function OwnerConnect() {
               </tbody>
             </Table>
           ) : (
-            <p className={styles.empty}>
+            <Empty>
               No codes redeemed yet. Stores you've connected will show
               up here.
-            </p>
+            </Empty>
           )}
         </Card>
       </Section>

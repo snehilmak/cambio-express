@@ -5,7 +5,7 @@ import { getCurrentIdentity } from "../lib/auth";
 import { formatTimestamp } from "../lib/datetime";
 import { useUrlFilterState } from "../lib/useUrlFilterState";
 import {
-  Breadcrumbs, Card, EmptyState, Input, Loading, PageHeader, PageShell,
+  Breadcrumbs, Card, EmptyState, ErrorState, Input, Loading, PageHeader, PageShell,
   Pager, Pill, Table,
 } from "../components/ui";
 
@@ -43,7 +43,7 @@ function useOwnerActivity(q: string, page: number) {
 
 export default function OwnerActivity() {
   const filters = useUrlFilterState({ q: "" });
-  const { data, isLoading, isError } = useOwnerActivity(filters.params.q, filters.page);
+  const { data, isLoading, isError, refetch } = useOwnerActivity(filters.params.q, filters.page);
   const setPage = filters.setPage;
 
   return (
@@ -64,7 +64,12 @@ export default function OwnerActivity() {
       </div>
 
       {isLoading && <Loading />}
-      {isError && <EmptyState title="Error" body="Could not load activity." />}
+      {isError && (
+        <ErrorState
+          message="Could not load activity."
+          onRetry={() => { void refetch(); }}
+        />
+      )}
 
       {data && data.rows.length === 0 && (
         <EmptyState title="No activity" body="No matching events found." />

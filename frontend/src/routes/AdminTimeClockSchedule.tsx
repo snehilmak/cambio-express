@@ -12,8 +12,8 @@ import { useEmployees } from "../api/transfers";
 import { ApiError } from "../lib/api";
 import {
   Breadcrumbs,
-  Alert, Button, Card, ConfirmDialog, EmptyState, ErrorState, Field, Input,
-  Loading, PageHeader, PageShell, Select,
+  Button, Card, ConfirmDialog, EmptyState, ErrorState, Field, Input,
+  Loading, PageHeader, PageShell, Select, useToast,
 } from "../components/ui";
 import styles from "./AdminTimeClockSchedule.module.css";
 
@@ -33,9 +33,7 @@ export default function AdminTimeClockSchedule() {
   const [weekStart, setWeekStart] = useState(() => mondayOf(new Date()));
   const weekEnd     = useMemo(() => addDays(weekStart, 7), [weekStart]);
   const shifts      = useShifts(isoDate(weekStart), isoDate(weekEnd));
-  const [flash, setFlash] = useState<
-    { kind: "ok" | "err"; msg: string } | null
-  >(null);
+  const toast = useToast();
 
   function refresh() {
     queryClient.invalidateQueries({ queryKey: ["timeclock", "shifts"] });
@@ -106,13 +104,6 @@ export default function AdminTimeClockSchedule() {
             This week
           </Button>
         </div>
-        {flash && (
-          <div className={styles.flash}>
-            <Alert tone={flash.kind === "ok" ? "success" : "error"}>
-              {flash.msg}
-            </Alert>
-          </div>
-        )}
       </Card>
 
       {activeRoster.length === 0 ? (
@@ -136,10 +127,11 @@ export default function AdminTimeClockSchedule() {
                 shifts={shiftsByDay.get(iso) ?? []}
                 roster={activeRoster}
                 onSaved={(msg) => {
-                  setFlash({ kind: "ok", msg });
+                  toast({ message: msg, tone: "success" });
                   refresh();
                 }}
-                onError={(msg) => setFlash({ kind: "err", msg })}
+                onError={(msg) =>
+                  toast({ message: msg, tone: "error" })}
               />
             );
           })}

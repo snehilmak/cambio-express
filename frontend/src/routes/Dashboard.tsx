@@ -34,6 +34,7 @@ import {
   fontSize,
   space,
   tokens,
+  Empty,
 } from "../components/ui";
 import { getCurrentIdentity } from "../lib/auth";
 import { getOpenStatus } from "../lib/datetime";
@@ -514,9 +515,7 @@ function AdminPanel({ d }: { d: AdminDashboard }) {
           ))}
           {d.company_stats.length === 0 && (
             <Card>
-              <p style={{ color: tokens.textMuted, margin: 0 }}>
-                No companies enabled for this store yet.
-              </p>
+              <Empty>No companies enabled for this store yet.</Empty>
             </Card>
           )}
         </div>
@@ -658,9 +657,7 @@ function AdminPanel({ d }: { d: AdminDashboard }) {
               <ButtonLink href="/bank" tone="secondary" size="sm">View all</ButtonLink>
             </header>
             {d.stripe_accounts.length === 0 ? (
-              <p style={{ color: tokens.textMuted, margin: 0 }}>
-                No bank connected yet.
-              </p>
+              <Empty>No bank connected yet.</Empty>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: space.sm }}>
                 {d.stripe_accounts.map((a) => (

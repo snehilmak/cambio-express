@@ -10,6 +10,7 @@ import {
   Alert, Breadcrumbs, Button, Card, ConfirmDialog, DateInput, ErrorState,
   Field, FormActions, InfoTip, Input, Loading, MoneyInput, PageHeader,
   PageShell, Pill, Section, Select,
+  useToast,
 } from "../components/ui";
 import { useUnsavedGuard } from "../lib/useUnsavedGuard";
 import {
@@ -100,6 +101,7 @@ export default function EditTransfer() {
   const { id } = useParams<{ id: string }>();
   const transferId = id ? Number(id) : NaN;
   const navigate = useNavigate();
+  const toast = useToast();
   const identity = getCurrentIdentity();
   const detail = useTransfer(Number.isFinite(transferId) ? transferId : undefined);
   const roster = useEmployees();
@@ -168,6 +170,7 @@ export default function EditTransfer() {
     clearErrors("root");
     try {
       const result = await updateTransfer(transferId, values);
+      toast({ message: "Transfer updated.", tone: "success" });
       navigate(`/transfers/${result.transfer.id}`, { replace: true });
     } catch (err) {
       setError("root", {

@@ -10,8 +10,9 @@ import { unlinkStore, useOwnerStoreDetail } from "../api/owner";
 import { ApiError } from "../lib/api";
 import {
   Breadcrumbs, Button,
-  Card, ErrorState, KpiCard, KpiGrid, Loading, PageHeader, PageShell,
-  Section, TabsBar, TabsButton, Table, tdStyle, thStyle,
+  Card, ConfirmDialog, ErrorState, KpiCard, KpiGrid, Loading,
+  PageHeader, PageShell, Section, TabsBar, TabsButton, Table, tdStyle,
+  thStyle, useToast,
 } from "../components/ui";
 import { chartSeries, chartTokens, moneyChartOptions, seriesFill } from "../lib/chartOptions";
 import styles from "./OwnerStoreDetail.module.css";
@@ -38,15 +39,28 @@ export default function OwnerStoreDetail() {
   const navigate = useNavigate();
   const [period, setPeriod] = useState<Period>("month");
   const { data, isLoading, isError, error, refetch } = useOwnerStoreDetail(sid, period);
+  const toast = useToast();
+  const [confirmUnlink, setConfirmUnlink] = useState(false);
+  const [unlinking, setUnlinking] = useState(false);
 
   async function handleUnlink() {
-    const name = data?.store?.name ?? `store ${sid}`;
-    if (!confirm(`Disconnect "${name}" from your umbrella? The store keeps all its data but you will no longer see it.`)) return;
+    setUnlinking(true);
     try {
       await unlinkStore(sid);
+      toast({
+        message: "Store disconnected from your umbrella.",
+        tone: "success",
+      });
       navigate("/owner/locations");
     } catch (err) {
-      alert(err instanceof ApiError ? err.message : "Could not unlink store.");
+      toast({
+        message: err instanceof ApiError
+          ? err.message : "Could not unlink store.",
+        tone: "error",
+      });
+    } finally {
+      setUnlinking(false);
+      setConfirmUnlink(false);
     }
   }
 
@@ -77,13 +91,27 @@ export default function OwnerStoreDetail() {
                   Permissions
                 </Button>
               </Link>
-              <Button size="sm" tone="secondary" onClick={() => { void handleUnlink(); }}>
+              <Button
+                size="sm" tone="secondary"
+                onClick={() => setConfirmUnlink(true)}
+              >
                 Disconnect store
               </Button>
             </div>
           )}
         />
       </div>
+
+      <ConfirmDialog
+        open={confirmUnlink}
+        title="Disconnect store"
+        message={`Disconnect "${data?.store?.name ?? `store ${sid}`}" from your umbrella? The store keeps all its data but you will no longer see it.`}
+        confirmLabel="Disconnect"
+        confirmTone="danger"
+        busy={unlinking}
+        onConfirm={() => { void handleUnlink(); }}
+        onCancel={() => setConfirmUnlink(false)}
+      />
 
       {isLoading && <Loading />}
       {isError && (

@@ -11,6 +11,7 @@ import {
   Breadcrumbs,
   Card, ErrorState, KpiCard, KpiGrid, Loading, PageHeader, PageShell,
   Section, TabsBar, TabsButton, Table, tdStyle, thStyle,
+  Empty,
 } from "../components/ui";
 import { chartSeries, moneyChartOptions, seriesFill } from "../lib/chartOptions";
 import styles from "./OwnerDashboard.module.css";
@@ -128,7 +129,7 @@ export default function OwnerDashboard() {
                 </Link>
               ))}
               {data.stores.length === 0 && (
-                <p className={styles.muted}>No stores linked yet.</p>
+                <Empty>No stores linked yet.</Empty>
               )}
             </div>
           </Section>

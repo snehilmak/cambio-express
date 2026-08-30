@@ -39,8 +39,8 @@ a single `true/false` is a `<Checkbox>` (form) or `<Switch>` (setting).
 | Fetch failed (page/table data) | `<ErrorState message onRetry>` — always with retry; never `EmptyState` |
 | Mutation/form failed | `<Alert tone="error">` (root) + `<Field error>` (per-field) |
 | Data loading | list/table routes: `<TableStates>` (skeleton→error→empty); everything else: `<Loading />`. Never bare "Loading…" text, never an info Alert |
-| Zero rows | `<EmptyState title body>` — never an ad-hoc muted `<p>` |
-| Permission/scope gate | `<Empty>` |
+| Zero rows (whole region: table, tab pane, page section) | `<EmptyState title body>` — never an ad-hoc muted `<p>` |
+| Zero rows (small in-card sub-list) or permission/scope gate | `<Empty>` |
 | Destructive action | `<ConfirmDialog>` — never `window.confirm` / `alert()` |
 
 ## 3. Status display

@@ -14,6 +14,7 @@ import {
   Breadcrumbs,
   Alert, Button, Card, Checkbox, ConfirmDialog, ErrorState, Field, Input,
   Loading, PageHeader, PageShell, Select, space,
+  useToast,
 } from "../components/ui";
 import { useUnsavedGuard } from "../lib/useUnsavedGuard";
 import styles from "./AdminUserForm.module.css";
@@ -136,6 +137,7 @@ export default function AdminUserForm() {
 
   const queryClient = useQueryClient();
   const navigate    = useNavigate();
+  const toast = useToast();
   const identity    = getCurrentIdentity();
 
   const detail  = useAdminUser(isEdit ? uid : null);
@@ -333,6 +335,10 @@ export default function AdminUserForm() {
       // Invalidate roster + this user's detail cache so the next
       // visit to /admin/users shows the updated row.
       queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
+      toast({
+        message: isEdit ? "User updated." : "User created.",
+        tone: "success",
+      });
       navigate("/admin/users");
     } catch (err) {
       if (err instanceof ApiError && err.status === 422) {
