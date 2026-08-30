@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router-dom";
 
 import { useLoggedMonths, useMonthly, type MonthlyRow } from "../api/monthly";
 import { getCurrentIdentity } from "../lib/auth";
+import { fmtMoney2 } from "../lib/formatters";
 import {
   Breadcrumbs,
   ButtonLink, Card, Empty, EmptyState, ErrorState, Loading, PageHeader,
@@ -271,7 +272,7 @@ function Stat({
     <div className={styles.stat}>
       <p className={styles.statLabel}>{label}</p>
       <p className={styles.statValue} style={{ color }}>
-        ${(value || 0).toFixed(2)}
+        {fmtMoney2(value || 0)}
       </p>
     </div>
   );

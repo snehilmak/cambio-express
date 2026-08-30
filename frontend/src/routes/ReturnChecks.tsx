@@ -2,6 +2,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 
 import { useReturnChecks, type ReturnCheckRow } from "../api/returnChecks";
 import { getCurrentIdentity } from "../lib/auth";
+import { fmtMoney2 } from "../lib/formatters";
 import {
   ButtonLink, Card, Empty, PageHeader,
   PageShell, Pill, Table as KitTable, TableStates, tdStyle,
@@ -133,11 +134,11 @@ function Table({ rows }: { rows: ReturnCheckRow[] }) {
                 </td>
                 <td style={tdStyle}>{r.payer_bank || "—"}</td>
                 <td style={{ ...tdStyle, textAlign: "right" }}>
-                  <span className={styles.mono}>${r.amount.toFixed(2)}</span>
+                  <span className={styles.mono}>{fmtMoney2(r.amount)}</span>
                 </td>
                 <td style={{ ...tdStyle, textAlign: "right" }}>
                   <span className={r.recovered_total >= r.amount + r.return_check_fee ? styles.recoveredFull : styles.mono}>
-                    ${r.recovered_total.toFixed(2)}
+                    {fmtMoney2(r.recovered_total)}
                   </span>
                   {r.payment_count > 0 && (
                     <span className={styles.paymentCount}>

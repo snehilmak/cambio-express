@@ -236,7 +236,7 @@ function ItemsTab() {
                       </td>
                       <td style={tdStyle}>{i.is_taxable ? "Taxable" : "—"}</td>
                       <td style={tdStyle}>
-                        <Pill tone={i.is_active ? "success" : "neutral"}>
+                        <Pill tone={i.is_active ? "accent" : "neutral"}>
                           {i.is_active ? "active" : "inactive"}
                         </Pill>
                       </td>
@@ -880,7 +880,7 @@ function VendorsTab() {
                     </td>
                     <td style={tdStyle}>{v.item_count}</td>
                     <td style={tdStyle}>
-                      <Pill tone={v.is_active ? "success" : "neutral"}>
+                      <Pill tone={v.is_active ? "accent" : "neutral"}>
                         {v.is_active ? "active" : "inactive"}
                       </Pill>
                     </td>

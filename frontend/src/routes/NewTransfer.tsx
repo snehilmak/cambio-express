@@ -37,6 +37,7 @@ import {
 import { useStoreInfo } from "../api/account";
 import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
+import { fmtMoney2 } from "../lib/formatters";
 
 // New transfer form at /app/transfers/new.
 //
@@ -518,7 +519,7 @@ function FederalTaxPreview({
         type="text"
         readOnly
         tabIndex={-1}
-        value={`$${tax.toFixed(2)}`}
+        value={fmtMoney2(tax)}
         style={{
           background: tokens.surface2,
           color: tokens.textMuted,

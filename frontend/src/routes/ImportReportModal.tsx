@@ -2,6 +2,7 @@ import { useState } from "react";
 
 import { Alert, Button, Loading, Modal, Pill } from "../components/ui";
 import { ApiError } from "../lib/api";
+import { fmtMoney2 } from "../lib/formatters";
 import {
   commitIntermexReport,
   parseIntermexReport,
@@ -17,12 +18,6 @@ import styles from "./ImportReportModal.module.css";
 // (the Intermex company row) and reports how it reconciles against the
 // transfers already logged.  The PDF is re-parsed server-side on
 // commit — the client never sends money numbers.
-
-function money(n: number): string {
-  return n.toLocaleString("en-US", {
-    style: "currency", currency: "USD",
-  });
-}
 
 function humanize(e: unknown): string {
   if (e instanceof ApiError) return e.message;
@@ -163,10 +158,10 @@ export function ImportReportModal({
                   <tr key={g.confirm_number}
                       className={g.cancelled ? styles.cancelled : undefined}>
                     <td className={styles.mono}>{g.confirm_number}</td>
-                    <td className={`${styles.num} ${styles.mono}`}>{money(g.send_amount)}</td>
-                    <td className={`${styles.num} ${styles.mono}`}>{money(g.fee)}</td>
-                    <td className={`${styles.num} ${styles.mono}`}>{money(g.federal_tax)}</td>
-                    <td className={`${styles.num} ${styles.mono}`}>{money(g.total_collected)}</td>
+                    <td className={`${styles.num} ${styles.mono}`}>{fmtMoney2(g.send_amount)}</td>
+                    <td className={`${styles.num} ${styles.mono}`}>{fmtMoney2(g.fee)}</td>
+                    <td className={`${styles.num} ${styles.mono}`}>{fmtMoney2(g.federal_tax)}</td>
+                    <td className={`${styles.num} ${styles.mono}`}>{fmtMoney2(g.total_collected)}</td>
                     <td>{g.cashier || "—"}</td>
                     <td>
                       {g.cancelled ? <Pill tone="negative">Cancelled</Pill>
@@ -193,12 +188,12 @@ export function ImportReportModal({
               Committed {committed.giros_committed} giro
               {committed.giros_committed === 1 ? "" : "s"} to{" "}
               <strong>{committed.company}</strong> for {reportDate}:{" "}
-              <strong>{money(committed.amount)}</strong> sent ·{" "}
-              {money(committed.fees)} fees · {money(committed.federal_tax)}{" "}
+              <strong>{fmtMoney2(committed.amount)}</strong> sent ·{" "}
+              {fmtMoney2(committed.fees)} fees · {fmtMoney2(committed.federal_tax)}{" "}
               fed. tax.
               {committed.matches_logged
                 ? " Matches the transfers already logged for this day."
-                : ` Heads up — you have ${money(committed.logged_amount)} ` +
+                : ` Heads up — you have ${fmtMoney2(committed.logged_amount)} ` +
                   "logged as Intermex transfers for this day; the report " +
                   "total is now the money-transfer figure."}
             </Alert>

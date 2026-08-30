@@ -17,6 +17,7 @@ import {
   PageHeader, PageShell, Pill, Table, tdStyle, thStyle,
 } from "../components/ui";
 import { getCurrentIdentity } from "../lib/auth";
+import { formatDate } from "../lib/datetime";
 import styles from "./AdminTimeClockCredentials.module.css";
 
 // /app/admin/timeclock/credentials — admin enrolls a passkey
@@ -175,20 +176,20 @@ export default function AdminTimeClockCredentials() {
                   </td>
                   <td style={tdStyle}>
                     {r.has_passkey
-                      ? <Pill tone="accent">Registered</Pill>
+                      ? <Pill tone="success">Registered</Pill>
                       : <Pill tone="warning">Pending</Pill>}
                   </td>
                   <td style={tdStyle}>
                     <span className={styles.mono}>
                       {r.registered_at
-                        ? r.registered_at.slice(0, 10)
+                        ? formatDate(r.registered_at)
                         : "—"}
                     </span>
                   </td>
                   <td style={tdStyle}>
                     <span className={styles.mono}>
                       {r.last_used_at
-                        ? r.last_used_at.slice(0, 10)
+                        ? formatDate(r.last_used_at)
                         : "—"}
                     </span>
                   </td>

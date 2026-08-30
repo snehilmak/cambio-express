@@ -529,7 +529,7 @@ function GamesTab() {
                     <td style={tdStyle}>{fmtMoney2(g.ticket_price)}</td>
                     <td style={tdStyle}>{g.tickets_per_pack}</td>
                     <td style={tdStyle}>
-                      <Pill tone={g.is_active ? "success" : "neutral"}>
+                      <Pill tone={g.is_active ? "accent" : "neutral"}>
                         {g.is_active ? "active" : "inactive"}
                       </Pill>
                     </td>

@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
 
 import { useTransferReceipt } from "../api/transfers";
+import { fmtMoney2 } from "../lib/formatters";
 import { Button, ErrorState, Loading } from "../components/ui";
 import styles from "./TransferReceipt.module.css";
 
@@ -93,7 +94,7 @@ export default function TransferReceipt() {
   }
 
   const { store, transfer } = data;
-  const total = transfer.total_collected.toFixed(2);
+  const total = fmtMoney2(transfer.total_collected);
 
   return (
     <div className={styles.page}>
@@ -193,13 +194,13 @@ export default function TransferReceipt() {
               <td>{transfer.service_type}</td>
               <td>{transfer.company}</td>
               <td className={styles.numCol}>
-                ${transfer.send_amount.toFixed(2)}
+                {fmtMoney2(transfer.send_amount)}
               </td>
               <td className={styles.numCol}>
-                ${transfer.fee.toFixed(2)}
+                {fmtMoney2(transfer.fee)}
               </td>
               <td className={styles.numCol}>
-                ${transfer.federal_tax.toFixed(2)}
+                {fmtMoney2(transfer.federal_tax)}
               </td>
               <td className={`${styles.numCol} ${styles.totalCell}`}>
                 ${total}

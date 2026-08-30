@@ -22,6 +22,7 @@ import {
 import { useStoreInfo } from "../api/account";
 import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
+import { fmtMoney2 } from "../lib/formatters";
 import styles from "./EditTransfer.module.css";
 
 const COMPANIES = [
@@ -397,12 +398,12 @@ export default function EditTransfer() {
                   type="text"
                   readOnly
                   tabIndex={-1}
-                  value={`$${previewFederalTax({
+                  value={fmtMoney2(previewFederalTax({
                     sendAmount,
                     serviceType,
                     country: country ?? "",
                     rate: storeInfo.data?.store.federal_tax_rate ?? 0,
-                  }).toFixed(2)}`}
+                  }))}
                   className={styles.taxPreview}
                 />
               </Field>

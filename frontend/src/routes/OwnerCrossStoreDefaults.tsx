@@ -337,6 +337,6 @@ function ResultsCard({ rows }: { rows: OwnerCrossStoreResultRow[] }) {
 }
 
 function StatusPill({ status }: { status: OwnerCrossStoreResultRow["status"] }) {
-  if (status === "updated")  return <Pill tone="accent">Updated</Pill>;
+  if (status === "updated")  return <Pill tone="success">Updated</Pill>;
   return <Pill tone="negative">Rejected</Pill>;
 }

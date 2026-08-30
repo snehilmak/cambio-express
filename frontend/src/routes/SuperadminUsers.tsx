@@ -15,6 +15,7 @@ import {
 } from "../api/superadmin";
 import { ApiError } from "../lib/api";
 import { setAccessToken, setCurrentIdentity } from "../lib/auth";
+import { formatDate } from "../lib/datetime";
 import {
   Alert,
   Breadcrumbs,
@@ -353,8 +354,8 @@ function UserRow({
         )}
       </td>
       <td style={tdStyle}>
-        <Pill tone={u.is_active ? "accent" : "negative"}>
-          {u.is_active ? "Active" : "Disabled"}
+        <Pill tone={u.is_active ? "accent" : "neutral"}>
+          {u.is_active ? "Active" : "Inactive"}
         </Pill>
       </td>
       <td style={tdStyle}>
@@ -366,7 +367,7 @@ function UserRow({
       </td>
       <td style={tdStyle}>
         <span className={styles.monoMuted}>
-          {u.last_login_at ? u.last_login_at.slice(0, 10) : "Never"}
+          {u.last_login_at ? formatDate(u.last_login_at) : "Never"}
         </span>
       </td>
       <td style={{ ...tdStyle, textAlign: "right" }}>

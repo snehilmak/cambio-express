@@ -17,7 +17,7 @@ import {
 } from "../api/account";
 import { redeemConnectCode } from "../api/owner";
 import { ApiError } from "../lib/api";
-import { formatTimestamp } from "../lib/datetime";
+import { formatDate, formatTimestamp } from "../lib/datetime";
 import { timezoneFromAddress } from "../lib/timezoneFromAddress";
 import { getCurrentIdentity } from "../lib/auth";
 import { passkeysSupported } from "../lib/webauthn";
@@ -493,9 +493,9 @@ function PasskeysCard() {
                   {p.name || "Unnamed device"}
                 </div>
                 <div className={styles.rowMeta}>
-                  Added {p.created_at.slice(0, 10)}
+                  Added {formatDate(p.created_at)}
                   {p.last_used_at &&
-                    ` · last used ${p.last_used_at.slice(0, 10)}`}
+                    ` · last used ${formatDate(p.last_used_at)}`}
                 </div>
               </span>
               <Button

@@ -559,7 +559,7 @@ function DepartmentsTab() {
                     <td style={tdStyle}>{d.parent_name || "—"}</td>
                     <td style={tdStyle}>{d.sort_order}</td>
                     <td style={tdStyle}>
-                      <Pill tone={d.is_active ? "success" : "neutral"}>
+                      <Pill tone={d.is_active ? "accent" : "neutral"}>
                         {d.is_active ? "active" : "inactive"}
                       </Pill>
                     </td>

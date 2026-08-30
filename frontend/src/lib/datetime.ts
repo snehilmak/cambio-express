@@ -73,7 +73,14 @@ export function formatTimestamp(
 
 
 /** Date-only formatter — for column cells where the time of day
- *  doesn't matter and would just clutter the view. */
+ *  doesn't matter and would just clutter the view.
+ *
+ *  Accepts full timestamps AND bare ``YYYY-MM-DD`` strings. A
+ *  bare date names a calendar day, not an instant — it renders
+ *  as that day verbatim (no timezone math), because parsing it
+ *  as UTC midnight and converting would show the PREVIOUS day
+ *  everywhere west of Greenwich. This is the standard cell
+ *  formatter (UI-STANDARDS §4); never ``iso.slice(0, 10)``. */
 export function formatDate(
   iso: string | null | undefined,
   opts: {
@@ -82,9 +89,12 @@ export function formatDate(
   } = {},
 ): string {
   if (!iso) return "—";
-  const d = new Date(iso);
+  const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(iso);
+  const d = new Date(dateOnly ? `${iso}T00:00:00` : iso);
   if (Number.isNaN(d.getTime())) return iso;
-  const tz = resolveTimezone(opts.userTimezone, opts.storeTimezone);
+  const tz = dateOnly
+    ? undefined
+    : resolveTimezone(opts.userTimezone, opts.storeTimezone);
   return _DATE_ONLY_FMT(tz).format(d);
 }
 

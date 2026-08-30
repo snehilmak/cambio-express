@@ -9,7 +9,7 @@ import {
 import { useEmployees } from "../api/transfers";
 import { updateStoreInfo, useProfile, useStoreInfo } from "../api/account";
 import { ApiError } from "../lib/api";
-import { formatTimestamp } from "../lib/datetime";
+import { formatDate, formatTimestamp } from "../lib/datetime";
 import {
   Breadcrumbs,
   Alert, Button, Card, ConfirmDialog, DateInput, EmptyState, ErrorState,
@@ -235,7 +235,7 @@ export default function AdminTimeClock() {
                     </td>
                     <td style={tdStyle}>
                       <RowActions
-                        title={`${r.employee_name} · ${r.clock_in_at.slice(0, 10)}`}
+                        title={`${r.employee_name} · ${formatDate(r.clock_in_at)}`}
                         actions={[
                           {
                             label: "Edit", tone: "warning",
@@ -401,7 +401,7 @@ function EmployeeGroupHeader({
 
 
 function StatusPill({ status }: { status: TimeClockStatus }) {
-  if (status === "approved") return <Pill tone="accent">approved</Pill>;
+  if (status === "approved") return <Pill tone="success">approved</Pill>;
   if (status === "rejected") return <Pill tone="negative">rejected</Pill>;
   return <Pill tone="warning">pending</Pill>;
 }
@@ -512,7 +512,7 @@ function HistoryPanel({ entryId }: { entryId: number }) {
         <li key={h.id} className={styles.historyItem}>
           <div className={styles.historyHeader}>
             <span className={styles.historyAction}>{h.action}</span>
-            <span>{_formatHistoryDate(h.at)}</span>
+            <span>{formatTimestamp(h.at)}</span>
             <span className={styles.historyActor}>
               by {h.actor || "unknown"}{h.actor_role
                 ? ` (${h.actor_role})` : ""}
@@ -523,14 +523,6 @@ function HistoryPanel({ entryId }: { entryId: number }) {
       ))}
     </ul>
   );
-}
-
-
-function _formatHistoryDate(iso: string): string {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleString();
 }
 
 

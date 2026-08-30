@@ -15,6 +15,7 @@ import {
   thStyle, useToast,
 } from "../components/ui";
 import { chartSeries, chartTokens, moneyChartOptions, seriesFill } from "../lib/chartOptions";
+import { fmtMoney2 } from "../lib/formatters";
 import styles from "./OwnerStoreDetail.module.css";
 
 ChartJS.register(
@@ -134,11 +135,11 @@ export default function OwnerStoreDetail() {
               value={`$${Math.round(data.period_volume).toLocaleString()}`}
               sub={fmtDelta(data.period_volume - data.prev_volume, "$", " vs prior")}
             />
-            <KpiCard label="Fees" value={`$${data.period_fees.toFixed(2)}`} />
-            <KpiCard label="Federal Tax" value={`$${data.period_tax.toFixed(2)}`} />
+            <KpiCard label="Fees" value={fmtMoney2(data.period_fees)} />
+            <KpiCard label="Federal Tax" value={fmtMoney2(data.period_tax)} />
             <KpiCard
               label="Over/Short"
-              value={`${data.period_over_short >= 0 ? "+" : "-"}$${Math.abs(data.period_over_short).toFixed(2)}`}
+              value={`${data.period_over_short >= 0 ? "+" : "-"}${fmtMoney2(Math.abs(data.period_over_short))}`}
               tone={data.period_over_short < 0 ? "negative" : "neutral"}
             />
           </KpiGrid>
@@ -266,9 +267,9 @@ export default function OwnerStoreDetail() {
                       <tr key={c.company}>
                         <td style={tdStyle}>{c.company}</td>
                         <td style={tdStyleR}>{c.count.toLocaleString()}</td>
-                        <td style={tdStyleR}>${c.volume.toFixed(2)}</td>
-                        <td style={tdStyleR}>${c.fees.toFixed(2)}</td>
-                        <td style={tdStyleR}>${c.tax.toFixed(2)}</td>
+                        <td style={tdStyleR}>{fmtMoney2(c.volume)}</td>
+                        <td style={tdStyleR}>{fmtMoney2(c.fees)}</td>
+                        <td style={tdStyleR}>{fmtMoney2(c.tax)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -302,7 +303,7 @@ export default function OwnerStoreDetail() {
                         <td style={tdStyle}>{t.sender_name || "—"}</td>
                         <td style={tdStyle}>{t.recipient_name || "—"}</td>
                         <td style={tdStyle}>{t.company || "—"}</td>
-                        <td style={tdStyleR}>${t.send_amount.toFixed(2)}</td>
+                        <td style={tdStyleR}>{fmtMoney2(t.send_amount)}</td>
                         <td style={tdStyle}>{t.status}</td>
                       </tr>
                     ))}

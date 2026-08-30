@@ -117,7 +117,7 @@ function UserTable({
             </td>
             <td style={tdStyle}>{u.full_name || "—"}</td>
             <td style={tdStyle}>
-              <Pill tone={u.role === "admin" ? "accent" : "info"}>
+              <Pill tone={u.role === "admin" ? "accent" : "neutral"}>
                 {u.role === "admin" ? "Super Admin" : "Employee"}
               </Pill>
               {u.has_custom_permissions && (
@@ -128,7 +128,7 @@ function UserTable({
               )}
             </td>
             <td style={tdStyle}>
-              <Pill tone={u.is_active ? "accent" : "negative"}>
+              <Pill tone={u.is_active ? "accent" : "neutral"}>
                 {u.is_active ? "Active" : "Inactive"}
               </Pill>
             </td>

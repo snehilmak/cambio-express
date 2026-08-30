@@ -6,6 +6,7 @@ import {
 } from "../api/transfers";
 import { getCurrentIdentity } from "../lib/auth";
 import { useUrlFilterState } from "../lib/useUrlFilterState";
+import { fmtMoney2 } from "../lib/formatters";
 import {
   ButtonLink, Card, DateInput, Empty, Field, Input,
   PageHeader, PageShell, Pager, Pill, Select, Table, TableStates,
@@ -228,7 +229,7 @@ function TransfersTable({ rows }: { rows: TransferRow[] }) {
             </td>
             <td style={tdStyle}>{r.status}</td>
             <td style={{ ...tdStyle, textAlign: "right" }}>
-              <span className={styles.mono}>${r.total_collected.toFixed(2)}</span>
+              <span className={styles.mono}>{fmtMoney2(r.total_collected)}</span>
             </td>
           </tr>
         ))}

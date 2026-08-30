@@ -249,7 +249,7 @@ function ResultsCard({ rows }: { rows: OwnerBulkAddUserResultRow[] }) {
 
 
 function StatusPill({ status }: { status: OwnerBulkAddUserResultRow["status"] }) {
-  if (status === "created") return <Pill tone="accent">Created</Pill>;
+  if (status === "created") return <Pill tone="success">Created</Pill>;
   if (status === "skipped") return <Pill tone="warning">Skipped</Pill>;
   return <Pill tone="negative">Rejected</Pill>;
 }

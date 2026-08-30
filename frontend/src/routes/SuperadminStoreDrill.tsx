@@ -16,6 +16,7 @@ import {
   Textarea, thStyle, useToast,
 } from "../components/ui";
 import { useApiErrorToast } from "../lib/useApiErrorToast";
+import { formatDate } from "../lib/datetime";
 import styles from "./SuperadminStoreDrill.module.css";
 
 interface StoreInfo {
@@ -188,7 +189,7 @@ export default function SuperadminStoreDrill() {
               This store is <strong>frozen</strong> — its users are locked out
               to a “suspended” screen until you unfreeze it.
               {data.store.frozen_reason ? ` Reason: ${data.store.frozen_reason}.` : ""}
-              {data.store.frozen_at ? ` Since ${data.store.frozen_at.slice(0, 10)}.` : ""}
+              {data.store.frozen_at ? ` Since ${formatDate(data.store.frozen_at)}.` : ""}
             </Alert>
           )}
 
@@ -199,7 +200,7 @@ export default function SuperadminStoreDrill() {
               : data.store.plan === "trial" ? "warning"
               : "negative"
             } />
-            <KpiCard label="Status" value={data.store.is_active ? "Active" : "Disabled"} tone={data.store.is_active ? "positive" : "negative"} />
+            <KpiCard label="Status" value={data.store.is_active ? "Active" : "Inactive"} tone={data.store.is_active ? "positive" : "muted"} />
             <KpiCard label="Transfers (30d)" value={data.stats_30d.transfer_count.toLocaleString()} />
             <KpiCard label="Volume (30d)" value={fmtMoney2(data.stats_30d.volume)} tone="positive" />
             <KpiCard label="Fees (30d)" value={fmtMoney2(data.stats_30d.fees)} />
@@ -214,12 +215,12 @@ export default function SuperadminStoreDrill() {
                 <InfoRow label="Address" value={data.store.address || "—"} />
                 <InfoRow label="Billing cycle" value={data.store.billing_cycle || "—"} />
                 <InfoRow label="Trial status" value={data.store.trial_status} />
-                <InfoRow label="Created" value={data.store.created_at.slice(0, 10)} />
+                <InfoRow label="Created" value={formatDate(data.store.created_at)} />
                 {data.store.trial_ends_at && (
-                  <InfoRow label="Trial ends" value={data.store.trial_ends_at.slice(0, 10)} />
+                  <InfoRow label="Trial ends" value={formatDate(data.store.trial_ends_at)} />
                 )}
                 {data.store.canceled_at && (
-                  <InfoRow label="Cancelled" value={data.store.canceled_at.slice(0, 10)} />
+                  <InfoRow label="Cancelled" value={formatDate(data.store.canceled_at)} />
                 )}
                 {data.store.stripe_customer_id && (
                   <InfoRow label="Stripe customer" value={data.store.stripe_customer_id} />
@@ -246,7 +247,7 @@ export default function SuperadminStoreDrill() {
                           : u.role === "owner" ? "info"
                           : "neutral"
                         }>{u.role}</Pill>
-                        {!u.is_active && <Pill tone="negative">disabled</Pill>}
+                        {!u.is_active && <Pill tone="neutral">Inactive</Pill>}
                       </div>
                     </div>
                   ))
@@ -729,11 +730,11 @@ function OwnerLinksSection({ storeId }: { storeId: number | undefined }) {
               <div className={styles.teamName}>{r.full_name || r.username}</div>
               <div className={styles.teamMeta}>
                 {r.username}
-                {r.linked_at ? ` · linked ${r.linked_at.slice(0, 10)}` : ""}
+                {r.linked_at ? ` · linked ${formatDate(r.linked_at)}` : ""}
               </div>
             </div>
             <div style={{ display: "flex", gap: "0.35rem", alignItems: "center" }}>
-              {!r.is_active && <Pill tone="negative">disabled</Pill>}
+              {!r.is_active && <Pill tone="neutral">Inactive</Pill>}
               <Button
                 size="sm" tone="danger" disabled={busy}
                 onClick={() => { void remove(r.owner_id, r.username); }}

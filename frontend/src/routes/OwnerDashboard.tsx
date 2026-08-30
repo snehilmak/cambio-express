@@ -14,6 +14,7 @@ import {
   Empty,
 } from "../components/ui";
 import { chartSeries, moneyChartOptions, seriesFill } from "../lib/chartOptions";
+import { fmtMoney2 } from "../lib/formatters";
 import styles from "./OwnerDashboard.module.css";
 
 ChartJS.register(
@@ -124,7 +125,7 @@ export default function OwnerDashboard() {
                     ${Math.round(s.volume).toLocaleString()}
                   </div>
                   <div className={styles.storeOver}>
-                    {s.over_short >= 0 ? "+" : "-"}${Math.abs(s.over_short).toFixed(2)} over/short
+                    {s.over_short >= 0 ? "+" : "-"}{fmtMoney2(Math.abs(s.over_short))} over/short
                   </div>
                 </Link>
               ))}

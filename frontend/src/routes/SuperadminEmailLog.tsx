@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import { api } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
+import { formatDate } from "../lib/datetime";
 import {
   Breadcrumbs, Card, EmptyState, ErrorState, Input,
   Loading, Pager, PageHeader, PageShell, Pill, Section,
@@ -174,7 +175,7 @@ export default function SuperadminEmailLog() {
                         <span className={styles.monoMuted}> · {s.email}</span>
                       </div>
                       <span className={styles.monoMuted}>
-                        Bounced {s.bounced_at.slice(0, 10)}
+                        Bounced {formatDate(s.bounced_at)}
                       </span>
                     </div>
                   ))}

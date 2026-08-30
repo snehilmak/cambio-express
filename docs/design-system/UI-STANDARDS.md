@@ -50,8 +50,9 @@ same tone on every screen:
 
 | Semantic | Tone | Cell text |
 |---|---|---|
-| Active / on / enabled / approved / completed / credited | `accent` | `Active` |
-| Inactive / off / disabled / archived | `neutral` | `Inactive` |
+| Live state: active / on / enabled / in-progress | `accent` | `Active` |
+| Completed outcome: approved / settled / delivered / cleared / credited / resolved | `success` | — |
+| Inactive / off / disabled / archived — NOT red; red is for failures | `neutral` | `Inactive` |
 | Pending / expiring / needs attention | `warning` | — |
 | Failed / rejected / cancelled / destructive | `negative` | — |
 | Informational / secondary identity (owner role, info) | `info` | — |

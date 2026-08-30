@@ -11,6 +11,7 @@ import {
   type BankAccountRow,
 } from "../api/bankSync";
 import { ApiError } from "../lib/api";
+import { fmtMoney2 } from "../lib/formatters";
 import {
   Breadcrumbs,
   Button, Card, ConfirmDialog, ErrorState,
@@ -294,7 +295,7 @@ function AccountCard({
         {acct.label}
       </div>
       <div className={styles.balance}>
-        ${acct.last_balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+        {fmtMoney2(acct.last_balance)}
       </div>
       <div className={styles.mutedSmall}>
         {acct.last_balance_as_of

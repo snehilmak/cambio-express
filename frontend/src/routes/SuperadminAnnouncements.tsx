@@ -19,6 +19,7 @@ import {
 import { useSuperadminStores } from "../api/superadmin";
 import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
+import { formatDate } from "../lib/datetime";
 import styles from "./SuperadminAnnouncements.module.css";
 
 // Superadmin-only banner CRUD at /app/superadmin/announcements.
@@ -32,7 +33,7 @@ const LEVEL_TONE: Record<string, PillTone> = {
   info:    "info",
   warning: "warning",
   error:   "negative",
-  success: "accent",
+  success: "success",
 };
 
 export default function SuperadminAnnouncements() {
@@ -383,13 +384,13 @@ function Row({ row, onChanged }: { row: AnnouncementRow; onChanged: () => void }
       </td>
       <td style={{ ...tdStyle, verticalAlign: "top" }}>
         <span className={styles.dateCell}>
-          {row.created_at.slice(0, 10)}
+          {formatDate(row.created_at)}
         </span>
       </td>
       <td style={{ ...tdStyle, verticalAlign: "top" }}>
         {row.expires_at ? (
           <span className={styles.dateCell}>
-            {row.expires_at.slice(0, 10)}
+            {formatDate(row.expires_at)}
           </span>
         ) : (
           <span className={styles.dash}>—</span>
@@ -485,7 +486,7 @@ function BroadcastCell({ row }: { row: AnnouncementRow }) {
   }
   const sent = new Date(row.broadcast_sent_at);
   const stamp = Number.isNaN(sent.getTime())
-    ? row.broadcast_sent_at.slice(0, 10)
+    ? formatDate(row.broadcast_sent_at)
     : sent.toLocaleDateString(undefined, {
         month: "short", day: "numeric",
       });
