@@ -249,13 +249,14 @@ export const HELP_REGISTRY: readonly HelpEntry[] = [
 
   // ── Admin / account ────────────────────────────────────
   {
-    title: "Add a user to your store",
-    keywords: "user add admin employee team invite",
+    title: "Add an employee to your store",
+    keywords: "employee user add admin team invite hire login",
     body:
-      "<p>Settings → Users → <strong>+ Add user</strong>. Pick "
-      + "the role (admin or employee), set a password. Admins see "
-      + "everything; employees see Daily + Time clock only.</p>",
-    deepLink: { label: "Open users", to: "/admin/users" },
+      "<p>Employees → <strong>+ Add Employee</strong> for the "
+      + "person's profile and payroll details; the Login section "
+      + "on their record creates or links a sign-in with a role "
+      + "and custom access.</p>",
+    deepLink: { label: "Open employees", to: "/employees" },
   },
   {
     title: "Switch between light and dark mode",

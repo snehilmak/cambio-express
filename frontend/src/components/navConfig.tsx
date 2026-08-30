@@ -182,18 +182,11 @@ export const NAV: NavGroup[] = [
         desc: "PINs employees use to punch.",
       },
       {
-        to: "/admin/cashiers", label: "Cashiers",
+        to: "/employees", label: "Employees",
         roles: ["admin"],
         perm: "users.read",
         icon: iconCustomers(),
-        desc: "Manage cashier accounts.",
-      },
-      {
-        to: "/admin/users", label: "Team users",
-        roles: ["admin"],
-        perm: "users.read",
-        icon: iconCustomers(),
-        desc: "Admins and staff on this store.",
+        desc: "Profile, payroll, and login for everyone here.",
       },
       {
         to: "/admin/store-permissions", label: "Permissions",
