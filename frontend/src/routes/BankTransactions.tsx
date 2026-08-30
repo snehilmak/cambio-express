@@ -15,12 +15,14 @@ import {
 } from "../api/bankSync";
 import {
   Alert, Breadcrumbs, Button, ButtonLink,
-  Card, DateInput, Empty, Field, Input, KpiCard, KpiGrid,
+  Card, Checkbox, DateInput, Empty, Field, Input, KpiCard, KpiGrid,
   monoStyle, PageHeader, PageShell, Pager, Select, Table, TableStates,
   tdStyle, thStyle,
 } from "../components/ui";
 import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
+import { fmtMoney2 } from "../lib/formatters";
+import { formatDate } from "../lib/datetime";
 import styles from "./BankTransactions.module.css";
 
 // Bank transactions at /app/bank-transactions. Filters: account,
@@ -186,16 +188,14 @@ export default function BankTransactions() {
             />
           </Field>
           <Field label="Filter">
-            <label className={styles.checkboxRow}>
-              <input
-                type="checkbox"
-                checked={filters.uncategorized_only}
-                onChange={(e) =>
-                  setParam("uncategorized_only", e.target.checked ? "1" : "")
-                }
-              />
-              <span>Uncategorized only</span>
-            </label>
+            <Checkbox
+              checked={filters.uncategorized_only}
+              onChange={(v) =>
+                setParam("uncategorized_only", v ? "1" : "")
+              }
+            >
+              Uncategorized only
+            </Checkbox>
           </Field>
         </div>
 
@@ -216,7 +216,7 @@ export default function BankTransactions() {
                 <span className={styles.pagerLead}>
                   Page total:{" "}
                   <span style={monoStyle}>
-                    ${(txns.data.page_total_cents / 100).toFixed(2)}
+                    {fmtMoney2(txns.data.page_total_cents / 100)}
                   </span>
                 </span>
               }
@@ -258,7 +258,7 @@ function TxnTable({ rows }: { rows: BankTransactionRow[] }) {
           <tr key={r.id}>
             <td style={tdStyle}>
               <span className={styles.dateCell}>
-                {r.posted_at.slice(0, 10)}
+                {formatDate(r.posted_at)}
               </span>
             </td>
             <td style={tdStyle}>{r.description || "—"}</td>
@@ -272,7 +272,7 @@ function TxnTable({ rows }: { rows: BankTransactionRow[] }) {
             </td>
             <td style={{ ...tdStyle, textAlign: "right" }}>
               <span className={r.amount_cents > 0 ? styles.amountPos : styles.amountNeutral}>
-                {r.amount_cents > 0 ? "+" : ""}${r.amount.toFixed(2)}
+                {r.amount_cents > 0 ? "+" : ""}{fmtMoney2(r.amount)}
               </span>
             </td>
           </tr>
@@ -349,9 +349,7 @@ function BalanceCards({ accounts }: { accounts: BankAccountRow[] }) {
         <KpiCard
           key={a.id}
           label={a.nickname || a.display_name || a.institution_name}
-          value={`$${a.last_balance.toLocaleString(undefined, {
-            minimumFractionDigits: 2, maximumFractionDigits: 2,
-          })}`}
+          value={fmtMoney2(a.last_balance)}
           sub={
             a.last_balance_as_of
               ? `As of ${formatBalanceDate(a.last_balance_as_of)}`

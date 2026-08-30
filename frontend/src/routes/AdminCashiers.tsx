@@ -14,6 +14,7 @@ import {
   Breadcrumbs,
   Alert, Button, Card, ErrorState, Input, Loading,
   PageHeader, PageShell, RowActions,
+  Empty,
 } from "../components/ui";
 import styles from "./AdminCashiers.module.css";
 
@@ -150,7 +151,7 @@ export default function AdminCashiers() {
         {data && (
           <ul className={styles.listSpaced}>
             {data.members.length === 0 && (
-              <li className={styles.emptyRow}>No team members yet.</li>
+              <li><Empty>No team members yet.</Empty></li>
             )}
             {data.members.map((m) => {
               const draft = rateDraftById[m.id];

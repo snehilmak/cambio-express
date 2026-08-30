@@ -10,6 +10,7 @@ import {
   PageShell, Select, Table, TableStates, tdStyle, thStyle,
 } from "../components/ui";
 import { getCurrentIdentity } from "../lib/auth";
+import { fmtMoney2 } from "../lib/formatters";
 import styles from "./OwnerPLRollup.module.css";
 
 // /app/owner/pl-rollup — side-by-side monthly P&L for every store
@@ -213,7 +214,7 @@ function Money({
         className={`${colorClass} ${bold ? styles.bold : ""}`}
         style={monoStyle}
       >
-        {signed && value > 0 ? "+" : ""}${value.toFixed(2)}
+        {signed && value > 0 ? "+" : ""}{fmtMoney2(value)}
       </span>
     </td>
   );

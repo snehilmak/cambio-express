@@ -101,6 +101,25 @@ def test_due_includes_stores_in_threshold():
         assert s in result
 
 
+def test_due_defaults_now_when_omitted():
+    """Calling without `now` falls back to utc_now() internally —
+    exercises the module's own default branch rather than run()'s."""
+    from tests._app import db
+    from api.Modules.Notifications.Services import (
+        stores_due_for_reminder,
+    )
+    with db_session():
+        db.session.query(Store).delete()
+        db.session.commit()
+        now = datetime.utcnow()
+        s = _add_store(
+            db.session, slug="due-default-now-co",
+            trial_ends_at=now + timedelta(days=2),
+        )
+        result = stores_due_for_reminder(db.session)
+        assert s in result
+
+
 def test_due_excludes_no_trial_end_set():
     """A trial row without trial_ends_at can't be classified —
     skip rather than guess."""
@@ -295,6 +314,214 @@ def test_body_template_has_named_placeholders():
 # in Final step 2 — ``send_trial_reminders`` now calls
 # ``eligible_recipients`` directly with a ``SessionLocal()``
 # session. Its delegation test went with it.
+
+
+# ── run() — the cron orchestrator ───────────────────────────
+
+
+def test_run_sends_email_and_stamps_dedup_flag(monkeypatch):
+    """A trial store inside the reminder window with one eligible
+    admin gets exactly one email, and the store's
+    trial_reminder_sent_at gets stamped so a same-day rerun is a
+    no-op."""
+    from tests._app import db
+    from api.Modules.Notifications.Services.trial_reminders import run
+
+    sent_calls = []
+    monkeypatch.setattr(
+        "api.Modules.Notifications.Services.trial_reminders.send_email",
+        lambda session, to_addr, subject, body, html: sent_calls.append(
+            (to_addr, subject),
+        ) or True,
+    )
+
+    with db_session():
+        db.session.query(Store).delete()
+        db.session.query(User).delete()
+        db.session.commit()
+        now = datetime.utcnow()
+        s = _add_store(
+            db.session, slug="run-due-co",
+            trial_ends_at=now + timedelta(days=2),
+        )
+        u = _add_user(
+            db.session, store_id=s.id, role="admin",
+            username="run-admin@test.com", email="run-admin@test.com",
+        )
+        db.session.commit()
+
+        count = run(db.session, now=now, base_url="https://x.test")
+        assert count == 1
+        assert sent_calls == [("run-admin@test.com",
+                                "Your DineroBook trial ends in 2 days")]
+
+        refreshed = db.session.get(Store, s.id)
+        assert refreshed.trial_reminder_sent_at == now
+
+
+def test_run_is_idempotent_on_second_call(monkeypatch):
+    """Once trial_reminder_sent_at is stamped, a second run() for the
+    same `now` sends nothing further."""
+    from tests._app import db
+    from api.Modules.Notifications.Services.trial_reminders import run
+
+    sent_calls = []
+    monkeypatch.setattr(
+        "api.Modules.Notifications.Services.trial_reminders.send_email",
+        lambda session, to_addr, subject, body, html: sent_calls.append(
+            to_addr,
+        ) or True,
+    )
+
+    with db_session():
+        db.session.query(Store).delete()
+        db.session.query(User).delete()
+        db.session.commit()
+        now = datetime.utcnow()
+        s = _add_store(
+            db.session, slug="run-idempotent-co",
+            trial_ends_at=now + timedelta(days=2),
+        )
+        _add_user(
+            db.session, store_id=s.id, role="admin",
+            username="idem-admin@test.com", email="idem-admin@test.com",
+        )
+        db.session.commit()
+
+        first = run(db.session, now=now, base_url="https://x.test")
+        second = run(db.session, now=now, base_url="https://x.test")
+        assert first == 1
+        assert second == 0
+        assert len(sent_calls) == 1
+
+
+def test_run_skips_stores_outside_the_window(monkeypatch):
+    """A trial ending 10 days out doesn't qualify — no email, no
+    stamp."""
+    from tests._app import db
+    from api.Modules.Notifications.Services.trial_reminders import run
+
+    sent_calls = []
+    monkeypatch.setattr(
+        "api.Modules.Notifications.Services.trial_reminders.send_email",
+        lambda session, to_addr, subject, body, html: sent_calls.append(
+            to_addr,
+        ) or True,
+    )
+
+    with db_session():
+        db.session.query(Store).delete()
+        db.session.query(User).delete()
+        db.session.commit()
+        now = datetime.utcnow()
+        s = _add_store(
+            db.session, slug="run-not-due-co",
+            trial_ends_at=now + timedelta(days=10),
+        )
+        _add_user(
+            db.session, store_id=s.id, role="admin",
+            username="not-due-admin@test.com",
+            email="not-due-admin@test.com",
+        )
+        db.session.commit()
+
+        count = run(db.session, now=now, base_url="https://x.test")
+        assert count == 0
+        assert sent_calls == []
+        refreshed = db.session.get(Store, s.id)
+        assert refreshed.trial_reminder_sent_at is None
+
+
+def test_run_skips_paid_stores(monkeypatch):
+    """A basic-plan store never qualifies, regardless of any stray
+    trial_ends_at value left on the row."""
+    from tests._app import db
+    from api.Modules.Notifications.Services.trial_reminders import run
+
+    sent_calls = []
+    monkeypatch.setattr(
+        "api.Modules.Notifications.Services.trial_reminders.send_email",
+        lambda session, to_addr, subject, body, html: sent_calls.append(
+            to_addr,
+        ) or True,
+    )
+
+    with db_session():
+        db.session.query(Store).delete()
+        db.session.query(User).delete()
+        db.session.commit()
+        now = datetime.utcnow()
+        s = _add_store(
+            db.session, slug="run-paid-co", plan="basic",
+            trial_ends_at=now + timedelta(days=2),
+        )
+        _add_user(
+            db.session, store_id=s.id, role="admin",
+            username="paid-admin@test.com", email="paid-admin@test.com",
+        )
+        db.session.commit()
+
+        count = run(db.session, now=now, base_url="https://x.test")
+        assert count == 0
+        assert sent_calls == []
+
+
+def test_run_does_not_stamp_store_with_no_eligible_recipients(monkeypatch):
+    """A due store with zero eligible recipients (e.g. opted out)
+    doesn't get stamped — so it becomes reachable again if a
+    recipient later opts in within the same window."""
+    from tests._app import db
+    from api.Modules.Notifications.Services.trial_reminders import run
+
+    sent_calls = []
+    monkeypatch.setattr(
+        "api.Modules.Notifications.Services.trial_reminders.send_email",
+        lambda session, to_addr, subject, body, html: sent_calls.append(
+            to_addr,
+        ) or True,
+    )
+
+    with db_session():
+        db.session.query(Store).delete()
+        db.session.query(User).delete()
+        db.session.commit()
+        now = datetime.utcnow()
+        s = _add_store(
+            db.session, slug="run-no-recipients-co",
+            trial_ends_at=now + timedelta(days=2),
+        )
+        _add_user(
+            db.session, store_id=s.id, role="admin",
+            username="optout-run@test.com", email="optout-run@test.com",
+            notify=False,
+        )
+        db.session.commit()
+
+        count = run(db.session, now=now, base_url="https://x.test")
+        assert count == 0
+        assert sent_calls == []
+        refreshed = db.session.get(Store, s.id)
+        assert refreshed.trial_reminder_sent_at is None
+
+
+def test_run_defaults_now_and_base_url_when_omitted(monkeypatch):
+    """Calling run() with no kwargs falls back to utc_now() and
+    get_base_url() rather than raising — exercises the two
+    ``if ... is None`` branches."""
+    from tests._app import db
+    from api.Modules.Notifications.Services.trial_reminders import run
+
+    monkeypatch.setattr(
+        "api.Modules.Notifications.Services.trial_reminders.send_email",
+        lambda session, to_addr, subject, body, html: True,
+    )
+
+    with db_session():
+        db.session.query(Store).delete()
+        db.session.query(User).delete()
+        db.session.commit()
+        # Nothing due — just confirms no exception and a clean 0.
+        assert run(db.session) == 0
 
 
 def test_recipients_excludes_hard_bounced_addresses():

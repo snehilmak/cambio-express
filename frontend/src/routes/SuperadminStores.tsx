@@ -8,6 +8,7 @@ import {
 } from "../api/superadmin";
 import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
+import { formatDate } from "../lib/datetime";
 import {
   Alert, Breadcrumbs, Button, ButtonLink, Checkbox,
   Card, Empty, Input, PageHeader, PageShell, Pill,
@@ -166,7 +167,10 @@ function StoresTable({ rows, selected, onToggle, onToggleAll }: {
       <thead>
         <tr>
           <th style={thStyle}>
-            <Checkbox checked={allSelected} onChange={onToggleAll}>{""}</Checkbox>
+            <Checkbox
+              checked={allSelected} onChange={onToggleAll}
+              aria-label="Select all stores"
+            />
           </th>
           {[
             "Store",
@@ -188,7 +192,8 @@ function StoresTable({ rows, selected, onToggle, onToggleAll }: {
               <Checkbox
                 checked={selected.has(r.store_id)}
                 onChange={() => onToggle(r.store_id)}
-              >{""}</Checkbox>
+                aria-label={`Select ${r.name}`}
+              />
             </td>
             <td style={tdStyle}>
               <div className={styles.storeName}>{r.name}</div>
@@ -201,8 +206,8 @@ function StoresTable({ rows, selected, onToggle, onToggleAll }: {
               <PlanPill plan={r.plan} cycle={r.billing_cycle} />
             </td>
             <td style={tdStyle}>
-              <Pill tone={r.is_active ? "accent" : "negative"}>
-                {r.is_active ? "active" : "disabled"}
+              <Pill tone={r.is_active ? "accent" : "neutral"}>
+                {r.is_active ? "Active" : "Inactive"}
               </Pill>
             </td>
             <td style={tdStyle}>
@@ -218,7 +223,7 @@ function StoresTable({ rows, selected, onToggle, onToggleAll }: {
               )}
             </td>
             <td style={tdStyle}>
-              <span className={styles.monoMuted}>{r.created_at.slice(0, 10)}</span>
+              <span className={styles.monoMuted}>{formatDate(r.created_at)}</span>
             </td>
             <td style={{ ...tdStyle, textAlign: "right" }}>
               <ButtonLink href={`/superadmin/stores/${r.store_id}/drill`} tone="secondary" size="sm">
@@ -255,14 +260,14 @@ function TrialCell({ row }: { row: SuperadminStoreRow }) {
   if (row.data_retention_until) {
     return (
       <span className={styles.trialRetention}>
-        Purge {row.data_retention_until.slice(0, 10)}
+        Purge {formatDate(row.data_retention_until)}
       </span>
     );
   }
   if (row.plan === "trial" && row.trial_ends_at) {
     return (
       <span className={styles.trialEnds}>
-        Trial ends {row.trial_ends_at.slice(0, 10)}
+        Trial ends {formatDate(row.trial_ends_at)}
       </span>
     );
   }

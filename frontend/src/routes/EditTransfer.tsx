@@ -10,6 +10,7 @@ import {
   Alert, Breadcrumbs, Button, Card, ConfirmDialog, DateInput, ErrorState,
   Field, FormActions, InfoTip, Input, Loading, MoneyInput, PageHeader,
   PageShell, Pill, Section, Select,
+  useToast,
 } from "../components/ui";
 import { useUnsavedGuard } from "../lib/useUnsavedGuard";
 import {
@@ -21,6 +22,7 @@ import {
 import { useStoreInfo } from "../api/account";
 import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
+import { fmtMoney2 } from "../lib/formatters";
 import styles from "./EditTransfer.module.css";
 
 const COMPANIES = [
@@ -100,6 +102,7 @@ export default function EditTransfer() {
   const { id } = useParams<{ id: string }>();
   const transferId = id ? Number(id) : NaN;
   const navigate = useNavigate();
+  const toast = useToast();
   const identity = getCurrentIdentity();
   const detail = useTransfer(Number.isFinite(transferId) ? transferId : undefined);
   const roster = useEmployees();
@@ -168,6 +171,7 @@ export default function EditTransfer() {
     clearErrors("root");
     try {
       const result = await updateTransfer(transferId, values);
+      toast({ message: "Transfer updated.", tone: "success" });
       navigate(`/transfers/${result.transfer.id}`, { replace: true });
     } catch (err) {
       setError("root", {
@@ -394,12 +398,12 @@ export default function EditTransfer() {
                   type="text"
                   readOnly
                   tabIndex={-1}
-                  value={`$${previewFederalTax({
+                  value={fmtMoney2(previewFederalTax({
                     sendAmount,
                     serviceType,
                     country: country ?? "",
                     rate: storeInfo.data?.store.federal_tax_rate ?? 0,
-                  }).toFixed(2)}`}
+                  }))}
                   className={styles.taxPreview}
                 />
               </Field>

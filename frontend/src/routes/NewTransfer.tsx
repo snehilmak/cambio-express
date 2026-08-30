@@ -24,6 +24,8 @@ import {
   Select,
   space,
   tokens,
+  useToast,
+  Empty,
 } from "../components/ui";
 import { useUnsavedGuard } from "../lib/useUnsavedGuard";
 import { getOpenStatus } from "../lib/datetime";
@@ -35,6 +37,7 @@ import {
 import { useStoreInfo } from "../api/account";
 import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
+import { fmtMoney2 } from "../lib/formatters";
 
 // New transfer form at /app/transfers/new.
 //
@@ -142,6 +145,7 @@ const defaultValues = {
 
 export default function NewTransfer() {
   const navigate = useNavigate();
+  const toast = useToast();
   const identity = getCurrentIdentity();
   const roster = useEmployees();
   const storeInfo = useStoreInfo();
@@ -174,6 +178,7 @@ export default function NewTransfer() {
     clearErrors("root");
     try {
       const result = await createTransfer(values);
+      toast({ message: "Transfer saved.", tone: "success" });
       navigate(`/transfers/${result.transfer.id}`, { replace: true });
     } catch (err) {
       setError("root", {
@@ -400,7 +405,11 @@ export default function NewTransfer() {
         <Card>
           <Section title="Processed by">
             <Grid>
-              <Field label="Employee" highlight={!!errors.employee_id}>
+              <Field
+                label="Employee"
+                highlight={!!errors.employee_id}
+                error={errors.employee_id?.message}
+              >
                 <Select
                   {...register("employee_id", {
                     setValueAs: (v) => v === "" ? null : Number(v),
@@ -415,45 +424,28 @@ export default function NewTransfer() {
                     </option>
                   ))}
                 </Select>
-                {errors.employee_id && (
-                  <FieldError>{errors.employee_id.message}</FieldError>
-                )}
               </Field>
             </Grid>
             {roster.isError && (
-              <p style={{
-                margin: "0.5rem 0 0",
-                fontSize: "0.85rem",
-                color: tokens.negative,
-              }}>
+              <Alert tone="error">
                 Couldn't load roster. Add cashiers via Settings → Team
                 on the legacy admin page.
-              </p>
+              </Alert>
             )}
             {!roster.isLoading &&
               !roster.isError &&
               roster.data &&
               roster.data.employees.length === 0 && (
-                <p style={{
-                  margin: "0.5rem 0 0",
-                  fontSize: "0.85rem",
-                  color: tokens.textMuted,
-                }}>
+                <Empty>
                   No active employees on this store's roster yet. Add
                   them under Settings → Team.
-                </p>
+                </Empty>
               )}
           </Section>
         </Card>
 
         {errors.root && (
-          <p role="alert" style={{
-            color: tokens.negative,
-            textAlign: "center",
-            padding: "0.5rem 0",
-          }}>
-            {errors.root.message}
-          </p>
+          <Alert tone="error">{errors.root.message}</Alert>
         )}
 
         <FormActions>
@@ -496,21 +488,6 @@ function Grid({ children }: { children: React.ReactNode }) {
 }
 
 
-function FieldError({ children }: { children: React.ReactNode }) {
-  // Field-scoped validation message. Slot under a ``<Field>``
-  // input to surface the Zod issue inline.
-  return (
-    <span style={{
-      display: "block",
-      marginTop: "0.3rem",
-      fontSize: "0.78rem",
-      color: tokens.negative,
-    }}>
-      {children}
-    </span>
-  );
-}
-
 
 // Read-only client-side preview of the federal tax the server is
 // about to compute. Mirrors the rule in
@@ -542,7 +519,7 @@ function FederalTaxPreview({
         type="text"
         readOnly
         tabIndex={-1}
-        value={`$${tax.toFixed(2)}`}
+        value={fmtMoney2(tax)}
         style={{
           background: tokens.surface2,
           color: tokens.textMuted,

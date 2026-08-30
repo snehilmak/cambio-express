@@ -14,9 +14,9 @@ import {
 import { ApiError } from "../lib/api";
 import {
   Breadcrumbs,
-  Button, Card, ConfirmDialog, EmptyState, ErrorState, Field,
-  Input, Loading, PageHeader, PageShell, RowActions, Section, Select,
-  Table, tdStyle, thStyle, useToast,
+  Button, Card, Checkbox, ConfirmDialog, EmptyState, ErrorState,
+  Field, Input, Loading, PageHeader, PageShell, RowActions, Section,
+  Select, Table, tdStyle, thStyle, useToast,
 } from "../components/ui";
 import styles from "./BankRules.module.css";
 
@@ -262,22 +262,18 @@ export default function BankRules() {
                 placeholder="What this rule does"
               />
             </Field>
-            <label className={styles.checkRow}>
-              <input
-                type="checkbox"
-                checked={form.enabled}
-                onChange={(e) => setForm({ ...form, enabled: e.target.checked })}
-              />
+            <Checkbox
+              checked={form.enabled}
+              onChange={(v) => setForm({ ...form, enabled: v })}
+            >
               Enabled
-            </label>
-            <label className={styles.checkRow}>
-              <input
-                type="checkbox"
-                checked={form.auto_post}
-                onChange={(e) => setForm({ ...form, auto_post: e.target.checked })}
-              />
+            </Checkbox>
+            <Checkbox
+              checked={form.auto_post}
+              onChange={(v) => setForm({ ...form, auto_post: v })}
+            >
               Auto-post matching transactions to daily book
-            </label>
+            </Checkbox>
             <div className={styles.formActions}>
               <Button type="submit" busy={busy} disabled={busy}>
                 {editingId ? (busy ? "Saving…" : "Save changes") : (busy ? "Creating…" : "Create rule")}

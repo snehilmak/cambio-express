@@ -7,6 +7,7 @@ import {
   type OwnerStoreRow,
 } from "../api/owner";
 import { getCurrentIdentity } from "../lib/auth";
+import { fmtMoney2 } from "../lib/formatters";
 import {
   Breadcrumbs,
   Card, Empty, Input, PageHeader, PageShell,
@@ -150,7 +151,7 @@ function StoreTable({ rows }: { rows: OwnerStoreRow[] }) {
               <span className={styles.mono}>{r.transfer_count.toLocaleString()}</span>
             </td>
             <td style={{ ...tdStyle, textAlign: "right" }}>
-              <span className={styles.mono}>${r.volume.toFixed(2)}</span>
+              <span className={styles.mono}>{fmtMoney2(r.volume)}</span>
             </td>
             <td style={{ ...tdStyle, textAlign: "right" }}>
               <span
@@ -162,7 +163,7 @@ function StoreTable({ rows }: { rows: OwnerStoreRow[] }) {
                       : styles.overShortZero
                 }
               >
-                {r.over_short >= 0 ? "+" : ""}${r.over_short.toFixed(2)}
+                {r.over_short >= 0 ? "+" : ""}{fmtMoney2(r.over_short)}
               </span>
             </td>
             <td style={tdStyle}>

@@ -87,6 +87,17 @@
   --db-co-maxi:     #b48cff;
   --db-co-barri:    #4dd8e6;
 
+  /* ── Referral rewards accents ──
+     The ONE sanctioned gold sub-theme — the topbar crown + the
+     /settings/referrals share card only. Not a second brand
+     color: never use these on general CTAs or nav. */
+  --db-referral-gold:      #ffd96e;
+  --db-referral-gold-deep: #d4a92a;
+  --db-referral-navy:      #0a1a2e;
+  --db-referral-navy-deep: #050d1a;
+  --db-referral-border:    #1f3656;
+  --db-referral-text:      #e9eef5;
+
   /* ── Type ── */
   --db-font-display: 'Space Grotesk', 'DM Sans', sans-serif;
   --db-font-body:    'Inter', 'DM Sans', system-ui, sans-serif;

@@ -7,6 +7,7 @@ import {
   Breadcrumbs, Button, ErrorState, Loading, PageShell,
 } from "../components/ui";
 import { getCurrentIdentity } from "../lib/auth";
+import { fmtMoney2 } from "../lib/formatters";
 import styles from "./TimeClockPaystub.module.css";
 
 // /app/admin/timeclock/paystub/:id?from=YYYY-MM-DD&to=YYYY-MM-DD
@@ -119,7 +120,7 @@ export default function TimeClockPaystub() {
             <div className={styles.summaryLabel}>Hourly rate</div>
             <div className={styles.summaryValue}>
               {data.hourly_rate > 0
-                ? `$${data.hourly_rate.toFixed(2)}`
+                ? fmtMoney2(data.hourly_rate)
                 : "—"}
             </div>
           </div>
@@ -129,7 +130,7 @@ export default function TimeClockPaystub() {
               className={`${styles.summaryValue} ${styles.grossPay}`}
             >
               {data.hourly_rate > 0
-                ? `$${data.gross_pay.toFixed(2)}`
+                ? fmtMoney2(data.gross_pay)
                 : "—"}
             </div>
           </div>

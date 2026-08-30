@@ -8,6 +8,7 @@ import {
 } from "../api/superadmin";
 import { api, ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
+import { formatDate } from "../lib/datetime";
 import {
   Alert, Breadcrumbs, Button, Card, ConfirmDialog, EmptyState,
   ErrorState, KpiCard, KpiGrid, Loading, PageHeader, PageShell, Pill,
@@ -150,7 +151,7 @@ export default function SuperadminBilling() {
                       </div>
                       <div className={styles.badge}>
                         <Pill tone="warning">
-                          Ends {s.trial_ends_at?.slice(0, 10)}
+                          Ends {formatDate(s.trial_ends_at)}
                         </Pill>
                       </div>
                     </div>
@@ -172,7 +173,7 @@ export default function SuperadminBilling() {
                       </div>
                       <div className={styles.badge}>
                         <Pill tone="warning">
-                          Grace ends {s.grace_ends_at?.slice(0, 10)}
+                          Grace ends {formatDate(s.grace_ends_at)}
                         </Pill>
                       </div>
                     </div>
@@ -226,7 +227,7 @@ export default function SuperadminBilling() {
                         <div className={styles.storeMeta}>{s.slug} · {s.plan}</div>
                       </div>
                       <span className={styles.monoMuted}>
-                        {s.canceled_at?.slice(0, 10)}
+                        {formatDate(s.canceled_at)}
                       </span>
                     </div>
                   ))

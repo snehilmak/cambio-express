@@ -35,26 +35,26 @@
 }
 
 .hero {
-  background: linear-gradient(135deg, #0a1a2e 0%, #050d1a 100%);
-  border: 1px solid #1f3656;
+  background: linear-gradient(135deg, var(--db-referral-navy, #0a1a2e) 0%, var(--db-referral-navy-deep, #050d1a) 100%);
+  border: 1px solid var(--db-referral-border, #1f3656);
   border-radius: 1rem;
   padding: 1.75rem;
   margin-bottom: 1rem;
-  color: #e9eef5;
+  color: var(--db-referral-text, #e9eef5);
 }
 
 .heroLabel {
   font-size: 0.7rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: #ffd96e;
+  color: var(--db-referral-gold, #ffd96e);
   font-weight: 600;
 }
 
 .heroCode {
   font-family: var(--db-font-mono, "JetBrains Mono", monospace);
   font-size: 2.2rem;
-  color: #ffd96e;
+  color: var(--db-referral-gold, #ffd96e);
   margin-top: 0.4rem;
   letter-spacing: 0.15em;
 }
@@ -87,7 +87,7 @@
 }
 
 .btnGold {
-  background: #d4a92a;
+  background: var(--db-referral-gold-deep, #d4a92a);
   color: #fff;
   border: none;
   padding: 0.65rem 1.1rem;
@@ -100,7 +100,7 @@
 
 .howBox {
   background: var(--db-surface-2, #141414);
-  border-left: 3px solid #d4a92a;
+  border-left: 3px solid var(--db-referral-gold-deep, #d4a92a);
   border-radius: 0.4rem;
   padding: 0.85rem 1.1rem;
   font-size: 0.88rem;

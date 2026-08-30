@@ -28,22 +28,6 @@
   gap: 0.4rem 1rem;
 }
 
-.storeRow {
-  display: flex;
-  align-items: center;
-  gap: 0.55rem;
-  padding: 0.45rem 0.5rem;
-  border: 1px solid var(--db-border, #262626);
-  border-radius: 0.4rem;
-  cursor: pointer;
-  transition: background-color 120ms ease, border-color 120ms ease;
-}
-
-.storeRow:hover {
-  border-color: var(--db-accent, #3fff00);
-  background: var(--db-fill-neutral, rgba(255,255,255,0.04));
-}
-
 .storeName {
   font-weight: 600;
   flex: 0 1 auto;

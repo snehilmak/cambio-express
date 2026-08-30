@@ -33,13 +33,6 @@
   opacity: 0.4;
 }
 
-.deleteLabel {
-  font-size: 0.8rem;
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-}
-
 .newBankInput {
   margin-bottom: 0.5rem;
 }

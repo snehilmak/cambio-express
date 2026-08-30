@@ -1,7 +1,8 @@
-import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
 import { AuthChrome, StatusPill } from "../components/AuthChrome";
+import { Alert, Button, Field, Input, Select } from "../components/ui";
 import { previewReferral, signup, type ReferralPreview } from "../api/account";
 import { autoEnterOwnerStore } from "../api/switchStore";
 import { ApiError } from "../lib/api";
@@ -99,12 +100,11 @@ export default function Signup() {
         </div>
       )}
 
-      {error && <div className={styles.errorMsg}>{error}</div>}
+      <form onSubmit={onSubmit} style={{ display: "flex", flexDirection: "column", gap: "0.95rem" }}>
+        {error && <Alert tone="error">{error}</Alert>}
 
-      <form onSubmit={onSubmit}>
-        <SignupField label="Store Name" error={errors.store_name}>
-          <input
-            className={`${styles.input}${errors.store_name ? ` ${styles.inputError}` : ""}`}
+        <Field label="Store Name" error={errors.store_name}>
+          <Input
             type="text"
             value={storeName}
             onChange={(e) => setStoreName(e.target.value)}
@@ -112,10 +112,9 @@ export default function Signup() {
             disabled={busy}
             required
           />
-        </SignupField>
-        <SignupField label="Business type">
-          <select
-            className={styles.input}
+        </Field>
+        <Field label="Business type">
+          <Select
             value={bizType}
             onChange={(e) => setBizType(e.target.value)}
             disabled={busy}
@@ -124,11 +123,10 @@ export default function Signup() {
             <option value="gas_station">Gas station</option>
             <option value="grocery">Grocery store</option>
             <option value="msb_hybrid">Money services / hybrid</option>
-          </select>
-        </SignupField>
-        <SignupField label="Store Email" error={errors.email}>
-          <input
-            className={`${styles.input}${errors.email ? ` ${styles.inputError}` : ""}`}
+          </Select>
+        </Field>
+        <Field label="Store Email" error={errors.email}>
+          <Input
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
@@ -137,10 +135,9 @@ export default function Signup() {
             disabled={busy}
             required
           />
-        </SignupField>
-        <SignupField label="Password" error={errors.password}>
-          <input
-            className={`${styles.input}${errors.password ? ` ${styles.inputError}` : ""}`}
+        </Field>
+        <Field label="Password" error={errors.password}>
+          <Input
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
@@ -150,10 +147,9 @@ export default function Signup() {
             disabled={busy}
             required
           />
-        </SignupField>
-        <SignupField label="Phone" optional>
-          <input
-            className={styles.input}
+        </Field>
+        <Field label={<>Phone <span className={styles.optional}>(optional)</span></>}>
+          <Input
             type="tel"
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
@@ -161,10 +157,9 @@ export default function Signup() {
             autoComplete="tel"
             disabled={busy}
           />
-        </SignupField>
-        <SignupField label="Referral code" optional>
-          <input
-            className={styles.input}
+        </Field>
+        <Field label={<>Referral code <span className={styles.optional}>(optional)</span></>}>
+          <Input
             type="text"
             value={refCode}
             onChange={(e) => setRefCode(e.target.value.toUpperCase())}
@@ -177,40 +172,22 @@ export default function Signup() {
               letterSpacing: "2px",
             }}
           />
-        </SignupField>
-        <button
+        </Field>
+        <Button
           type="submit"
-          className={`${styles.submitBtn}${busy ? ` ${styles.isBusy}` : ""}`}
+          tone="primary"
+          size="lg"
+          busy={busy}
           disabled={busy || !storeName || !email || !password}
+          style={{ width: "100%" }}
         >
           {busy ? "Creating store…" : "Start free trial →"}
-        </button>
+        </Button>
       </form>
 
       <div className={styles.loginPrompt}>
         Already have an account? <Link to="/login">Sign in</Link>
       </div>
     </AuthChrome>
-  );
-}
-
-
-function SignupField({
-  label, optional, error, children,
-}: {
-  label: string;
-  optional?: boolean;
-  error?: string;
-  children: ReactNode;
-}) {
-  return (
-    <div className={styles.field}>
-      <label className={styles.label}>
-        {label}
-        {optional && <span className={styles.optional}>(optional)</span>}
-      </label>
-      {children}
-      {error && <div className={styles.fieldError}>{error}</div>}
-    </div>
   );
 }

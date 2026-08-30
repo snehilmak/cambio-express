@@ -5,9 +5,10 @@ import { api, ApiError } from "../lib/api";
 import { getCurrentIdentity, refreshToken } from "../lib/auth";
 import { useUnsavedChangesGuard } from "../lib/useUnsavedChangesGuard";
 import {
-  Alert, Breadcrumbs, Button, Card, Checkbox, Loading,
+  Alert, Breadcrumbs, Button, Card, Loading,
   PageHeader, PageShell, Pill, SectionTitle, useToast,
 } from "../components/ui";
+import { PermissionMatrixTable } from "../components/PermissionMatrixTable";
 import styles from "./StorePermissions.module.css";
 
 interface PermissionMatrix {
@@ -18,20 +19,6 @@ interface PermissionMatrix {
   matrix: Record<string, Record<string, Record<string, boolean>>>;
   has_overrides: string[];
 }
-
-const RESOURCE_LABELS: Record<string, string> = {
-  transfers: "Transfers",
-  customers: "Customers",
-  daily_book: "Daily book",
-  monthly: "Monthly P&L",
-  batches: "ACH batches",
-  bank_sync: "Bank sync",
-  reports: "Reports",
-  settings: "Settings",
-  users: "Users / Team",
-  time_clock: "Time clock",
-  return_checks: "Returned checks",
-};
 
 const ROLE_LABELS: Record<string, string> = {
   admin: "Admin",
@@ -175,34 +162,14 @@ export default function StorePermissions() {
                 </Button>
               )}
             </div>
-            <div style={{ overflowX: "auto" }}>
-              <table className={styles.matrix}>
-                <thead>
-                  <tr>
-                    <th>Resource</th>
-                    {draft.actions.map((a) => <th key={a}>{a}</th>)}
-                  </tr>
-                </thead>
-                <tbody>
-                  {draft.resources.map((resource) => (
-                    <tr key={resource}>
-                      <td>{RESOURCE_LABELS[resource] ?? resource}</td>
-                      {draft.actions.map((action) => (
-                        <td key={action}>
-                          <div className={styles.checkCell}>
-                            <Checkbox
-                              checked={draft.matrix[role][resource][action]}
-                              onChange={() => toggle(role, resource, action)}
-                              disabled={!canEdit}
-                            >{""}</Checkbox>
-                          </div>
-                        </td>
-                      ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <PermissionMatrixTable
+              resources={draft.resources}
+              actions={draft.actions}
+              checked={(resource, action) => draft.matrix[role][resource][action]}
+              onToggle={(resource, action) => toggle(role, resource, action)}
+              disabled={!canEdit}
+              ariaContext={role}
+            />
           </Card>
         );
       })}

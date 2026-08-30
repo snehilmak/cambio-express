@@ -8,8 +8,9 @@ import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
 import {
   Breadcrumbs,
-  Alert, Button, Card, Empty, ErrorState, Field, InfoTip, Input, Loading,
-  PageHeader, PageShell, Pill, Section, Table, tdStyle, thStyle,
+  Alert, Button, Card, Checkbox, Empty, ErrorState, Field, InfoTip,
+  Input, Loading, PageHeader, PageShell, Pill, Section, Table, tdStyle,
+  thStyle,
 } from "../components/ui";
 import styles from "./OwnerBulkAddUser.module.css";
 
@@ -177,15 +178,14 @@ export default function OwnerBulkAddUser() {
                   const checked = storeIds.includes(s.store_id);
                   return (
                     <li key={s.store_id}>
-                      <label className={styles.storeRow}>
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          onChange={() => toggleStore(s.store_id)}
-                        />
-                        <span className={styles.storeName}>{s.store_name}</span>
+                      <Checkbox
+                        checked={checked}
+                        onChange={() => toggleStore(s.store_id)}
+                        style={{ alignItems: "center", width: "100%" }}
+                      >
+                        <span className={styles.storeName}>{s.store_name}</span>{" "}
                         <span className={styles.storeSlug}>{s.store_slug}</span>
-                      </label>
+                      </Checkbox>
                     </li>
                   );
                 })}
@@ -249,7 +249,7 @@ function ResultsCard({ rows }: { rows: OwnerBulkAddUserResultRow[] }) {
 
 
 function StatusPill({ status }: { status: OwnerBulkAddUserResultRow["status"] }) {
-  if (status === "created") return <Pill tone="accent">Created</Pill>;
+  if (status === "created") return <Pill tone="success">Created</Pill>;
   if (status === "skipped") return <Pill tone="warning">Skipped</Pill>;
   return <Pill tone="negative">Rejected</Pill>;
 }

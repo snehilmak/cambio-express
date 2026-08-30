@@ -18,6 +18,8 @@ import {
   Alert,
   Button,
   Card,
+  Checkbox,
+  ConfirmDialog,
   EmptyState,
   Field,
   Input,
@@ -117,6 +119,7 @@ function FlagRow({
   const toast = useToast();
   const toastApiError = useApiErrorToast();
   const [busy, setBusy] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   async function handleToggle() {
     setBusy(true);
@@ -132,7 +135,6 @@ function FlagRow({
   }
 
   async function handleDelete() {
-    if (!confirm(`Delete flag "${flag.key}"? This also removes all per-store overrides.`)) return;
     setBusy(true);
     try {
       await deleteFeatureFlag(flag.key);
@@ -142,6 +144,7 @@ function FlagRow({
       toastApiError(err, "Delete failed");
     } finally {
       setBusy(false);
+      setConfirmingDelete(false);
     }
   }
 
@@ -174,9 +177,20 @@ function FlagRow({
               },
               {
                 label: "Delete", tone: "danger",
-                onClick: handleDelete, disabled: busy,
+                onClick: () => setConfirmingDelete(true),
+                disabled: busy,
               },
             ]}
+          />
+          <ConfirmDialog
+            open={confirmingDelete}
+            title="Delete feature flag"
+            message={`Delete flag "${flag.key}"? This also removes all per-store overrides.`}
+            confirmLabel="Delete"
+            confirmTone="danger"
+            busy={busy}
+            onConfirm={() => { void handleDelete(); }}
+            onCancel={() => setConfirmingDelete(false)}
           />
         </td>
       </tr>
@@ -349,10 +363,9 @@ function CreateFlagForm({
         <Field label="Description">
           <Textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} />
         </Field>
-        <label style={{ display: "flex", gap: "0.5rem", alignItems: "center", fontSize: "0.88rem" }}>
-          <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
+        <Checkbox checked={enabled} onChange={setEnabled}>
           Enabled by default
-        </label>
+        </Checkbox>
         <div style={{ display: "flex", gap: "0.5rem" }}>
           <Button type="submit" busy={busy}>Create</Button>
           <Button tone="secondary" onClick={onCancel} type="button">Cancel</Button>

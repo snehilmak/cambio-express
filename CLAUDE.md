@@ -48,6 +48,16 @@ single neon-green `#3fff00` accent, Space Grotesk + Inter +
 JetBrains Mono, inline stroke SVG nav icons).
 
 Non-negotiables:
+- **One control per data type — see
+  [`docs/design-system/UI-STANDARDS.md`](docs/design-system/UI-STANDARDS.md).**
+  Binding for every UI change: booleans are `<Switch>` (settings) or
+  `<Checkbox>` (form fields / selection) — never Yes/No dropdowns or
+  radio pairs; save-success is a toast; fetch errors are
+  `<ErrorState>` with retry; money renders via `fmtMoney2`, dates via
+  `formatDate`/`formatTimestamp`; pill tones carry one meaning each
+  (active=accent, inactive=neutral, pending=warning,
+  failed=negative). When a new pattern is needed, add it to that file
+  in the same PR.
 - **Dark by default; light is opt-in.** ``data-theme`` flips
   between ``"dark"`` (default) and ``"light"`` (per-user
   preference, stored on ``User.theme_preference``). The light

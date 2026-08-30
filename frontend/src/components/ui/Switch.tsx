@@ -19,7 +19,9 @@ import { tokens } from "./tokens";
  */
 export function Switch({
   checked, defaultChecked, onChange, disabled, name,
-  children, style, "aria-describedby": describedBy,
+  children, style,
+  "aria-describedby": describedBy,
+  "aria-label": ariaLabel,
 }: {
   checked?: boolean;
   defaultChecked?: boolean;
@@ -28,10 +30,12 @@ export function Switch({
   name?: string;
   /** Label rendered next to the switch.  Pass null/undefined
    *  for an unlabelled switch (rare — usually paired with a
-   *  separate `<Field>` label). */
+   *  separate `<Field>` label; give it an `aria-label`). */
   children?: ReactNode;
   style?: CSSProperties;
   "aria-describedby"?: string;
+  /** Accessible name for label-less use. */
+  "aria-label"?: string;
 }) {
   // Render is controlled-or-uncontrolled depending on `checked`
   // — let the native input own the value so React's reconciler
@@ -60,6 +64,7 @@ export function Switch({
           disabled={disabled}
           name={name}
           aria-describedby={describedBy}
+          aria-label={ariaLabel}
           style={hiddenInputStyle}
         />
         <span style={thumbStyle(!!isOn)} aria-hidden="true" />

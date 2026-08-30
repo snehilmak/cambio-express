@@ -7,14 +7,6 @@
   margin-bottom: 1rem;
 }
 
-.checkboxRow {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.55rem 0;
-  font-size: 0.95rem;
-}
-
 .legacyLink {
   color: var(--db-text-muted, #a3a3a3);
   font-size: 0.85rem;

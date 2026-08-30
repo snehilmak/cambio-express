@@ -7,6 +7,7 @@ import {
   Section, Table, tdStyle, thStyle, tokens,
 } from "../components/ui";
 import { useUrlFilterState } from "../lib/useUrlFilterState";
+import { fmtMoney2 } from "../lib/formatters";
 
 // /app/store-reports/item-movement (G-2) — per-item quantity +
 // dollars over a date range from the booked Gilbarco journal
@@ -99,9 +100,7 @@ export default function ItemMovement() {
             />
             <KpiCard
               label="Dollars"
-              value={`$${data.total_amount.toLocaleString(undefined, {
-                minimumFractionDigits: 2, maximumFractionDigits: 2,
-              })}`}
+              value={fmtMoney2(data.total_amount)}
               tone="positive"
             />
           </KpiGrid>
@@ -135,13 +134,10 @@ export default function ItemMovement() {
                             {r.quantity.toLocaleString()}
                           </td>
                           <td style={{ ...tdStyle, fontFamily: tokens.fontMono }}>
-                            ${r.amount.toLocaleString(undefined, {
-                              minimumFractionDigits: 2,
-                              maximumFractionDigits: 2,
-                            })}
+                            {fmtMoney2(r.amount)}
                           </td>
                           <td style={{ ...tdStyle, fontFamily: tokens.fontMono }}>
-                            ${r.avg_price.toFixed(2)}
+                            {fmtMoney2(r.avg_price)}
                           </td>
                           <td style={tdStyle}>
                             {!r.in_price_book && (

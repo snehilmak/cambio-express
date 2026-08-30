@@ -1,7 +1,8 @@
-import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import { AuthChrome } from "../components/AuthChrome";
+import { Alert, Button, Field, Input } from "../components/ui";
 import { signupOwner } from "../api/account";
 import { ApiError } from "../lib/api";
 import { setAccessToken } from "../lib/auth";
@@ -59,12 +60,11 @@ export default function SignupOwner() {
       <div className={styles.cardTitle}>Create owner account</div>
       <div className={styles.cardSub}>Manage multiple store locations from one login.</div>
 
-      {error && <div className={styles.errorMsg}>{error}</div>}
+      <form onSubmit={onSubmit} style={{ display: "flex", flexDirection: "column", gap: "0.95rem" }}>
+        {error && <Alert tone="error">{error}</Alert>}
 
-      <form onSubmit={onSubmit}>
-        <OwnerField label="Full Name" error={errors.full_name}>
-          <input
-            className={`${styles.input}${errors.full_name ? ` ${styles.inputError}` : ""}`}
+        <Field label="Full Name" error={errors.full_name}>
+          <Input
             type="text"
             value={fullName}
             onChange={(e) => setFullName(e.target.value)}
@@ -72,10 +72,9 @@ export default function SignupOwner() {
             disabled={busy}
             required
           />
-        </OwnerField>
-        <OwnerField label="Email" error={errors.email}>
-          <input
-            className={`${styles.input}${errors.email ? ` ${styles.inputError}` : ""}`}
+        </Field>
+        <Field label="Email" error={errors.email}>
+          <Input
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
@@ -84,10 +83,9 @@ export default function SignupOwner() {
             disabled={busy}
             required
           />
-        </OwnerField>
-        <OwnerField label="Password" error={errors.password}>
-          <input
-            className={`${styles.input}${errors.password ? ` ${styles.inputError}` : ""}`}
+        </Field>
+        <Field label="Password" error={errors.password}>
+          <Input
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
@@ -97,14 +95,17 @@ export default function SignupOwner() {
             disabled={busy}
             required
           />
-        </OwnerField>
-        <button
+        </Field>
+        <Button
           type="submit"
-          className={`${styles.submitBtn}${busy ? ` ${styles.isBusy}` : ""}`}
+          tone="primary"
+          size="lg"
+          busy={busy}
           disabled={busy || !fullName || !email || !password}
+          style={{ width: "100%" }}
         >
           {busy ? "Creating account…" : "Create owner account →"}
-        </button>
+        </Button>
       </form>
 
       <div className={styles.loginPrompt}>
@@ -114,18 +115,5 @@ export default function SignupOwner() {
         Managing a single store? <Link to="/signup">Sign up as a store</Link>
       </div>
     </AuthChrome>
-  );
-}
-
-
-function OwnerField({
-  label, error, children,
-}: { label: string; error?: string; children: ReactNode }) {
-  return (
-    <div className={styles.field}>
-      <label className={styles.label}>{label}</label>
-      {children}
-      {error && <div className={styles.fieldError}>{error}</div>}
-    </div>
   );
 }

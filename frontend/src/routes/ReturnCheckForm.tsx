@@ -18,12 +18,14 @@ import {
 import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
 import { useUnsavedGuard } from "../lib/useUnsavedGuard";
+import { fmtMoney2 } from "../lib/formatters";
 import {
   Breadcrumbs,
   Alert, Button, Card, ConfirmDialog, DateInput, EmptyState, Field,
   FormActions, Input, Loading, MoneyInput, PageHeader, PageShell, Pill,
   SectionTitle, Select, Table, Textarea, tdStyle, thStyle,
   type PillTone,
+  useToast,
 } from "../components/ui";
 import styles from "./ReturnCheckForm.module.css";
 
@@ -65,6 +67,7 @@ export default function ReturnCheckForm() {
   const isEdit = id !== undefined;
   const rcId = isEdit ? Number(id) : NaN;
   const navigate = useNavigate();
+  const toast = useToast();
   const identity = getCurrentIdentity();
 
   const detail = useReturnCheck(isEdit ? rcId : undefined);
@@ -137,6 +140,10 @@ export default function ReturnCheckForm() {
       };
       if (isEdit) await updateReturnCheck(rcId, body);
       else        await createReturnCheck(body);
+      toast({
+        message: isEdit ? "Return check updated." : "Return check recorded.",
+        tone: "success",
+      });
       navigate("/return-checks", { replace: true });
     } catch (err) {
       if (err instanceof ApiError) {
@@ -220,9 +227,9 @@ export default function ReturnCheckForm() {
             </Pill>
             <span className={styles.statusMeta}>
               Recovered{" "}
-              <span className={styles.mono}>${recovered.toFixed(2)}</span>
+              <span className={styles.mono}>{fmtMoney2(recovered)}</span>
               {" of "}
-              <span className={styles.mono}>${totalDue.toFixed(2)}</span>
+              <span className={styles.mono}>{fmtMoney2(totalDue)}</span>
             </span>
           </div>
           <div className={styles.transitionRow}>
@@ -460,7 +467,7 @@ function RecordPaymentForm({
         </Field>
         <MoneyInput
           label="Amount"
-          hint={cap > 0 ? `Up to $${cap.toFixed(2)} remaining.` : undefined}
+          hint={cap > 0 ? `Up to ${fmtMoney2(cap)} remaining.` : undefined}
           value={amount}
           onChange={setAmount}
           disabled={busy || disabled || cap <= 0}
@@ -559,7 +566,7 @@ function PaymentsTable({
                 <span className={styles.monoMuted}>{p.paid_on}</span>
               </td>
               <td style={{ ...tdStyle, textAlign: "right" }}>
-                <span className={styles.mono}>${p.amount.toFixed(2)}</span>
+                <span className={styles.mono}>{fmtMoney2(p.amount)}</span>
               </td>
               <td style={tdStyle}>{p.method || "—"}</td>
               <td style={tdStyle}>{p.notes || "—"}</td>
@@ -584,7 +591,7 @@ function PaymentsTable({
         title="Remove payment"
         message={
           pendingRemove
-            ? `Remove the $${pendingRemove.amount.toFixed(2)} payment from `
+            ? `Remove the ${fmtMoney2(pendingRemove.amount)} payment from `
               + `${pendingRemove.paid_on}?  The audit trail keeps the original `
               + "entry but the recovered total goes back down."
             : ""

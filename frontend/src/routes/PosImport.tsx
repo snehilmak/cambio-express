@@ -11,6 +11,7 @@ import {
 } from "../api/posimport";
 import { ApiError } from "../lib/api";
 import { fmtMoney2 } from "../lib/formatters";
+import { formatDate } from "../lib/datetime";
 import {
   Alert, Breadcrumbs, Button, Card, EmptyState, Field, InfoTip,
   Input, KpiCard, KpiGrid, PageHeader, PageShell, Pill, Section,
@@ -489,15 +490,15 @@ function AgentSection() {
                 {keyRows.map((k) => (
                   <tr key={k.id}>
                     <td style={tdStyle}>{k.label || "—"}</td>
-                    <td style={tdStyle}>{k.created_at.slice(0, 10)}</td>
+                    <td style={tdStyle}>{formatDate(k.created_at)}</td>
                     <td style={tdStyle}>
                       {k.last_used_at
                         ? k.last_used_at.slice(0, 16).replace("T", " ")
                         : "never"}
                     </td>
                     <td style={tdStyle}>
-                      <Pill tone={k.revoked ? "neutral" : "success"}>
-                        {k.revoked ? "revoked" : "active"}
+                      <Pill tone={k.revoked ? "neutral" : "accent"}>
+                        {k.revoked ? "Revoked" : "Active"}
                       </Pill>
                     </td>
                     <td style={tdStyle}>

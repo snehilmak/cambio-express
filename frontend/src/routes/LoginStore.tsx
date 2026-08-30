@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
 import { lookupStoreBySlug, type StoreLookup } from "../api/account";
+import { Alert, Button, Field, Input, Loading } from "../components/ui";
 import { api, ApiError } from "../lib/api";
 import { setAccessToken } from "../lib/auth";
 import { BRAND_NAME } from "../lib/brand";
@@ -85,7 +86,7 @@ export default function LoginStore() {
       <style>{LOGIN_STORE_CSS}</style>
 
       {loading ? (
-        <div className="loading-shell">Loading…</div>
+        <div className="loading-shell"><Loading /></div>
       ) : notFound ? (
         <div className="loading-shell">
           <div className="card-title">Store not found</div>
@@ -118,12 +119,14 @@ export default function LoginStore() {
               Sign in with the username your store admin gave you.
             </div>
 
-            {error && <div className="error-msg">{error}</div>}
+            <form
+              onSubmit={onSubmit}
+              style={{ display: "flex", flexDirection: "column", gap: "0.95rem" }}
+            >
+              {error && <Alert tone="error">{error}</Alert>}
 
-            <form onSubmit={onSubmit}>
-              <div className="field">
-                <label>Username</label>
-                <input
+              <Field label="Username">
+                <Input
                   type="text"
                   placeholder="your-username"
                   autoComplete="username"
@@ -133,10 +136,9 @@ export default function LoginStore() {
                   required
                   autoFocus
                 />
-              </div>
-              <div className="field">
-                <label>Password</label>
-                <input
+              </Field>
+              <Field label="Password">
+                <Input
                   type="password"
                   placeholder="••••••••"
                   autoComplete="current-password"
@@ -145,14 +147,17 @@ export default function LoginStore() {
                   disabled={busy}
                   required
                 />
-              </div>
-              <button
+              </Field>
+              <Button
                 type="submit"
-                className={`btn-login${busy ? " is-busy" : ""}`}
+                tone="primary"
+                size="lg"
+                busy={busy}
                 disabled={busy || !username || !password}
+                style={{ width: "100%" }}
               >
                 {busy ? "Signing in…" : "Sign in →"}
-              </button>
+              </Button>
             </form>
 
             <div className="login-footer">{store.name} · DineroBook</div>
@@ -187,16 +192,6 @@ const LOGIN_STORE_CSS = `
 .status-pill .label{font-family:var(--db-font-mono);font-size:10px;color:var(--db-gray-7);letter-spacing:1.2px}
 .login-heading{font-family:var(--db-font-display);font-size:30px;font-weight:600;color:var(--db-gray-9);letter-spacing:-.025em;margin-bottom:6px}
 .login-sub{font-size:14px;color:var(--db-gray-7);margin-bottom:28px}
-.field{display:flex;flex-direction:column;gap:7px;margin-bottom:16px}
-.login-right label{font-family:var(--db-font-mono);font-size:10.5px;font-weight:500;color:var(--db-gray-6);letter-spacing:1.5px;text-transform:uppercase}
-.login-right input{padding:13px 14px;background:var(--db-bg-input);border:1px solid var(--db-gray-3);border-radius:10px;font-size:14px;font-family:var(--db-font-body);color:var(--db-gray-9);width:100%;outline:none;transition:border-color .15s,box-shadow .15s}
-.login-right input::placeholder{color:var(--db-gray-5)}
-.login-right input:focus{border-color:var(--db-neon);box-shadow:0 0 0 3px var(--db-neon-glow-15)}
-.error-msg{background:rgba(255,77,109,.08);color:var(--db-negative);border:1px solid rgba(255,77,109,.3);border-radius:10px;padding:11px 14px;font-size:13px;margin-bottom:16px}
-.btn-login{width:100%;padding:14px;background:var(--db-neon);color:var(--db-neon-ink);border:none;border-radius:10px;font-size:14.5px;font-weight:600;font-family:var(--db-font-body);letter-spacing:-.01em;cursor:pointer;margin-top:6px;box-shadow:0 0 0 1px var(--db-neon),0 0 28px var(--db-neon-glow-40);transition:background .12s}
-.btn-login:hover:not(:disabled){background:var(--db-neon-bright)}
-.btn-login:disabled{opacity:.6;cursor:not-allowed}
-.btn-login.is-busy:disabled{cursor:wait}
 .login-footer{margin-top:28px;font-family:var(--db-font-mono);font-size:11px;color:var(--db-gray-6);text-align:center;letter-spacing:.5px}
 
 .loading-shell{min-height:100vh;min-height:100dvh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:48px 24px;background:var(--db-bg);color:var(--db-gray-7);font-family:var(--db-font-body);text-align:center;gap:12px}
@@ -216,8 +211,6 @@ const LOGIN_STORE_CSS = `
   .login-right{width:100%;padding:24px 24px 32px;padding-bottom:max(32px,env(safe-area-inset-bottom));flex:0 0 auto;max-height:none}
   .login-heading{font-size:24px}
   .login-sub{margin-bottom:22px}
-  .field{margin-bottom:14px}
-  .login-right input{font-size:16px}
   .login-footer{margin-top:24px}
 }
 @media (max-width:480px){

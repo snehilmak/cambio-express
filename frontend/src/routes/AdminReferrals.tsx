@@ -6,6 +6,8 @@ import {
 } from "../api/admin";
 import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
+import { fmtMoney2 } from "../lib/formatters";
+import { formatDate } from "../lib/datetime";
 import {
   Button, ButtonLink, Card, Empty, ErrorState, KpiCard, KpiGrid, Loading,
   Pill, space, Table, tdStyle, thStyle,
@@ -77,7 +79,7 @@ export default function AdminReferrals() {
             />
             <KpiCard
               label="Credits earned"
-              value={`$${(data.credits_earned_cents / 100).toFixed(2)}`}
+              value={fmtMoney2(data.credits_earned_cents / 100)}
               sub="applied to your Stripe balance"
               tone="neon"
             />
@@ -187,10 +189,10 @@ function Hero({
 function HistoryTable({ rows }: { rows: ReferralRedemptionRow[] }) {
   if (rows.length === 0) {
     return (
-      <p className={styles.emptyTable}>
+      <Empty>
         No referrals yet. Share your code above — your first credit
         posts the moment someone subscribes.
-      </p>
+      </Empty>
     );
   }
   return (
@@ -207,14 +209,14 @@ function HistoryTable({ rows }: { rows: ReferralRedemptionRow[] }) {
           <tr key={`${r.referee_store_id}-${r.redeemed_at}`}>
             <td style={tdStyle}>
               <span className={styles.monoMuted}>
-                {r.redeemed_at ? r.redeemed_at.slice(0, 10) : "—"}
+                {r.redeemed_at ? formatDate(r.redeemed_at) : "—"}
               </span>
             </td>
             <td style={tdStyle}>#{r.referee_store_id}</td>
             <td style={tdStyle}>
               {r.self_credit_applied ? (
                 <>
-                  <Pill tone="accent">Credited</Pill>
+                  <Pill tone="success">Credited</Pill>
                   {r.stripe_self_txn_id && (
                     <span className={`${styles.monoMuted} ${styles.txnId}`}>
                       {r.stripe_self_txn_id}
@@ -227,7 +229,7 @@ function HistoryTable({ rows }: { rows: ReferralRedemptionRow[] }) {
             </td>
             <td style={tdStyle}>
               {r.referee_credit_applied
-                ? <Pill tone="accent">Credited</Pill>
+                ? <Pill tone="success">Credited</Pill>
                 : <Pill tone="warning">Pending</Pill>}
             </td>
           </tr>

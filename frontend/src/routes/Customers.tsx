@@ -13,6 +13,8 @@ import { maskPhone } from "../lib/format";
 import {
   Alert, Button, Card, Checkbox, Empty, EmptyState, ErrorState, Field,
   Input, Modal, PageHeader, PageShell, Section, space, Table, tdStyle, thStyle,
+  Loading,
+  useToast,
 } from "../components/ui";
 import styles from "./Customers.module.css";
 
@@ -57,7 +59,7 @@ export default function Customers() {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [merging, setMerging] = useState(false);
   const [mergeError, setMergeError] = useState<string | null>(null);
-  const [toast, setToast] = useState<string | null>(null);
+  const toast = useToast();
 
   function exitMergeMode() {
     setMergeMode(false);
@@ -103,14 +105,16 @@ export default function Customers() {
     setMergeError(null);
     try {
       const result = await mergeCustomers(winner.id, loser.id);
-      setToast(
-        `Merged "${loser.full_name}" into "${winner.full_name}"`
-        + (result.transfers_repointed
-          ? ` (${result.transfers_repointed} transfer${
-              result.transfers_repointed === 1 ? "" : "s"
-            } re-pointed)`
-          : ""),
-      );
+      toast({
+        message:
+          `Merged "${loser.full_name}" into "${winner.full_name}"`
+          + (result.transfers_repointed
+            ? ` (${result.transfers_repointed} transfer${
+                result.transfers_repointed === 1 ? "" : "s"
+              } re-pointed)`
+            : ""),
+        tone: "success",
+      });
       exitMergeMode();
       await refetch();
     } catch (e) {
@@ -184,23 +188,6 @@ export default function Customers() {
         actions={actions}
       />
 
-      {toast && (
-        <div style={{ marginBottom: space.lg }}>
-          <Alert tone="success">
-            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-              <span>{toast}</span>
-              <Button
-                tone="secondary"
-                size="sm"
-                onClick={() => setToast(null)}
-              >
-                Dismiss
-              </Button>
-            </div>
-          </Alert>
-        </div>
-      )}
-
       {mergeMode && (
         <MergeBanner
           picks={picks}
@@ -219,9 +206,7 @@ export default function Customers() {
             placeholder="Name, phone, …"
           />
         </Field>
-        {isFetching && (
-          <p className={styles.searching}>Searching…</p>
-        )}
+        {isFetching && <Loading />}
       </Card>
 
       {isError && (

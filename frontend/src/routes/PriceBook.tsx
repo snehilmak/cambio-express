@@ -16,10 +16,10 @@ import { fmtMoney2 } from "../lib/formatters";
 import { hasPermission } from "../lib/permissions";
 import { useUrlFilterState } from "../lib/useUrlFilterState";
 import {
-  Alert, Breadcrumbs, Button, Card, EmptyState, ErrorState, Field,
-  InfoTip, Input, Loading, Modal, PageHeader, PageShell, Pager, Pill,
-  RowActions, Section, Select, TabsBar, TabsButton, Table, tdStyle,
-  thStyle, useToast,
+  Alert, Breadcrumbs, Button, Card, Checkbox, EmptyState, ErrorState,
+  Field, InfoTip, Input, Loading, Modal, PageHeader, PageShell, Pager,
+  Pill, RowActions, Section, Select, TabsBar, TabsButton, Table,
+  tdStyle, thStyle, useToast,
 } from "../components/ui";
 import styles from "./PriceBook.module.css";
 
@@ -236,7 +236,7 @@ function ItemsTab() {
                       </td>
                       <td style={tdStyle}>{i.is_taxable ? "Taxable" : "—"}</td>
                       <td style={tdStyle}>
-                        <Pill tone={i.is_active ? "success" : "neutral"}>
+                        <Pill tone={i.is_active ? "accent" : "neutral"}>
                           {i.is_active ? "active" : "inactive"}
                         </Pill>
                       </td>
@@ -660,13 +660,9 @@ function ItemForm({
           </Select>
         </Field>
         <Field label="Sales tax">
-          <Select
-            value={taxable ? "1" : ""}
-            onChange={(e) => setTaxable(e.target.value === "1")}
-          >
-            <option value="1">Taxable</option>
-            <option value="">Not taxable</option>
-          </Select>
+          <Checkbox checked={taxable} onChange={setTaxable}>
+            Taxable
+          </Checkbox>
         </Field>
         <Field label="Item # (optional)">
           <Input
@@ -766,14 +762,12 @@ function ItemForm({
           </div>
         </Field>
       </div>
-      <label className={styles.ebtRow}>
-        <input
-          type="checkbox"
-          checked={ebt}
-          onChange={(e) => setEbt(e.target.checked)}
-        />
-        <span>EBT / SNAP eligible</span>
-      </label>
+      <Checkbox
+        checked={ebt} onChange={setEbt}
+        style={{ marginTop: "0.75rem" }}
+      >
+        EBT / SNAP eligible
+      </Checkbox>
       <div className={styles.modalActions}>
         <Button tone="secondary" type="button" onClick={onClose}>
           Cancel
@@ -886,7 +880,7 @@ function VendorsTab() {
                     </td>
                     <td style={tdStyle}>{v.item_count}</td>
                     <td style={tdStyle}>
-                      <Pill tone={v.is_active ? "success" : "neutral"}>
+                      <Pill tone={v.is_active ? "accent" : "neutral"}>
                         {v.is_active ? "active" : "inactive"}
                       </Pill>
                     </td>

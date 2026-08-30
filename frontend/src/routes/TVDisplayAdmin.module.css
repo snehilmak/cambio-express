@@ -320,12 +320,6 @@
   font-family: "Inter", sans-serif;
 }
 
-.savedFlash {
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--db-neon);
-}
-
 .statRows {
   display: flex;
   flex-direction: column;

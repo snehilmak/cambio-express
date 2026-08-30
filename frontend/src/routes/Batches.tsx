@@ -7,6 +7,7 @@ import {
   type BatchSort,
 } from "../api/batches";
 import { getCurrentIdentity } from "../lib/auth";
+import { fmtMoney2 } from "../lib/formatters";
 import {
   Breadcrumbs,
   ButtonLink, Card, Empty, PageHeader, PageShell, Pill,
@@ -184,15 +185,15 @@ function BatchesTable({
                 <span className={styles.mono}>{r.batch_ref}</span>
               </td>
               <td style={{ ...tdStyle, textAlign: "right" }}>
-                <span className={styles.mono}>${r.ach_amount.toFixed(2)}</span>
+                <span className={styles.mono}>{fmtMoney2(r.ach_amount)}</span>
               </td>
               <td style={tdStyle}>
-                <span className={styles.mono}>${r.transfers_total.toFixed(2)}</span>
+                <span className={styles.mono}>{fmtMoney2(r.transfers_total)}</span>
                 <span className={styles.transferCount}>({r.transfer_count})</span>
               </td>
               <td style={tdStyle}>
                 <span className={r.variance < 0 ? styles.varianceNeg : styles.variancePos}>
-                  {r.variance >= 0 ? "+" : ""}${r.variance.toFixed(2)}
+                  {r.variance >= 0 ? "+" : ""}{fmtMoney2(r.variance)}
                 </span>
               </td>
               <td style={tdStyle}>

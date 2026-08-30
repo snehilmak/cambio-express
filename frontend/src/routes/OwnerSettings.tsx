@@ -5,12 +5,14 @@ import { useProfile } from "../api/account";
 import {
   Breadcrumbs, Card, KpiCard, KpiGrid, Loading, PageHeader, PageShell,
   Pill, SectionTitle,
+  ErrorState,
+  Empty,
 } from "../components/ui";
 import styles from "./OwnerSettings.module.css";
 
 export default function OwnerSettings() {
   const { data: profile } = useProfile();
-  const { data: locations } = useOwnerLocations("month");
+  const { data: locations, isLoading, isError, refetch } = useOwnerLocations("month");
 
   const storeCount = locations?.rows.length ?? 0;
 
@@ -76,15 +78,25 @@ export default function OwnerSettings() {
               </Link>
             ))}
             {storeCount === 0 && (
-              <p className={styles.emptyNote}>
-                No stores linked yet. <Link to="/owner/connect" className={styles.emptyLink}>Generate a connect code</Link> to get started.
-              </p>
+              <Empty>
+                No stores linked yet.{" "}
+                <Link to="/owner/connect" className={styles.emptyLink}>
+                  Generate a connect code
+                </Link>{" "}
+                to get started.
+              </Empty>
             )}
           </div>
         </Card>
       )}
 
-      {!locations && <Loading />}
+      {isLoading && <Loading />}
+      {isError && (
+        <ErrorState
+          message="Could not load your stores."
+          onRetry={() => { void refetch(); }}
+        />
+      )}
     </PageShell>
   );
 }

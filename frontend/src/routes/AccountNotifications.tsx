@@ -19,8 +19,9 @@ import {
 } from "../lib/push";
 import {
   Breadcrumbs,
-  Alert, Button, Card, ErrorState, InfoTip, Loading, PageHeader, PageShell,
-  Section, Table, tdStyle, thStyle, tokens, useToast,
+  Alert, Button, Card, Checkbox, ErrorState, InfoTip, Loading,
+  PageHeader, PageShell, Section, Table, tdStyle, thStyle, tokens,
+  useToast,
 } from "../components/ui";
 import styles from "./AccountNotifications.module.css";
 import { BRAND_NAME } from "../lib/brand";
@@ -135,7 +136,6 @@ export default function AccountNotifications() {
               </div>
 
               <PrefKindRow
-                id="trial"
                 title="Trial-ending reminder"
                 disabled={busy || !trialApplies}
                 emailChecked={draft.notify_trial_reminders ?? false}
@@ -157,7 +157,6 @@ export default function AccountNotifications() {
               </PrefKindRow>
 
               <PrefKindRow
-                id="announcement"
                 title="Platform announcements"
                 disabled={busy}
                 emailChecked={draft.notify_announcement_email ?? false}
@@ -172,7 +171,6 @@ export default function AccountNotifications() {
               </PrefKindRow>
 
               <PrefKindRow
-                id="digest"
                 title="Daily book close-out digest"
                 disabled={busy || !digestApplies}
                 emailChecked={draft.notify_locked_day_digest ?? false}
@@ -195,7 +193,6 @@ export default function AccountNotifications() {
               </PrefKindRow>
 
               <PrefKindRow
-                id="summary"
                 title="Daily summary"
                 disabled={busy || !summaryApplies}
                 emailChecked={draft.notify_daily_summary ?? false}
@@ -219,7 +216,6 @@ export default function AccountNotifications() {
               </PrefKindRow>
 
               <PrefKindRow
-                id="ticket-updates"
                 title="Support-ticket updates"
                 disabled={busy}
                 emailChecked={draft.notify_ticket_updates ?? false}
@@ -234,7 +230,6 @@ export default function AccountNotifications() {
 
               {data.high_variance_applies && (
                 <PrefKindRow
-                  id="high-variance"
                   title="High over/short alert"
                   disabled={busy}
                   emailChecked={draft.notify_high_variance ?? false}
@@ -250,7 +245,6 @@ export default function AccountNotifications() {
 
               {data.store_offline_applies && (
                 <PrefKindRow
-                  id="store-offline"
                   title="Store inactivity alert"
                   disabled={busy}
                   emailChecked={draft.notify_store_offline ?? false}
@@ -346,12 +340,11 @@ export default function AccountNotifications() {
 
 
 function PrefKindRow({
-  id, title, disabled,
+  title, disabled,
   emailChecked, emailOnChange,
   pushChecked,  pushOnChange,
   children,
 }: {
-  id:            string;
   title:         string;
   disabled:      boolean;
   emailChecked:  boolean;
@@ -360,8 +353,6 @@ function PrefKindRow({
   pushOnChange:  (v: boolean) => void;
   children:      React.ReactNode;
 }) {
-  const emailId = `${id}-email`;
-  const pushId  = `${id}-push`;
   return (
     <div className={styles.kindRow}>
       <div className={styles.prefBody}>
@@ -375,32 +366,22 @@ function PrefKindRow({
         </div>
         <div className={styles.prefDesc}>{children}</div>
       </div>
-      <label
-        htmlFor={emailId}
-        className={styles.channelCell}
-        aria-label={`Email — ${title}`}
-      >
-        <input
-          id={emailId} type="checkbox"
+      <div className={styles.channelCell}>
+        <Checkbox
           checked={emailChecked}
           disabled={disabled}
-          onChange={(e) => emailOnChange(e.target.checked)}
-          className={styles.checkbox}
+          onChange={emailOnChange}
+          aria-label={`Email — ${title}`}
         />
-      </label>
-      <label
-        htmlFor={pushId}
-        className={styles.channelCell}
-        aria-label={`Push — ${title}`}
-      >
-        <input
-          id={pushId} type="checkbox"
+      </div>
+      <div className={styles.channelCell}>
+        <Checkbox
           checked={pushChecked}
           disabled={disabled}
-          onChange={(e) => pushOnChange(e.target.checked)}
-          className={styles.checkbox}
+          onChange={pushOnChange}
+          aria-label={`Push — ${title}`}
         />
-      </label>
+      </div>
     </div>
   );
 }

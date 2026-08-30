@@ -18,6 +18,7 @@ import {
   SectionTitle,
   useToast,
 } from "../components/ui";
+import { PermissionMatrixTable } from "../components/PermissionMatrixTable";
 import styles from "./SuperadminPermissions.module.css";
 
 interface PermissionMatrix {
@@ -35,20 +36,6 @@ function usePermissionMatrix() {
     queryFn: () => api<PermissionMatrix>("/api/v2/superadmin/permissions"),
   });
 }
-
-const RESOURCE_LABELS: Record<string, string> = {
-  transfers: "Transfers",
-  customers: "Customers",
-  daily_book: "Daily book",
-  monthly: "Monthly P&L",
-  batches: "ACH batches",
-  bank_sync: "Bank sync",
-  reports: "Reports",
-  settings: "Settings",
-  users: "Users / Team",
-  time_clock: "Time clock",
-  return_checks: "Returned checks",
-};
 
 const ROLE_LABELS: Record<string, string> = {
   admin: "Admin",
@@ -166,51 +153,28 @@ export default function SuperadminPermissions() {
           <SectionTitle>
             <Pill tone={ROLE_TONES[role] ?? "neutral"}>{ROLE_LABELS[role] ?? role}</Pill>
           </SectionTitle>
-          <div style={{ overflowX: "auto" }}>
-            <table className={styles.matrix}>
-              <thead>
-                <tr>
-                  <th>Resource</th>
-                  {draft.actions.map((a) => (
-                    <th key={a}>{a}</th>
-                  ))}
-                  <th>All</th>
-                </tr>
-              </thead>
-              <tbody>
-                {draft.resources.map((resource) => {
-                  const allChecked = draft.actions.every(
-                    (a) => draft.matrix[role][resource][a],
-                  );
-                  return (
-                    <tr key={resource}>
-                      <td className={styles.resourceLabel}>
-                        {RESOURCE_LABELS[resource] ?? resource}
-                      </td>
-                      {draft.actions.map((action) => (
-                        <td key={action}>
-                          <div className={styles.checkCell}>
-                            <Checkbox
-                              checked={draft.matrix[role][resource][action]}
-                              onChange={() => toggle(role, resource, action)}
-                            >{""}</Checkbox>
-                          </div>
-                        </td>
-                      ))}
-                      <td>
-                        <div className={styles.checkCell}>
-                          <Checkbox
-                            checked={allChecked}
-                            onChange={() => toggleAllForRole(role, resource, !allChecked)}
-                          >{""}</Checkbox>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <PermissionMatrixTable
+            resources={draft.resources}
+            actions={draft.actions}
+            checked={(resource, action) => draft.matrix[role][resource][action]}
+            onToggle={(resource, action) => toggle(role, resource, action)}
+            ariaContext={role}
+            trailingColumn={{
+              header: "All",
+              render: (resource) => {
+                const allChecked = draft.actions.every(
+                  (a) => draft.matrix[role][resource][a],
+                );
+                return (
+                  <Checkbox
+                    checked={allChecked}
+                    onChange={() => toggleAllForRole(role, resource, !allChecked)}
+                    aria-label={`All actions — ${resource} (${role})`}
+                  />
+                );
+              },
+            }}
+          />
         </Card>
       ))}
 

@@ -6,6 +6,7 @@ import {
   type DiscountCodeRow,
 } from "../api/featureFlags";
 import { ApiError } from "../lib/api";
+import { formatDate } from "../lib/datetime";
 import {
   Alert,
   Button,
@@ -18,11 +19,6 @@ import {
   Table,
   useToast,
 } from "../components/ui";
-
-function fmtDate(iso: string): string {
-  if (!iso) return "—";
-  return new Date(iso).toLocaleDateString();
-}
 
 export default function SuperadminDiscounts() {
   const { data, isLoading, isError } = useDiscounts();
@@ -97,7 +93,7 @@ export default function SuperadminDiscounts() {
                     )}
                   </td>
                   <td style={{ fontSize: "0.82rem", color: "var(--db-text-muted)" }}>
-                    {fmtDate(row.expires_at)}
+                    {formatDate(row.expires_at)}
                   </td>
                   <td>
                     {row.is_redeemable ? (

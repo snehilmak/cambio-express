@@ -31,6 +31,7 @@ import {
   Breadcrumbs, Button, Card, ConfirmDialog, EmptyState, Field, InfoTip,
   Input, Loading, Modal, MoneyInput, PageHeader, PageShell, Pill,
   RowActions, TabsBar, TabsButton, Textarea,
+  Alert,
 } from "../components/ui";
 import { useUnsavedGuard } from "../lib/useUnsavedGuard";
 import { computeTotals, type FormState } from "./editDailyBook.totals";
@@ -480,7 +481,7 @@ export default function EditDailyBook() {
 
         <NotesPanel form={form} set={set} locked={locked} />
 
-        {error && <ErrorRow message={error} />}
+        {error && <Alert tone="error">{error}</Alert>}
 
         <StickySaveBar
           locked={locked}
@@ -1059,7 +1060,7 @@ function SalesWidget({
             </div>
           </div>
 
-          {err && <ErrorRow message={err} />}
+          {err && <Alert tone="error">{err}</Alert>}
 
           <div className={styles.mtSaveRow}>
             <span className={styles.mtSaveRowLeft}>
@@ -1190,7 +1191,7 @@ function FeesWidget({
             </div>
           </div>
 
-          {err && <ErrorRow message={err} />}
+          {err && <Alert tone="error">{err}</Alert>}
 
           <div className={styles.mtSaveRow}>
             <span className={styles.mtSaveRowLeft}>
@@ -1388,7 +1389,7 @@ function MoneyTransferWidget({
             </div>
           )}
 
-          {err && <ErrorRow message={err} />}
+          {err && <Alert tone="error">{err}</Alert>}
 
           <div className={styles.mtSaveRow}>
             <span className={styles.mtSaveRowLeft}>
@@ -1819,7 +1820,7 @@ function LineItemEntriesEditor({
       </div>
     )}
 
-    {err && <ErrorRow message={err} />}
+    {err && <Alert tone="error">{err}</Alert>}
 
     {items.length === 0 ? (
       <p className={styles.emptyEntries}>
@@ -2042,14 +2043,6 @@ function ForwardBalanceInput({
       onChange={onChange}
       disabled={disabled || auto}
     />
-  );
-}
-
-function ErrorRow({ message }: { message: string }) {
-  return (
-    <p role="alert" className={styles.error}>
-      {message}
-    </p>
   );
 }
 

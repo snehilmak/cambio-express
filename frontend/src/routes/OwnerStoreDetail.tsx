@@ -10,10 +10,14 @@ import { unlinkStore, useOwnerStoreDetail } from "../api/owner";
 import { ApiError } from "../lib/api";
 import {
   Breadcrumbs, Button,
-  Card, ErrorState, KpiCard, KpiGrid, Loading, PageHeader, PageShell,
-  Section, TabsBar, TabsButton, Table, tdStyle, thStyle,
+  Card, ConfirmDialog, ErrorState, KpiCard, KpiGrid, Loading,
+  PageHeader, PageShell, Section, TabsBar, TabsButton, Table, tdStyle,
+  thStyle, useToast,
+  thStyleRight,
+  tdStyleRight,
 } from "../components/ui";
 import { chartSeries, chartTokens, moneyChartOptions, seriesFill } from "../lib/chartOptions";
+import { fmtMoney2 } from "../lib/formatters";
 import styles from "./OwnerStoreDetail.module.css";
 
 ChartJS.register(
@@ -29,8 +33,6 @@ const PERIODS: Array<{ value: Period; label: string }> = [
   { value: "year",  label: "This Year" },
 ];
 
-const thStyleR: React.CSSProperties = { ...thStyle, textAlign: "right" };
-const tdStyleR: React.CSSProperties = { ...tdStyle, textAlign: "right" };
 
 export default function OwnerStoreDetail() {
   const { storeId } = useParams<{ storeId: string }>();
@@ -38,15 +40,28 @@ export default function OwnerStoreDetail() {
   const navigate = useNavigate();
   const [period, setPeriod] = useState<Period>("month");
   const { data, isLoading, isError, error, refetch } = useOwnerStoreDetail(sid, period);
+  const toast = useToast();
+  const [confirmUnlink, setConfirmUnlink] = useState(false);
+  const [unlinking, setUnlinking] = useState(false);
 
   async function handleUnlink() {
-    const name = data?.store?.name ?? `store ${sid}`;
-    if (!confirm(`Disconnect "${name}" from your umbrella? The store keeps all its data but you will no longer see it.`)) return;
+    setUnlinking(true);
     try {
       await unlinkStore(sid);
+      toast({
+        message: "Store disconnected from your umbrella.",
+        tone: "success",
+      });
       navigate("/owner/locations");
     } catch (err) {
-      alert(err instanceof ApiError ? err.message : "Could not unlink store.");
+      toast({
+        message: err instanceof ApiError
+          ? err.message : "Could not unlink store.",
+        tone: "error",
+      });
+    } finally {
+      setUnlinking(false);
+      setConfirmUnlink(false);
     }
   }
 
@@ -77,13 +92,27 @@ export default function OwnerStoreDetail() {
                   Permissions
                 </Button>
               </Link>
-              <Button size="sm" tone="secondary" onClick={() => { void handleUnlink(); }}>
+              <Button
+                size="sm" tone="secondary"
+                onClick={() => setConfirmUnlink(true)}
+              >
                 Disconnect store
               </Button>
             </div>
           )}
         />
       </div>
+
+      <ConfirmDialog
+        open={confirmUnlink}
+        title="Disconnect store"
+        message={`Disconnect "${data?.store?.name ?? `store ${sid}`}" from your umbrella? The store keeps all its data but you will no longer see it.`}
+        confirmLabel="Disconnect"
+        confirmTone="danger"
+        busy={unlinking}
+        onConfirm={() => { void handleUnlink(); }}
+        onCancel={() => setConfirmUnlink(false)}
+      />
 
       {isLoading && <Loading />}
       {isError && (
@@ -106,11 +135,11 @@ export default function OwnerStoreDetail() {
               value={`$${Math.round(data.period_volume).toLocaleString()}`}
               sub={fmtDelta(data.period_volume - data.prev_volume, "$", " vs prior")}
             />
-            <KpiCard label="Fees" value={`$${data.period_fees.toFixed(2)}`} />
-            <KpiCard label="Federal Tax" value={`$${data.period_tax.toFixed(2)}`} />
+            <KpiCard label="Fees" value={fmtMoney2(data.period_fees)} />
+            <KpiCard label="Federal Tax" value={fmtMoney2(data.period_tax)} />
             <KpiCard
               label="Over/Short"
-              value={`${data.period_over_short >= 0 ? "+" : "-"}$${Math.abs(data.period_over_short).toFixed(2)}`}
+              value={`${data.period_over_short >= 0 ? "+" : "-"}${fmtMoney2(Math.abs(data.period_over_short))}`}
               tone={data.period_over_short < 0 ? "negative" : "neutral"}
             />
           </KpiGrid>
@@ -227,20 +256,20 @@ export default function OwnerStoreDetail() {
                   <thead>
                     <tr>
                       <th style={thStyle}>Company</th>
-                      <th style={thStyleR}>Transfers</th>
-                      <th style={thStyleR}>Volume</th>
-                      <th style={thStyleR}>Fees</th>
-                      <th style={thStyleR}>Tax</th>
+                      <th style={thStyleRight}>Transfers</th>
+                      <th style={thStyleRight}>Volume</th>
+                      <th style={thStyleRight}>Fees</th>
+                      <th style={thStyleRight}>Tax</th>
                     </tr>
                   </thead>
                   <tbody>
                     {data.company_rows.map((c) => (
                       <tr key={c.company}>
                         <td style={tdStyle}>{c.company}</td>
-                        <td style={tdStyleR}>{c.count.toLocaleString()}</td>
-                        <td style={tdStyleR}>${c.volume.toFixed(2)}</td>
-                        <td style={tdStyleR}>${c.fees.toFixed(2)}</td>
-                        <td style={tdStyleR}>${c.tax.toFixed(2)}</td>
+                        <td style={tdStyleRight}>{c.count.toLocaleString()}</td>
+                        <td style={tdStyleRight}>{fmtMoney2(c.volume)}</td>
+                        <td style={tdStyleRight}>{fmtMoney2(c.fees)}</td>
+                        <td style={tdStyleRight}>{fmtMoney2(c.tax)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -261,7 +290,7 @@ export default function OwnerStoreDetail() {
                       <th style={thStyle}>Sender</th>
                       <th style={thStyle}>Recipient</th>
                       <th style={thStyle}>Co.</th>
-                      <th style={thStyleR}>Amount</th>
+                      <th style={thStyleRight}>Amount</th>
                       <th style={thStyle}>Status</th>
                     </tr>
                   </thead>
@@ -274,7 +303,7 @@ export default function OwnerStoreDetail() {
                         <td style={tdStyle}>{t.sender_name || "—"}</td>
                         <td style={tdStyle}>{t.recipient_name || "—"}</td>
                         <td style={tdStyle}>{t.company || "—"}</td>
-                        <td style={tdStyleR}>${t.send_amount.toFixed(2)}</td>
+                        <td style={tdStyleRight}>{fmtMoney2(t.send_amount)}</td>
                         <td style={tdStyle}>{t.status}</td>
                       </tr>
                     ))}

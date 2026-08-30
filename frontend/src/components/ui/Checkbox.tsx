@@ -7,16 +7,21 @@ import { tokens } from "./tokens";
  *  `<input type="checkbox">` so form-libraries (react-hook-form,
  *  uncontrolled forms) Just Work.
  *
- *  Always pass children — they're rendered as the clickable
- *  label.  The whole label-row is the hit target so the checkbox
- *  itself doesn't need pixel-perfect aim.
+ *  Pass children — they're rendered as the clickable label; the
+ *  whole label-row is the hit target so the checkbox itself
+ *  doesn't need pixel-perfect aim.  When the visible label lives
+ *  elsewhere (a matrix cell, a table row whose text names the
+ *  thing), omit children and pass `aria-label` instead — one of
+ *  the two is required for screen readers.
  *
  *  For purely-decorative use ("show as checked, don't gate any
  *  state"), pair with `disabled` and an explicit `aria-readonly`.
  */
 export function Checkbox({
   checked, defaultChecked, onChange, disabled, name, value,
-  children, style, "aria-describedby": describedBy,
+  children, style,
+  "aria-describedby": describedBy,
+  "aria-label": ariaLabel,
 }: {
   /** Controlled-mode `checked`.  Pair with `onChange` to update
    *  it.  Mutually exclusive with `defaultChecked`. */
@@ -26,9 +31,12 @@ export function Checkbox({
   disabled?: boolean;
   name?: string;
   value?: string;
-  children: ReactNode;
+  /** Visible label. Omit only when `aria-label` is provided. */
+  children?: ReactNode;
   style?: CSSProperties;
   "aria-describedby"?: string;
+  /** Accessible name for label-less use (matrix cells etc.). */
+  "aria-label"?: string;
 }) {
   return (
     <label
@@ -50,9 +58,10 @@ export function Checkbox({
         name={name}
         value={value}
         aria-describedby={describedBy}
+        aria-label={ariaLabel}
         style={inputStyle}
       />
-      <span>{children}</span>
+      {children != null && children !== "" && <span>{children}</span>}
     </label>
   );
 }

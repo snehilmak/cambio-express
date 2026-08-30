@@ -34,10 +34,11 @@ import {
   fontSize,
   space,
   tokens,
+  Empty,
 } from "../components/ui";
 import { getCurrentIdentity } from "../lib/auth";
 import { getOpenStatus } from "../lib/datetime";
-import { fmtNumber, fmtShortDate } from "../lib/formatters";
+import { fmtMoney2, fmtNumber, fmtShortDate } from "../lib/formatters";
 
 // Role-shaped dashboard. /api/v2/dashboard/summary returns one
 // payload tagged by role; we render the matching panel.
@@ -101,7 +102,7 @@ export default function Dashboard() {
                 : `${openStatus.dayLabel}: closed all day`
             }
           >
-            <Pill tone={openStatus.open ? "accent" : "negative"}>
+            <Pill tone={openStatus.open ? "accent" : "neutral"}>
               {openStatus.open ? "Open now" : "Closed now"}
             </Pill>
           </span>
@@ -158,7 +159,7 @@ function AdminPanel({ d }: { d: AdminDashboard }) {
           <>
             <KpiCard
               label="Today's sales"
-              value={fmtUsd(d.sales.today)}
+              value={fmtMoney2(d.sales.today)}
               sub={
                 <Link to="/day-close" className="ds-link" style={{ color: tokens.accent }}>
                   Open day close →
@@ -168,12 +169,12 @@ function AdminPanel({ d }: { d: AdminDashboard }) {
             />
             <KpiCard
               label="Yesterday's sales"
-              value={fmtUsd(d.sales.yesterday)}
+              value={fmtMoney2(d.sales.yesterday)}
               sub={fmtShortDate(d.today)}
             />
             <KpiCard
               label={`Sales (${monthName} to date)`}
-              value={fmtUsd(d.sales.month_to_date)}
+              value={fmtMoney2(d.sales.month_to_date)}
               tone="positive"
             />
           </>
@@ -184,7 +185,7 @@ function AdminPanel({ d }: { d: AdminDashboard }) {
             value={
               d.day_close.over_short == null
                 ? "—"
-                : `$${d.day_close.over_short.toFixed(2)}`
+                : fmtMoney2(d.day_close.over_short)
             }
             sub={
               d.day_close.uncounted_drawers > 0
@@ -201,7 +202,7 @@ function AdminPanel({ d }: { d: AdminDashboard }) {
         {d.lottery && (
           <KpiCard
             label={`Lottery (${shortDate(d.lottery.date)})`}
-            value={fmtUsd(d.lottery.value)}
+            value={fmtMoney2(d.lottery.value)}
             sub={
               d.lottery.uncounted_active_packs > 0
                 ? `${d.lottery.uncounted_active_packs} pack(s) uncounted`
@@ -215,11 +216,11 @@ function AdminPanel({ d }: { d: AdminDashboard }) {
         {d.purchases && (
           <KpiCard
             label="Purchases (30d)"
-            value={fmtUsd(d.purchases.d30)}
+            value={fmtMoney2(d.purchases.d30)}
             sub={
               <Link to="/purchase-invoices" className="ds-link" style={{ color: tokens.accent }}>
                 {d.purchases.open_count > 0
-                  ? `${d.purchases.open_count} open · ${fmtUsd(d.purchases.open_total)} →`
+                  ? `${d.purchases.open_count} open · ${fmtMoney2(d.purchases.open_total)} →`
                   : "All invoices paid →"}
               </Link>
             }
@@ -297,12 +298,12 @@ function AdminPanel({ d }: { d: AdminDashboard }) {
                       <td style={dashTdStyle}>{label}</td>
                       {d.sales && (
                         <td style={{ ...dashTdStyle, fontFamily: tokens.fontMono }}>
-                          {fmtUsd(sales ?? 0)}
+                          {fmtMoney2(sales ?? 0)}
                         </td>
                       )}
                       {d.purchases && (
                         <td style={{ ...dashTdStyle, fontFamily: tokens.fontMono }}>
-                          {fmtUsd(purchases ?? 0)}
+                          {fmtMoney2(purchases ?? 0)}
                         </td>
                       )}
                     </tr>
@@ -350,8 +351,8 @@ function AdminPanel({ d }: { d: AdminDashboard }) {
               fontFamily: tokens.fontMono,
             }}>
               {d.sales.hourly.previous_total != null
-                && `Prev ${fmtUsd(d.sales.hourly.previous_total)} · `}
-              Current {fmtUsd(d.sales.hourly.current_total)}
+                && `Prev ${fmtMoney2(d.sales.hourly.previous_total)} · `}
+              Current {fmtMoney2(d.sales.hourly.current_total)}
             </span>
           }
         >
@@ -431,10 +432,7 @@ function AdminPanel({ d }: { d: AdminDashboard }) {
                   {t.name}
                 </div>
                 <div style={{ fontFamily: tokens.fontMono, fontSize: "1.4rem" }}>
-                  ${t.amount.toLocaleString(undefined, {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2,
-                  })}
+                  {fmtMoney2(t.amount)}
                 </div>
               </Card>
             ))}
@@ -499,24 +497,16 @@ function AdminPanel({ d }: { d: AdminDashboard }) {
                 <Pill>{c.count} transfers</Pill>
               </header>
               <div style={{ fontFamily: tokens.fontMono, fontSize: "1.6rem" }}>
-                ${c.total.toLocaleString(undefined, {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2,
-                })}
+                {fmtMoney2(c.total)}
               </div>
               <div style={{ color: tokens.textMuted, fontSize: fontSize.sm }}>
-                Fees: ${c.fees.toLocaleString(undefined, {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2,
-                })}
+                Fees: {fmtMoney2(c.fees)}
               </div>
             </Card>
           ))}
           {d.company_stats.length === 0 && (
             <Card>
-              <p style={{ color: tokens.textMuted, margin: 0 }}>
-                No companies enabled for this store yet.
-              </p>
+              <Empty>No companies enabled for this store yet.</Empty>
             </Card>
           )}
         </div>
@@ -560,7 +550,7 @@ function AdminPanel({ d }: { d: AdminDashboard }) {
                   <td style={dashTdStyle}>{t.sender_name}</td>
                   <td style={dashTdStyle}>{t.company}</td>
                   <td style={{ ...dashTdStyle, fontFamily: tokens.fontMono }}>
-                    ${t.send_amount.toFixed(2)}
+                    {fmtMoney2(t.send_amount)}
                   </td>
                   <td style={dashTdStyle}>
                     <StatusPill value={t.status} />
@@ -616,10 +606,10 @@ function AdminPanel({ d }: { d: AdminDashboard }) {
                     <td style={dashTdStyle}>{shortDate(b.ach_date)}</td>
                     <td style={dashTdStyle}>{b.company}</td>
                     <td style={{ ...dashTdStyle, fontFamily: tokens.fontMono }}>
-                      ${b.ach_amount.toFixed(2)}
+                      {fmtMoney2(b.ach_amount)}
                     </td>
                     <td style={dashTdStyle}>
-                      {b.variance === 0 ? "✓ $0" : `$${b.variance.toFixed(2)}`}
+                      {fmtMoney2(b.variance)}
                     </td>
                     <td style={dashTdStyle}>
                       <StatusPill value={b.status} />
@@ -658,9 +648,7 @@ function AdminPanel({ d }: { d: AdminDashboard }) {
               <ButtonLink href="/bank" tone="secondary" size="sm">View all</ButtonLink>
             </header>
             {d.stripe_accounts.length === 0 ? (
-              <p style={{ color: tokens.textMuted, margin: 0 }}>
-                No bank connected yet.
-              </p>
+              <Empty>No bank connected yet.</Empty>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: space.sm }}>
                 {d.stripe_accounts.map((a) => (
@@ -684,10 +672,7 @@ function AdminPanel({ d }: { d: AdminDashboard }) {
                       </div>
                     </div>
                     <div style={{ fontFamily: tokens.fontMono }}>
-                      ${a.last_balance.toLocaleString(undefined, {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                      })}
+                      {fmtMoney2(a.last_balance)}
                     </div>
                   </div>
                 ))}
@@ -717,9 +702,7 @@ function EmployeePanel({ d }: { d: EmployeeDashboard }) {
         {d.day_close && (
           <KpiCard
             label={`Store sales (${shortDate(d.day_close.date)})`}
-            value={`$${d.day_close.gross_sales.toLocaleString(undefined, {
-              minimumFractionDigits: 2, maximumFractionDigits: 2,
-            })}`}
+            value={fmtMoney2(d.day_close.gross_sales)}
             sub={
               <Link to="/day-close" className="ds-link" style={{ color: tokens.accent }}>
                 Open day close →
@@ -787,10 +770,10 @@ function EmployeePanel({ d }: { d: EmployeeDashboard }) {
                   <td style={dashTdStyle}>{t.sender_name}</td>
                   <td style={dashTdStyle}>{t.company}</td>
                   <td style={{ ...dashTdStyle, fontFamily: tokens.fontMono }}>
-                    ${t.send_amount.toFixed(2)}
+                    {fmtMoney2(t.send_amount)}
                   </td>
                   <td style={{ ...dashTdStyle, fontFamily: tokens.fontMono }}>
-                    ${t.fee.toFixed(2)}
+                    {fmtMoney2(t.fee)}
                   </td>
                   <td style={dashTdStyle}>{t.recipient_name || "—"}</td>
                   <td style={dashTdStyle}>{t.country || "—"}</td>
@@ -845,10 +828,7 @@ function EmployeePanel({ d }: { d: EmployeeDashboard }) {
                 Today Total Sent:
               </span>{" "}
               <strong style={{ fontFamily: tokens.fontMono }}>
-                ${d.totals.sent.toLocaleString(undefined, {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2,
-                })}
+                {fmtMoney2(d.totals.sent)}
               </strong>
             </div>
             <div>
@@ -856,10 +836,7 @@ function EmployeePanel({ d }: { d: EmployeeDashboard }) {
                 Fees Collected:
               </span>{" "}
               <strong style={{ fontFamily: tokens.fontMono }}>
-                ${d.totals.fees.toLocaleString(undefined, {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2,
-                })}
+                {fmtMoney2(d.totals.fees)}
               </strong>
             </div>
             <div>
@@ -961,12 +938,6 @@ function StatusPill({ value }: { value: string }) {
   return <Pill tone={tone as "accent" | "warning" | "negative" | "neutral"}>{value}</Pill>;
 }
 
-
-function fmtUsd(v: number) {
-  return `$${v.toLocaleString(undefined, {
-    minimumFractionDigits: 2, maximumFractionDigits: 2,
-  })}`;
-}
 
 function shortDate(iso: string) {
   const d = new Date(iso + "T00:00:00");

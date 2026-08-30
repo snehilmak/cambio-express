@@ -134,3 +134,12 @@ export const tdStyle: CSSProperties = {
   borderBottom: `1px solid ${tokens.borderSubtle}`,
   fontSize: fontSize.sm,
 };
+
+// Right-aligned twins for numeric columns — several routes were
+// re-deriving these with identical spreads (UI-STANDARDS §5).
+export const thStyleRight: CSSProperties = {
+  ...thStyle, textAlign: "right",
+};
+export const tdStyleRight: CSSProperties = {
+  ...tdStyle, textAlign: "right",
+};

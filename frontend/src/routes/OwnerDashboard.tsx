@@ -11,8 +11,12 @@ import {
   Breadcrumbs,
   Card, ErrorState, KpiCard, KpiGrid, Loading, PageHeader, PageShell,
   Section, TabsBar, TabsButton, Table, tdStyle, thStyle,
+  Empty,
+  thStyleRight,
+  tdStyleRight,
 } from "../components/ui";
 import { chartSeries, moneyChartOptions, seriesFill } from "../lib/chartOptions";
+import { fmtMoney2 } from "../lib/formatters";
 import styles from "./OwnerDashboard.module.css";
 
 ChartJS.register(
@@ -27,8 +31,6 @@ const PERIODS: Array<{ value: Period; label: string }> = [
   { value: "year",  label: "This Year" },
 ];
 
-const thStyleR: React.CSSProperties = { ...thStyle, textAlign: "right" };
-const tdStyleR: React.CSSProperties = { ...tdStyle, textAlign: "right" };
 
 export default function OwnerDashboard() {
   const [period, setPeriod] = useState<Period>("month");
@@ -123,12 +125,12 @@ export default function OwnerDashboard() {
                     ${Math.round(s.volume).toLocaleString()}
                   </div>
                   <div className={styles.storeOver}>
-                    {s.over_short >= 0 ? "+" : "-"}${Math.abs(s.over_short).toFixed(2)} over/short
+                    {s.over_short >= 0 ? "+" : "-"}{fmtMoney2(Math.abs(s.over_short))} over/short
                   </div>
                 </Link>
               ))}
               {data.stores.length === 0 && (
-                <p className={styles.muted}>No stores linked yet.</p>
+                <Empty>No stores linked yet.</Empty>
               )}
             </div>
           </Section>
@@ -139,16 +141,16 @@ export default function OwnerDashboard() {
                 <thead>
                   <tr>
                     <th style={thStyle}>Company</th>
-                    <th style={thStyleR}>Transfers</th>
-                    <th style={thStyleR}>Volume</th>
+                    <th style={thStyleRight}>Transfers</th>
+                    <th style={thStyleRight}>Volume</th>
                   </tr>
                 </thead>
                 <tbody>
                   {data.company_breakdown.map((c) => (
                     <tr key={c.company}>
                       <td style={tdStyle}>{c.company}</td>
-                      <td style={tdStyleR}>{c.count.toLocaleString()}</td>
-                      <td style={tdStyleR}>${Math.round(c.volume).toLocaleString()}</td>
+                      <td style={tdStyleRight}>{c.count.toLocaleString()}</td>
+                      <td style={tdStyleRight}>${Math.round(c.volume).toLocaleString()}</td>
                     </tr>
                   ))}
                 </tbody>

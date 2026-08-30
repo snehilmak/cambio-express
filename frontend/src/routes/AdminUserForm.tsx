@@ -14,7 +14,9 @@ import {
   Breadcrumbs,
   Alert, Button, Card, Checkbox, ConfirmDialog, ErrorState, Field, Input,
   Loading, PageHeader, PageShell, Select, space,
+  useToast,
 } from "../components/ui";
+import { PermissionMatrixTable } from "../components/PermissionMatrixTable";
 import { useUnsavedGuard } from "../lib/useUnsavedGuard";
 import styles from "./AdminUserForm.module.css";
 
@@ -54,27 +56,6 @@ const FALLBACK_RESOURCES = [
   "return_checks", "lottery", "day_close", "catalog",
 ];
 const FALLBACK_ACTIONS = ["create", "read", "update", "delete"];
-
-const RESOURCE_LABELS: Record<string, string> = {
-  transfers: "Money transfers",
-  customers: "Customers",
-  daily_book: "Daily book",
-  monthly: "Monthly P&L",
-  batches: "ACH batches",
-  bank_sync: "Bank sync",
-  reports: "Reports",
-  settings: "Settings",
-  users: "Users / Team",
-  time_clock: "Time clock (HR)",
-  return_checks: "Returned checks",
-  lottery: "Lottery",
-  day_close: "Day close",
-  catalog: "Price book & purchases",
-};
-
-const ACTION_LABELS: Record<string, string> = {
-  create: "Create", read: "View", update: "Edit", delete: "Delete",
-};
 
 function emptyMatrix(resources: string[], actions: string[]): PermMatrix {
   const m: PermMatrix = {};
@@ -136,6 +117,7 @@ export default function AdminUserForm() {
 
   const queryClient = useQueryClient();
   const navigate    = useNavigate();
+  const toast = useToast();
   const identity    = getCurrentIdentity();
 
   const detail  = useAdminUser(isEdit ? uid : null);
@@ -333,6 +315,10 @@ export default function AdminUserForm() {
       // Invalidate roster + this user's detail cache so the next
       // visit to /admin/users shows the updated row.
       queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
+      toast({
+        message: isEdit ? "User updated." : "User created.",
+        tone: "success",
+      });
       navigate("/admin/users");
     } catch (err) {
       if (err instanceof ApiError && err.status === 422) {
@@ -441,36 +427,14 @@ export default function AdminUserForm() {
                   <option value="custom">Custom — pick exactly what they can do</option>
                 </Select>
                 {draft.access !== "role" && draft.perm && (
-                  <div style={{ overflowX: "auto" }}>
-                    <table className={styles.matrix}>
-                      <thead>
-                        <tr>
-                          <th>Area</th>
-                          {actions.map((a) => (
-                            <th key={a}>{ACTION_LABELS[a] ?? a}</th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {resources.map((resource) => (
-                          <tr key={resource}>
-                            <td>{RESOURCE_LABELS[resource] ?? resource}</td>
-                            {actions.map((action) => (
-                              <td key={action}>
-                                <div className={styles.checkCell}>
-                                  <Checkbox
-                                    checked={draft.perm?.[resource]?.[action] ?? false}
-                                    onChange={() => togglePerm(resource, action)}
-                                    disabled={busy}
-                                  >{""}</Checkbox>
-                                </div>
-                              </td>
-                            ))}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                  <PermissionMatrixTable
+                    resources={resources}
+                    actions={actions}
+                    checked={(resource, action) => draft.perm?.[resource]?.[action] ?? false}
+                    onToggle={togglePerm}
+                    disabled={busy}
+                    resourceHeader="Area"
+                  />
                 )}
               </div>
             </Field>
@@ -482,28 +446,13 @@ export default function AdminUserForm() {
             hint="Which parts of the app this user sees. Restricting hides modules from their navigation — use Access above to change what they can actually do."
           >
             <div style={{ display: "flex", flexDirection: "column", gap: "0.45rem" }}>
-              <label className={styles.checkboxRow}>
-                <input
-                  type="radio" name="module-access-mode"
-                  checked={!draft.restrict}
-                  onChange={() => set("restrict", false)}
-                  disabled={busy}
-                />
-                <span className={styles.checkboxLabel}>
-                  All store modules
-                </span>
-              </label>
-              <label className={styles.checkboxRow}>
-                <input
-                  type="radio" name="module-access-mode"
-                  checked={draft.restrict}
-                  onChange={() => set("restrict", true)}
-                  disabled={busy}
-                />
-                <span className={styles.checkboxLabel}>
-                  Only selected modules
-                </span>
-              </label>
+              <Checkbox
+                checked={draft.restrict}
+                onChange={(v) => set("restrict", v)}
+                disabled={busy}
+              >
+                Only selected modules (default: all store modules)
+              </Checkbox>
               {draft.restrict && (
                 <div style={{
                   display: "flex", flexDirection: "column",
@@ -511,22 +460,19 @@ export default function AdminUserForm() {
                 }}>
                   {(session.data?.features ?? Object.keys(MODULE_LABELS))
                     .map((key) => (
-                      <label key={key} className={styles.checkboxRow}>
-                        <input
-                          type="checkbox"
-                          checked={draft.modules.includes(key)}
-                          onChange={(e) => set(
-                            "modules",
-                            e.target.checked
-                              ? [...draft.modules, key]
-                              : draft.modules.filter((k) => k !== key),
-                          )}
-                          disabled={busy}
-                        />
-                        <span className={styles.checkboxLabel}>
-                          {MODULE_LABELS[key] ?? key}
-                        </span>
-                      </label>
+                      <Checkbox
+                        key={key}
+                        checked={draft.modules.includes(key)}
+                        onChange={(v) => set(
+                          "modules",
+                          v
+                            ? [...draft.modules, key]
+                            : draft.modules.filter((k) => k !== key),
+                        )}
+                        disabled={busy}
+                      >
+                        {MODULE_LABELS[key] ?? key}
+                      </Checkbox>
                     ))}
                 </div>
               )}
@@ -557,17 +503,13 @@ export default function AdminUserForm() {
               error={fieldErrors.is_active}
               hint={isSelf ? "You can't deactivate your own account. Ask another admin to do it." : undefined}
             >
-              <label className={styles.checkboxRow}>
-                <input
-                  type="checkbox"
-                  checked={draft.is_active}
-                  onChange={(e) => set("is_active", e.target.checked)}
-                  disabled={busy || isSelf}
-                />
-                <span className={styles.checkboxLabel}>
-                  Account is active
-                </span>
-              </label>
+              <Checkbox
+                checked={draft.is_active}
+                onChange={(v) => set("is_active", v)}
+                disabled={busy || isSelf}
+              >
+                Account is active
+              </Checkbox>
             </Field>
           )}
 

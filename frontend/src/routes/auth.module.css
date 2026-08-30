@@ -178,85 +178,10 @@
   font-size: 13px;
 }
 
-.field { margin-bottom: 18px; }
-
-.label {
-  display: block;
-  font-family: var(--db-font-mono);
-  font-size: 10.5px;
-  font-weight: 500;
-  color: var(--db-gray-6);
-  letter-spacing: 1.5px;
-  text-transform: uppercase;
-  margin-bottom: 6px;
-}
-
-.input {
-  width: 100%;
-  padding: 12px 14px;
-  background: var(--db-bg-input);
-  border: 1px solid var(--db-gray-3);
-  border-radius: 10px;
-  font-size: 14px;
-  color: var(--db-gray-9);
-  font-family: var(--db-font-body);
-  outline: none;
-  transition: border-color 0.15s, box-shadow 0.15s;
-}
-
-.input:focus {
-  border-color: var(--db-neon);
-  box-shadow: 0 0 0 3px var(--db-neon-glow-15);
-}
-
-.input::placeholder { color: var(--db-gray-5); }
-
-.submitBtn {
-  width: 100%;
-  background: var(--db-neon);
-  color: var(--db-neon-ink);
-  border: none;
-  padding: 14px;
-  border-radius: 10px;
-  font-size: 14.5px;
-  font-weight: 600;
-  cursor: pointer;
-  font-family: var(--db-font-body);
-  letter-spacing: -0.01em;
-  margin-top: 10px;
-  box-shadow: 0 0 0 1px var(--db-neon), 0 0 28px var(--db-neon-glow-40);
-  transition: background 0.12s;
-}
-
-.submitBtn:hover:not(:disabled) { background: var(--db-neon-bright); }
-.submitBtn:disabled { opacity: 0.6; cursor: not-allowed; }
-.submitBtn.isBusy:disabled { cursor: wait; }
-
-.submitLink {
-  display: block;
-  text-align: center;
-  text-decoration: none;
-  box-sizing: border-box;
-}
-
-.errorMsg {
-  background: rgba(255, 77, 109, 0.08);
-  color: var(--db-negative);
-  border: 1px solid rgba(255, 77, 109, 0.3);
-  border-radius: 10px;
-  padding: 11px 14px;
-  font-size: 13px;
-  margin-bottom: 18px;
-  font-family: var(--db-font-body);
-}
-
-.fieldError {
-  font-size: 12px;
-  color: var(--db-negative);
-  margin-top: 5px;
-}
-
-.inputError { border-color: var(--db-negative); }
+/* Inputs, buttons, field labels, and error styling now come from
+   the design-system kit (`Field` / `Input` / `Select` / `Button` /
+   `Alert` in components/ui) — only layout + chrome rules remain
+   in this module. */
 
 .optional {
   color: var(--db-gray-5);
@@ -316,6 +241,4 @@
   }
   .card { padding: 28px 24px; border-radius: 14px; }
   .cardTitle { font-size: 24px; }
-  .input { font-size: 16px; padding: 13px 14px; }
-  .submitBtn { padding: 14px; font-size: 15px; }
 }

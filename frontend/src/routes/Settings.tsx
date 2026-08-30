@@ -17,7 +17,7 @@ import {
 } from "../api/account";
 import { redeemConnectCode } from "../api/owner";
 import { ApiError } from "../lib/api";
-import { formatTimestamp } from "../lib/datetime";
+import { formatDate, formatTimestamp } from "../lib/datetime";
 import { timezoneFromAddress } from "../lib/timezoneFromAddress";
 import { getCurrentIdentity } from "../lib/auth";
 import { passkeysSupported } from "../lib/webauthn";
@@ -26,6 +26,7 @@ import {
   Alert, Button, ButtonLink, Card, Checkbox, ConfirmDialog, ErrorState, Field,
   InfoTip, Input, Loading, PageHeader, PageShell, Pill, SectionTitle, Select,
   space, Switch, TabsBar, TabsLink, useToast,
+  Empty,
 } from "../components/ui";
 import styles from "./Settings.module.css";
 
@@ -316,19 +317,15 @@ function ProfileCard() {
           label={<>Appearance<InfoTip text="Follows you to every browser you sign in on. The topbar toggle is a quicker shortcut for the same setting." /></>}
           error={fieldErrors.theme_preference}
         >
-          <Select
-            value={draft.theme_preference ?? "dark"}
-            onChange={(e) =>
-              set(
-                "theme_preference",
-                e.target.value as "dark" | "light",
-              )
+          <Switch
+            checked={(draft.theme_preference ?? "dark") === "light"}
+            onChange={(on) =>
+              set("theme_preference", on ? "light" : "dark")
             }
             disabled={busy}
           >
-            <option value="dark">Dark (default)</option>
-            <option value="light">Light</option>
-          </Select>
+            Light theme (dark is the default)
+          </Switch>
         </Field>
 
         <hr className={styles.profileHr} />
@@ -485,7 +482,7 @@ function PasskeysCard() {
         />
       )}
       {data && data.passkeys.length === 0 && !isLoading && (
-        <p className={styles.muted}>No passkeys registered yet.</p>
+        <Empty>No passkeys registered yet.</Empty>
       )}
       {data && data.passkeys.length > 0 && (
         <ul className={styles.list}>
@@ -496,9 +493,9 @@ function PasskeysCard() {
                   {p.name || "Unnamed device"}
                 </div>
                 <div className={styles.rowMeta}>
-                  Added {p.created_at.slice(0, 10)}
+                  Added {formatDate(p.created_at)}
                   {p.last_used_at &&
-                    ` · last used ${p.last_used_at.slice(0, 10)}`}
+                    ` · last used ${formatDate(p.last_used_at)}`}
                 </div>
               </span>
               <Button

@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 
 import { AuthChrome, StatusPill } from "../components/AuthChrome";
+import { Button, Field, Input } from "../components/ui";
 import { forgotPassword } from "../api/account";
 import styles from "./auth.module.css";
 
@@ -57,11 +58,9 @@ export default function ForgotPassword() {
             to set a new password. For employees, contact your store
             admin for a reset.
           </div>
-          <form onSubmit={onSubmit}>
-            <div className={styles.field}>
-              <label className={styles.label}>Email</label>
-              <input
-                className={styles.input}
+          <form onSubmit={onSubmit} style={{ display: "flex", flexDirection: "column", gap: "0.95rem" }}>
+            <Field label="Email">
+              <Input
                 type="email"
                 autoComplete="email"
                 placeholder="you@example.com"
@@ -71,14 +70,17 @@ export default function ForgotPassword() {
                 required
                 autoFocus
               />
-            </div>
-            <button
+            </Field>
+            <Button
               type="submit"
-              className={`${styles.submitBtn}${busy ? ` ${styles.isBusy}` : ""}`}
+              tone="primary"
+              size="lg"
+              busy={busy}
               disabled={busy || !email}
+              style={{ width: "100%" }}
             >
               {busy ? "Sending…" : "Send reset link"}
-            </button>
+            </Button>
           </form>
           <Link to="/login" className={styles.backLink}>← Back to sign in</Link>
         </>
