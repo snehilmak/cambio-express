@@ -165,8 +165,8 @@
 }
 
 .kpi_accent  .kpiValue { color: var(--db-accent, #3fff00); }
-.kpi_warning .kpiValue { color: #ffb800; }
-.kpi_info    .kpiValue { color: #63a6ff; }
+.kpi_warning .kpiValue { color: var(--db-warning, #ffb020); }
+.kpi_info    .kpiValue { color: var(--db-info, #5ea9ff); }
 
 /* ── Per-employee group header ─────────────────────────── */
 

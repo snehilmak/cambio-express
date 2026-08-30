@@ -12,6 +12,8 @@ import {
   Card, ErrorState, KpiCard, KpiGrid, Loading, PageHeader, PageShell,
   Section, TabsBar, TabsButton, Table, tdStyle, thStyle,
   Empty,
+  thStyleRight,
+  tdStyleRight,
 } from "../components/ui";
 import { chartSeries, moneyChartOptions, seriesFill } from "../lib/chartOptions";
 import { fmtMoney2 } from "../lib/formatters";
@@ -29,8 +31,6 @@ const PERIODS: Array<{ value: Period; label: string }> = [
   { value: "year",  label: "This Year" },
 ];
 
-const thStyleR: React.CSSProperties = { ...thStyle, textAlign: "right" };
-const tdStyleR: React.CSSProperties = { ...tdStyle, textAlign: "right" };
 
 export default function OwnerDashboard() {
   const [period, setPeriod] = useState<Period>("month");
@@ -141,16 +141,16 @@ export default function OwnerDashboard() {
                 <thead>
                   <tr>
                     <th style={thStyle}>Company</th>
-                    <th style={thStyleR}>Transfers</th>
-                    <th style={thStyleR}>Volume</th>
+                    <th style={thStyleRight}>Transfers</th>
+                    <th style={thStyleRight}>Volume</th>
                   </tr>
                 </thead>
                 <tbody>
                   {data.company_breakdown.map((c) => (
                     <tr key={c.company}>
                       <td style={tdStyle}>{c.company}</td>
-                      <td style={tdStyleR}>{c.count.toLocaleString()}</td>
-                      <td style={tdStyleR}>${Math.round(c.volume).toLocaleString()}</td>
+                      <td style={tdStyleRight}>{c.count.toLocaleString()}</td>
+                      <td style={tdStyleRight}>${Math.round(c.volume).toLocaleString()}</td>
                     </tr>
                   ))}
                 </tbody>

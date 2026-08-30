@@ -13,6 +13,8 @@ import {
   Card, ConfirmDialog, ErrorState, KpiCard, KpiGrid, Loading,
   PageHeader, PageShell, Section, TabsBar, TabsButton, Table, tdStyle,
   thStyle, useToast,
+  thStyleRight,
+  tdStyleRight,
 } from "../components/ui";
 import { chartSeries, chartTokens, moneyChartOptions, seriesFill } from "../lib/chartOptions";
 import { fmtMoney2 } from "../lib/formatters";
@@ -31,8 +33,6 @@ const PERIODS: Array<{ value: Period; label: string }> = [
   { value: "year",  label: "This Year" },
 ];
 
-const thStyleR: React.CSSProperties = { ...thStyle, textAlign: "right" };
-const tdStyleR: React.CSSProperties = { ...tdStyle, textAlign: "right" };
 
 export default function OwnerStoreDetail() {
   const { storeId } = useParams<{ storeId: string }>();
@@ -256,20 +256,20 @@ export default function OwnerStoreDetail() {
                   <thead>
                     <tr>
                       <th style={thStyle}>Company</th>
-                      <th style={thStyleR}>Transfers</th>
-                      <th style={thStyleR}>Volume</th>
-                      <th style={thStyleR}>Fees</th>
-                      <th style={thStyleR}>Tax</th>
+                      <th style={thStyleRight}>Transfers</th>
+                      <th style={thStyleRight}>Volume</th>
+                      <th style={thStyleRight}>Fees</th>
+                      <th style={thStyleRight}>Tax</th>
                     </tr>
                   </thead>
                   <tbody>
                     {data.company_rows.map((c) => (
                       <tr key={c.company}>
                         <td style={tdStyle}>{c.company}</td>
-                        <td style={tdStyleR}>{c.count.toLocaleString()}</td>
-                        <td style={tdStyleR}>{fmtMoney2(c.volume)}</td>
-                        <td style={tdStyleR}>{fmtMoney2(c.fees)}</td>
-                        <td style={tdStyleR}>{fmtMoney2(c.tax)}</td>
+                        <td style={tdStyleRight}>{c.count.toLocaleString()}</td>
+                        <td style={tdStyleRight}>{fmtMoney2(c.volume)}</td>
+                        <td style={tdStyleRight}>{fmtMoney2(c.fees)}</td>
+                        <td style={tdStyleRight}>{fmtMoney2(c.tax)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -290,7 +290,7 @@ export default function OwnerStoreDetail() {
                       <th style={thStyle}>Sender</th>
                       <th style={thStyle}>Recipient</th>
                       <th style={thStyle}>Co.</th>
-                      <th style={thStyleR}>Amount</th>
+                      <th style={thStyleRight}>Amount</th>
                       <th style={thStyle}>Status</th>
                     </tr>
                   </thead>
@@ -303,7 +303,7 @@ export default function OwnerStoreDetail() {
                         <td style={tdStyle}>{t.sender_name || "—"}</td>
                         <td style={tdStyle}>{t.recipient_name || "—"}</td>
                         <td style={tdStyle}>{t.company || "—"}</td>
-                        <td style={tdStyleR}>{fmtMoney2(t.send_amount)}</td>
+                        <td style={tdStyleRight}>{fmtMoney2(t.send_amount)}</td>
                         <td style={tdStyle}>{t.status}</td>
                       </tr>
                     ))}

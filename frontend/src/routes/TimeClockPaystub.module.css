@@ -92,9 +92,9 @@
   font-family: var(--db-font-mono, "JetBrains Mono", monospace);
 }
 
-.statusPending  { color: #ffb800; }
+.statusPending  { color: var(--db-warning, #ffb020); }
 .statusApproved { color: var(--db-accent, #3fff00); }
-.statusRejected { color: #ff4141; }
+.statusRejected { color: var(--db-negative, #ff4d6d); }
 
 .footer {
   margin-top: 1.25rem;

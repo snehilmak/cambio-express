@@ -44,7 +44,8 @@ import "./ui.css";
 // trade-off for the simpler import surface.
 /* eslint-disable react-refresh/only-export-components -- public DS surface: re-export tokens from this barrel so consumers don't learn two import paths */
 export {
-  fontSize, inputStyle, monoStyle, space, tdStyle, thStyle, tokens,
+  fontSize, inputStyle, monoStyle, space, tdStyle, tdStyleRight,
+  thStyle, thStyleRight, tokens,
 } from "./tokens";
 /* eslint-enable react-refresh/only-export-components */
 
