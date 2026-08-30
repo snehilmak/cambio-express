@@ -385,6 +385,36 @@ to the register.
   editor is otherwise parked pending POS integration by owner
   decision 2026-08-28).
 
+**C-track — UI consistency + stability sweep (owner-directed
+2026-08-30, "single procedure of development… full consistency
+even for future developments"; PR #896, squash of 6 verified
+commits):** the binding standard is
+[`docs/design-system/UI-STANDARDS.md`](docs/design-system/UI-STANDARDS.md)
+(linked from CLAUDE.md) — one control per data type, one feedback
+pattern per event, one meaning per pill tone, one formatter per
+value kind, and §5's headless-primitive rule (overlay behavior =
+Radix/cmdk/day-picker inside the kit, never hand-rolled;
+Checkbox/Switch deliberately stay native-input-based). Shipped:
+boolean-control unification (Yes/No + On/Off dropdowns and
+radio-pairs → Switch/Checkbox), feedback normalization (toasts
+everywhere incl. before navigate-away; ErrorState-with-retry;
+ConfirmDialog for the last native confirms), tone + Active/
+Inactive text standard, fmtMoney2/formatDate everywhere (incl. a
+real date-only tz bug fix in formatDate, regression-tested),
+auth-cluster kit conversion, shared `PermissionMatrixTable`,
+UserMenu on Radix DropdownMenu, hex → tokens (`--db-referral-*`
+sanctioned gold sub-theme). Plus T-1: 54 coverage-driven backend
+tests (webhook controllers, six owner routes, both notification
+crons → 100%).
+- Known remaining drift (documented, lower value): Dashboard's
+  ~50 inline styles + dashTh/TdStyle constants;
+  SuperadminFeatureFlags / NewTransfer / OwnerBulkPermissions
+  have no module.css; EditDailyBook's five duplicated
+  widget-card buttons + two raw tables; ReportDrilldown /
+  SuperadminBIDrilldown raw tables; Login hero SVG hexes
+  (intentional single-look illustration); four independent
+  day/month stepper implementations (kit-extraction candidate).
+
 **R-track — per-user permissions perfection (owner-directed
 2026-08-29, "permissions and roles to be perfect… custom user with
 custom access… can't see any numbers"; PRs #894 R-1 + R-2):**
