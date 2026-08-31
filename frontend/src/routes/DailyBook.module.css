@@ -71,6 +71,14 @@
   min-height: 3rem;
   aspect-ratio: 1 / 1;
   position: relative;
+  /* Establish an inline-size container so the money line and
+     over/short pill can size themselves against the CELL width
+     rather than the viewport — a 7-column grid on a narrow-ish
+     screen makes each cell far smaller than any vw-based guess.
+     `overflow: hidden` is the hard backstop: a six-figure day
+     total must never paint past the cell border. */
+  container-type: inline-size;
+  overflow: hidden;
   transition: background-color 120ms ease, border-color 120ms ease, transform 120ms ease;
 }
 
@@ -196,25 +204,43 @@
     flex-direction: column;
     gap: 0.25rem;
     width: 100%;
+    /* Flex children default to min-width:auto, which refuses to
+       shrink below the text's intrinsic width — that's what let
+       long totals push out of the cell. */
+    min-width: 0;
   }
 }
 
 .cellMoney {
   font-family: var(--db-font-mono, "JetBrains Mono", monospace);
-  font-size: 0.85rem;
+  /* Scales with the cell: a $180,023 day stays inside a narrow
+     column instead of overflowing, while roomy cells keep the
+     original 0.85rem. */
+  font-size: clamp(0.62rem, 13cqi, 0.85rem);
   font-weight: 600;
   color: var(--db-text, #f5f5f5);
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .overPill {
-  display: inline-block;
+  display: block;
   align-self: flex-start;
+  max-width: 100%;
+  /* No global border-box reset in the app shell — without this the
+     pill's padding + border push it back outside the cell. */
+  box-sizing: border-box;
   font-family: var(--db-font-mono, "JetBrains Mono", monospace);
-  font-size: 0.65rem;
+  font-size: clamp(0.55rem, 9cqi, 0.65rem);
   font-weight: 600;
   padding: 0.1rem 0.35rem;
   border-radius: 0.3rem;
   border: 1px solid transparent;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .overPos {
