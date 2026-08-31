@@ -474,6 +474,74 @@ boundary (unlike `User.module_access`, which stays nav-only UX).
   ("save this matrix as a role"); per-user overlays surfaced in
   the superadmin store detail.
 
+**Small-wins batch (owner-directed 2026-08-31, "let's focus on
+small wins like these so we are ready to start using it in the
+real world"; PRs #900–#901):**
+- ✅ E-3 (#900) — employee form split across tabs (Profile /
+  Payroll / Login & access) using the existing
+  `TabsBar`/`TabsButton` primitive. The tab lives in `?tab=`, not
+  component state, so the Employees list deep-links "Manage
+  access" straight at somebody's login and the back button steps
+  through tabs. ONE form, ONE Save across all tabs.
+  **Trap worth remembering:** a `required` control inside a
+  hidden tab panel makes the browser refuse to submit with an
+  error it cannot display ("not focusable") — it reads as a dead
+  Save button. Validate in JS and switch to the tab owning the
+  error instead. Tab rules live in the pure
+  `frontend/src/routes/employeeFormTabs.ts` (same pattern as
+  `editDailyBook.totals.ts`) so they're unit-testable.
+- ✅ Daily-book calendar overflow (#900, owner-reported from the
+  live UI) — day cells had no overflow guard and a fixed-size
+  money line, so six-figure totals and the over/short pill painted
+  past the cell border. `.cell` is now an inline-size container
+  (the money + pill scale against the CELL, not the viewport — a
+  7-column grid makes cells far narrower than any `vw` guess),
+  with `min-width: 0` so flex children can shrink at all, plus
+  `overflow: hidden` and explicit `box-sizing` on the pill as the
+  backstop. **There is no global border-box reset in the app
+  shell** — any padded element with `max-width: 100%` needs its
+  own `box-sizing`.
+- ✅ B-1 (#901) — `/owner/billing`: every umbrella store's
+  subscription state in one table (status, plan, monthly cost,
+  add-ons) with umbrella totals as KPIs. Stores needing action
+  float to the top, worst-first (retention → trial expired →
+  inactive → trial ending); the rest stay alphabetical. Yearly
+  plans amortise to a monthly figure so mixed cadences sum.
+  Read-only: the per-row button switches into the store and lands
+  on `/admin/subscription` or `/subscribe`, because the Stripe
+  customer lives there. Button is hidden for superadmin —
+  `/auth/switch-store` is owner-only and would only 403.
+- 🔴 **THREE price bugs found while building B-1 — plan prices had
+  been copy-pasted into three modules and two had drifted from
+  what we actually sell:**
+  1. superadmin MRR tile priced Pro-yearly at **$420** vs the
+     **$450** on the pricing page (Pro is $45/mo; yearly is "two
+     months free" = $450), under-reporting every Pro-yearly store
+     by $2.50/mo;
+  2. the superadmin MRR/ARR report table (`PLAN_MRR`) priced
+     Basic/Pro at **$49/$99** monthly and **$490/$990** yearly —
+     pricing we have NEVER charged — inflating those reports by
+     roughly 40–120%;
+  3. a store on a **yearly** plan was shown **"$35 / month"** on
+     its own subscription page, because the label table only knew
+     about monthly plans.
+- **RULE going forward: `PLAN_CATALOG`
+  (`api/Modules/Billing/Services/plans.py`) is the ONLY place
+  plan names and prices live.** Prices in cents, matching the
+  money layer. Never re-introduce a local price dict — derive
+  from the catalog (`plan_label`, `plan_price_label`,
+  `plan_price_cents`, `plan_monthly_cents`). `PLAN_MRR` is now a
+  derived view and a test asserts it EQUALS the catalog, so the
+  tables can't drift apart again. If Stripe's Price IDs and the
+  catalog ever disagree, Stripe wins for the customer's card and
+  the catalog is what needs correcting.
+- **Still NOT built: consolidated owner INVOICING** (one Stripe
+  subscription, quantity = store count, one invoice). B-1 is the
+  rollup VIEW only. Invoicing stays gated on the owner's
+  pricing/packaging decision — specifically whether store #2
+  costs the same as store #1 or earns a multi-store discount.
+  Don't build it without that answer.
+
 **Phase 2+ (not yet scoped in detail):** inventory basics; fuel module (needs a
 gas-station design partner first); Modisoft/Cronysoft migration
 importers; public API/webhooks GA; loyalty / scan-data rebates;
