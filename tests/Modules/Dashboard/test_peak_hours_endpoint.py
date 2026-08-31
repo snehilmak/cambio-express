@@ -124,23 +124,25 @@ def test_peak_hours_empty_grid_when_no_transfers(
 
 
 def _recent_monday_at(hour: int, minute: int = 0) -> datetime:
-    """Most recent Monday at ``hour:minute`` UTC.  Computed relative
-    to ``utcnow`` so the trailing-window filter on ``days=365``
-    never drops the test row regardless of when the suite runs.
+    """Most recent Monday at ``hour:minute`` UTC that is IN THE
+    PAST.  Computed relative to ``utcnow`` so the trailing-window
+    filter on ``days=365`` never drops the test row regardless of
+    when the suite runs.
 
     Previously these tests hard-coded ``datetime(2025, 5, 19, ...)``
-    which silently expired once ``now`` was more than a year past
-    that anchor.
+    (which silently expired once ``now`` was more than a year past
+    that anchor) and then anchored to "this Monday" — which is in
+    the FUTURE when the suite runs on a Monday before
+    ``hour:minute`` UTC, emptying every bucket. CI reds every
+    Monday morning taught us the boundary case IS worth handling.
     """
     now = datetime.utcnow()
-    # ``weekday()``: Monday = 0, Sunday = 6.  Walk back to the
-    # most recent Monday (going further back than 7 days only if
-    # today IS Monday but the time-of-day is earlier than ``hour``
-    # — that boundary case isn't worth handling, the test data
-    # ages by a week which is fine inside a 365-day window).
-    back = now.weekday()
-    monday = now - timedelta(days=back)
-    return datetime(monday.year, monday.month, monday.day, hour, minute)
+    # ``weekday()``: Monday = 0, Sunday = 6.
+    monday = now - timedelta(days=now.weekday())
+    moment = datetime(monday.year, monday.month, monday.day, hour, minute)
+    if moment > now:
+        moment -= timedelta(days=7)
+    return moment
 
 
 def test_peak_hours_buckets_in_utc_when_timezone_unset(
@@ -167,10 +169,17 @@ def test_peak_hours_buckets_in_utc_when_timezone_unset(
 def test_peak_hours_buckets_in_store_local_time(
     client, test_store_id,
 ):
-    """A New York store sees 14:30 UTC as 10:30 EDT (UTC-4
-    in May) → bucket 10. Validates the timezone-aware
-    conversion."""
+    """A New York store sees 14:30 UTC as 10:30 EDT / 09:30 EST
+    → the bucket follows the store's local clock, not UTC.
+    The expected hour is computed with zoneinfo so the test is
+    correct on both sides of a DST switch (hardcoding EDT's -4
+    broke every winter)."""
+    from zoneinfo import ZoneInfo
+
     moment = _recent_monday_at(14, 30)  # most recent Mon 14:30 UTC
+    local = moment.replace(tzinfo=ZoneInfo("UTC")).astimezone(
+        ZoneInfo("America/New_York"),
+    )
     with db_session():
         _set_store_tz(test_store_id, "America/New_York")
         emp = _seed_employee(test_store_id)
@@ -180,9 +189,9 @@ def test_peak_hours_buckets_in_store_local_time(
         "/api/v2/dashboard/peak-hours?days=365",
         headers={"Authorization": f"Bearer {token}"},
     ).get_json()
-    assert body["grid"][0][10] == 1   # 10:30 EDT
+    assert body["grid"][0][local.hour] == 1
     assert body["timezone"] == "America/New_York"
-    assert body["busiest"]["hour"] == 10
+    assert body["busiest"]["hour"] == local.hour
 
 
 def test_peak_hours_excludes_canceled_transfers(
