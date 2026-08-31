@@ -27,7 +27,7 @@ from api.Modules.Admin.Requests.employees import (
     EmployeeCreateRequest,
     EmployeeLinkRequest,
     EmployeeLoginInfo,
-    EmployeeRow,
+    EmployeeRecord,
     EmployeesListResponse,
     EmployeeUpdateRequest,
     LoginOnlyRow,
@@ -334,7 +334,7 @@ def deactivate_team_member_route(
 # roster ids) until the SPA cutover removes their pages.
 
 
-def _employee_row(e, u) -> "EmployeeRow":
+def _employee_row(e, u) -> "EmployeeRecord":
     from api.Core.Permissions import user_has_custom_permissions
     login = None
     if u is not None:
@@ -347,7 +347,7 @@ def _employee_row(e, u) -> "EmployeeRow":
                 user_has_custom_permissions(u.id, e.store_id)
             ),
         )
-    return EmployeeRow(
+    return EmployeeRecord(
         id=e.id,
         name=e.name or "",
         is_active=bool(e.is_active),
@@ -391,18 +391,19 @@ def list_employees_route(
 
 
 @router.post(
-    "/employees", response_model=EmployeeRow, status_code=201,
+    "/employees", response_model=EmployeeRecord, status_code=201,
 )
 def create_employee_route(
     body: EmployeeCreateRequest,
     db: Session = Depends(get_db),
     claims: dict[str, Any] = Depends(get_principal),
-) -> EmployeeRow:
+) -> EmployeeRecord:
     require_permission(claims, "users", "create")
     store_id = resolve_store_scope(claims)
     try:
         emp = add_team_member(
-            db, store_id, body.name, hourly_rate=body.hourly_rate,
+            db, store_id, body.name,
+            hourly_rate=body.hourly_rate or 0.0,
         )
         update_employee_hr(
             db, emp,
@@ -433,14 +434,14 @@ def create_employee_route(
 
 
 @router.patch(
-    "/employees/{employee_id}", response_model=EmployeeRow,
+    "/employees/{employee_id}", response_model=EmployeeRecord,
 )
 def update_employee_route(
     employee_id: int = Path(..., ge=1),
     body: EmployeeUpdateRequest = ...,
     db: Session = Depends(get_db),
     claims: dict[str, Any] = Depends(get_principal),
-) -> EmployeeRow:
+) -> EmployeeRecord:
     require_permission(claims, "users", "update")
     store_id = resolve_store_scope(claims)
     emp = find_team_member(db, store_id, employee_id)
@@ -458,8 +459,8 @@ def update_employee_route(
             db, emp,
             hired_on=fields.get("hired_on"),
             date_of_birth=fields.get("date_of_birth"),
-            clear_hired_on=body.clear_hired_on,
-            clear_date_of_birth=body.clear_date_of_birth,
+            clear_hired_on=bool(body.clear_hired_on),
+            clear_date_of_birth=bool(body.clear_date_of_birth),
             email=fields.get("email"),
             phone=fields.get("phone"),
             address_line1=fields.get("address_line1"),
@@ -485,14 +486,14 @@ def update_employee_route(
 
 
 @router.post(
-    "/employees/{employee_id}/link", response_model=EmployeeRow,
+    "/employees/{employee_id}/link", response_model=EmployeeRecord,
 )
 def link_employee_login_route(
     body: EmployeeLinkRequest,
     employee_id: int = Path(..., ge=1),
     db: Session = Depends(get_db),
     claims: dict[str, Any] = Depends(get_principal),
-) -> EmployeeRow:
+) -> EmployeeRecord:
     """Attach a login account to this person (1:1)."""
     require_permission(claims, "users", "update")
     store_id = resolve_store_scope(claims)
@@ -516,13 +517,13 @@ def link_employee_login_route(
 
 
 @router.delete(
-    "/employees/{employee_id}/link", response_model=EmployeeRow,
+    "/employees/{employee_id}/link", response_model=EmployeeRecord,
 )
 def unlink_employee_login_route(
     employee_id: int = Path(..., ge=1),
     db: Session = Depends(get_db),
     claims: dict[str, Any] = Depends(get_principal),
-) -> EmployeeRow:
+) -> EmployeeRecord:
     """Detach the login. The User account stays active — deactivate
     it via the login section if the person should lose access."""
     require_permission(claims, "users", "update")

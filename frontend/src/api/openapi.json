@@ -3545,16 +3545,28 @@
         "additionalProperties": false,
         "properties": {
           "address_line1": {
-            "default": "",
-            "maxLength": 255,
-            "title": "Address Line1",
-            "type": "string"
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Address Line1"
           },
           "address_line2": {
-            "default": "",
-            "maxLength": 255,
-            "title": "Address Line2",
-            "type": "string"
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Address Line2"
           },
           "date_of_birth": {
             "anyOf": [
@@ -3569,10 +3581,16 @@
             "title": "Date Of Birth"
           },
           "email": {
-            "default": "",
-            "maxLength": 255,
-            "title": "Email",
-            "type": "string"
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
           },
           "hired_on": {
             "anyOf": [
@@ -3587,11 +3605,17 @@
             "title": "Hired On"
           },
           "hourly_rate": {
-            "default": 0.0,
-            "maximum": 10000.0,
-            "minimum": 0.0,
-            "title": "Hourly Rate",
-            "type": "number"
+            "anyOf": [
+              {
+                "maximum": 10000.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hourly Rate"
           },
           "name": {
             "maxLength": 120,
@@ -3600,16 +3624,28 @@
             "type": "string"
           },
           "payroll_schedule": {
-            "default": "",
-            "maxLength": 20,
-            "title": "Payroll Schedule",
-            "type": "string"
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Payroll Schedule"
           },
           "phone": {
-            "default": "",
-            "maxLength": 40,
-            "title": "Phone",
-            "type": "string"
+            "anyOf": [
+              {
+                "maxLength": 40,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phone"
           },
           "user_id": {
             "anyOf": [
@@ -3679,6 +3715,95 @@
         "title": "EmployeeLoginInfo",
         "type": "object"
       },
+      "EmployeeRecord": {
+        "additionalProperties": false,
+        "properties": {
+          "address_line1": {
+            "title": "Address Line1",
+            "type": "string"
+          },
+          "address_line2": {
+            "title": "Address Line2",
+            "type": "string"
+          },
+          "date_of_birth": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date Of Birth"
+          },
+          "email": {
+            "title": "Email",
+            "type": "string"
+          },
+          "hired_on": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hired On"
+          },
+          "hourly_rate": {
+            "title": "Hourly Rate",
+            "type": "number"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "is_active": {
+            "title": "Is Active",
+            "type": "boolean"
+          },
+          "login": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EmployeeLoginInfo"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "payroll_schedule": {
+            "title": "Payroll Schedule",
+            "type": "string"
+          },
+          "phone": {
+            "title": "Phone",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "is_active",
+          "hourly_rate",
+          "hired_on",
+          "date_of_birth",
+          "email",
+          "phone",
+          "address_line1",
+          "address_line2",
+          "payroll_schedule",
+          "login"
+        ],
+        "title": "EmployeeRecord",
+        "type": "object"
+      },
       "EmployeeUpdateRequest": {
         "additionalProperties": false,
         "description": "PATCH semantics \u2014 omitted fields stay unchanged. The two\n``clear_*`` flags reset the nullable dates (None can't be the\nclear sentinel on an optional field).",
@@ -3708,14 +3833,26 @@
             "title": "Address Line2"
           },
           "clear_date_of_birth": {
-            "default": false,
-            "title": "Clear Date Of Birth",
-            "type": "boolean"
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Clear Date Of Birth"
           },
           "clear_hired_on": {
-            "default": false,
-            "title": "Clear Hired On",
-            "type": "boolean"
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Clear Hired On"
           },
           "date_of_birth": {
             "anyOf": [
@@ -3830,7 +3967,7 @@
           },
           "rows": {
             "items": {
-              "$ref": "#/components/schemas/api__Modules__Admin__Requests__employees__EmployeeRow"
+              "$ref": "#/components/schemas/EmployeeRecord"
             },
             "title": "Rows",
             "type": "array"
@@ -13686,95 +13823,6 @@
         "title": "VendorWriteRequest",
         "type": "object"
       },
-      "api__Modules__Admin__Requests__employees__EmployeeRow": {
-        "additionalProperties": false,
-        "properties": {
-          "address_line1": {
-            "title": "Address Line1",
-            "type": "string"
-          },
-          "address_line2": {
-            "title": "Address Line2",
-            "type": "string"
-          },
-          "date_of_birth": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Date Of Birth"
-          },
-          "email": {
-            "title": "Email",
-            "type": "string"
-          },
-          "hired_on": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Hired On"
-          },
-          "hourly_rate": {
-            "title": "Hourly Rate",
-            "type": "number"
-          },
-          "id": {
-            "title": "Id",
-            "type": "integer"
-          },
-          "is_active": {
-            "title": "Is Active",
-            "type": "boolean"
-          },
-          "login": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/EmployeeLoginInfo"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "name": {
-            "title": "Name",
-            "type": "string"
-          },
-          "payroll_schedule": {
-            "title": "Payroll Schedule",
-            "type": "string"
-          },
-          "phone": {
-            "title": "Phone",
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "name",
-          "is_active",
-          "hourly_rate",
-          "hired_on",
-          "date_of_birth",
-          "email",
-          "phone",
-          "address_line1",
-          "address_line2",
-          "payroll_schedule",
-          "login"
-        ],
-        "title": "EmployeeRow",
-        "type": "object"
-      },
       "api__Modules__Customers__Requests__customers__CustomerRow": {
         "additionalProperties": false,
         "description": "One row in the autocomplete picker. The JSON keys match the\nlegacy `Customer.to_dict()` output 1:1.",
@@ -14416,7 +14464,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/api__Modules__Admin__Requests__employees__EmployeeRow"
+                  "$ref": "#/components/schemas/EmployeeRecord"
                 }
               }
             },
@@ -14501,7 +14549,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/api__Modules__Admin__Requests__employees__EmployeeRow"
+                  "$ref": "#/components/schemas/EmployeeRecord"
                 }
               }
             },
@@ -14577,7 +14625,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/api__Modules__Admin__Requests__employees__EmployeeRow"
+                  "$ref": "#/components/schemas/EmployeeRecord"
                 }
               }
             },
@@ -14661,7 +14709,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/api__Modules__Admin__Requests__employees__EmployeeRow"
+                  "$ref": "#/components/schemas/EmployeeRecord"
                 }
               }
             },

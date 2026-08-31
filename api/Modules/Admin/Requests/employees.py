@@ -16,7 +16,7 @@ class EmployeeLoginInfo(BaseModel):
     has_custom_permissions: bool
 
 
-class EmployeeRow(BaseModel):
+class EmployeeRecord(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     id:          int
@@ -49,7 +49,7 @@ class LoginOnlyRow(BaseModel):
 class EmployeesListResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    rows: list[EmployeeRow]
+    rows: list[EmployeeRecord]
     login_only: list[LoginOnlyRow]
 
 
@@ -57,14 +57,14 @@ class EmployeeCreateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     name: str = Field(..., min_length=1, max_length=120)
-    hourly_rate: float = Field(0.0, ge=0, le=10_000)
+    hourly_rate: float | None = Field(None, ge=0, le=10_000)
     hired_on:      date | None = None
     date_of_birth: date | None = None
-    email:         str = Field("", max_length=255)
-    phone:         str = Field("", max_length=40)
-    address_line1: str = Field("", max_length=255)
-    address_line2: str = Field("", max_length=255)
-    payroll_schedule: str = Field("", max_length=20)
+    email:         str | None = Field(None, max_length=255)
+    phone:         str | None = Field(None, max_length=40)
+    address_line1: str | None = Field(None, max_length=255)
+    address_line2: str | None = Field(None, max_length=255)
+    payroll_schedule: str | None = Field(None, max_length=20)
     # Optionally attach an existing login at creation time.
     user_id: int | None = None
 
@@ -81,8 +81,8 @@ class EmployeeUpdateRequest(BaseModel):
     hourly_rate: float | None = Field(None, ge=0, le=10_000)
     hired_on:      date | None = None
     date_of_birth: date | None = None
-    clear_hired_on:      bool = False
-    clear_date_of_birth: bool = False
+    clear_hired_on:      bool | None = None
+    clear_date_of_birth: bool | None = None
     email:         str | None = Field(None, max_length=255)
     phone:         str | None = Field(None, max_length=40)
     address_line1: str | None = Field(None, max_length=255)

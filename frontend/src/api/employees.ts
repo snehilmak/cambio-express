@@ -7,7 +7,7 @@ import { api } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
 import type { components } from "./openapi";
 
-export type EmployeeRow = components["schemas"]["EmployeeRow"];
+export type EmployeeRow = components["schemas"]["EmployeeRecord"];
 export type EmployeeLoginInfo = components["schemas"]["EmployeeLoginInfo"];
 export type LoginOnlyRow = components["schemas"]["LoginOnlyRow"];
 export type EmployeesListResponse =

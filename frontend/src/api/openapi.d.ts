@@ -7736,42 +7736,24 @@ export interface components {
         };
         /** EmployeeCreateRequest */
         EmployeeCreateRequest: {
-            /**
-             * Address Line1
-             * @default
-             */
-            address_line1: string;
-            /**
-             * Address Line2
-             * @default
-             */
-            address_line2: string;
+            /** Address Line1 */
+            address_line1?: string | null;
+            /** Address Line2 */
+            address_line2?: string | null;
             /** Date Of Birth */
             date_of_birth?: string | null;
-            /**
-             * Email
-             * @default
-             */
-            email: string;
+            /** Email */
+            email?: string | null;
             /** Hired On */
             hired_on?: string | null;
-            /**
-             * Hourly Rate
-             * @default 0
-             */
-            hourly_rate: number;
+            /** Hourly Rate */
+            hourly_rate?: number | null;
             /** Name */
             name: string;
-            /**
-             * Payroll Schedule
-             * @default
-             */
-            payroll_schedule: string;
-            /**
-             * Phone
-             * @default
-             */
-            phone: string;
+            /** Payroll Schedule */
+            payroll_schedule?: string | null;
+            /** Phone */
+            phone?: string | null;
             /** User Id */
             user_id?: number | null;
         };
@@ -7796,6 +7778,32 @@ export interface components {
             /** Username */
             username: string;
         };
+        /** EmployeeRecord */
+        EmployeeRecord: {
+            /** Address Line1 */
+            address_line1: string;
+            /** Address Line2 */
+            address_line2: string;
+            /** Date Of Birth */
+            date_of_birth: string | null;
+            /** Email */
+            email: string;
+            /** Hired On */
+            hired_on: string | null;
+            /** Hourly Rate */
+            hourly_rate: number;
+            /** Id */
+            id: number;
+            /** Is Active */
+            is_active: boolean;
+            login: components["schemas"]["EmployeeLoginInfo"] | null;
+            /** Name */
+            name: string;
+            /** Payroll Schedule */
+            payroll_schedule: string;
+            /** Phone */
+            phone: string;
+        };
         /**
          * EmployeeUpdateRequest
          * @description PATCH semantics — omitted fields stay unchanged. The two
@@ -7807,16 +7815,10 @@ export interface components {
             address_line1?: string | null;
             /** Address Line2 */
             address_line2?: string | null;
-            /**
-             * Clear Date Of Birth
-             * @default false
-             */
-            clear_date_of_birth: boolean;
-            /**
-             * Clear Hired On
-             * @default false
-             */
-            clear_hired_on: boolean;
+            /** Clear Date Of Birth */
+            clear_date_of_birth?: boolean | null;
+            /** Clear Hired On */
+            clear_hired_on?: boolean | null;
             /** Date Of Birth */
             date_of_birth?: string | null;
             /** Email */
@@ -7839,7 +7841,7 @@ export interface components {
             /** Login Only */
             login_only: components["schemas"]["LoginOnlyRow"][];
             /** Rows */
-            rows: components["schemas"]["api__Modules__Admin__Requests__employees__EmployeeRow"][];
+            rows: components["schemas"]["EmployeeRecord"][];
         };
         /**
          * FeatureFlagCreateRequest
@@ -12297,32 +12299,6 @@ export interface components {
              */
             phone: string;
         };
-        /** EmployeeRow */
-        api__Modules__Admin__Requests__employees__EmployeeRow: {
-            /** Address Line1 */
-            address_line1: string;
-            /** Address Line2 */
-            address_line2: string;
-            /** Date Of Birth */
-            date_of_birth: string | null;
-            /** Email */
-            email: string;
-            /** Hired On */
-            hired_on: string | null;
-            /** Hourly Rate */
-            hourly_rate: number;
-            /** Id */
-            id: number;
-            /** Is Active */
-            is_active: boolean;
-            login: components["schemas"]["EmployeeLoginInfo"] | null;
-            /** Name */
-            name: string;
-            /** Payroll Schedule */
-            payroll_schedule: string;
-            /** Phone */
-            phone: string;
-        };
         /**
          * CustomerRow
          * @description One row in the autocomplete picker. The JSON keys match the
@@ -12652,7 +12628,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["api__Modules__Admin__Requests__employees__EmployeeRow"];
+                    "application/json": components["schemas"]["EmployeeRecord"];
                 };
             };
             /** @description Validation Error */
@@ -12691,7 +12667,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["api__Modules__Admin__Requests__employees__EmployeeRow"];
+                    "application/json": components["schemas"]["EmployeeRecord"];
                 };
             };
             /** @description Validation Error */
@@ -12730,7 +12706,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["api__Modules__Admin__Requests__employees__EmployeeRow"];
+                    "application/json": components["schemas"]["EmployeeRecord"];
                 };
             };
             /** @description Validation Error */
@@ -12765,7 +12741,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["api__Modules__Admin__Requests__employees__EmployeeRow"];
+                    "application/json": components["schemas"]["EmployeeRecord"];
                 };
             };
             /** @description Validation Error */
