@@ -59,6 +59,8 @@ STORE_OWNED_MODELS: list[str] = [
     "PurchaseInvoiceLine", "PurchaseInvoice",
     "PriceBookItem", "Vendor", "Department",
     # POS import: agent keys + staged journal files (store-scoped).
+    # Store Daily Book: originals FK the entry — children first.
+    "StoreDailyEntryOriginal", "StoreDailyEntry",
     # POS transactions: lines + tenders FK the transaction — purge
     # children first.
     "PosTransactionLine", "PosTransactionTender", "PosTransaction",
@@ -131,6 +133,9 @@ def _store_owned_models() -> list[tuple[type, str]]:
     from api.Modules.Catalog.Models import (
         PriceBookItem, PurchaseInvoice, PurchaseInvoiceLine, Vendor,
     )
+    from api.Modules.StoreBook.Models import (
+        StoreDailyEntry, StoreDailyEntryOriginal,
+    )
     from api.Modules.Transfers.Models import Transfer
     from api.Modules.Support.Models import SupportMessage, SupportTicket
     from api.Modules.TVDisplay.Models import TVDisplay
@@ -169,6 +174,9 @@ def _store_owned_models() -> list[tuple[type, str]]:
         (PosAgentCredential, "store_id"),
         (PosItemDaySale, "store_id"),
         (PosJournalFile, "store_id"),
+        # Originals FK store_daily_entry — children first.
+        (StoreDailyEntryOriginal, "store_id"),
+        (StoreDailyEntry, "store_id"),
         # Lines + tenders FK pos_transaction — children first.
         (PosTransactionLine, "store_id"),
         (PosTransactionTender, "store_id"),

@@ -73,6 +73,7 @@ from api.Modules.Customers import Models as _customers_models  # noqa: F401, E40
 from api.Modules.DailyBook import Models as _dailybook_models  # noqa: F401, E402
 from api.Modules.Monthly import Models as _monthly_models  # noqa: F401, E402
 from api.Modules.ReturnChecks import Models as _returnchecks_models  # noqa: F401, E402
+from api.Modules.StoreBook import Models as _storebook_models  # noqa: F401, E402
 from api.Modules.Tenancy import Models as _tenancy_models  # noqa: F401, E402
 from api.Modules.Transfers import Models as _transfers_models  # noqa: F401, E402
 from api.Modules.TVDisplay import Models as _tvdisplay_models  # noqa: F401, E402
