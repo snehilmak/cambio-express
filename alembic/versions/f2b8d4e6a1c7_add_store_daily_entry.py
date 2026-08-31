@@ -20,13 +20,52 @@ Revises: e7a3c5d1f9b4
 import sqlalchemy as sa
 from alembic import op
 
-from api.Modules.StoreBook.Models import COUNT_FIELDS, MONEY_FIELDS
-
 
 revision = "f2b8d4e6a1c7"
 down_revision = "e7a3c5d1f9b4"
 branch_labels = None
 depends_on = None
+
+
+# The column list is spelled out here rather than imported from
+# api.Modules.StoreBook.Models, deliberately, for two reasons.
+#
+# 1. A migration must be IMMUTABLE. Deriving columns from the live
+#    model means that renaming a field later would silently change
+#    what this historical revision creates — a database rebuilt
+#    from scratch would no longer match one migrated in place.
+#    Alembic is the sole source of schema truth (CLAUDE.md), and
+#    truth that follows application code isn't truth.
+# 2. Alembic imports every version file to build the revision
+#    graph, and `init_db()` runs that during app boot — so a
+#    top-level app import here drags the model layer into the
+#    boot path from inside the migration loader.
+#
+# The model and this list are checked against each other by
+# tests/Modules/StoreBook/test_migration_matches_model.py, so they
+# cannot drift apart unnoticed.
+_MONEY_FIELDS = (
+    "opening_balance", "cash_in", "money_from_banks", "taxable_sales",
+    "non_taxable_sales", "gross_sales", "sales_tax", "lottery_sales",
+    "lotto_sales", "lotto_adjustment", "lottery_credits",
+    "check_income", "check_rebate", "equity", "loan", "money_order",
+    "phone_card", "fuel_amount", "check_fees", "money_transfer",
+    "ac_received", "bill_pay", "checks", "closing_cash", "cash_out",
+    "gas_pos_cards", "lotto_paid_out", "customer_credit", "cards",
+    "store_credit", "coupon_amount", "loyalty", "paid_out_expenses",
+    "paid_out_purchases", "paid_out_advance", "pre_cash_deposit",
+    "pre_check_deposit", "atm_loads", "atm_withdrawal", "atm_fees",
+    "atm_rejected", "atm_balance", "check_paid_expenses",
+    "check_paid_purchases", "check_paid_payroll", "cash_deposit",
+    "check_deposit", "eft_deposit", "merchant_deposit",
+    "income_rebate_equity", "atm_deposit", "closing_balance",
+)
+
+_COUNT_FIELDS = (
+    "money_order_count", "fuel_gallons", "money_transfer_count",
+    "bill_pay_count", "coupon_count", "atm_withdrawal_count",
+    "atm_rejected_count",
+)
 
 
 def _has_table(bind, name: str) -> bool:
@@ -41,16 +80,14 @@ def upgrade() -> None:
             sa.Column("store_id", sa.Integer(), nullable=False),
             sa.Column("entry_date", sa.Date(), nullable=False),
         ]
-        # Money columns are generated from the model's own field
-        # list, so the table and MONEY_FIELDS cannot drift apart.
         columns += [
             sa.Column(
                 f"{key}_cents", sa.BigInteger(),
                 nullable=False, server_default="0",
             )
-            for key in MONEY_FIELDS
+            for key in _MONEY_FIELDS
         ]
-        for key in COUNT_FIELDS:
+        for key in _COUNT_FIELDS:
             # Gallons is volume (float); the rest are integer counts.
             col_type = (
                 sa.Float() if key.endswith("gallons") else sa.Integer()
