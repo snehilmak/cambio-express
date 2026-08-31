@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
@@ -112,6 +112,12 @@ const MODULE_LABELS: Record<string, string> = {
 
 export default function AdminUserForm() {
   const { uid: uidStr } = useParams();
+  // ?employee=<id> — arrived from the Employees hub's "Create a
+  // login for this employee": link the new account to that HR
+  // record on success and return to the employee form (E-2).
+  const [searchParams] = useSearchParams();
+  const linkEmployeeId =
+    Number(searchParams.get("employee")) || null;
   const uid = uidStr ? Number(uidStr) : null;
   const isEdit = uid != null;
 
@@ -242,7 +248,7 @@ export default function AdminUserForm() {
   ) {
     return (
       <PageShell maxWidth="36rem">
-        <PageHeader title="User Management" />
+        <PageHeader title="Employees" />
         <p>You need a store-admin sign-in to manage users.</p>
       </PageShell>
     );
@@ -310,16 +316,25 @@ export default function AdminUserForm() {
           module_access: moduleAccess,
         };
         if (wantsCustom && draft.perm) body.permissions = draft.perm;
-        await createAdminUser(body);
+        const created = await createAdminUser(body);
+        if (linkEmployeeId) {
+          const { linkEmployeeLogin } = await import("../api/employees");
+          await linkEmployeeLogin(linkEmployeeId, created.id);
+          queryClient.invalidateQueries({ queryKey: ["employees"] });
+        }
       }
       // Invalidate roster + this user's detail cache so the next
       // visit to /admin/users shows the updated row.
       queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
       toast({
-        message: isEdit ? "User updated." : "User created.",
+        message: isEdit ? "Login updated." : "Login created.",
         tone: "success",
       });
-      navigate("/admin/users");
+      navigate(
+        linkEmployeeId
+          ? `/employees/${linkEmployeeId}/edit`
+          : "/employees",
+      );
     } catch (err) {
       if (err instanceof ApiError && err.status === 422) {
         const detailBody = (err.body as {
@@ -343,9 +358,9 @@ export default function AdminUserForm() {
   return (
     <PageShell maxWidth="36rem">
 
-      <Breadcrumbs crumbs={[{ label: "User Management", to: "/admin/users" }, { label: isEdit ? "Edit User" : "Add User" }]} />
+      <Breadcrumbs crumbs={[{ label: "Employees", to: "/employees" }, { label: isEdit ? "Edit Login" : "Add Login" }]} />
 
-      <PageHeader title={isEdit ? "Edit User" : "Add User"} />
+      <PageHeader title={isEdit ? "Edit Login & Access" : "Add Login"} />
 
       <Card>
         <div className={styles.cardHeader}>
@@ -520,7 +535,11 @@ export default function AdminUserForm() {
             <Button
               type="button"
               tone="secondary"
-              onClick={() => guard.confirmLeave(() => navigate("/admin/users"))}
+              onClick={() => guard.confirmLeave(() => navigate(
+                linkEmployeeId
+                  ? `/employees/${linkEmployeeId}/edit`
+                  : "/employees",
+              ))}
               disabled={busy}
             >
               Cancel

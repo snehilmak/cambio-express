@@ -20,7 +20,8 @@ const AccountActivity = lazy(() => import("./routes/AccountActivity"));
 const AccountNotifications = lazy(() => import("./routes/AccountNotifications"));
 const AccountSessions = lazy(() => import("./routes/AccountSessions"));
 const AdminAuditLog = lazy(() => import("./routes/AdminAuditLog"));
-const AdminCashiers = lazy(() => import("./routes/AdminCashiers"));
+const Employees = lazy(() => import("./routes/Employees"));
+const EmployeeForm = lazy(() => import("./routes/EmployeeForm"));
 const AdminSubscription = lazy(() => import("./routes/AdminSubscription"));
 const AdminDataExport = lazy(() => import("./routes/AdminDataExport"));
 const SupportTickets = lazy(() => import("./routes/SupportTickets"));
@@ -33,7 +34,6 @@ const AdminTimeClockSchedule = lazy(
   () => import("./routes/AdminTimeClockSchedule"),
 );
 const AdminUserForm = lazy(() => import("./routes/AdminUserForm"));
-const AdminUsers = lazy(() => import("./routes/AdminUsers"));
 const Bank = lazy(() => import("./routes/Bank"));
 const BankRules = lazy(() => import("./routes/BankRules"));
 const BankTransactions = lazy(() => import("./routes/BankTransactions"));
@@ -346,13 +346,17 @@ export default function App() {
           <Route path="admin/timeclock/paystub/:id"   element={<RequirePermission resource="time_clock" action="read"><TimeClockPaystub /></RequirePermission>} />
           <Route path="admin/audit-log"       element={<RequirePermission resource="reports" action="read"><AdminAuditLog /></RequirePermission>} />
           <Route path="admin/store-permissions" element={<RequirePermission resource="settings" action="read"><StorePermissions /></RequirePermission>} />
-          <Route path="admin/users"             element={<RequirePermission resource="users" action="read"><AdminUsers /></RequirePermission>} />
+          {/* Unified Employees hub (E-2) — merges the old Cashiers
+              roster + Team Users pages into one person-centric
+              place. /admin/users/* survives only as the login
+              (credentials + role + custom access) form. */}
+          <Route path="employees"               element={<RequirePermission resource="users" action="read"><Employees /></RequirePermission>} />
+          <Route path="employees/new"           element={<RequirePermission resource="users" action="create"><EmployeeForm /></RequirePermission>} />
+          <Route path="employees/:id/edit"      element={<RequirePermission resource="users" action="update"><EmployeeForm /></RequirePermission>} />
+          <Route path="admin/users"             element={<Navigate to="/employees" replace />} />
           <Route path="admin/users/new"         element={<RequirePermission resource="users" action="create"><AdminUserForm /></RequirePermission>} />
           <Route path="admin/users/:uid/edit"   element={<RequirePermission resource="users" action="update"><AdminUserForm /></RequirePermission>} />
-          {/* Cashier roster — lifted out of the /settings/team tab
-              when HR became its own sidebar group.  The old URL
-              redirects below for bookmarks. */}
-          <Route path="admin/cashiers"          element={<RequirePermission resource="users" action="read"><AdminCashiers /></RequirePermission>} />
+          <Route path="admin/cashiers"          element={<Navigate to="/employees" replace />} />
           <Route path="timeclock"             element={<RequirePermission resource="time_clock" action="read"><TimeClock /></RequirePermission>} />
           <Route path="account/referrals"     element={<Navigate to="/settings/referrals" replace />} />
           <Route path="account/tickets"      element={<SupportTickets />} />
@@ -383,7 +387,7 @@ export default function App() {
             {/* Legacy /settings/team — cashier roster moved to
                 /admin/cashiers when HR became its own sidebar
                 section.  Keep a redirect for bookmarks. */}
-            <Route path="team" element={<Navigate to="/admin/cashiers" replace />} />
+            <Route path="team" element={<Navigate to="/employees" replace />} />
             <Route path="billing" element={<SettingsBilling />} />
             <Route path="referrals" element={<SettingsReferrals />} />
             <Route path="security" element={<SettingsSecurity />} />

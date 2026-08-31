@@ -23,6 +23,23 @@ from api.Modules.Admin.Repositories import (
     list_team,
 )
 
+from api.Modules.Admin.Requests.employees import (
+    EmployeeCreateRequest,
+    EmployeeLinkRequest,
+    EmployeeLoginInfo,
+    EmployeeRecord,
+    EmployeesListResponse,
+    EmployeeUpdateRequest,
+    LoginOnlyRow,
+)
+from api.Modules.Admin.Services.employees import (
+    EmployeeLinkError,
+    link_employee_user,
+    list_employees_unified,
+    unlink_employee_user,
+    update_employee_hr,
+)
+from api.Modules.Tenancy.Models import User
 from api.Modules.Admin.Requests import (
     AddonListResponse,
     AddonRow,
@@ -306,6 +323,225 @@ def deactivate_team_member_route(
         summary="soft-deleted (is_active=False)",
     )
     db.commit()
+
+
+# ── Unified Employees hub (E-1) ────────────────────────────
+#
+# One place manages the person: StoreEmployee is the HR record;
+# the optional user link attaches their login. These endpoints
+# power /app/employees; the legacy /team + /users endpoints stay
+# for compatibility (transfer attribution + time clock keep using
+# roster ids) until the SPA cutover removes their pages.
+
+
+def _employee_row(e, u) -> "EmployeeRecord":
+    from api.Core.Permissions import user_has_custom_permissions
+    login = None
+    if u is not None:
+        login = EmployeeLoginInfo(
+            user_id=u.id,
+            username=u.username or "",
+            role=u.role or "employee",
+            is_active=bool(u.is_active),
+            has_custom_permissions=(
+                user_has_custom_permissions(u.id, e.store_id)
+            ),
+        )
+    return EmployeeRecord(
+        id=e.id,
+        name=e.name or "",
+        is_active=bool(e.is_active),
+        hourly_rate=float(e.hourly_rate or 0.0),
+        hired_on=e.hired_on.isoformat() if e.hired_on else None,
+        date_of_birth=(
+            e.date_of_birth.isoformat() if e.date_of_birth else None
+        ),
+        email=e.email or "",
+        phone=e.phone or "",
+        address_line1=e.address_line1 or "",
+        address_line2=e.address_line2 or "",
+        payroll_schedule=e.payroll_schedule or "",
+        login=login,
+    )
+
+
+@router.get("/employees", response_model=EmployeesListResponse)
+def list_employees_route(
+    db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
+) -> EmployeesListResponse:
+    """Everyone at the store: HR records (with linked login info)
+    plus login-only accounts awaiting an HR record."""
+    require_permission(claims, "users", "read")
+    store_id = resolve_store_scope(claims)
+    rows, login_only = list_employees_unified(db, store_id)
+    return EmployeesListResponse(
+        rows=[_employee_row(e, u) for e, u in rows],
+        login_only=[
+            LoginOnlyRow(
+                user_id=u.id,
+                username=u.username or "",
+                full_name=u.full_name or "",
+                role=u.role or "employee",
+                is_active=bool(u.is_active),
+            )
+            for u in login_only
+        ],
+    )
+
+
+@router.post(
+    "/employees", response_model=EmployeeRecord, status_code=201,
+)
+def create_employee_route(
+    body: EmployeeCreateRequest,
+    db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
+) -> EmployeeRecord:
+    require_permission(claims, "users", "create")
+    store_id = resolve_store_scope(claims)
+    try:
+        emp = add_team_member(
+            db, store_id, body.name,
+            hourly_rate=body.hourly_rate or 0.0,
+        )
+        update_employee_hr(
+            db, emp,
+            hired_on=body.hired_on,
+            date_of_birth=body.date_of_birth,
+            email=body.email, phone=body.phone,
+            address_line1=body.address_line1,
+            address_line2=body.address_line2,
+            payroll_schedule=body.payroll_schedule,
+        )
+        if body.user_id is not None:
+            link_employee_user(db, store_id, emp, body.user_id)
+    except EmployeeLinkError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    _audit_admin_action(
+        db, claims=claims, action="create_employee",
+        target_type="team_member",
+        target_id=str(emp.id),
+        target_label=(emp.name or "")[:160],
+        summary="created employee record"
+        + (" with linked login" if body.user_id is not None else ""),
+    )
+    db.commit()
+    linked = db.get(User, emp.user_id) if emp.user_id else None
+    return _employee_row(emp, linked)
+
+
+@router.patch(
+    "/employees/{employee_id}", response_model=EmployeeRecord,
+)
+def update_employee_route(
+    employee_id: int = Path(..., ge=1),
+    body: EmployeeUpdateRequest = ...,
+    db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
+) -> EmployeeRecord:
+    require_permission(claims, "users", "update")
+    store_id = resolve_store_scope(claims)
+    emp = find_team_member(db, store_id, employee_id)
+    if emp is None:
+        raise HTTPException(status_code=404, detail="Employee not found")
+    fields = body.model_dump(exclude_unset=True)
+    try:
+        update_team_member(
+            db, emp,
+            name=fields.get("name"),
+            is_active=fields.get("is_active"),
+            hourly_rate=fields.get("hourly_rate"),
+        )
+        update_employee_hr(
+            db, emp,
+            hired_on=fields.get("hired_on"),
+            date_of_birth=fields.get("date_of_birth"),
+            clear_hired_on=bool(body.clear_hired_on),
+            clear_date_of_birth=bool(body.clear_date_of_birth),
+            email=fields.get("email"),
+            phone=fields.get("phone"),
+            address_line1=fields.get("address_line1"),
+            address_line2=fields.get("address_line2"),
+            payroll_schedule=fields.get("payroll_schedule"),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    changed = [
+        k for k in fields if not k.startswith("clear_")
+    ] + [k for k in ("clear_hired_on", "clear_date_of_birth")
+         if fields.get(k)]
+    _audit_admin_action(
+        db, claims=claims, action="update_employee",
+        target_type="team_member",
+        target_id=str(emp.id),
+        target_label=(emp.name or "")[:160],
+        summary=f"changed: {', '.join(sorted(changed)) or 'nothing'}",
+    )
+    db.commit()
+    linked = db.get(User, emp.user_id) if emp.user_id else None
+    return _employee_row(emp, linked)
+
+
+@router.post(
+    "/employees/{employee_id}/link", response_model=EmployeeRecord,
+)
+def link_employee_login_route(
+    body: EmployeeLinkRequest,
+    employee_id: int = Path(..., ge=1),
+    db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
+) -> EmployeeRecord:
+    """Attach a login account to this person (1:1)."""
+    require_permission(claims, "users", "update")
+    store_id = resolve_store_scope(claims)
+    emp = find_team_member(db, store_id, employee_id)
+    if emp is None:
+        raise HTTPException(status_code=404, detail="Employee not found")
+    try:
+        link_employee_user(db, store_id, emp, body.user_id)
+    except EmployeeLinkError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    _audit_admin_action(
+        db, claims=claims, action="link_employee_login",
+        target_type="team_member",
+        target_id=str(emp.id),
+        target_label=(emp.name or "")[:160],
+        summary=f"linked login user_id={body.user_id}",
+    )
+    db.commit()
+    linked = db.get(User, emp.user_id) if emp.user_id else None
+    return _employee_row(emp, linked)
+
+
+@router.delete(
+    "/employees/{employee_id}/link", response_model=EmployeeRecord,
+)
+def unlink_employee_login_route(
+    employee_id: int = Path(..., ge=1),
+    db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
+) -> EmployeeRecord:
+    """Detach the login. The User account stays active — deactivate
+    it via the login section if the person should lose access."""
+    require_permission(claims, "users", "update")
+    store_id = resolve_store_scope(claims)
+    emp = find_team_member(db, store_id, employee_id)
+    if emp is None:
+        raise HTTPException(status_code=404, detail="Employee not found")
+    prior = emp.user_id
+    unlink_employee_user(db, emp)
+    _audit_admin_action(
+        db, claims=claims, action="unlink_employee_login",
+        target_type="team_member",
+        target_id=str(emp.id),
+        target_label=(emp.name or "")[:160],
+        summary=f"unlinked login user_id={prior}",
+    )
+    db.commit()
+    return _employee_row(emp, None)
 
 
 # ── Subscription add-ons ────────────────────────────────────
