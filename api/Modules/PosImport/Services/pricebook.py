@@ -37,6 +37,7 @@ from api.Modules.Catalog.Services import create_item
 from api.Modules.DayClose.Models import Department
 from api.Modules.PosImport.Models import PosJournalFile, PosMerchandiseMap
 from api.Modules.PosImport.Services.naxml import (
+    LINE_STATUS_NORMAL,
     PosJournalParseError,
     parse_pjr,
 )
@@ -81,6 +82,13 @@ def harvest_price_book(
         if event.business_date is None:
             continue
         for item in event.items:
+            # Cancelled lines are parsed now (G-5) so the viewer can
+            # show voided items. Don't seed the price book from one:
+            # the sale didn't happen, so its price is the least
+            # trustworthy reading we have. A real sale of the same
+            # code harvests it on the next pass.
+            if item.status != LINE_STATUS_NORMAL:
+                continue
             code = item.pos_code.strip()
             if item.is_fuel or not code:
                 continue
