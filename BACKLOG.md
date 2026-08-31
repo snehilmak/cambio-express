@@ -510,6 +510,44 @@ impact ÷ effort. Numbers are an estimate.
       `api/Modules/Auth/Controllers/__init__.py::
       _set_last_store_slug_cookie`).
 
+## G-7 — the movement reports we still discard (BLOCKED on sample data)
+
+Passport writes seven NAXML document families to its back-office
+folder. We ingest exactly one of them — PJR (POSJournal), the
+per-transaction journal. The other six are parsed by nothing:
+`parse_pjr` rejects them outright, so every day a live site sends
+them they are staged and dropped.
+
+| Family | Document | What we lose each day |
+|---|---|---|
+| FGM | FuelGradeMovement | gallons + dollars per grade, per period |
+| ISM | ItemSalesMovement | per-item movement independent of the journal |
+| MCM | MerchandiseCodeMovement | department totals straight from the register |
+| MSM | MiscellaneousSummaryMovement | payouts, safe drops, no-sales, refunds |
+| TLM | TaxLevelMovement | taxable vs non-taxable sales per tax level |
+| TPM | TenderPeriodMovement | header-only in the sample — nothing to ingest |
+
+**Why this is not built yet.** Writing these five parsers requires
+the exact element names each document uses, and NAXML's movement
+schemas differ per family. Guessing them produces parsers that
+pass whatever synthetic fixture the author invented and match
+NOTHING against the real files — code that looks finished and
+silently ingests zero rows. The sample set (a live site's `Brew*`
+export) was analysed once but is not checked into the repo (it is
+real store data — see the standing rule against committing it),
+and the structural notes from that pass were never written down
+here. **To do G-7, re-attach the sample export first**, derive the
+element names from it, then build synthetic fixtures that mirror
+the real shape.
+
+**One open question before any of it is wired to a total.** The
+sample's MSM reports `payouts/total` as −$4,689.60 and
+`payouts/vendorPay` as −$9,379.20 — exactly 2×. One of them is
+double-counting, and which one is authoritative cannot be settled
+from a single store's data. Do not feed either into a P&L or
+daily-book line until a second site's export confirms the
+relationship.
+
 ## Nice to have (post-launch)
 - [x] **Daily Book Money Transfers — editable per-company breakdown.**
       Landed. New `GET/PUT /api/v2/daily/{store}/{date}/mt-breakdown`
