@@ -5,6 +5,7 @@ import {
 } from "chart.js";
 import { Line } from "react-chartjs-2";
 
+import { PeriodRollup } from "../components/PeriodRollup";
 import {
   RecentReceipts, RegisterActivityTiles,
 } from "../components/RegisterActivity";
@@ -425,6 +426,14 @@ function AdminPanel({ d }: { d: AdminDashboard }) {
           </Card>
         </Section>
       )}
+
+      {/* Sales / purchases / transfers over the same four windows,
+          side by side (D-5). */}
+      <PeriodRollup
+        sales={d.sales}
+        purchases={d.purchases}
+        transfers={d.transfers_rollup}
+      />
 
       <RecentReceipts receipts={d.recent_receipts} />
 
