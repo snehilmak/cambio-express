@@ -17,8 +17,11 @@ Ground truth from a real Passport 22.01 site (23 business days,
   every event carries the day it belongs to.
 * Refund events carry NEGATIVE amounts end-to-end (summary and
   tenders), so plain summation nets them out of a day.
-* Void events contain only ``status="cancel"`` lines — skipping
-  cancelled lines (which we must do everywhere) zeroes them.
+* Void events contain only ``status="cancel"`` lines. Those lines
+  are PARSED and kept (G-5 — an operator needs to see that an item
+  was voided mid-sale), flagged ``status="cancel"``, and excluded
+  from every money total. A void event therefore still nets to
+  zero, but is no longer invisible.
 * ``MerchandiseCode`` is the site's numeric department. Fuel
   lines (``FuelLine``) additionally carry the grade, gallons
   (3-decimal quantity), and pump position.
@@ -67,6 +70,12 @@ CARD_TENDER_CODES = frozenset({
 CASH_TENDER_CODES = frozenset({"cash"})
 
 
+# TransactionLine status="cancel" — a line the register itself
+# discarded (a voided item, a mis-scan corrected mid-sale).
+LINE_STATUS_NORMAL = "normal"
+LINE_STATUS_CANCEL = "cancel"
+
+
 @dataclass
 class PjrItemLine:
     merchandise_code: str
@@ -83,6 +92,21 @@ class PjrItemLine:
     pos_code: str = ""
     pos_code_format: str = ""
     regular_price_cents: int = 0
+    # G-5 additions — for the transaction viewer, not the money math.
+    #
+    # `status` is the load-bearing one. Cancelled lines used to be
+    # dropped during parse; they are now kept so an operator can see
+    # that an item WAS voided mid-sale (a real loss-prevention
+    # signal). Everything that computes money MUST filter on
+    # `status == LINE_STATUS_NORMAL` — `aggregate_events` does, and
+    # a cancelled line reaching a day total would silently inflate
+    # it.
+    status: str = LINE_STATUS_NORMAL
+    line_seq: int = 0
+    entry_method: str = ""
+    actual_price_cents: int = 0
+    selling_units: str = ""
+    tax_level_id: str = ""
 
 
 @dataclass
@@ -91,6 +115,9 @@ class PjrTender:
     sub_code: str
     amount_cents: int
     is_change: bool
+    # Same rule as PjrItemLine.status — a tender on a cancelled
+    # line never counts toward a drawer total.
+    status: str = LINE_STATUS_NORMAL
 
 
 # Aggregation key + display label for pay-at-pump activity. All
@@ -122,6 +149,21 @@ class PjrEvent:
     tax_cents: int = 0
     # OtherEvent register-open detail: the opening drawer float.
     opening_cash_cents: int | None = None
+    # G-5 — event detail for the transaction viewer. None/"" when
+    # the file omits them; nothing here feeds a money total.
+    event_sequence_id: str = ""
+    started_at: datetime | None = None
+    ended_at: datetime | None = None
+    receipt_at: datetime | None = None
+    training_mode: bool = False
+    offline: bool = False
+    suspended: bool = False
+    grand_total_cents: int = 0
+    # Filename the event was parsed from. Set by the caller that
+    # loaded it (parse_pjr sees bytes, not a name); it is what makes
+    # the persisted transaction idempotent across re-commits — one
+    # event per file, so re-parsing replaces rather than duplicates.
+    source_file: str = ""
 
 
 def _text(el, tag: str) -> str:
@@ -155,6 +197,13 @@ def _float(el, tag: str) -> float:
         )
 
 
+def _flag(el, tag: str) -> bool:
+    """NAXML boolean flags are an attribute, not text:
+    ``<TrainingModeFlag value="no"/>``."""
+    found = el.find(".//" + tag)
+    return found is not None and (found.get("value") or "") == "yes"
+
+
 def _date(el, tag: str) -> date | None:
     raw = _text(el, tag)
     if not raw:
@@ -165,6 +214,23 @@ def _date(el, tag: str) -> date | None:
         raise PosJournalParseError(
             f"Bad date {raw!r} in <{tag}>",
         )
+
+
+def _stamp(el, date_tag: str, time_tag: str) -> datetime | None:
+    """Combine a sibling <XxxDate> + <XxxTime> pair into a datetime.
+
+    Returns None when either half is missing or unparseable —
+    timestamps are display detail, so a malformed one must never
+    fail a parse that would otherwise book money correctly.
+    """
+    d = _text(el, date_tag)
+    t = _text(el, time_tag) or "00:00:00"
+    if not d:
+        return None
+    try:
+        return datetime.strptime(f"{d} {t[:8]}", "%Y-%m-%d %H:%M:%S")
+    except ValueError:
+        return None
 
 
 def _event_hour(root, event_el) -> int | None:
@@ -198,10 +264,18 @@ def _event_hour(root, event_el) -> int | None:
     return None
 
 
-def _parse_item_line(line_el) -> list[PjrItemLine]:
+def _parse_item_line(line_el, *, status: str = LINE_STATUS_NORMAL,
+                     line_seq: int = 0) -> list[PjrItemLine]:
+    """Every ItemLine / FuelLine under one TransactionLine.
+
+    `status` is the parent TransactionLine's — a cancelled line's
+    items are kept (so the viewer can show what was voided) and
+    carry the flag that keeps them out of every money total.
+    """
     items: list[PjrItemLine] = []
     for item in line_el.findall(".//ItemLine"):
         fmt_el = item.find(".//ItemCode/POSCodeFormat")
+        entry_el = item.find(".//EntryMethod")
         items.append(PjrItemLine(
             merchandise_code=_text(item, "MerchandiseCode"),
             description=_text(item, "Description"),
@@ -212,6 +286,14 @@ def _parse_item_line(line_el) -> list[PjrItemLine]:
                 (fmt_el.get("format") or "") if fmt_el is not None else ""
             ),
             regular_price_cents=_cents(item, "RegularSellPrice"),
+            status=status,
+            line_seq=line_seq,
+            entry_method=(
+                (entry_el.get("method") or "") if entry_el is not None else ""
+            ),
+            actual_price_cents=_cents(item, "ActualSalesPrice"),
+            selling_units=_text(item, "SellingUnits"),
+            tax_level_id=_text(item, "ItemTax/TaxLevelID"),
         ))
     for fuel in line_el.findall(".//FuelLine"):
         items.append(PjrItemLine(
@@ -223,6 +305,9 @@ def _parse_item_line(line_el) -> list[PjrItemLine]:
             fuel_grade_id=_text(fuel, "FuelGradeID"),
             fuel_position=_text(fuel, "FuelPositionID"),
             gallons=_float(fuel, "SalesQuantity"),
+            status=status,
+            line_seq=line_seq,
+            actual_price_cents=_cents(fuel, "ActualSalesPrice"),
         ))
     return items
 
@@ -265,6 +350,13 @@ def parse_pjr(data: bytes | str) -> PjrEvent:
             outside_el is not None and outside_el.get("value") == "yes"
         ),
         event_hour=_event_hour(root, event_el),
+        event_sequence_id=_text(event_el, "EventSequenceID"),
+        started_at=_stamp(event_el, "EventStartDate", "EventStartTime"),
+        ended_at=_stamp(event_el, "EventEndDate", "EventEndTime"),
+        receipt_at=_stamp(event_el, "ReceiptDate", "ReceiptTime"),
+        training_mode=_flag(event_el, "TrainingModeFlag"),
+        offline=_flag(event_el, "OfflineFlag"),
+        suspended=_flag(event_el, "SuspendFlag"),
     )
 
     # Register open/close detail (OtherEvent): opening drawer cash.
@@ -272,12 +364,20 @@ def parse_pjr(data: bytes | str) -> PjrEvent:
     if detail is not None and detail.get("detailType") == "open":
         event.opening_cash_cents = _cents(detail, "CashInDrawer")
 
-    for line in event_el.findall(".//TransactionLine"):
+    for seq, line in enumerate(event_el.findall(".//TransactionLine"), 1):
         # Cancelled lines are corrections the register already
-        # discarded — voided items, mis-scans. Never count them.
-        if line.get("status") == "cancel":
-            continue
-        event.items.extend(_parse_item_line(line))
+        # discarded — voided items, mis-scans. They are KEPT here
+        # (G-5: an operator wants to see that something was voided
+        # mid-sale) and flagged, so everything downstream that
+        # computes money can filter them out. `aggregate_events`
+        # does exactly that; day totals are unchanged.
+        status = (
+            LINE_STATUS_CANCEL if line.get("status") == "cancel"
+            else LINE_STATUS_NORMAL
+        )
+        event.items.extend(
+            _parse_item_line(line, status=status, line_seq=seq),
+        )
         for tender in line.findall(".//TenderInfo"):
             change_el = tender.find(".//ChangeFlag")
             event.tenders.append(PjrTender(
@@ -288,6 +388,7 @@ def parse_pjr(data: bytes | str) -> PjrEvent:
                     change_el is not None
                     and change_el.get("value") == "yes"
                 ),
+                status=status,
             ))
 
     summary = event_el.find(".//TransactionSummary")
@@ -295,6 +396,9 @@ def parse_pjr(data: bytes | str) -> PjrEvent:
         event.gross_cents = _cents(summary, "TransactionTotalGrossAmount")
         event.net_cents = _cents(summary, "TransactionTotalNetAmount")
         event.tax_cents = _cents(summary, "TransactionTotalTaxNetAmount")
+        event.grand_total_cents = _cents(
+            summary, "TransactionTotalGrandAmount",
+        )
     return event
 
 
@@ -377,6 +481,10 @@ def aggregate_events(
         agg.net_sales_cents += ev.net_cents
         agg.tax_cents += ev.tax_cents
         for item in ev.items:
+            # Voided lines are visible in the transaction viewer but
+            # never money. Parsing keeps them; totals must not.
+            if item.status != LINE_STATUS_NORMAL:
+                continue
             code = item.merchandise_code or "?"
             agg.departments[code] = (
                 agg.departments.get(code, 0) + item.amount_cents
@@ -392,6 +500,8 @@ def aggregate_events(
                 grade.gallons += item.gallons
                 grade.amount_cents += item.amount_cents
         for tender in ev.tenders:
+            if tender.status != LINE_STATUS_NORMAL:
+                continue
             # Change lines are already negative — summing yields
             # net money taken in per tender bucket.
             if tender.code in CASH_TENDER_CODES:
@@ -408,7 +518,8 @@ def aggregate_events(
 
 
 __all__ = [
-    "CARD_TENDER_CODES", "CASH_TENDER_CODES", "FuelGradeAggregate",
+    "CARD_TENDER_CODES", "CASH_TENDER_CODES",
+    "LINE_STATUS_CANCEL", "LINE_STATUS_NORMAL", "FuelGradeAggregate",
     "OUTSIDE_REGISTER_KEY", "OUTSIDE_REGISTER_LABEL",
     "PjrEvent", "PjrItemLine", "PjrTender", "PosJournalParseError",
     "RegisterDayAggregate", "aggregate_events", "parse_pjr",

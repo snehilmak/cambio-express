@@ -390,9 +390,13 @@ def staged_events_for_day(
     events: list[PjrEvent] = []
     for f in files:
         try:
-            events.append(parse_pjr(gzip.decompress(f.content_gz)))
+            event = parse_pjr(gzip.decompress(f.content_gz))
         except (PosJournalParseError, OSError):
             continue
+        # Carry the filename through so the persisted transaction
+        # (G-5) can key on it and stay idempotent across re-commits.
+        event.source_file = f.filename
+        events.append(event)
     return events
 
 

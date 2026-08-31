@@ -213,12 +213,18 @@ def rebuild_item_day_sales(
     """Replace the day's per-item movement rows from its events
     (G-2). Same delete-and-rebuild posture as the hourly buckets:
     every (re)commit makes the stored movement the exact sum of
-    the staged originals. Cancelled lines never reach ``items``
-    (skipped at parse), refund quantities/amounts are negative
+    the staged originals. Refund quantities/amounts are negative
     end-to-end so they net out, and fuel/code-less lines are
     excluded (fuel is grade volume; a code-less line can't be
-    tracked as an item)."""
+    tracked as an item).
+
+    Cancelled lines are skipped HERE. They used to be dropped at
+    parse time; G-5 keeps them so the transaction viewer can show a
+    voided item, which means every consumer that sums money now
+    owns the filter. Selling a $5.49 item and voiding it mid-sale
+    must move zero units."""
     from api.Modules.PosImport.Models import PosItemDaySale
+    from api.Modules.PosImport.Services.naxml import LINE_STATUS_NORMAL
 
     qty: dict[str, float] = {}
     cents: dict[str, int] = {}
@@ -228,6 +234,8 @@ def rebuild_item_day_sales(
         if e.kind not in ("sale", "refund") or e.business_date != day:
             continue
         for line in e.items:
+            if line.status != LINE_STATUS_NORMAL:
+                continue
             if line.is_fuel or not line.pos_code:
                 continue
             code = line.pos_code
@@ -254,6 +262,123 @@ def rebuild_item_day_sales(
         ))
     db.flush()
     return len(cents)
+
+
+def rebuild_transactions(
+    db: Session, store_id: int, day: date, events: list[PjrEvent],
+) -> int:
+    """Replace the day's persisted transactions from its events
+    (G-5). Same delete-and-rebuild posture as the hourly buckets and
+    item movement: after every (re)commit the stored transactions
+    are exactly what the staged originals say.
+
+    Unlike the aggregates, this keeps EVERYTHING — refunds, voids,
+    register opens, financial events, and the individual lines the
+    register cancelled mid-sale. Nothing here is summed into a
+    total, so nothing needs filtering out; the callers that DO sum
+    (aggregate_events, rebuild_item_day_sales) own that filter.
+
+    Events with no ``source_file`` are skipped: without it there is
+    no idempotence key, and a re-commit would duplicate them.
+    """
+    from api.Modules.PosImport.Models import (
+        PosTransaction, PosTransactionLine, PosTransactionTender,
+    )
+    from api.Modules.PosImport.Services.naxml import LINE_STATUS_NORMAL
+
+    # Children go first — the FK is ON DELETE CASCADE in Postgres,
+    # but SQLite doesn't enforce it by default, so be explicit.
+    existing = [
+        row.id for row in
+        db.query(PosTransaction.id)
+        .filter_by(store_id=store_id, business_date=day)
+        .all()
+    ]
+    if existing:
+        for model in (PosTransactionLine, PosTransactionTender):
+            (
+                db.query(model)
+                .filter(model.transaction_id.in_(existing))
+                .delete(synchronize_session=False)
+            )
+        (
+            db.query(PosTransaction)
+            .filter(PosTransaction.id.in_(existing))
+            .delete(synchronize_session=False)
+        )
+        db.flush()
+
+    written = 0
+    for e in events:
+        if e.business_date != day or not e.source_file:
+            continue
+        txn = PosTransaction(
+            store_id=store_id,
+            business_date=day,
+            source_file=e.source_file[:120],
+            kind=e.kind,
+            register_id=(e.register_id or "")[:20],
+            cashier_id=(e.cashier_id or "")[:20],
+            till_id=(e.till_id or "")[:20],
+            transaction_no=(e.transaction_id or "")[:30],
+            event_sequence_id=(e.event_sequence_id or "")[:20],
+            started_at=e.started_at,
+            ended_at=e.ended_at,
+            receipt_at=e.receipt_at,
+            event_hour=e.event_hour,
+            outside=e.outside,
+            training_mode=e.training_mode,
+            offline=e.offline,
+            suspended=e.suspended,
+            gross_cents=e.gross_cents,
+            net_cents=e.net_cents,
+            tax_cents=e.tax_cents,
+            grand_total_cents=e.grand_total_cents,
+            has_voided_line=any(
+                i.status != LINE_STATUS_NORMAL for i in e.items
+            ),
+        )
+        db.add(txn)
+        db.flush()  # need txn.id for the children
+
+        for line in e.items:
+            db.add(PosTransactionLine(
+                transaction_id=txn.id,
+                store_id=store_id,
+                business_date=day,
+                line_seq=line.line_seq,
+                status=line.status,
+                pos_code=(line.pos_code or "")[:30],
+                pos_code_format=(line.pos_code_format or "")[:20],
+                description=(line.description or "")[:160],
+                entry_method=(line.entry_method or "")[:20],
+                merchandise_code=(line.merchandise_code or "")[:20],
+                selling_units=(line.selling_units or "")[:20],
+                tax_level_id=(line.tax_level_id or "")[:20],
+                quantity=float(line.quantity or 0),
+                amount_cents=int(line.amount_cents or 0),
+                actual_price_cents=int(line.actual_price_cents or 0),
+                regular_price_cents=int(line.regular_price_cents or 0),
+                is_fuel=line.is_fuel,
+                fuel_grade_id=(line.fuel_grade_id or "")[:10],
+                fuel_position=(line.fuel_position or "")[:10],
+                gallons=float(line.gallons or 0),
+            ))
+        for tender in e.tenders:
+            db.add(PosTransactionTender(
+                transaction_id=txn.id,
+                store_id=store_id,
+                business_date=day,
+                status=tender.status,
+                code=(tender.code or "")[:30],
+                sub_code=(tender.sub_code or "")[:30],
+                amount_cents=int(tender.amount_cents or 0),
+                is_change=tender.is_change,
+            ))
+        written += 1
+
+    db.flush()
+    return written
 
 
 @dataclass
@@ -317,6 +442,7 @@ def commit_business_day(
         registers.append(label)
     rebuild_hourly_sales(db, store_id, day, events)
     rebuild_item_day_sales(db, store_id, day, events)
+    rebuild_transactions(db, store_id, day, events)
     return CommitDayResult(
         day=day, closes_written=len(days), registers=registers,
     )
@@ -327,5 +453,6 @@ __all__ = [
     "MAX_PAYLOAD_BYTES", "PosImportError", "commit_business_day",
     "list_mappings", "load_pjr_payload", "mapping_status",
     "rebuild_hourly_sales", "rebuild_item_day_sales",
+    "rebuild_transactions",
     "register_label_for", "set_mappings",
 ]

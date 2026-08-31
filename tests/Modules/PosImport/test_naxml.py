@@ -17,6 +17,7 @@ the repo. The invariants under test:
 import pytest
 
 from api.Modules.PosImport.Services import (
+    LINE_STATUS_CANCEL,
     PosJournalParseError,
     aggregate_events,
     parse_pjr,
@@ -235,11 +236,36 @@ def test_parse_refund_is_negative():
     assert ev.items[0].amount_cents == -2000
 
 
-def test_void_event_has_no_countable_lines():
+def test_void_event_lines_are_visible_but_never_money():
+    """A void's lines are PARSED and kept (G-5 — the operator needs
+    to see what was voided) but flagged `cancel`, and contribute
+    nothing to any total.
+
+    This pairs with `test_cancelled_lines_never_reach_day_totals`
+    below: parsing them and counting them are different questions,
+    and getting the second one wrong silently inflates a day.
+    """
     ev = parse_pjr(VOID)
     assert ev.kind == "void"
-    assert ev.items == []
-    assert ev.tenders == []
+    # Visible...
+    assert ev.items, "voided lines must not vanish from the record"
+    # ...but every one of them flagged, so nothing counts.
+    assert all(i.status == LINE_STATUS_CANCEL for i in ev.items)
+    assert all(t.status == LINE_STATUS_CANCEL for t in ev.tenders)
+
+
+def test_cancelled_lines_never_reach_day_totals():
+    """The invariant the viewer change must not break: a void event
+    still rolls up to zero sales, zero departments, zero tender."""
+    ev = parse_pjr(VOID)
+    if ev.business_date is None:
+        pytest.skip("fixture carries no business date")
+    aggs = aggregate_events([ev])
+    for agg in aggs:
+        assert agg.departments == {}
+        assert agg.cash_cents == 0
+        assert agg.card_cents == 0
+        assert agg.other_tender_cents == 0
 
 
 def test_register_open_captures_drawer_float():
