@@ -68,6 +68,9 @@ def _register_routers(app: FastAPI) -> None:
     from api.Modules.PosImport.Controllers import router as posimport_router
     app.include_router(posimport_router)
 
+    from api.Modules.StoreBook.Controllers import router as storebook_router
+    app.include_router(storebook_router)
+
     from api.Modules.Catalog.Controllers import router as catalog_router
     app.include_router(catalog_router)
 

@@ -248,6 +248,7 @@ def month_summary(
 
 
 __all__ = [
+    "COUNT_FIELDS",
     "DayLockedError", "StoreBookError", "apply_import",
     "column_totals", "get_or_create_entry", "is_locked",
     "month_summary", "originals_for", "over_short_cents",
