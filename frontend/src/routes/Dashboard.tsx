@@ -161,8 +161,8 @@ function AdminPanel({ d }: { d: AdminDashboard }) {
               label="Today's sales"
               value={fmtMoney2(d.sales.today)}
               sub={
-                <Link to="/day-close" className="ds-link" style={{ color: tokens.accent }}>
-                  Open day close →
+                <Link to="/store-book" className="ds-link" style={{ color: tokens.accent }}>
+                  Open daily book →
                 </Link>
               }
               tone="positive"
@@ -704,8 +704,8 @@ function EmployeePanel({ d }: { d: EmployeeDashboard }) {
             label={`Store sales (${shortDate(d.day_close.date)})`}
             value={fmtMoney2(d.day_close.gross_sales)}
             sub={
-              <Link to="/day-close" className="ds-link" style={{ color: tokens.accent }}>
-                Open day close →
+              <Link to="/store-book" className="ds-link" style={{ color: tokens.accent }}>
+                Open daily book →
               </Link>
             }
           />

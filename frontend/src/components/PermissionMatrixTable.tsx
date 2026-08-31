@@ -24,7 +24,7 @@ export const RESOURCE_LABELS: Record<string, string> = {
   time_clock: "Time clock (HR)",
   return_checks: "Returned checks",
   lottery: "Lottery",
-  day_close: "Day close",
+  day_close: "Store daily book",
   catalog: "Price book & purchases",
 };
 

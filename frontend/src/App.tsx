@@ -78,7 +78,6 @@ const Reports = lazy(() => import("./routes/Reports"));
 const ResetPassword = lazy(() => import("./routes/ResetPassword"));
 const ReturnCheckForm = lazy(() => import("./routes/ReturnCheckForm"));
 const Lottery = lazy(() => import("./routes/Lottery"));
-const DayClose = lazy(() => import("./routes/DayClose"));
 const PriceBook = lazy(() => import("./routes/PriceBook"));
 const PurchaseInvoices = lazy(() => import("./routes/PurchaseInvoices"));
 const PurchaseInvoiceForm = lazy(
@@ -301,7 +300,10 @@ export default function App() {
           <Route path="lottery"                element={<RequirePermission resource="lottery" action="read"><Lottery /></RequirePermission>} />
           <Route path="store-book"             element={<RequirePermission resource="day_close" action="read"><StoreBookMonth /></RequirePermission>} />
           <Route path="store-book/day"         element={<RequirePermission resource="day_close" action="read"><StoreBookDay /></RequirePermission>} />
-          <Route path="day-close"              element={<RequirePermission resource="day_close" action="read"><DayClose /></RequirePermission>} />
+          {/* Day close folded into the store daily book — the day
+              sheet carries the register detail as a section. Kept as
+              a redirect for bookmarks and old links. */}
+          <Route path="day-close"              element={<Navigate to="/store-book" replace />} />
           <Route path="pos-import"             element={<RequirePermission resource="day_close" action="update"><PosImport /></RequirePermission>} />
           <Route path="price-book"             element={<RequirePermission resource="catalog" action="read"><PriceBook /></RequirePermission>} />
           <Route path="purchase-invoices"      element={<RequirePermission resource="catalog" action="read"><PurchaseInvoices /></RequirePermission>} />

@@ -12,6 +12,7 @@ import {
   IconButton, Input, Loading, MoneyInput, PageHeader, PageShell,
   Textarea, useToast,
 } from "../components/ui";
+import RegisterCloses from "../components/RegisterCloses";
 import { ApiError } from "../lib/api";
 import { fmtMoney2 } from "../lib/formatters";
 import { formatDate } from "../lib/datetime";
@@ -341,6 +342,11 @@ export default function StoreBookDay() {
           </div>
         ))}
       </div>
+
+      {/* Per-register Z-report detail for the same day. The sheet
+          above is what the store banked; this is which drawer it
+          came out of — one screen, one day. */}
+      <RegisterCloses day={day} canEdit={!locked} />
 
       <Card>
         <Field label="Notes">

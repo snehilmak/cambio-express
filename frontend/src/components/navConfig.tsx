@@ -52,8 +52,8 @@ export const NAV: NavGroup[] = [
     items: [],
   },
   {
-    // Daily operations. The store-level retail modules (Day close /
-    // Lottery / Price book) carry roles: superadmin is the platform
+    // Daily operations. The store-level retail modules (Store
+    // daily book / Lottery / Price book) carry roles: superadmin is the platform
     // operator, not a store — store modules stay off their nav
     // (they can still reach any route directly for support).
     title: "Daily",

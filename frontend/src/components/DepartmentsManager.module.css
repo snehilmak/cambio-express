@@ -1,0 +1,21 @@
+/* Department catalog — the few treatments the kit primitives don't
+   cover. Moved here from DayClose.module.css when the catalog left
+   the close-out screen for the price book. */
+
+.modalForm {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.modalActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.actions {
+  display: flex;
+  gap: 0.5rem;
+}
+

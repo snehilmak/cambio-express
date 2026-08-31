@@ -24,8 +24,8 @@ import styles from "./PosImport.module.css";
  * folder's zip of) NAXML journal files, review the per-register
  * aggregates, map the register's numeric department codes onto
  * this store's own departments, and book one business day into
- * Day close. Until the site agent ships, the operator grabs the
- * files from the register's back-office share.
+ * the store daily book. Until the site agent ships, the operator
+ * grabs the files from the register's back-office share.
  */
 export default function PosImport() {
   const qc = useQueryClient();
@@ -102,7 +102,10 @@ export default function PosImport() {
         + `(${result.registers.join(", ")}).`,
       );
       void qc.invalidateQueries({ queryKey: ["dayclose"] });
-      toast({ message: "Day imported into Day close.", tone: "success" });
+      toast({
+        message: "Day imported into the store daily book.",
+        tone: "success",
+      });
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not import the day.");
     } finally {
@@ -131,14 +134,14 @@ export default function PosImport() {
   return (
     <PageShell maxWidth="64rem">
       <Breadcrumbs crumbs={[
-        { label: "Day close", to: "/day-close" },
+        { label: "Store daily book", to: "/store-book" },
         { label: "Register import" },
       ]} />
       <PageHeader
         title={
           <>
             Register import
-            <InfoTip text="Upload the XML journal files your Gilbarco register writes to its back-office folder — one file or a ZIP of many. Review the totals, map the register's department codes to your departments once, then book the day into Day close." />
+            <InfoTip text="Upload the XML journal files your Gilbarco register writes to its back-office folder — one file or a ZIP of many. Review the totals, map the register's department codes to your departments once, then book the day into the store daily book." />
           </>
         }
         subtitle="Import a Gilbarco day close from the register's journal files."
@@ -235,7 +238,7 @@ export default function PosImport() {
               body={
                 <>
                   Set up your departments first on the{" "}
-                  <Link to="/day-close">Day close page</Link> — the
+                  <Link to="/price-book">Price book’s Departments tab</Link> — the
                   starter set takes one click.
                 </>
               }
@@ -271,7 +274,7 @@ export default function PosImport() {
         >
           {committed && (
             <Alert tone="success">
-              {committed} <Link to="/day-close">Open Day close</Link>
+              {committed} <Link to="/store-book">Open the store daily book</Link>
             </Alert>
           )}
           {unmapped.length > 0 && (

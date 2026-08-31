@@ -438,7 +438,7 @@ def test_store_report_collection_is_separate(authed_client):
         r for r in cats["store_sales"]["reports"]
         if r["key"] == "day_close_summary"
     )
-    assert day_close["url"] == "/day-close"
+    assert day_close["url"] == "/store-book"
     assert day_close["status"] == "ready"
     trends = next(
         r for r in cats["store_sales"]["reports"]

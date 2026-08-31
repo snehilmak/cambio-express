@@ -94,7 +94,7 @@ describe("filterNavForRole → section-hub resolution", () => {
     const labels = filterNavForRole("superadmin", [])
       .flatMap((g) => g.items.map((i) => i.label));
     for (const storeOnly of [
-      "MSB Daily book", "Day close", "Lottery", "Price book", "Purchases",
+      "MSB Daily book", "Store Daily book", "Lottery", "Price book", "Purchases",
     ]) {
       expect(labels).not.toContain(storeOnly);
     }
