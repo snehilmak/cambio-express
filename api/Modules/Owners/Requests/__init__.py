@@ -195,13 +195,17 @@ from pydantic import Field
 
 class OwnerBulkAddUserRequest(BaseModel):
     """POST body for ``/owner/bulk-add-user``. Creates the same
-    login (username + password) at every store in ``store_ids``
-    that's actually in the owner's umbrella. Stores outside the
-    umbrella are reported as ``rejected`` rather than 403'd so
-    the operator sees the full result table."""
+    login at every store in ``store_ids`` that's actually in the
+    owner's umbrella. Stores outside the umbrella are reported as
+    ``rejected`` rather than 403'd so the operator sees the full
+    result table.
+
+    The person is identified by email and/or phone (L-2) — at
+    least one is required."""
     model_config = ConfigDict(extra="forbid")
 
-    username:  str = Field(..., min_length=1, max_length=80)
+    email:     str | None = Field(None, max_length=255)
+    phone:     str | None = Field(None, max_length=40)
     password:  str = Field(..., min_length=8, max_length=200)
     full_name: str = Field("", max_length=120)
     role:      Literal["employee"] = "employee"

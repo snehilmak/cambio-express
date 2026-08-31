@@ -91,6 +91,7 @@ files = [
     "api/Modules/Auth/Requests/profile.py",
     "api/Modules/Auth/Requests/push.py",
     "api/Modules/Auth/Requests/sessions.py",
+    "api/Modules/Auth/Services/identity.py",
     "api/Modules/Auth/Services/jwt_issuer.py",
     "api/Modules/Auth/Services/notifications.py",
     "api/Modules/Auth/Services/passkey.py",

@@ -18,7 +18,7 @@ import styles from "./OwnerBulkAddUser.module.css";
 // login at many of their linked stores at once. Useful for a
 // regional manager who needs the same credentials across every
 // store in the umbrella. Server creates N independent User rows
-// (one per store) sharing the same username + password — single-
+// (one per store) sharing the same email/phone + password — single-
 // row multi-store user is a separate architectural item.
 
 export default function OwnerBulkAddUser() {
@@ -26,7 +26,8 @@ export default function OwnerBulkAddUser() {
   const { data: locations, isLoading, isError, refetch } =
     useOwnerLocations("month", "");
 
-  const [username, setUsername]   = useState("");
+  const [email, setEmail]         = useState("");
+  const [phone, setPhone]         = useState("");
   const [password, setPassword]   = useState("");
   const [fullName, setFullName]   = useState("");
   const [role]                    = useState<"employee">("employee");
@@ -70,7 +71,8 @@ export default function OwnerBulkAddUser() {
     setErr(null); setResults(null); setBusy(true);
     try {
       const out = await bulkAddUser({
-        username: username.trim(),
+        email: email.trim(),
+        phone: phone.trim(),
         password,
         full_name: fullName.trim(),
         role,
@@ -100,9 +102,9 @@ export default function OwnerBulkAddUser() {
       <PageHeader
         title="Bulk add user"
         subtitle={
-          "Create the same login (username + password) at every "
-          + "store you select. Skips stores that already have a "
-          + "user with this username."
+          "Create the same login at every store you select. They "
+          + "sign in with their email or phone, and pick which store "
+          + "to open. Skips stores that already have this person."
         }
       />
 
@@ -127,13 +129,25 @@ export default function OwnerBulkAddUser() {
           <Card>
             <Section>
               <div className={styles.grid}>
-                <Field label="Email / username">
+                <Field
+                  label="Email"
+                  hint="They sign in with this. Either email or phone is enough."
+                >
                   <Input
-                    type="email" required maxLength={80}
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
+                    type="email" maxLength={255}
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
                     autoComplete="off"
                     placeholder="manager@example.com"
+                  />
+                </Field>
+                <Field label="Mobile phone">
+                  <Input
+                    type="tel" maxLength={40}
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    autoComplete="off"
+                    placeholder="(555) 123-4567"
                   />
                 </Field>
                 <Field
@@ -200,7 +214,7 @@ export default function OwnerBulkAddUser() {
                 busy={busy}
                 disabled={
                   busy
-                  || !username.trim()
+                  || (!email.trim() && !phone.trim())
                   || password.length < 8
                   || storeIds.length === 0
                 }

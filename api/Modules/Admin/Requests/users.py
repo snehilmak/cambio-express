@@ -34,9 +34,14 @@ class AdminUserDetailResponse(BaseModel):
 
 
 class AdminUserCreateRequest(BaseModel):
+    """New logins are identified by email and/or phone — there is no
+    username to type. At least one of `email` / `phone` must be
+    present; the Service raises 422 when both are blank."""
+
     model_config = ConfigDict(extra="forbid")
 
-    username:  str = Field(..., min_length=1, max_length=80)
+    email:     str | None = Field(None, max_length=255)
+    phone:     str | None = Field(None, max_length=40)
     password:  str = Field(..., min_length=1, max_length=200)
     full_name: str = Field("", max_length=120)
     role:      str = Field("employee", min_length=1, max_length=20)

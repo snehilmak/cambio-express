@@ -429,7 +429,20 @@
       },
       "AdminUserCreateRequest": {
         "additionalProperties": false,
+        "description": "New logins are identified by email and/or phone \u2014 there is no\nusername to type. At least one of `email` / `phone` must be\npresent; the Service raises 422 when both are blank.",
         "properties": {
+          "email": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
           "full_name": {
             "default": "",
             "maxLength": 120,
@@ -474,22 +487,27 @@
             ],
             "title": "Permissions"
           },
+          "phone": {
+            "anyOf": [
+              {
+                "maxLength": 40,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phone"
+          },
           "role": {
             "default": "employee",
             "maxLength": 20,
             "minLength": 1,
             "title": "Role",
             "type": "string"
-          },
-          "username": {
-            "maxLength": 80,
-            "minLength": 1,
-            "title": "Username",
-            "type": "string"
           }
         },
         "required": [
-          "username",
           "password"
         ],
         "title": "AdminUserCreateRequest",
@@ -7838,8 +7856,20 @@
       },
       "OwnerBulkAddUserRequest": {
         "additionalProperties": false,
-        "description": "POST body for ``/owner/bulk-add-user``. Creates the same\nlogin (username + password) at every store in ``store_ids``\nthat's actually in the owner's umbrella. Stores outside the\numbrella are reported as ``rejected`` rather than 403'd so\nthe operator sees the full result table.",
+        "description": "POST body for ``/owner/bulk-add-user``. Creates the same\nlogin at every store in ``store_ids`` that's actually in the\nowner's umbrella. Stores outside the umbrella are reported as\n``rejected`` rather than 403'd so the operator sees the full\nresult table.\n\nThe person is identified by email and/or phone (L-2) \u2014 at\nleast one is required.",
         "properties": {
+          "email": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
           "full_name": {
             "default": "",
             "maxLength": 120,
@@ -7851,6 +7881,18 @@
             "minLength": 8,
             "title": "Password",
             "type": "string"
+          },
+          "phone": {
+            "anyOf": [
+              {
+                "maxLength": 40,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phone"
           },
           "role": {
             "const": "employee",
@@ -7866,16 +7908,9 @@
             "minItems": 1,
             "title": "Store Ids",
             "type": "array"
-          },
-          "username": {
-            "maxLength": 80,
-            "minLength": 1,
-            "title": "Username",
-            "type": "string"
           }
         },
         "required": [
-          "username",
           "password",
           "store_ids"
         ],
@@ -17217,7 +17252,7 @@
         ]
       },
       "post": {
-        "description": "Create a new User in the principal's store. Username must\nbe unique within the store; password is hashed via\n`User.set_password` (never stored raw). Role limited to\n'admin' / 'employee'.",
+        "description": "Create a new User in the principal's store.\n\nThe person signs in with their email address or phone number \u2014\nat least one is required, and it must be unused at this store.\nPassword is hashed via `User.set_password` (never stored raw).\nRole limited to 'admin' / 'employee'.",
         "operationId": "create_user_route_admin_users_post",
         "parameters": [
           {
@@ -18380,7 +18415,7 @@
     },
     "/auth/login-cross-store": {
       "post": {
-        "description": "Cross-store JWT login for the SPA's generic landing page.\nSame response shape as `/auth/login`, but takes\nusername + password only \u2014 the user's home store is looked\nup across every store. Employees are rejected here so they\nuse their store's slug-scoped sign-in page.",
+        "description": "Cross-store JWT login for the SPA's sign-in page. Same\nresponse shape as `/auth/login`, but takes username +\npassword only \u2014 the store is resolved from the credentials.\n\n**Every role signs in here, employees included.** The old\nemployee rejection (\"use your store's sign-in page\") predates\nthe unified sign-in page and left employee logins unusable.\n\nReturns 409 with `{code: \"store_ambiguous\", stores: [...]}`\nwhen the same credentials are valid at more than one store;\nthe client re-submits to `/auth/login` with the chosen\n`store_id`.",
         "operationId": "login_cross_store_route_auth_login_cross_store_post",
         "requestBody": {
           "content": {

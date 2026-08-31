@@ -224,6 +224,13 @@ class User(Base):
     # validation lives in _update_user_profile.
     email            = Column(String(255), default="")
     phone            = Column(String(40), default="")
+    # Canonical form of `phone`, digits only with the NANP country
+    # code dropped — see api/Modules/Auth/Services/identity.py. Sign-in
+    # matches on THIS, never on `phone`: `phone` holds the number as
+    # the operator typed it ("(555) 123-4567") and a login has to work
+    # whatever punctuation the person uses. Maintained on write by
+    # `set_login_phone`; indexed because sign-in filters on it alone.
+    login_phone      = Column(String(20), default="", index=True)
     timezone         = Column(String(60), default="")
     last_login_at    = Column(DateTime, nullable=True)
     # UI theme preference. Dark is the design-system default; users
@@ -289,6 +296,16 @@ class User(Base):
         # scan the table without this index.
         Index("ix_user_username", "username"),
     )
+
+    def set_login_phone(self, raw: str | None) -> None:
+        """Set `phone` as typed and `login_phone` to its canonical
+        form. Always go through this rather than assigning `phone`
+        directly — a raw assignment leaves `login_phone` stale and
+        the person silently loses phone sign-in."""
+        from api.Modules.Auth.Services.identity import normalize_phone
+        setattr(self, "phone", (raw or "").strip())
+        setattr(self, "login_phone", normalize_phone(raw))
+
     def set_password(self, pw: str) -> None:
         # ``password_hash`` is declared via SQLAlchemy 1.x
         # ``Column[str]``; the instrumented attribute accepts a

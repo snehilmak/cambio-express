@@ -1022,25 +1022,32 @@ def create_user_route(
     db: Session = Depends(get_db),
     claims: dict[str, Any] = Depends(get_principal),
 ) -> AdminUserRow:
-    """Create a new User in the principal's store. Username must
-    be unique within the store; password is hashed via
-    `User.set_password` (never stored raw). Role limited to
-    'admin' / 'employee'."""
+    """Create a new User in the principal's store.
+
+    The person signs in with their email address or phone number —
+    at least one is required, and it must be unused at this store.
+    Password is hashed via `User.set_password` (never stored raw).
+    Role limited to 'admin' / 'employee'.
+    """
     require_permission(claims, "users", "create")
     store_id = resolve_store_scope(claims)
     try:
         user = create_store_user(
             db, store_id=store_id,
-            username=body.username,
+            email=body.email or "",
+            phone=body.phone or "",
             password=body.password,
             full_name=body.full_name,
             role=body.role,
             module_access=body.module_access,
         )
     except UsernameTakenError as exc:
+        # Anchor the error on the field the operator actually filled
+        # in, so the SPA can highlight it inline.
+        field = "email" if (body.email or "").strip() else "phone"
         raise HTTPException(
             status_code=422,
-            detail={"field_errors": {"username": str(exc)}},
+            detail={"field_errors": {field: str(exc)}},
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc))

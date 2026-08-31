@@ -25,7 +25,12 @@ import styles from "./AdminUserForm.module.css";
 type AccessMode = "role" | "hr" | "bookkeeper" | "custom";
 
 interface UserDraft {
+  // Identity. New logins are created with email and/or phone (L-2);
+  // `username` is the stored identifier, shown read-only on edit and
+  // never typed by hand.
   username:  string;
+  email:     string;
+  phone:     string;
   full_name: string;
   role:      string;
   is_active: boolean;
@@ -42,7 +47,8 @@ interface UserDraft {
 
 function makeBlankUser(): UserDraft {
   return {
-    username: "", full_name: "", role: "employee", is_active: true,
+    username: "", email: "", phone: "",
+    full_name: "", role: "employee", is_active: true,
     password: "", restrict: false, modules: [],
     access: "role", perm: null,
   };
@@ -309,7 +315,8 @@ export default function AdminUserForm() {
         }
       } else {
         const body: AdminUserCreateBody = {
-          username:  draft.username.trim(),
+          email:     draft.email.trim(),
+          phone:     draft.phone.trim(),
           password:  draft.password,
           full_name: draft.full_name,
           role:      draft.role,
@@ -377,17 +384,45 @@ export default function AdminUserForm() {
           style={{ display: "flex", flexDirection: "column", gap: space.lg, marginTop: space.lg }}
         >
           {!isEdit ? (
-            <Field label="Username *" error={fieldErrors.username}>
-              <Input
-                type="text" maxLength={80} required
-                placeholder="e.g. maria.lopez"
-                value={draft.username}
-                onChange={(e) => set("username", e.target.value)}
-                disabled={busy}
-              />
-            </Field>
+            <>
+              <Field
+                label="Email"
+                error={fieldErrors.email}
+                hint={
+                  "They sign in with this. Also where password-reset "
+                  + "links go."
+                }
+              >
+                <Input
+                  type="email" maxLength={255}
+                  placeholder="maria.lopez@store.com"
+                  value={draft.email}
+                  onChange={(e) => set("email", e.target.value)}
+                  disabled={busy}
+                />
+              </Field>
+              <Field
+                label="Mobile phone"
+                error={fieldErrors.phone}
+                hint={
+                  "Works as a sign-in too — useful for staff with no "
+                  + "email address. Either one is enough."
+                }
+              >
+                <Input
+                  type="tel" maxLength={40}
+                  placeholder="(555) 123-4567"
+                  value={draft.phone}
+                  onChange={(e) => set("phone", e.target.value)}
+                  disabled={busy}
+                />
+              </Field>
+            </>
           ) : (
-            <Field label="Username">
+            <Field
+              label="Signs in with"
+              hint="Change this from the employee's Profile tab."
+            >
               <Input
                 type="text" disabled
                 value={draft.username}

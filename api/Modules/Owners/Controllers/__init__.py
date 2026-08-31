@@ -381,7 +381,8 @@ def owner_bulk_add_user_route(
             db,
             owner_id=user.id,
             store_ids=list(body.store_ids),
-            username=body.username,
+            email=body.email or "",
+            phone=body.phone or "",
             password=body.password,
             full_name=body.full_name,
             role=body.role,
@@ -392,6 +393,11 @@ def owner_bulk_add_user_route(
     # Audit one row per successful create. Skipped / rejected
     # don't get audit entries — nothing mutated.
     from api.Modules.Audit.Services import record_operator_action
+    from api.Modules.Auth.Services.identity import login_identifier
+
+    # The identifier the person will actually sign in with — same
+    # value the Service stored, so the audit trail matches the login.
+    _bulk_add_label = login_identifier(body.email, body.phone)
     for r in raw_results:
         if r["status"] != "created":
             continue
@@ -403,10 +409,10 @@ def owner_bulk_add_user_route(
             user_role=user.role,
             target_type="user",
             target_id="",
-            target_label=body.username,
+            target_label=_bulk_add_label,
             action="create",
             summary=(
-                f"Owner bulk-added {body.role} '{body.username}'"
+                f"Owner bulk-added {body.role} '{_bulk_add_label}'"
             ),
         )
     db.commit()

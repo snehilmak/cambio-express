@@ -181,10 +181,10 @@ function PrimaryForm({
       {error && <Alert tone="error">{error}</Alert>}
 
       <form onSubmit={onSubmit} style={{ display: "flex", flexDirection: "column", gap: "0.85rem" }}>
-        <Field label="Username">
+        <Field label="Email or phone">
           <Input
             type="text"
-            placeholder="admin@store.com"
+            placeholder="you@store.com or (555) 123-4567"
             autoFocus required
             autoComplete="username"
             value={username}
