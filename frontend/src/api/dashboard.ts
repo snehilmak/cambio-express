@@ -104,6 +104,31 @@ export interface PurchasesBlock {
   open_total: number;
 }
 
+// What the register itself did on the latest booked day (D-4).
+// null until the store has booked a business day from its POS, so
+// a hand-keyed store never sees an empty block.
+export interface RegisterActivityBlock {
+  date: string;
+  is_today: boolean;
+  receipts: number;
+  voided_tickets: number;
+  refunds: number;
+  total_rung: number;
+  fuel_gallons: number;
+  fuel_sales: number;
+}
+
+export interface ReceiptRow {
+  id: number;
+  transaction_no: string;
+  register_id: string;
+  cashier_id: string;
+  receipt_at: string | null;
+  business_date: string;
+  total: number;
+  has_voided_line: boolean;
+}
+
 export interface ClockedInRow {
   name: string;
   clock_in_at: string | null;
@@ -118,6 +143,8 @@ export interface AdminDashboard {
   sales: SalesBlock | null;
   purchases: PurchasesBlock | null;
   clocked_in: ClockedInRow[];
+  register: RegisterActivityBlock | null;
+  recent_receipts: ReceiptRow[];
   kpis: AdminDashboardKpis;
   company_stats: CompanyStat[];
   recent_transfers: DashboardTransferRow[];
@@ -144,6 +171,7 @@ export interface EmployeeDashboard {
   modules: string[];
   day_close: DayCloseSnapshot | null;
   lottery: LotterySnapshot | null;
+  register: RegisterActivityBlock | null;
   today_transfers: EmployeeTodayRow[];
   totals: { sent: number; fees: number; count: number };
 }

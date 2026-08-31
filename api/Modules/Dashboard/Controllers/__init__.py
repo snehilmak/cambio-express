@@ -70,6 +70,114 @@ def _day_close_snapshot(
     }
 
 
+def _register_activity(
+    db: Session, store_id: int, today: date,
+) -> dict[str, Any] | None:
+    """What the register itself did on the latest booked day
+    (D-4): ticket count, voids, refunds, and fuel.
+
+    Every competitor's dashboard leads with these because they are
+    the numbers a manager scans for trouble — a void count that
+    jumps, a refund that should not be there. We have had the data
+    since transactions were persisted; this surfaces it.
+
+    ``None`` until the store has booked a business day from its
+    register, so a store that keys its book by hand never sees an
+    empty block.
+
+    Fuel gallons deliberately exclude cancelled lines, like every
+    other total in this codebase: a voided pump sale did not move
+    fuel.
+    """
+    from sqlalchemy import func
+
+    from api.Modules.PosImport.Models import (
+        PosTransaction, PosTransactionLine,
+    )
+
+    latest = (
+        db.query(PosTransaction.business_date)
+        .filter(PosTransaction.store_id == store_id)
+        .order_by(PosTransaction.business_date.desc())
+        .first()
+    )
+    if latest is None:
+        return None
+    target = latest[0]
+
+    base = db.query(PosTransaction).filter(
+        PosTransaction.store_id == store_id,
+        PosTransaction.business_date == target,
+    )
+    receipts = base.count()
+    voided = base.filter(PosTransaction.has_voided_line.is_(True)).count()
+    refunds = base.filter(PosTransaction.kind == "refund").count()
+    rung_cents = (
+        base.with_entities(
+            func.coalesce(func.sum(PosTransaction.grand_total_cents), 0),
+        ).scalar() or 0
+    )
+
+    fuel = (
+        db.query(
+            func.coalesce(func.sum(PosTransactionLine.gallons), 0.0),
+            func.coalesce(func.sum(PosTransactionLine.amount_cents), 0),
+        )
+        .filter(
+            PosTransactionLine.store_id == store_id,
+            PosTransactionLine.business_date == target,
+            PosTransactionLine.is_fuel.is_(True),
+            PosTransactionLine.status != "cancel",
+        )
+        .one()
+    )
+
+    return {
+        "date": target.isoformat(),
+        "is_today": target == today,
+        "receipts": receipts,
+        "voided_tickets": voided,
+        "refunds": refunds,
+        "total_rung": int(rung_cents) / 100.0,
+        "fuel_gallons": float(fuel[0] or 0.0),
+        "fuel_sales": int(fuel[1] or 0) / 100.0,
+    }
+
+
+def _recent_receipts(
+    db: Session, store_id: int, limit: int = 6,
+) -> list[dict[str, Any]]:
+    """The last few tickets, for the receipts panel. Newest first."""
+    from api.Modules.PosImport.Models import PosTransaction
+
+    rows = (
+        db.query(PosTransaction)
+        .filter(PosTransaction.store_id == store_id)
+        .order_by(
+            PosTransaction.business_date.desc(),
+            PosTransaction.receipt_at.desc(),
+            PosTransaction.id.desc(),
+        )
+        .limit(limit)
+        .all()
+    )
+    return [
+        {
+            "id": t.id,
+            "transaction_no": t.transaction_no or "",
+            "register_id": t.register_id or "",
+            "cashier_id": t.cashier_id or "",
+            "receipt_at": (
+                t.receipt_at.isoformat() if t.receipt_at is not None else None
+            ),
+            "business_date": t.business_date.isoformat(),
+            "total": int(t.grand_total_cents or 0) / 100.0,
+            "has_voided_line": bool(t.has_voided_line),
+        }
+        for t in rows
+    ]
+
+
 def _lottery_snapshot(
     db: Session, store_id: int, today: date,
 ) -> dict[str, Any] | None:
@@ -407,6 +515,19 @@ def _admin_summary(
         _clocked_in_block(db, store_id)
         if _can("time_clock") else []
     )
+    # What the register did (D-4). Same gate as the rest of the
+    # store-book block — it is the same permission and the same
+    # module.
+    register = (
+        _register_activity(db, store_id, today)
+        if "module_day_close" in modules and _can("day_close")
+        else None
+    )
+    recent_receipts = (
+        _recent_receipts(db, store_id)
+        if "module_day_close" in modules and _can("day_close")
+        else []
+    )
 
     today_report = (
         db.query(DailyReport)
@@ -434,6 +555,8 @@ def _admin_summary(
         "sales": sales,
         "purchases": purchases,
         "clocked_in": clocked_in,
+        "register": register,
+        "recent_receipts": recent_receipts,
         "kpis": {
             "total_transfers": total_transfers,
             "today_transfers": today_transfers,
@@ -514,6 +637,14 @@ def _employee_summary(
         "lottery": (
             _lottery_snapshot(db, store_id, today)
             if "module_lottery" in modules and _can("lottery")
+            else None
+        ),
+        # A cashier gets the register numbers too — the void count
+        # on their own shift is exactly what they should be able to
+        # see without asking a manager.
+        "register": (
+            _register_activity(db, store_id, today)
+            if "module_day_close" in modules and _can("day_close")
             else None
         ),
         "today_transfers": [

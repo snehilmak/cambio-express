@@ -6,6 +6,10 @@ import {
 import { Line } from "react-chartjs-2";
 
 import {
+  RecentReceipts, RegisterActivityTiles,
+} from "../components/RegisterActivity";
+
+import {
   useDashboardSummary,
   type AdminDashboard,
   type EmployeeDashboard,
@@ -342,6 +346,11 @@ function AdminPanel({ d }: { d: AdminDashboard }) {
         </Section>
       )}
 
+      {/* What the register did (D-4) — receipts, voids, refunds and
+          fuel. Its own grid rather than more tiles in the one above:
+          these are register facts, not the store's own ledger. */}
+      <RegisterActivityTiles register={d.register} />
+
       {d.sales?.hourly && (
         <Section
           title="Hourly sales"
@@ -416,6 +425,8 @@ function AdminPanel({ d }: { d: AdminDashboard }) {
           </Card>
         </Section>
       )}
+
+      <RecentReceipts receipts={d.recent_receipts} />
 
       {d.day_close && d.day_close.top_departments.length > 0 && (
         <Section title={`Department sales (${shortDate(d.day_close.date)})`}>
@@ -729,6 +740,10 @@ function EmployeePanel({ d }: { d: EmployeeDashboard }) {
           />
         )}
       </KpiGrid>
+
+      {/* A cashier sees the register's own numbers too — the void
+          count on their shift should not need a manager. */}
+      <RegisterActivityTiles register={d.register} />
 
       {ms && (
       <Section
