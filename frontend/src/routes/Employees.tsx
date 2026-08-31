@@ -174,6 +174,15 @@ export default function Employees() {
                           label: "Edit",
                           onClick: () => navigate(`/employees/${r.id}/edit`),
                         },
+                        {
+                          // Deep-links the form's Login tab (E-3) —
+                          // "who can sign in" is the most common
+                          // reason to open somebody's record.
+                          label: r.login ? "Manage access" : "Add login",
+                          onClick: () => navigate(
+                            `/employees/${r.id}/edit?tab=login`,
+                          ),
+                        },
                         r.is_active
                           ? {
                               label: "Deactivate", tone: "danger" as const,

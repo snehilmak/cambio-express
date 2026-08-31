@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 
 import {
@@ -12,16 +12,31 @@ import { getCurrentIdentity } from "../lib/auth";
 import {
   Alert, Breadcrumbs, Button, ButtonLink, Card, Checkbox,
   ConfirmDialog, DateInput, Empty, ErrorState, Field, Input, Loading,
-  PageHeader, PageShell, Pill, Section, Select, useToast,
+  PageHeader, PageShell, Pill, Section, Select, TabsBar, TabsButton,
+  useToast,
 } from "../components/ui";
 import { useUnsavedGuard } from "../lib/useUnsavedGuard";
+import {
+  resolveEmployeeTab, visibleEmployeeTabs, type EmployeeTabKey,
+} from "./employeeFormTabs";
+import styles from "./EmployeeForm.module.css";
 
 // /app/employees/new + /app/employees/:id/edit — the person form
-// of the unified Employees hub (E-2). Sections: Basic, Payroll,
-// Contact, Login. The Login section links/unlinks a login
-// account; editing credentials + role + custom access stays on
-// the dedicated login form (/admin/users/:uid/edit) so the R-2
+// of the unified Employees hub (E-2). Split across tabs (E-3) so
+// one person's record doesn't read as one endless form: Profile
+// (who they are), Payroll (what they cost), Login & access (how
+// they sign in). Editing credentials + role + custom access stays
+// on the dedicated login form (/admin/users/:uid/edit) so the R-2
 // access UI has exactly one home.
+//
+// The tab lives in `?tab=` rather than component state so the
+// Employees list can deep-link straight at a person's access
+// ("Manage access" row action) and the back button steps through
+// tabs. All tabs share ONE form and ONE Save — switching tabs
+// never discards typing.
+//
+// The tab list + `?tab=` resolution rules live in
+// ./employeeFormTabs.ts so they can be unit-tested on their own.
 
 const SCHEDULES = [
   { value: "", label: "Not set" },
@@ -73,6 +88,17 @@ export default function EmployeeForm() {
   const [serverError, setServerError] = useState<string | null>(null);
   const [linkPick, setLinkPick] = useState<string>("");
   const [confirmUnlink, setConfirmUnlink] = useState(false);
+  const [nameError, setNameError] = useState<string | null>(null);
+
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tab = resolveEmployeeTab(searchParams.get("tab"), isEdit);
+
+  function goTab(next: EmployeeTabKey) {
+    const p = new URLSearchParams(searchParams);
+    if (next === "profile") p.delete("tab");
+    else p.set("tab", next);
+    setSearchParams(p, { replace: true });
+  }
 
   useEffect(() => {
     if (!isEdit || !existing) return;
@@ -109,6 +135,17 @@ export default function EmployeeForm() {
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
+    // Validate in JS rather than leaning on `required`: a required
+    // input inside a hidden tab panel makes the browser refuse to
+    // submit with an error message it can't display ("not
+    // focusable"), which reads as a dead Save button. Instead we
+    // surface the error and switch to the tab that owns it.
+    if (!draft.name.trim()) {
+      setNameError("Enter the employee's full name.");
+      goTab("profile");
+      return;
+    }
+    setNameError(null);
     setBusy(true);
     setServerError(null);
     try {
@@ -236,112 +273,129 @@ export default function EmployeeForm() {
 
       {serverError && <Alert tone="error">{serverError}</Alert>}
 
+      <TabsBar>
+        {visibleEmployeeTabs(isEdit).map((t) => (
+          <TabsButton
+            key={t.key}
+            active={tab === t.key}
+            onClick={() => goTab(t.key)}
+          >
+            {t.label}
+          </TabsButton>
+        ))}
+      </TabsBar>
+
       <form onSubmit={onSubmit} className="ds-form">
-        <Card>
-          <Section title="Basic info">
-            <Field label="Full name *">
-              <Input
-                type="text" maxLength={120} required
-                value={draft.name}
-                onChange={(e) => set("name", e.target.value)}
-                disabled={busy}
-              />
-            </Field>
-            {isEdit && (
-              <Checkbox
-                checked={draft.is_active}
-                onChange={(v) => set("is_active", v)}
-                disabled={busy}
+        {tab === "profile" && (
+          <Card>
+            <Section title="Basic info">
+              <Field label="Full name *" error={nameError}>
+                <Input
+                  type="text" maxLength={120}
+                  value={draft.name}
+                  onChange={(e) => {
+                    set("name", e.target.value);
+                    if (nameError) setNameError(null);
+                  }}
+                  disabled={busy}
+                />
+              </Field>
+              <Field label="Date of birth">
+                <DateInput
+                  value={draft.date_of_birth}
+                  onChange={(e) => set("date_of_birth", e.target.value)}
+                  disabled={busy}
+                />
+              </Field>
+              {isEdit && (
+                <Checkbox
+                  checked={draft.is_active}
+                  onChange={(v) => set("is_active", v)}
+                  disabled={busy}
+                >
+                  Employee is active
+                </Checkbox>
+              )}
+            </Section>
+
+            <Section title="Contact">
+              <Field label="Email">
+                <Input
+                  type="email" maxLength={255}
+                  value={draft.email}
+                  onChange={(e) => set("email", e.target.value)}
+                  disabled={busy}
+                />
+              </Field>
+              <Field label="Phone">
+                <Input
+                  type="tel" maxLength={40}
+                  value={draft.phone}
+                  onChange={(e) => set("phone", e.target.value)}
+                  disabled={busy}
+                />
+              </Field>
+              <Field label="Address line 1">
+                <Input
+                  type="text" maxLength={255}
+                  value={draft.address_line1}
+                  onChange={(e) => set("address_line1", e.target.value)}
+                  disabled={busy}
+                />
+              </Field>
+              <Field label="Address line 2">
+                <Input
+                  type="text" maxLength={255}
+                  value={draft.address_line2}
+                  onChange={(e) => set("address_line2", e.target.value)}
+                  disabled={busy}
+                />
+              </Field>
+            </Section>
+          </Card>
+        )}
+
+        {tab === "payroll" && (
+          <Card>
+            <Section title="Payroll">
+              <Field
+                label="Hourly rate"
+                hint="Used by the time-clock payroll rollup and paystubs."
               >
-                Employee is active
-              </Checkbox>
-            )}
-          </Section>
-        </Card>
+                <Input
+                  type="number" min={0} step="0.01"
+                  value={draft.hourly_rate}
+                  onChange={(e) => set("hourly_rate", e.target.value)}
+                  disabled={busy}
+                />
+              </Field>
+              <Field label="Hired on">
+                <DateInput
+                  value={draft.hired_on}
+                  onChange={(e) => set("hired_on", e.target.value)}
+                  disabled={busy}
+                />
+              </Field>
+              <Field label="Payroll schedule">
+                <Select
+                  value={draft.payroll_schedule}
+                  onChange={(e) => set("payroll_schedule", e.target.value)}
+                  disabled={busy}
+                >
+                  {SCHEDULES.map((s) => (
+                    <option key={s.value} value={s.value}>{s.label}</option>
+                  ))}
+                </Select>
+              </Field>
+            </Section>
+          </Card>
+        )}
 
-        <Card>
-          <Section title="Payroll">
-            <Field
-              label="Hourly rate"
-              hint="Used by the time-clock payroll rollup and paystubs."
-            >
-              <Input
-                type="number" min={0} step="0.01"
-                value={draft.hourly_rate}
-                onChange={(e) => set("hourly_rate", e.target.value)}
-                disabled={busy}
-              />
-            </Field>
-            <Field label="Hired on">
-              <DateInput
-                value={draft.hired_on}
-                onChange={(e) => set("hired_on", e.target.value)}
-                disabled={busy}
-              />
-            </Field>
-            <Field label="Payroll schedule">
-              <Select
-                value={draft.payroll_schedule}
-                onChange={(e) => set("payroll_schedule", e.target.value)}
-                disabled={busy}
-              >
-                {SCHEDULES.map((s) => (
-                  <option key={s.value} value={s.value}>{s.label}</option>
-                ))}
-              </Select>
-            </Field>
-            <Field label="Date of birth">
-              <DateInput
-                value={draft.date_of_birth}
-                onChange={(e) => set("date_of_birth", e.target.value)}
-                disabled={busy}
-              />
-            </Field>
-          </Section>
-        </Card>
-
-        <Card>
-          <Section title="Contact">
-            <Field label="Email">
-              <Input
-                type="email" maxLength={255}
-                value={draft.email}
-                onChange={(e) => set("email", e.target.value)}
-                disabled={busy}
-              />
-            </Field>
-            <Field label="Phone">
-              <Input
-                type="tel" maxLength={40}
-                value={draft.phone}
-                onChange={(e) => set("phone", e.target.value)}
-                disabled={busy}
-              />
-            </Field>
-            <Field label="Address line 1">
-              <Input
-                type="text" maxLength={255}
-                value={draft.address_line1}
-                onChange={(e) => set("address_line1", e.target.value)}
-                disabled={busy}
-              />
-            </Field>
-            <Field label="Address line 2">
-              <Input
-                type="text" maxLength={255}
-                value={draft.address_line2}
-                onChange={(e) => set("address_line2", e.target.value)}
-                disabled={busy}
-              />
-            </Field>
-          </Section>
-        </Card>
-
-        {isEdit && (
+        {tab === "login" && isEdit && (
           <Card>
             <Section title="Login">
               {existing?.login ? (
-                <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+                <div className={styles.stack}>
                   <div>
                     <strong>{existing.login.username}</strong>{" "}
                     <Pill tone={existing.login.role === "admin" ? "accent" : "neutral"}>
@@ -357,7 +411,7 @@ export default function EmployeeForm() {
                       </>
                     )}
                   </div>
-                  <div style={{ display: "flex", gap: "0.6rem", flexWrap: "wrap" }}>
+                  <div className={styles.actionRow}>
                     <ButtonLink
                       to={`/admin/users/${existing.login.user_id}/edit`}
                       tone="secondary" size="sm"
@@ -374,15 +428,15 @@ export default function EmployeeForm() {
                   </div>
                 </div>
               ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-                  <p style={{ margin: 0 }}>
+                <div className={styles.stack}>
+                  <p className={styles.note}>
                     No login attached — this person appears in
                     attribution dropdowns and the time clock but
                     can't sign in.
                   </p>
                   {loginOnly.length > 0 && (
                     <Field label="Link an existing login">
-                      <div style={{ display: "flex", gap: "0.5rem" }}>
+                      <div className={styles.linkRow}>
                         <Select
                           value={linkPick}
                           onChange={(e) => setLinkPick(e.target.value)}
@@ -420,7 +474,7 @@ export default function EmployeeForm() {
           </Card>
         )}
 
-        <div style={{ display: "flex", gap: "0.6rem" }}>
+        <div className={styles.actionRow}>
           <Button type="submit" busy={busy} disabled={busy}>
             {busy ? "Saving…" : (isEdit ? "Save Changes" : "Create Employee")}
           </Button>
@@ -432,6 +486,11 @@ export default function EmployeeForm() {
             Cancel
           </Button>
         </div>
+        {isDirty && (
+          <p className={styles.note}>
+            Unsaved edits — Save Changes stores every tab at once.
+          </p>
+        )}
       </form>
 
       <ConfirmDialog {...guard.dialogProps} />

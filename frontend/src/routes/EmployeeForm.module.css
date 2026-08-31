@@ -1,0 +1,35 @@
+/* Employee form (E-3). Kit primitives carry every input, button
+   and alert on this page — what's left is the handful of local
+   layouts the kit has no opinion about. */
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+/* Save/Cancel and the linked-login button pair. Wraps so two
+   buttons never overflow a narrow phone. */
+.actionRow {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+/* Select + Link button on one line; the select takes the slack. */
+.linkRow {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.linkRow > :first-child {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.note {
+  margin: 0;
+  color: var(--db-text-muted);
+  font-size: 0.85rem;
+}
