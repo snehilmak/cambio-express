@@ -155,7 +155,6 @@ files = [
     "api/Modules/DailyBook/Services/reports.py",
     "api/Modules/DailyBook/Services/transfers_summary.py",
     # ── api/Modules/Dashboard ────────────────────────────────
-    "api/Modules/Dashboard/Services/peak_hours.py",
     # ── api/Modules/Monthly ──────────────────────────────────
     "api/Modules/Monthly/Controllers/__init__.py",
     "api/Modules/Monthly/Models/__init__.py",
