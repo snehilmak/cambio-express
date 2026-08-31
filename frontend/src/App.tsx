@@ -69,6 +69,8 @@ const OwnerDashboard = lazy(() => import("./routes/OwnerDashboard"));
 const OwnerLocations = lazy(() => import("./routes/OwnerLocations"));
 const OwnerPLRollup = lazy(() => import("./routes/OwnerPLRollup"));
 const OwnerBilling = lazy(() => import("./routes/OwnerBilling"));
+const StoreBookMonth = lazy(() => import("./routes/StoreBookMonth"));
+const StoreBookDay = lazy(() => import("./routes/StoreBookDay"));
 const OwnerReports = lazy(() => import("./routes/OwnerReports"));
 const OwnerStoreDetail = lazy(() => import("./routes/OwnerStoreDetail"));
 const Privacy = lazy(() => import("./routes/Privacy"));
@@ -297,6 +299,8 @@ export default function App() {
           <Route path="monthly"          element={<RequirePermission resource="monthly" action="read"><Monthly /></RequirePermission>} />
           <Route path="monthly/edit"     element={<RequirePermission resource="monthly" action="update"><EditMonthly /></RequirePermission>} />
           <Route path="lottery"                element={<RequirePermission resource="lottery" action="read"><Lottery /></RequirePermission>} />
+          <Route path="store-book"             element={<RequirePermission resource="day_close" action="read"><StoreBookMonth /></RequirePermission>} />
+          <Route path="store-book/day"         element={<RequirePermission resource="day_close" action="read"><StoreBookDay /></RequirePermission>} />
           <Route path="day-close"              element={<RequirePermission resource="day_close" action="read"><DayClose /></RequirePermission>} />
           <Route path="pos-import"             element={<RequirePermission resource="day_close" action="update"><PosImport /></RequirePermission>} />
           <Route path="price-book"             element={<RequirePermission resource="catalog" action="read"><PriceBook /></RequirePermission>} />

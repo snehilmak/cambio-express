@@ -10810,6 +10810,383 @@
         "title": "StagedDaysResponse",
         "type": "object"
       },
+      "StoreBookColumnSpec": {
+        "additionalProperties": false,
+        "properties": {
+          "column": {
+            "title": "Column",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "sections": {
+            "items": {
+              "$ref": "#/components/schemas/StoreBookSectionSpec"
+            },
+            "title": "Sections",
+            "type": "array"
+          }
+        },
+        "required": [
+          "column",
+          "label",
+          "sections"
+        ],
+        "title": "StoreBookColumnSpec",
+        "type": "object"
+      },
+      "StoreBookDayResponse": {
+        "additionalProperties": false,
+        "description": "One day's sheet.\n\n`values` and `counts` are keyed by field key; `originals` holds\nonly the fields an import supplied, so the SPA renders the\n\"Orig. Val\" caption exactly where there is one.",
+        "properties": {
+          "counts": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "title": "Counts",
+            "type": "object"
+          },
+          "entry_date": {
+            "title": "Entry Date",
+            "type": "string"
+          },
+          "is_locked": {
+            "title": "Is Locked",
+            "type": "boolean"
+          },
+          "layout": {
+            "items": {
+              "$ref": "#/components/schemas/StoreBookColumnSpec"
+            },
+            "title": "Layout",
+            "type": "array"
+          },
+          "locked_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Locked At"
+          },
+          "notes": {
+            "title": "Notes",
+            "type": "string"
+          },
+          "originals": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Originals",
+            "type": "object"
+          },
+          "store_id": {
+            "title": "Store Id",
+            "type": "integer"
+          },
+          "totals": {
+            "$ref": "#/components/schemas/StoreBookTotals"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          },
+          "values": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Values",
+            "type": "object"
+          }
+        },
+        "required": [
+          "entry_date",
+          "store_id",
+          "values",
+          "counts",
+          "originals",
+          "totals",
+          "notes",
+          "is_locked",
+          "locked_at",
+          "updated_at",
+          "layout"
+        ],
+        "title": "StoreBookDayResponse",
+        "type": "object"
+      },
+      "StoreBookFieldSpec": {
+        "additionalProperties": false,
+        "description": "One input on the sheet.",
+        "properties": {
+          "count_field": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Count Field"
+          },
+          "gallons_field": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gallons Field"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "label"
+        ],
+        "title": "StoreBookFieldSpec",
+        "type": "object"
+      },
+      "StoreBookLockRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "locked": {
+            "title": "Locked",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "locked"
+        ],
+        "title": "StoreBookLockRequest",
+        "type": "object"
+      },
+      "StoreBookMonthResponse": {
+        "additionalProperties": false,
+        "description": "Calendar month: one row per day that has a sheet, plus the\nmonth's rolled-up totals for the header cards.",
+        "properties": {
+          "month": {
+            "title": "Month",
+            "type": "integer"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/StoreBookMonthRow"
+            },
+            "title": "Rows",
+            "type": "array"
+          },
+          "total_fuel_cents": {
+            "title": "Total Fuel Cents",
+            "type": "integer"
+          },
+          "total_fuel_gallons": {
+            "title": "Total Fuel Gallons",
+            "type": "number"
+          },
+          "total_sales_cents": {
+            "title": "Total Sales Cents",
+            "type": "integer"
+          },
+          "year": {
+            "title": "Year",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "year",
+          "month",
+          "rows",
+          "total_sales_cents",
+          "total_fuel_gallons",
+          "total_fuel_cents"
+        ],
+        "title": "StoreBookMonthResponse",
+        "type": "object"
+      },
+      "StoreBookMonthRow": {
+        "additionalProperties": false,
+        "properties": {
+          "deposit_cents": {
+            "title": "Deposit Cents",
+            "type": "integer"
+          },
+          "entry_date": {
+            "title": "Entry Date",
+            "type": "string"
+          },
+          "is_locked": {
+            "title": "Is Locked",
+            "type": "boolean"
+          },
+          "over_short_cents": {
+            "title": "Over Short Cents",
+            "type": "integer"
+          },
+          "sales_cents": {
+            "title": "Sales Cents",
+            "type": "integer"
+          },
+          "tenders_cents": {
+            "title": "Tenders Cents",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "entry_date",
+          "sales_cents",
+          "tenders_cents",
+          "deposit_cents",
+          "over_short_cents",
+          "is_locked"
+        ],
+        "title": "StoreBookMonthRow",
+        "type": "object"
+      },
+      "StoreBookRestoreRequest": {
+        "additionalProperties": false,
+        "description": "Take the register's number back for one field.",
+        "properties": {
+          "field_key": {
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Field Key",
+            "type": "string"
+          }
+        },
+        "required": [
+          "field_key"
+        ],
+        "title": "StoreBookRestoreRequest",
+        "type": "object"
+      },
+      "StoreBookSectionSpec": {
+        "additionalProperties": false,
+        "properties": {
+          "fields": {
+            "items": {
+              "$ref": "#/components/schemas/StoreBookFieldSpec"
+            },
+            "title": "Fields",
+            "type": "array"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "label",
+          "fields"
+        ],
+        "title": "StoreBookSectionSpec",
+        "type": "object"
+      },
+      "StoreBookTotals": {
+        "additionalProperties": false,
+        "description": "The three running column totals plus the variance between\ntwo of them \u2014 the number the sheet exists to produce.",
+        "properties": {
+          "deposit_cents": {
+            "title": "Deposit Cents",
+            "type": "integer"
+          },
+          "over_short_cents": {
+            "title": "Over Short Cents",
+            "type": "integer"
+          },
+          "sales_cents": {
+            "title": "Sales Cents",
+            "type": "integer"
+          },
+          "tenders_cents": {
+            "title": "Tenders Cents",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "sales_cents",
+          "tenders_cents",
+          "deposit_cents",
+          "over_short_cents"
+        ],
+        "title": "StoreBookTotals",
+        "type": "object"
+      },
+      "StoreBookUpdateRequest": {
+        "additionalProperties": false,
+        "description": "Partial update \u2014 only the fields the operator touched.\n\nUnknown keys are rejected by the Service rather than dropped\nhere, so a typo surfaces as an error instead of a save that\nsilently discarded a number.",
+        "properties": {
+          "counts": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "number"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Counts"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "values": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "integer"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Values"
+          }
+        },
+        "title": "StoreBookUpdateRequest",
+        "type": "object"
+      },
       "StoreHourEntry": {
         "additionalProperties": false,
         "description": "One row in the weekly schedule. ``day`` is 0..6 (ISO,\n0=Monday). ``open`` / ``close`` are \"HH:MM\" 24-hour strings.\n``closed`` overrides the open/close pair \u2014 when True the\ntimes are ignored at the gating layer.\n\nPydantic-level validation is intentionally light (string\npresence + range) \u2014 the deeper checks (open < close, no\nduplicate days, exactly 7 entries) live in\n``Services.store_hours.validate_hours_payload`` so they can\nbe tested without instantiating a request.",
@@ -32870,6 +33247,422 @@
         "summary": "Reopen Route",
         "tags": [
           "return-checks"
+        ]
+      }
+    },
+    "/storebook/month": {
+      "get": {
+        "description": "Calendar month: the days that have a sheet, with each day's\ntotals and lock state, plus month rollups for the header.",
+        "operationId": "storebook_month_route_storebook_month_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "year",
+            "required": true,
+            "schema": {
+              "maximum": 2100,
+              "minimum": 2000,
+              "title": "Year",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "month",
+            "required": true,
+            "schema": {
+              "maximum": 12,
+              "minimum": 1,
+              "title": "Month",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StoreBookMonthResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Storebook Month Route",
+        "tags": [
+          "storebook"
+        ]
+      }
+    },
+    "/storebook/{day}": {
+      "get": {
+        "description": "One day's sheet. Creates the row on first open \u2014 the\noperator shouldn't have to 'start' a day before entering it.",
+        "operationId": "storebook_day_route_storebook__day__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "day",
+            "required": true,
+            "schema": {
+              "title": "Day",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StoreBookDayResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Storebook Day Route",
+        "tags": [
+          "storebook"
+        ]
+      },
+      "patch": {
+        "description": "Partial edit. A locked day is refused with 409 so the SPA\ncan tell 'you need to unlock' apart from a validation error.",
+        "operationId": "storebook_update_route_storebook__day__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "day",
+            "required": true,
+            "schema": {
+              "title": "Day",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StoreBookUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StoreBookDayResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Storebook Update Route",
+        "tags": [
+          "storebook"
+        ]
+      }
+    },
+    "/storebook/{day}/lock": {
+      "post": {
+        "description": "Lock or unlock the day.",
+        "operationId": "storebook_lock_route_storebook__day__lock_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "day",
+            "required": true,
+            "schema": {
+              "title": "Day",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StoreBookLockRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StoreBookDayResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Storebook Lock Route",
+        "tags": [
+          "storebook"
+        ]
+      }
+    },
+    "/storebook/{day}/restore": {
+      "post": {
+        "description": "Take the register's number back for one overridden field.",
+        "operationId": "storebook_restore_route_storebook__day__restore_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "day",
+            "required": true,
+            "schema": {
+              "title": "Day",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StoreBookRestoreRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StoreBookDayResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Storebook Restore Route",
+        "tags": [
+          "storebook"
         ]
       }
     },

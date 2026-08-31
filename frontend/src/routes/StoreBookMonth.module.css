@@ -1,0 +1,137 @@
+/* Store Daily Book — month calendar (D-2). Same containment
+   lessons as the MSB daily-book calendar: a six-figure day must
+   never paint past its cell. */
+
+.nav {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.weekdays,
+.grid {
+  display: grid;
+  /* minmax(0, 1fr) — without the 0 floor the cells refuse to
+     shrink and the rightmost column overflows the card. */
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 0.4rem;
+}
+
+.weekdays {
+  margin-bottom: 0.4rem;
+}
+
+.weekday {
+  text-align: center;
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--db-text-muted);
+}
+
+.blank {
+  min-height: 4.5rem;
+}
+
+.cell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  min-height: 4.5rem;
+  padding: 0.5rem 0.55rem;
+  border-radius: 0.6rem;
+  border: 1px solid var(--db-border);
+  background: var(--db-surface-2);
+  color: var(--db-text);
+  text-decoration: none;
+  /* Size the money text against the CELL, not the viewport — a
+     7-column grid makes each cell far narrower than any vw guess.
+     `overflow: hidden` is the hard backstop. */
+  container-type: inline-size;
+  overflow: hidden;
+  transition: border-color 120ms ease, transform 120ms ease;
+}
+
+.cell:hover {
+  border-color: var(--db-accent);
+  transform: translateY(-1px);
+}
+
+.cell:focus-visible {
+  outline: 2px solid var(--db-accent);
+  outline-offset: 2px;
+}
+
+.hasEntry {
+  background: color-mix(in srgb, var(--db-accent) 6%, var(--db-surface-2));
+  border-color: color-mix(in srgb, var(--db-accent) 30%, transparent);
+}
+
+.locked {
+  border-style: dashed;
+}
+
+.cellHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.cellDay {
+  font-weight: 700;
+  font-size: 0.85rem;
+  line-height: 1;
+}
+
+.lockMark {
+  font-size: 0.7rem;
+  line-height: 1;
+}
+
+.cellBody {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.cellTotal {
+  font-family: var(--db-font-mono, "JetBrains Mono", monospace);
+  font-size: clamp(0.62rem, 13cqi, 0.85rem);
+  font-weight: 600;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.variance {
+  display: block;
+  align-self: flex-start;
+  max-width: 100%;
+  /* No global border-box reset in the app shell — without this the
+     padding pushes the pill back outside the cell. */
+  box-sizing: border-box;
+  padding: 0.05rem 0.3rem;
+  border-radius: 0.3rem;
+  border: 1px solid transparent;
+  font-family: var(--db-font-mono, "JetBrains Mono", monospace);
+  font-size: clamp(0.55rem, 9cqi, 0.68rem);
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.over {
+  color: var(--db-tone-info, #3b82f6);
+  border-color: var(--db-tone-info, #3b82f6);
+}
+
+.short {
+  color: var(--db-tone-negative, #ff3b30);
+  border-color: var(--db-tone-negative, #ff3b30);
+}
