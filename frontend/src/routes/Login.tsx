@@ -9,6 +9,9 @@ import { persistLoginResponse } from "../lib/auth";
 import { autoEnterOwnerStore } from "../api/switchStore";
 import styles from "./Login.module.css";
 import { BRAND_NAME } from "../lib/brand";
+import {
+  readStoreChoices, type StoreChoice,
+} from "./loginStoreChoices";
 import type { components } from "../api/openapi";
 
 type LoginResponse = components["schemas"]["LoginResponse"];
@@ -22,6 +25,7 @@ interface PendingState {
   has_recovery_codes: boolean;
 }
 
+
 /** SPA sign-in. Two-step when the role requires 2FA (superadmin):
  *  step 1 POSTs creds, step 2 verifies a 6-digit TOTP or recovery
  *  code. Admin/owner/employee skip step 2 and get the token straight
@@ -32,6 +36,8 @@ export default function Login() {
   const [error, setError]       = useState<string | null>(null);
   const [busy, setBusy]         = useState(false);
   const [pending, setPending]   = useState<PendingState | null>(null);
+  const [storeChoices, setStoreChoices] =
+    useState<StoreChoice[] | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
   const stateDest = (location.state as LocationState | null)?.from;
@@ -62,6 +68,24 @@ export default function Login() {
     navigate(stateDest || "/dashboard", { replace: true });
   }
 
+  async function handleResult(result: LoginResponse) {
+    if (result.requires_totp && result.pending_token) {
+      if (result.enroll_required) {
+        navigate("/login/2fa/enroll", {
+          state: { pending_token: result.pending_token },
+          replace: true,
+        });
+        return;
+      }
+      setPending({
+        pending_token: result.pending_token,
+        has_recovery_codes: result.has_recovery_codes ?? false,
+      });
+      return;
+    }
+    await finishLogin(result);
+  }
+
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
@@ -71,23 +95,37 @@ export default function Login() {
         method: "POST",
         json: { username: username.trim(), password },
       });
-      if (result.requires_totp && result.pending_token) {
-        if (result.enroll_required) {
-          navigate("/login/2fa/enroll", {
-            state: { pending_token: result.pending_token },
-            replace: true,
-          });
-          return;
-        }
-        setPending({
-          pending_token: result.pending_token,
-          has_recovery_codes: result.has_recovery_codes ?? false,
-        });
+      await handleResult(result);
+    } catch (err) {
+      // Credentials good at more than one store — ask which, rather
+      // than guessing or refusing. Usernames are unique per store,
+      // so the same person can legitimately exist at several.
+      const choices = readStoreChoices(err);
+      if (choices) {
+        setStoreChoices(choices);
       } else {
-        await finishLogin(result);
+        setError(err instanceof ApiError ? err.message : "Network error. Please try again.");
       }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /** Re-submit with the store the user picked. */
+  async function onPickStore(storeId: number) {
+    setError(null);
+    setBusy(true);
+    try {
+      const result = await api<LoginResponse>("/api/v2/auth/login", {
+        method: "POST",
+        json: {
+          username: username.trim(), password, store_id: storeId,
+        },
+      });
+      await handleResult(result);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Network error. Please try again.");
+      setStoreChoices(null);
     } finally {
       setBusy(false);
     }
@@ -100,6 +138,14 @@ export default function Login() {
           state={pending}
           onSuccess={finishLogin}
           onCancel={() => { setPending(null); setError(null); }}
+        />
+      ) : storeChoices ? (
+        <StorePicker
+          choices={storeChoices}
+          busy={busy}
+          error={error}
+          onPick={(id) => { void onPickStore(id); }}
+          onCancel={() => { setStoreChoices(null); setError(null); }}
         />
       ) : (
         <PrimaryForm
@@ -126,7 +172,6 @@ function PrimaryForm({
   busy: boolean;
   onSubmit: (e: FormEvent) => void;
 }) {
-  const navigate = useNavigate();
   return (
     <>
       <Pill tone="accent" dot mono>ALL SYSTEMS OPERATIONAL</Pill>
@@ -182,36 +227,11 @@ function PrimaryForm({
         </Button>
       </form>
 
-      <div className={styles.employeeBox}>
-        <div className={styles.employeeTitle}>Employee? Sign in to your store</div>
-        <div className={styles.employeeSub}>
-          Enter the store code your manager gave you. We'll take you to
-          your store's sign-in page.
-        </div>
-        <form
-          className={styles.employeeForm}
-          onSubmit={(e) => {
-            e.preventDefault();
-            const form = e.currentTarget;
-            const raw = (form.elements.namedItem("store_code") as HTMLInputElement | null)?.value || "";
-            const slug = raw.trim().toLowerCase();
-            if (slug) navigate(`/login/${encodeURIComponent(slug)}`);
-          }}
-        >
-          <Input
-            type="text"
-            name="store_code"
-            placeholder="Store code"
-            autoComplete="off"
-            autoCapitalize="none"
-            autoCorrect="off"
-            spellCheck={false}
-            required
-            className={styles.employeeInput}
-          />
-          <Button type="submit" tone="secondary">Go →</Button>
-        </form>
-      </div>
+      {/* The "Employee? Enter your store code" box that used to sit
+          here is gone. Everyone — owner, admin, employee — signs in
+          with the form above; sending cashiers off to a slug-scoped
+          page was the last thing making a simple sign-in feel
+          complicated. /login/:slug still resolves for old bookmarks. */}
 
       <div className={chrome.centerRow}>
         New to DineroBook? <Link to="/signup">Create an account →</Link>
@@ -227,6 +247,59 @@ function PrimaryForm({
           © 2026 DineroBook · <a href="/privacy">Privacy</a>
         </div>
       </div>
+    </>
+  );
+}
+
+
+/** "Which store?" step. Only reachable once the password has
+ *  already been verified, so listing the stores here reveals
+ *  nothing the person doesn't already have access to. */
+function StorePicker({
+  choices, busy, error, onPick, onCancel,
+}: {
+  choices: StoreChoice[];
+  busy: boolean;
+  error: string | null;
+  onPick: (storeId: number) => void;
+  onCancel: () => void;
+}) {
+  return (
+    <>
+      <h2 className={chrome.heading}>Which store?</h2>
+      <p className={chrome.sub}>
+        Your sign-in works at more than one store. Pick the one you
+        want to open.
+      </p>
+
+      {error && <Alert tone="error">{error}</Alert>}
+
+      <div className={styles.storeChoices}>
+        {choices.map((c) => (
+          <button
+            key={c.store_id}
+            type="button"
+            className={styles.storeChoice}
+            onClick={() => onPick(c.store_id)}
+            disabled={busy}
+          >
+            <span className={styles.storeChoiceName}>
+              {c.store_name || `Store #${c.store_id}`}
+            </span>
+            {c.role && (
+              <span className={styles.storeChoiceRole}>{c.role}</span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      <Button
+        type="button" tone="secondary" size="lg"
+        onClick={onCancel} disabled={busy}
+        style={{ width: "100%" }}
+      >
+        Back
+      </Button>
     </>
   );
 }

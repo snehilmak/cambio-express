@@ -55,6 +55,37 @@ def find_user_by_username(
     return q.first()
 
 
+def find_active_users_by_username(
+    db: Session, username: str, *, limit: int = 25,
+) -> list[User]:
+    """Every ACTIVE user carrying `username`, across all stores,
+    ordered by id asc.
+
+    Usernames are unique per store, not globally
+    (`UniqueConstraint("store_id", "username")`), so "amber" can
+    legitimately exist at several stores. The sign-in page has no
+    store context, so it has to consider all of them and let the
+    password decide — `find_user_by_username`'s first-match-wins
+    would lock out everyone but the oldest row.
+
+    `limit` bounds the scan: each candidate costs a bcrypt verify
+    at the call site, so an unbounded result would let a common
+    username ("admin") turn one login attempt into hundreds of
+    hashes. 25 is far above any realistic collision count and far
+    below a useful amplification factor.
+    """
+    if not username:
+        return []
+    return (
+        db.query(User)
+          .filter(User.username == username)
+          .filter(User.is_active.is_(True))
+          .order_by(User.id.asc())
+          .limit(limit)
+          .all()
+    )
+
+
 def list_users_in_store(
     db: Session, store_id: int, *,
     roles: Iterable[str] | None = None,

@@ -87,6 +87,7 @@ from api.Modules.Auth.Services.jwt_issuer import (
     JWTIssuer,
 )
 from api.Modules.Auth.Services.login import (
+    AmbiguousLoginError,
     AuthenticationError,
     TotpEnrollmentRequired,
 )
@@ -468,23 +469,46 @@ def login_cross_store_route(
     response: Response,
     db: Session = Depends(get_db),
 ) -> LoginResponse:
-    """Cross-store JWT login for the SPA's generic landing page.
-    Same response shape as `/auth/login`, but takes
-    username + password only — the user's home store is looked
-    up across every store. Employees are rejected here so they
-    use their store's slug-scoped sign-in page."""
+    """Cross-store JWT login for the SPA's sign-in page. Same
+    response shape as `/auth/login`, but takes username +
+    password only — the store is resolved from the credentials.
+
+    **Every role signs in here, employees included.** The old
+    employee rejection ("use your store's sign-in page") predates
+    the unified sign-in page and left employee logins unusable.
+
+    Returns 409 with `{code: "store_ambiguous", stores: [...]}`
+    when the same credentials are valid at more than one store;
+    the client re-submits to `/auth/login` with the chosen
+    `store_id`.
+    """
     try:
         result = authenticate_password_cross_store(
             db, username=body.username, password=body.password,
         )
     except AuthenticationError as exc:
-        # Same opaque 401 for invalid creds AND for the
-        # employee-rejection path — never leak which one tripped.
         raise HTTPException(
             status_code=401, detail=str(exc) or "Invalid username or password",
         )
+    except AmbiguousLoginError as exc:
+        # Credentials are good; we just need to know which account
+        # they meant. 3xx is semantically closer but this is a PWA
+        # — service workers and proxies handle redirects in ways a
+        # login flow shouldn't depend on. The `code` discriminator
+        # keeps it apart from the TOTP-enrollment 409 without the
+        # client string-matching a message.
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "store_ambiguous",
+                "message": str(exc),
+                "stores": exc.choices,
+            },
+        )
     except TotpEnrollmentRequired as exc:
         raise HTTPException(status_code=409, detail=str(exc))
+    _record_login_event(db, result.user_id, method="password")
+    db.commit()
     return _to_login_response(result, response, db, request)
 
 

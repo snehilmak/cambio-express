@@ -492,10 +492,15 @@ def test_cross_store_login_admin_finds_store_and_returns_token(test_store_id, ap
     assert "store.admin" in body["permissions"]
 
 
-def test_cross_store_login_rejects_employee(api_client):
-    """Employees must use their store's slug-scoped sign-in URL.
-    The cookieless cross-store login refuses them with the same
-    opaque 401 as a bad password — never leaks role info."""
+def test_cross_store_login_accepts_employee(api_client):
+    """Employees sign in on the same page as everyone else.
+
+    This route used to refuse `role == "employee"` and tell them to
+    use their store's slug-scoped page — a page the SPA dropped when
+    sign-in was unified, which left every employee login unusable.
+    See tests/Modules/Auth/test_employee_login.py for the full
+    behaviour; this guards the endpoint contract.
+    """
     from api.Modules.Tenancy.Models import User
     from tests._app import db
     u = User(
@@ -509,10 +514,8 @@ def test_cross_store_login_rejects_employee(api_client):
             "/auth/login-cross-store",
             json={"username": "empx@test.com", "password": "emppass123!"},
         )
-        # 401 — same as bad-password. Body string differs but the
-        # status code is identical, so a probe can't tell apart
-        # "wrong password" vs "you're an employee".
-        assert resp.status_code == 401
+        assert resp.status_code == 200
+        assert resp.json()["role"] == "employee"
     finally:
         db.session.delete(u)
         db.session.commit()

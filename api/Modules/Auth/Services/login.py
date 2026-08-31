@@ -94,6 +94,27 @@ class TotpEnrollmentRequired(Exception):
     user to complete enrollment via the legacy site."""
 
 
+class AmbiguousLoginError(Exception):
+    """Raised when one username + password authenticates at more
+    than one store, so the sign-in page can't tell which account
+    the person meant.
+
+    Usernames are unique per store, not globally, so this is a
+    legitimate (if uncommon) state: the same person set up with
+    the same credentials at two locations. The caller re-submits
+    to `/auth/login` with an explicit `store_id`.
+
+    Carries only the stores whose password check PASSED, so the
+    response can't be used to probe which stores a username exists
+    at — you have to already hold working credentials to see the
+    list.
+    """
+
+    def __init__(self, choices: list[dict[str, Any]]) -> None:
+        super().__init__("Choose which store to sign in to")
+        self.choices = choices
+
+
 def _issue_full_login(user: User, db: "Session | None" = None) -> LoginResult:
     perms = permissions_for(
         user.role, db, store_id=user.store_id, user_id=user.id,
@@ -179,6 +200,38 @@ def authenticate_password(
     return _issue_full_login(user)
 
 
+def _store_name(db: Session, store_id: int | None) -> str:
+    """Display name for a store-picker choice. Empty for the
+    superadmin (who has no store)."""
+    if store_id is None:
+        return ""
+    from api.Modules.Tenancy.Models import Store
+    store = db.get(Store, store_id)
+    return (store.name or "") if store is not None else ""
+
+
+def _authenticating_users(
+    db: Session, username: str, password: str,
+) -> list[User]:
+    """Every active user whose `username` + `password` both check
+    out, across all stores.
+
+    Usually 0 (bad credentials) or 1. More than one means the same
+    person is set up identically at several stores — the caller
+    disambiguates rather than guessing.
+
+    Every candidate is verified, with no early exit, so the work
+    done doesn't depend on which row happens to match first.
+    """
+    from api.Modules.Auth.Repositories import find_active_users_by_username
+    if not username or not password:
+        return []
+    return [
+        u for u in find_active_users_by_username(db, username)
+        if u.check_password(password)
+    ]
+
+
 def authenticate_password_cross_store(
     db: Session, *, username: str, password: str,
 ) -> LoginResult | LoginPendingResult:
@@ -191,22 +244,40 @@ def authenticate_password_cross_store(
     (when the user's role requires 2FA — see `authenticate_password`).
 
     Raises `AuthenticationError` on bad credentials / disabled
-    user, or `TotpEnrollmentRequired` if 2FA is required but
-    enrollment is incomplete.
+    user, `TotpEnrollmentRequired` if 2FA is required but
+    enrollment is incomplete, or `AmbiguousLoginError` when the
+    credentials are valid at more than one store.
 
-    Employees are intentionally rejected here because the legacy
-    flow does the same: an employee on the cookieless landing
-    page is told to use their store's slug-scoped page.
+    **Every role signs in here, employees included.** This used to
+    reject `role == "employee"` with "Please use your store's
+    sign-in page", carried over from the Flask era when cashiers
+    had their own slug-scoped login. Since the SPA unified on one
+    sign-in page that rejection had no page to send them to, so a
+    newly created employee login simply could not be used.
+
+    The rejection was also papering over a real defect. Usernames
+    are unique per store, not globally, and the old lookup took
+    the FIRST row matching the username — so once two stores each
+    had an "amber", the second one could never sign in: the lookup
+    found the other store's row and her password failed against
+    it, forever, with an opaque "invalid username or password".
+    Admins mostly escaped it by using email addresses; employees,
+    who get short names, would have hit it constantly. So we check
+    the password against every candidate and let it pick the row.
     """
-    user = verify_password_cross_store(db, username, password)
-    if user is None:
+    candidates = _authenticating_users(db, username, password)
+    if not candidates:
         raise AuthenticationError("Invalid username or password")
-    if user.role == "employee":
-        # Same behavior as the legacy /login route — employees
-        # must sign in via their store's slug-scoped page.
-        raise AuthenticationError(
-            "Please use your store's sign-in page",
-        )
+    if len(candidates) > 1:
+        raise AmbiguousLoginError([
+            {
+                "store_id": u.store_id,
+                "store_name": _store_name(db, u.store_id),
+                "role": u.role or "",
+            }
+            for u in candidates
+        ])
+    user = candidates[0]
 
     pending = _maybe_pending_2fa(db, user)
     if pending is not None:
