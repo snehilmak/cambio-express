@@ -84,6 +84,9 @@ export {
 } from "./RowActions";
 export { FormActions } from "./FormActions";
 export { TabsBar, TabsLink, TabsButton } from "./Tabs";
+export {
+  MonthCalendar, MonthCalendarLegend, type MonthCalendarDay,
+} from "./MonthCalendar";
 export { Checkbox } from "./Checkbox";
 export { Switch } from "./Switch";
 export { Tooltip } from "./Tooltip";

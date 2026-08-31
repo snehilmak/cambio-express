@@ -9,8 +9,8 @@ import {
 } from "../api/storebook";
 import {
   Alert, Breadcrumbs, Button, Card, ConfirmDialog, ErrorState, Field,
-  IconButton, Input, Loading, PageHeader, PageShell, Textarea,
-  useToast,
+  IconButton, Input, Loading, MoneyInput, PageHeader, PageShell,
+  Textarea, useToast,
 } from "../components/ui";
 import { ApiError } from "../lib/api";
 import { fmtMoney2 } from "../lib/formatters";
@@ -32,14 +32,13 @@ function todayIso(): string {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 
-/** Cents ⇄ the string in the box. Kept as strings while editing so
- *  a half-typed "1." doesn't get eaten by a round-trip. */
-function centsToInput(cents: number): string {
-  return cents ? (cents / 100).toFixed(2) : "";
+// MoneyInput works in DOLLARS; the API and the totals work in
+// cents. These two are the only place the boundary is crossed.
+function centsToDollars(cents: number): number {
+  return cents / 100;
 }
-function inputToCents(raw: string): number {
-  const n = Number.parseFloat(raw.replace(/[^0-9.-]/g, ""));
-  return Number.isFinite(n) ? Math.round(n * 100) : 0;
+function dollarsToCents(dollars: number): number {
+  return Math.round((dollars || 0) * 100);
 }
 
 export default function StoreBookDay() {
@@ -51,9 +50,10 @@ export default function StoreBookDay() {
 
   const { data, isLoading, isError, refetch } = useStoreBookDay(day);
 
-  // Local edit buffer. Money is held as display strings; counts as
-  // strings too. Flushed to the server on blur.
-  const [money, setMoney] = useState<Record<string, string>>({});
+  // Local edit buffer. MoneyInput is a controlled number field, so
+  // money is held in dollars; counts stay strings. Flushed to the
+  // server on blur.
+  const [money, setMoney] = useState<Record<string, number>>({});
   const [counts, setCounts] = useState<Record<string, string>>({});
   const [notes, setNotes] = useState("");
   const [busy, setBusy] = useState(false);
@@ -62,9 +62,9 @@ export default function StoreBookDay() {
 
   useEffect(() => {
     if (!data) return;
-    const m: Record<string, string> = {};
+    const m: Record<string, number> = {};
     for (const [k, v] of Object.entries(data.values)) {
-      m[k] = centsToInput(v);
+      m[k] = centsToDollars(v);
     }
     const c: Record<string, string> = {};
     for (const [k, v] of Object.entries(data.counts)) {
@@ -86,7 +86,7 @@ export default function StoreBookDay() {
       for (const section of column.sections) {
         for (const f of section.fields) {
           const key = column.column as keyof typeof out;
-          out[key] += inputToCents(money[f.key] ?? "");
+          out[key] += dollarsToCents(money[f.key] ?? 0);
         }
       }
     }
@@ -295,7 +295,7 @@ export default function StoreBookDay() {
                     field={f}
                     day={day}
                     locked={locked}
-                    value={money[f.key] ?? ""}
+                    value={money[f.key] ?? 0}
                     countValue={
                       f.count_field ? counts[f.count_field] ?? "" : ""
                     }
@@ -317,7 +317,9 @@ export default function StoreBookDay() {
                     }}
                     onCommit={() => {
                       const body: Parameters<typeof updateStoreBookDay>[1] = {
-                        values: { [f.key]: inputToCents(money[f.key] ?? "") },
+                        values: {
+                          [f.key]: dollarsToCents(money[f.key] ?? 0),
+                        },
                       };
                       const c: Record<string, number> = {};
                       if (f.count_field) {
@@ -381,17 +383,17 @@ function MoneyRow({
   field: StoreBookField;
   day: string;
   locked: boolean;
-  value: string;
+  value: number;
   countValue: string;
   gallonsValue: string;
   original?: number;
-  onMoney: (v: string) => void;
+  onMoney: (v: number) => void;
   onCount: (v: string) => void;
   onGallons: (v: string) => void;
   onCommit: () => void;
   onRestore: () => void;
 }) {
-  const cents = inputToCents(value);
+  const cents = dollarsToCents(value);
   // Green when the operator's value still matches what the register
   // said; red once they've overridden it. Matches the convention
   // operators already know from other back-office tools.
@@ -399,10 +401,8 @@ function MoneyRow({
 
   return (
     <div className={styles.row}>
-      <label className={styles.rowLabel} htmlFor={`f-${field.key}`}>
-        {field.label}
-      </label>
-      <div className={styles.rowInputs}>
+      <span className={styles.rowLabel}>{field.label}</span>
+      <div className={styles.rowInputs} onBlur={onCommit}>
         {field.count_field && (
           <Input
             type="number" inputMode="numeric"
@@ -412,7 +412,6 @@ function MoneyRow({
             value={countValue}
             disabled={locked}
             onChange={(e) => onCount(e.target.value)}
-            onBlur={onCommit}
           />
         )}
         {field.gallons_field && (
@@ -424,17 +423,14 @@ function MoneyRow({
             value={gallonsValue}
             disabled={locked}
             onChange={(e) => onGallons(e.target.value)}
-            onBlur={onCommit}
           />
         )}
-        <Input
-          id={`f-${field.key}`}
-          type="number" step="0.01" inputMode="decimal"
-          placeholder="0.00"
+        <MoneyInput
+          aria-label={field.label}
           value={value}
+          onChange={onMoney}
           disabled={locked}
-          onChange={(e) => onMoney(e.target.value)}
-          onBlur={onCommit}
+          fullWidth
         />
         {overridden && !locked && (
           <IconButton

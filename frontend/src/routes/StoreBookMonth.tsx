@@ -1,9 +1,9 @@
-import { useSearchParams, Link } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 
 import { useStoreBookMonth } from "../api/storebook";
 import {
   Breadcrumbs, Button, Card, ErrorState, KpiCard, KpiGrid, Loading,
-  PageHeader, PageShell, Select,
+  MonthCalendar, PageHeader, PageShell, Select,
 } from "../components/ui";
 import { fmtMoney2 } from "../lib/formatters";
 import styles from "./StoreBookMonth.module.css";
@@ -16,12 +16,10 @@ const MONTHS = [
   "July", "August", "September", "October", "November", "December",
 ];
 
-function daysInMonth(year: number, month: number): number {
-  return new Date(year, month, 0).getDate();
-}
-
-function pad2(n: number): string {
-  return String(n).padStart(2, "0");
+function todayIso(): string {
+  const d = new Date();
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 
 export default function StoreBookMonth() {
@@ -47,13 +45,6 @@ export default function StoreBookMonth() {
   const byDate = new Map(
     (data?.rows ?? []).map((r) => [r.entry_date, r]),
   );
-
-  // Leading blanks so the 1st lands on its weekday.
-  const firstWeekday = new Date(year, month - 1, 1).getDay();
-  const total = daysInMonth(year, month);
-  const cells: (number | null)[] = [];
-  for (let i = 0; i < firstWeekday; i++) cells.push(null);
-  for (let d = 1; d <= total; d++) cells.push(d);
 
   return (
     <PageShell>
@@ -120,67 +111,27 @@ export default function StoreBookMonth() {
 
       {data && (
         <Card>
-          <div className={styles.weekdays}>
-            {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => (
-              <div key={d} className={styles.weekday}>{d}</div>
-            ))}
-          </div>
-          <div className={styles.grid}>
-            {cells.map((d, i) => {
-              if (d == null) {
-                return <div key={`b${i}`} className={styles.blank} />;
-              }
-              const iso = `${year}-${pad2(month)}-${pad2(d)}`;
+          <MonthCalendar
+            year={year}
+            month={month}
+            today={todayIso()}
+            hrefFor={(iso) => `/store-book/day?date=${iso}`}
+            ariaLabelFor={(iso) => `Open the daily book for ${iso}`}
+            dayFor={(iso) => {
               const row = byDate.get(iso);
-              return (
-                <Link
-                  key={iso}
-                  to={`/store-book/day?date=${iso}`}
-                  className={[
-                    styles.cell,
-                    row ? styles.hasEntry : "",
-                    row?.is_locked ? styles.locked : "",
-                  ].filter(Boolean).join(" ")}
-                  aria-label={`Open the daily book for ${iso}`}
-                >
-                  <div className={styles.cellHead}>
-                    <span className={styles.cellDay}>{d}</span>
-                    {row?.is_locked && (
-                      <span
-                        className={styles.lockMark}
-                        aria-label="Locked"
-                      >
-                        🔒
-                      </span>
-                    )}
-                  </div>
-                  {row && (
-                    <div className={styles.cellBody}>
-                      <div className={styles.cellTotal}>
-                        {fmtMoney2(row.sales_cents / 100)}
-                      </div>
-                      {row.over_short_cents !== 0 && (
-                        <span
-                          className={[
-                            styles.variance,
-                            row.over_short_cents > 0
-                              ? styles.over : styles.short,
-                          ].join(" ")}
-                        >
-                          {row.over_short_cents > 0 ? "+" : "−"}
-                          {fmtMoney2(
-                            Math.abs(row.over_short_cents) / 100,
-                          )}
-                        </span>
-                      )}
-                    </div>
-                  )}
-                </Link>
-              );
-            })}
-          </div>
+              if (!row) return undefined;
+              return {
+                hasData: true,
+                locked: row.is_locked,
+                primary: fmtMoney2(row.sales_cents / 100),
+                variance: row.over_short_cents / 100,
+                varianceTitle: "Over/short for the day",
+              };
+            }}
+          />
         </Card>
       )}
+
     </PageShell>
   );
 }
