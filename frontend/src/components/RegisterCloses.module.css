@@ -1,5 +1,7 @@
-/* Day close page — the few page-specific treatments the kit
-   primitives don't cover (CLAUDE.md inline-styles-vs-modules). */
+/* Register-close detail — the few treatments the kit primitives
+   don't cover (CLAUDE.md inline-styles-vs-modules). Moved here
+   from DayClose.module.css when the section was folded into the
+   store daily book's day. */
 
 .modalForm {
   display: flex;
@@ -53,7 +55,9 @@
   box-shadow: inset 3px 0 0 0 var(--db-warning, #ffb020);
 }
 
-.departmentsActions {
+
+/* Section header controls sit side by side. */
+.actions {
   display: flex;
   gap: 0.5rem;
 }

@@ -164,9 +164,9 @@ STORE_REPORT_CATEGORIES: list[dict[str, Any]] = [
         "icon":  '<svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg>',
         "reports": [
             {"key": "day_close_summary",
-             "label": "Day Close Summary",
-             "description": "Register totals, tenders, department sales, and drawer over/short by day.",
-             "url": "/day-close"},
+             "label": "Store Daily Book",
+             "description": "Sales, tenders, deposits, register totals, and the day's over/short.",
+             "url": "/store-book"},
             {"key": "item_movement",
              "label": "Item Movement",
              "description": "Top sellers — per-item quantity and dollars from register journal data.",

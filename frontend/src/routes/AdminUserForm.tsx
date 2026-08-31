@@ -104,7 +104,7 @@ interface StorePermissionsPayload {
 const MODULE_LABELS: Record<string, string> = {
   module_money_services: "Money services (transfers, batches, senders)",
   module_lottery:        "Lottery",
-  module_day_close:      "Day close",
+  module_day_close:      "Store daily book",
   module_check_cashing:  "Check cashing & returned checks",
   module_price_book:     "Price book & purchases",
 };

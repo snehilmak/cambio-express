@@ -15,6 +15,7 @@ import { ApiError } from "../lib/api";
 import { fmtMoney2 } from "../lib/formatters";
 import { hasPermission } from "../lib/permissions";
 import { useUrlFilterState } from "../lib/useUrlFilterState";
+import DepartmentsManager from "../components/DepartmentsManager";
 import {
   Alert, Breadcrumbs, Button, Card, Checkbox, EmptyState, ErrorState,
   Field, InfoTip, Input, Loading, Modal, PageHeader, PageShell, Pager,
@@ -24,14 +25,17 @@ import {
 import styles from "./PriceBook.module.css";
 
 // /app/price-book — the item catalog + vendor directory (P2-2).
-// Two tabs on one page: Items (paginated live search over the
-// price book) and Vendors (the supplier directory items link to).
-// Everything here is an operator-owned catalog (HANDOFF.md §2
-// product principle) — cashiers can look items up (catalog.read),
-// managing rows needs catalog.update.
+// Three tabs on one page: Items (paginated live search over the
+// price book), Vendors (the supplier directory items link to), and
+// Departments (how sales are grouped, on items and on a register
+// close alike). Everything here is an operator-owned catalog
+// (HANDOFF.md §2 product principle) — cashiers can look items up
+// (catalog.read), managing rows needs catalog.update.
 
 export default function PriceBook() {
-  const [tab, setTab] = useState<"items" | "vendors">("items");
+  const [tab, setTab] = useState<"items" | "vendors" | "departments">(
+    "items",
+  );
   return (
     <PageShell maxWidth="72rem">
       <Breadcrumbs crumbs={[{ label: "Price book" }]} />
@@ -54,9 +58,16 @@ export default function PriceBook() {
         >
           Vendors
         </TabsButton>
+        <TabsButton
+          active={tab === "departments"}
+          onClick={() => setTab("departments")}
+        >
+          Departments
+        </TabsButton>
       </TabsBar>
       {tab === "items" && <ItemsTab />}
       {tab === "vendors" && <VendorsTab />}
+      {tab === "departments" && <DepartmentsManager />}
     </PageShell>
   );
 }
@@ -371,7 +382,7 @@ function SeedPreview({
       {preview != null && preview.items.length === 0 && (
         <EmptyState
           title="No register data yet"
-          body="Once your site agent has uploaded journal files (see Day close → Import from register), items it sold show up here."
+          body="Once your site agent has uploaded journal files (see Store daily book → Import from register), items it sold show up here."
         />
       )}
       {preview != null && preview.items.length > 0 && (

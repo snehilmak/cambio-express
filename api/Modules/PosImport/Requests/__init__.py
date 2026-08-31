@@ -226,3 +226,109 @@ class ItemMovementResponse(BaseModel):
     end: str
     total_quantity: float
     total_amount: float
+
+
+# ── Transactions (G-6) ──────────────────────────────────────
+#
+# The register's own ticket detail, so an operator can answer "what
+# sold on this transaction?" and "which tickets had a voided item?".
+# Cancelled lines are RETURNED, flagged by `status`, because a
+# voided item is exactly what a manager is looking for — the money
+# fields on the parent event already exclude them.
+
+
+class PosTransactionRow(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: int
+    business_date: str
+    kind: str
+    register_id: str
+    cashier_id: str
+    transaction_no: str
+    receipt_at: str | None
+    item_count: int
+    gross: float
+    tax: float
+    grand_total: float
+    has_voided_line: bool
+    training_mode: bool
+    offline: bool
+    suspended: bool
+
+
+class PosTransactionLineRow(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    line_seq: int
+    status: str
+    pos_code: str
+    description: str
+    entry_method: str
+    merchandise_code: str
+    quantity: float
+    amount: float
+    actual_price: float
+    regular_price: float
+    is_fuel: bool
+    fuel_grade_id: str
+    fuel_position: str
+    gallons: float
+
+
+class PosTransactionTenderRow(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    code: str
+    sub_code: str
+    amount: float
+    is_change: bool
+    status: str
+
+
+class PosTransactionDetail(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: int
+    business_date: str
+    source_file: str
+    kind: str
+    register_id: str
+    cashier_id: str
+    till_id: str
+    transaction_no: str
+    event_sequence_id: str
+    started_at: str | None
+    ended_at: str | None
+    receipt_at: str | None
+    outside: bool
+    training_mode: bool
+    offline: bool
+    suspended: bool
+    gross: float
+    net: float
+    tax: float
+    grand_total: float
+    has_voided_line: bool
+    lines: list[PosTransactionLineRow]
+    tenders: list[PosTransactionTenderRow]
+
+
+class PosTransactionListResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    rows: list[PosTransactionRow]
+    total: int
+    page: int
+    total_pages: int
+    # Totals for the WHOLE filtered set, not just this page — a
+    # per-page sum would silently disagree with the row count above
+    # it and read as a bug.
+    total_grand: float
+    voided_count: int
+
+
+class PosTransactionDetailResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    transaction: PosTransactionDetail

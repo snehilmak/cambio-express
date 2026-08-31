@@ -8964,6 +8964,416 @@
         "title": "PlatformUserCreateRequest",
         "type": "object"
       },
+      "PosTransactionDetail": {
+        "additionalProperties": false,
+        "properties": {
+          "business_date": {
+            "title": "Business Date",
+            "type": "string"
+          },
+          "cashier_id": {
+            "title": "Cashier Id",
+            "type": "string"
+          },
+          "ended_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ended At"
+          },
+          "event_sequence_id": {
+            "title": "Event Sequence Id",
+            "type": "string"
+          },
+          "grand_total": {
+            "title": "Grand Total",
+            "type": "number"
+          },
+          "gross": {
+            "title": "Gross",
+            "type": "number"
+          },
+          "has_voided_line": {
+            "title": "Has Voided Line",
+            "type": "boolean"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/PosTransactionLineRow"
+            },
+            "title": "Lines",
+            "type": "array"
+          },
+          "net": {
+            "title": "Net",
+            "type": "number"
+          },
+          "offline": {
+            "title": "Offline",
+            "type": "boolean"
+          },
+          "outside": {
+            "title": "Outside",
+            "type": "boolean"
+          },
+          "receipt_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Receipt At"
+          },
+          "register_id": {
+            "title": "Register Id",
+            "type": "string"
+          },
+          "source_file": {
+            "title": "Source File",
+            "type": "string"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "suspended": {
+            "title": "Suspended",
+            "type": "boolean"
+          },
+          "tax": {
+            "title": "Tax",
+            "type": "number"
+          },
+          "tenders": {
+            "items": {
+              "$ref": "#/components/schemas/PosTransactionTenderRow"
+            },
+            "title": "Tenders",
+            "type": "array"
+          },
+          "till_id": {
+            "title": "Till Id",
+            "type": "string"
+          },
+          "training_mode": {
+            "title": "Training Mode",
+            "type": "boolean"
+          },
+          "transaction_no": {
+            "title": "Transaction No",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "business_date",
+          "source_file",
+          "kind",
+          "register_id",
+          "cashier_id",
+          "till_id",
+          "transaction_no",
+          "event_sequence_id",
+          "started_at",
+          "ended_at",
+          "receipt_at",
+          "outside",
+          "training_mode",
+          "offline",
+          "suspended",
+          "gross",
+          "net",
+          "tax",
+          "grand_total",
+          "has_voided_line",
+          "lines",
+          "tenders"
+        ],
+        "title": "PosTransactionDetail",
+        "type": "object"
+      },
+      "PosTransactionDetailResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "transaction": {
+            "$ref": "#/components/schemas/PosTransactionDetail"
+          }
+        },
+        "required": [
+          "transaction"
+        ],
+        "title": "PosTransactionDetailResponse",
+        "type": "object"
+      },
+      "PosTransactionLineRow": {
+        "additionalProperties": false,
+        "properties": {
+          "actual_price": {
+            "title": "Actual Price",
+            "type": "number"
+          },
+          "amount": {
+            "title": "Amount",
+            "type": "number"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "entry_method": {
+            "title": "Entry Method",
+            "type": "string"
+          },
+          "fuel_grade_id": {
+            "title": "Fuel Grade Id",
+            "type": "string"
+          },
+          "fuel_position": {
+            "title": "Fuel Position",
+            "type": "string"
+          },
+          "gallons": {
+            "title": "Gallons",
+            "type": "number"
+          },
+          "is_fuel": {
+            "title": "Is Fuel",
+            "type": "boolean"
+          },
+          "line_seq": {
+            "title": "Line Seq",
+            "type": "integer"
+          },
+          "merchandise_code": {
+            "title": "Merchandise Code",
+            "type": "string"
+          },
+          "pos_code": {
+            "title": "Pos Code",
+            "type": "string"
+          },
+          "quantity": {
+            "title": "Quantity",
+            "type": "number"
+          },
+          "regular_price": {
+            "title": "Regular Price",
+            "type": "number"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "line_seq",
+          "status",
+          "pos_code",
+          "description",
+          "entry_method",
+          "merchandise_code",
+          "quantity",
+          "amount",
+          "actual_price",
+          "regular_price",
+          "is_fuel",
+          "fuel_grade_id",
+          "fuel_position",
+          "gallons"
+        ],
+        "title": "PosTransactionLineRow",
+        "type": "object"
+      },
+      "PosTransactionListResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/PosTransactionRow"
+            },
+            "title": "Rows",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          },
+          "total_grand": {
+            "title": "Total Grand",
+            "type": "number"
+          },
+          "total_pages": {
+            "title": "Total Pages",
+            "type": "integer"
+          },
+          "voided_count": {
+            "title": "Voided Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "rows",
+          "total",
+          "page",
+          "total_pages",
+          "total_grand",
+          "voided_count"
+        ],
+        "title": "PosTransactionListResponse",
+        "type": "object"
+      },
+      "PosTransactionRow": {
+        "additionalProperties": false,
+        "properties": {
+          "business_date": {
+            "title": "Business Date",
+            "type": "string"
+          },
+          "cashier_id": {
+            "title": "Cashier Id",
+            "type": "string"
+          },
+          "grand_total": {
+            "title": "Grand Total",
+            "type": "number"
+          },
+          "gross": {
+            "title": "Gross",
+            "type": "number"
+          },
+          "has_voided_line": {
+            "title": "Has Voided Line",
+            "type": "boolean"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "item_count": {
+            "title": "Item Count",
+            "type": "integer"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "offline": {
+            "title": "Offline",
+            "type": "boolean"
+          },
+          "receipt_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Receipt At"
+          },
+          "register_id": {
+            "title": "Register Id",
+            "type": "string"
+          },
+          "suspended": {
+            "title": "Suspended",
+            "type": "boolean"
+          },
+          "tax": {
+            "title": "Tax",
+            "type": "number"
+          },
+          "training_mode": {
+            "title": "Training Mode",
+            "type": "boolean"
+          },
+          "transaction_no": {
+            "title": "Transaction No",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "business_date",
+          "kind",
+          "register_id",
+          "cashier_id",
+          "transaction_no",
+          "receipt_at",
+          "item_count",
+          "gross",
+          "tax",
+          "grand_total",
+          "has_voided_line",
+          "training_mode",
+          "offline",
+          "suspended"
+        ],
+        "title": "PosTransactionRow",
+        "type": "object"
+      },
+      "PosTransactionTenderRow": {
+        "additionalProperties": false,
+        "properties": {
+          "amount": {
+            "title": "Amount",
+            "type": "number"
+          },
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "is_change": {
+            "title": "Is Change",
+            "type": "boolean"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "sub_code": {
+            "title": "Sub Code",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "sub_code",
+          "amount",
+          "is_change",
+          "status"
+        ],
+        "title": "PosTransactionTenderRow",
+        "type": "object"
+      },
       "PriceBookHarvestResponse": {
         "additionalProperties": false,
         "properties": {
@@ -29673,6 +30083,236 @@
           }
         },
         "summary": "Commit Staged Route",
+        "tags": [
+          "posimport"
+        ]
+      }
+    },
+    "/posimport/transactions": {
+      "get": {
+        "description": "Register tickets for a date range (G-6).\n\nReading tickets is a reporting act, not an import one, so this\ntakes ``day_close.read`` \u2014 a cashier looking up \"what was on\nticket 4417?\" should not need the admin rights that booking a\nday requires.",
+        "operationId": "list_transactions_route_posimport_transactions_get",
+        "parameters": [
+          {
+            "description": "YYYY-MM-DD",
+            "in": "query",
+            "name": "start",
+            "required": true,
+            "schema": {
+              "description": "YYYY-MM-DD",
+              "title": "Start",
+              "type": "string"
+            }
+          },
+          {
+            "description": "YYYY-MM-DD",
+            "in": "query",
+            "name": "end",
+            "required": true,
+            "schema": {
+              "description": "YYYY-MM-DD",
+              "title": "End",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "default": "",
+              "maxLength": 80,
+              "title": "Q",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "kind",
+            "required": false,
+            "schema": {
+              "default": "",
+              "maxLength": 16,
+              "title": "Kind",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "register_id",
+            "required": false,
+            "schema": {
+              "default": "",
+              "maxLength": 20,
+              "title": "Register Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "voided_only",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Voided Only",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "per_page",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Per Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PosTransactionListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Transactions Route",
+        "tags": [
+          "posimport"
+        ]
+      }
+    },
+    "/posimport/transactions/{transaction_id}": {
+      "get": {
+        "description": "One ticket, with every line and tender.\n\nCancelled lines are included and flagged \u2014 a voided item is what\nthe operator opened this for. The event's money fields already\nexclude them.",
+        "operationId": "transaction_detail_route_posimport_transactions__transaction_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "transaction_id",
+            "required": true,
+            "schema": {
+              "minimum": 1,
+              "title": "Transaction Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PosTransactionDetailResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Transaction Detail Route",
         "tags": [
           "posimport"
         ]

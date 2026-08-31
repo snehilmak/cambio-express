@@ -52,8 +52,8 @@ export const NAV: NavGroup[] = [
     items: [],
   },
   {
-    // Daily operations. The store-level retail modules (Day close /
-    // Lottery / Price book) carry roles: superadmin is the platform
+    // Daily operations. The store-level retail modules (Store
+    // daily book / Lottery / Price book) carry roles: superadmin is the platform
     // operator, not a store — store modules stay off their nav
     // (they can still reach any route directly for support).
     title: "Daily",
@@ -72,6 +72,16 @@ export const NAV: NavGroup[] = [
         flag: "module_day_close", perm: "day_close.read",
         icon: iconRegister(),
         desc: "Sales, tenders, deposits, and the day's over/short.",
+      },
+      {
+        // Ticket-level detail from the register. Same flag + read
+        // right as the store daily book it belongs beside — a
+        // cashier looking up a customer's ticket needs no more.
+        to: "/transactions", label: "Transactions",
+        roles: ["admin", "employee"],
+        flag: "module_day_close", perm: "day_close.read",
+        icon: iconReceipt(),
+        desc: "Every register ticket, item by item.",
       },
       {
         to: "/lottery", label: "Lottery",
@@ -634,6 +644,18 @@ function iconHealth() {
       stroke="currentColor" strokeWidth="2" strokeLinecap="round"
       strokeLinejoin="round">
       <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+    </svg>
+  );
+}
+function iconReceipt() {
+  // A paper receipt: torn bottom edge + two lines of print.
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false"
+      stroke="currentColor" strokeWidth="2" strokeLinecap="round"
+      strokeLinejoin="round">
+      <path d="M5 3h14v18l-2.3-1.6L14.4 21l-2.4-1.6L9.6 21l-2.3-1.6L5 21z" />
+      <path d="M9 8h6" />
+      <path d="M9 12h6" />
     </svg>
   );
 }

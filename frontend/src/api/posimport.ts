@@ -137,3 +137,56 @@ export function useItemMovement(params: {
     },
   });
 }
+
+
+// ── Transactions (G-6) ──────────────────────────────────────
+
+export type PosTransactionRow = components["schemas"]["PosTransactionRow"];
+export type PosTransaction = components["schemas"]["PosTransactionDetail"];
+export type PosTransactionLine =
+  components["schemas"]["PosTransactionLineRow"];
+export type PosTransactionTender =
+  components["schemas"]["PosTransactionTenderRow"];
+
+type PosTransactionListResponse =
+  components["schemas"]["PosTransactionListResponse"];
+type PosTransactionDetailResponse =
+  components["schemas"]["PosTransactionDetailResponse"];
+
+export function useTransactions(params: {
+  start: string;
+  end: string;
+  q?: string;
+  kind?: string;
+  registerId?: string;
+  voidedOnly?: boolean;
+  page?: number;
+}) {
+  const qs = new URLSearchParams({
+    start: params.start,
+    end: params.end,
+    page: String(params.page ?? 1),
+  });
+  if (params.q) qs.set("q", params.q);
+  if (params.kind) qs.set("kind", params.kind);
+  if (params.registerId) qs.set("register_id", params.registerId);
+  if (params.voidedOnly) qs.set("voided_only", "true");
+  return useQuery<PosTransactionListResponse>({
+    // Both dates must be present or the server 422s on the range.
+    enabled: params.start.length === 10 && params.end.length === 10,
+    queryKey: ["posimport", "transactions", qs.toString()],
+    queryFn: () => api<PosTransactionListResponse>(
+      `/api/v2/posimport/transactions?${qs.toString()}`,
+    ),
+  });
+}
+
+export function useTransaction(id: number | null) {
+  return useQuery<PosTransactionDetailResponse>({
+    enabled: id != null && id > 0,
+    queryKey: ["posimport", "transaction", id],
+    queryFn: () => api<PosTransactionDetailResponse>(
+      `/api/v2/posimport/transactions/${id}`,
+    ),
+  });
+}

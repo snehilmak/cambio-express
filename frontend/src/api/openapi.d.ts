@@ -3734,6 +3734,55 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/posimport/transactions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Transactions Route
+         * @description Register tickets for a date range (G-6).
+         *
+         *     Reading tickets is a reporting act, not an import one, so this
+         *     takes ``day_close.read`` — a cashier looking up "what was on
+         *     ticket 4417?" should not need the admin rights that booking a
+         *     day requires.
+         */
+        get: operations["list_transactions_route_posimport_transactions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/posimport/transactions/{transaction_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Transaction Detail Route
+         * @description One ticket, with every line and tender.
+         *
+         *     Cancelled lines are included and flagged — a voided item is what
+         *     the operator opened this for. The event's money fields already
+         *     exclude them.
+         */
+        get: operations["transaction_detail_route_posimport_transactions__transaction_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/report-import/intermex/commit": {
         parameters: {
             query?: never;
@@ -10077,6 +10126,151 @@ export interface components {
             password: string;
             /** Username */
             username: string;
+        };
+        /** PosTransactionDetail */
+        PosTransactionDetail: {
+            /** Business Date */
+            business_date: string;
+            /** Cashier Id */
+            cashier_id: string;
+            /** Ended At */
+            ended_at: string | null;
+            /** Event Sequence Id */
+            event_sequence_id: string;
+            /** Grand Total */
+            grand_total: number;
+            /** Gross */
+            gross: number;
+            /** Has Voided Line */
+            has_voided_line: boolean;
+            /** Id */
+            id: number;
+            /** Kind */
+            kind: string;
+            /** Lines */
+            lines: components["schemas"]["PosTransactionLineRow"][];
+            /** Net */
+            net: number;
+            /** Offline */
+            offline: boolean;
+            /** Outside */
+            outside: boolean;
+            /** Receipt At */
+            receipt_at: string | null;
+            /** Register Id */
+            register_id: string;
+            /** Source File */
+            source_file: string;
+            /** Started At */
+            started_at: string | null;
+            /** Suspended */
+            suspended: boolean;
+            /** Tax */
+            tax: number;
+            /** Tenders */
+            tenders: components["schemas"]["PosTransactionTenderRow"][];
+            /** Till Id */
+            till_id: string;
+            /** Training Mode */
+            training_mode: boolean;
+            /** Transaction No */
+            transaction_no: string;
+        };
+        /** PosTransactionDetailResponse */
+        PosTransactionDetailResponse: {
+            transaction: components["schemas"]["PosTransactionDetail"];
+        };
+        /** PosTransactionLineRow */
+        PosTransactionLineRow: {
+            /** Actual Price */
+            actual_price: number;
+            /** Amount */
+            amount: number;
+            /** Description */
+            description: string;
+            /** Entry Method */
+            entry_method: string;
+            /** Fuel Grade Id */
+            fuel_grade_id: string;
+            /** Fuel Position */
+            fuel_position: string;
+            /** Gallons */
+            gallons: number;
+            /** Is Fuel */
+            is_fuel: boolean;
+            /** Line Seq */
+            line_seq: number;
+            /** Merchandise Code */
+            merchandise_code: string;
+            /** Pos Code */
+            pos_code: string;
+            /** Quantity */
+            quantity: number;
+            /** Regular Price */
+            regular_price: number;
+            /** Status */
+            status: string;
+        };
+        /** PosTransactionListResponse */
+        PosTransactionListResponse: {
+            /** Page */
+            page: number;
+            /** Rows */
+            rows: components["schemas"]["PosTransactionRow"][];
+            /** Total */
+            total: number;
+            /** Total Grand */
+            total_grand: number;
+            /** Total Pages */
+            total_pages: number;
+            /** Voided Count */
+            voided_count: number;
+        };
+        /** PosTransactionRow */
+        PosTransactionRow: {
+            /** Business Date */
+            business_date: string;
+            /** Cashier Id */
+            cashier_id: string;
+            /** Grand Total */
+            grand_total: number;
+            /** Gross */
+            gross: number;
+            /** Has Voided Line */
+            has_voided_line: boolean;
+            /** Id */
+            id: number;
+            /** Item Count */
+            item_count: number;
+            /** Kind */
+            kind: string;
+            /** Offline */
+            offline: boolean;
+            /** Receipt At */
+            receipt_at: string | null;
+            /** Register Id */
+            register_id: string;
+            /** Suspended */
+            suspended: boolean;
+            /** Tax */
+            tax: number;
+            /** Training Mode */
+            training_mode: boolean;
+            /** Transaction No */
+            transaction_no: string;
+        };
+        /** PosTransactionTenderRow */
+        PosTransactionTenderRow: {
+            /** Amount */
+            amount: number;
+            /** Code */
+            code: string;
+            /** Is Change */
+            is_change: boolean;
+            /** Status */
+            status: string;
+            /** Sub Code */
+            sub_code: string;
         };
         /** PriceBookHarvestResponse */
         PriceBookHarvestResponse: {
@@ -19913,6 +20107,85 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["NaxmlCommitResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_transactions_route_posimport_transactions_get: {
+        parameters: {
+            query: {
+                /** @description YYYY-MM-DD */
+                start: string;
+                /** @description YYYY-MM-DD */
+                end: string;
+                q?: string;
+                kind?: string;
+                register_id?: string;
+                voided_only?: boolean;
+                page?: number;
+                per_page?: number;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PosTransactionListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    transaction_detail_route_posimport_transactions__transaction_id__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                transaction_id: number;
+            };
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PosTransactionDetailResponse"];
                 };
             };
             /** @description Validation Error */
