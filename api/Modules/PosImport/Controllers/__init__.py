@@ -57,12 +57,20 @@ from api.Modules.PosImport.Requests import (
     NaxmlCommitResponse,
     NaxmlPreviewResponse,
     NaxmlUploadRequest,
+    PosTransactionDetail,
+    PosTransactionDetailResponse,
+    PosTransactionListResponse,
     PriceBookHarvestResponse,
     PriceBookHarvestRow,
     PriceBookSeedResponse,
     StagedCommitRequest,
     StagedDayRow,
     StagedDaysResponse,
+)
+from api.Modules.PosImport.Services.transactions import (
+    TransactionQueryError,
+    list_transactions,
+    transaction_detail,
 )
 from api.Modules.PosImport.Services import (
     LoadedPayload,
@@ -655,4 +663,72 @@ def pricebook_export_route(
             ),
             "X-Item-Count": str(count),
         },
+    )
+
+
+# ── Transactions (G-6) ──────────────────────────────────────
+
+
+@router.get("/transactions", response_model=PosTransactionListResponse)
+def list_transactions_route(
+    start: str = FQuery(..., description="YYYY-MM-DD"),
+    end: str = FQuery(..., description="YYYY-MM-DD"),
+    q: str = FQuery("", max_length=80),
+    kind: str = FQuery("", max_length=16),
+    register_id: str = FQuery("", max_length=20),
+    voided_only: bool = FQuery(False),
+    page: int = FQuery(1, ge=1),
+    per_page: int = FQuery(50, ge=1, le=200),
+    db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
+) -> PosTransactionListResponse:
+    """Register tickets for a date range (G-6).
+
+    Reading tickets is a reporting act, not an import one, so this
+    takes ``day_close.read`` — a cashier looking up "what was on
+    ticket 4417?" should not need the admin rights that booking a
+    day requires.
+    """
+    sid = resolve_store_scope(claims)
+    require_permission(claims, "day_close", "read")
+    try:
+        start_d = datetime.strptime(start, "%Y-%m-%d").date()
+        end_d = datetime.strptime(end, "%Y-%m-%d").date()
+    except ValueError:
+        raise HTTPException(
+            status_code=422, detail="Dates must be YYYY-MM-DD.",
+        )
+    try:
+        result = list_transactions(
+            db, sid, start_d, end_d, q=q, kind=kind,
+            register_id=register_id, voided_only=voided_only,
+            page=page, per_page=per_page,
+        )
+    except TransactionQueryError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    return PosTransactionListResponse(**result)
+
+
+@router.get(
+    "/transactions/{transaction_id}",
+    response_model=PosTransactionDetailResponse,
+)
+def transaction_detail_route(
+    transaction_id: int = Path(..., ge=1),
+    db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
+) -> PosTransactionDetailResponse:
+    """One ticket, with every line and tender.
+
+    Cancelled lines are included and flagged — a voided item is what
+    the operator opened this for. The event's money fields already
+    exclude them.
+    """
+    sid = resolve_store_scope(claims)
+    require_permission(claims, "day_close", "read")
+    detail = transaction_detail(db, sid, transaction_id)
+    if detail is None:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    return PosTransactionDetailResponse(
+        transaction=PosTransactionDetail(**detail),
     )
