@@ -415,6 +415,36 @@ crons → 100%).
   (intentional single-look illustration); four independent
   day/month stepper implementations (kit-extraction candidate).
 
+**E-track — unified Employees hub (owner-directed 2026-08-31,
+"merge and make a single place where we manage the person"; PR
+#898):** the Cashiers roster + Team Users pages are gone;
+/app/employees manages the PERSON — profile, payroll basics,
+contact details, and login — in one place (Cronysoft parity,
+minus their Legacy POS tab).
+- StoreEmployee is the canonical HR record: nullable-unique
+  `user_id` login link (1:1), hired_on, DOB, email/phone/address,
+  payroll_schedule. Migration c8e2f4a6b0d3 auto-links logins to
+  roster rows on unambiguous exact full-name matches only.
+- `/api/v2/admin/employees` (users.* gated, audited): unified
+  listing (HR records + login-only accounts so nobody is
+  invisible), create with link-at-creation, PATCH with
+  clear-flags, link/unlink with same-store/store-role/1:1 guards.
+- SPA: Employees list + tabbed person form; the Login section
+  links/unlinks or jumps to `/admin/users/new?employee=<id>`
+  (auto-links on create). `/admin/users/*` survives ONLY as the
+  "Edit Login & Access" form (R-2 presets/matrix keep one home).
+  Old URLs redirect; nav is one "Employees" entry.
+- Schema-naming lesson (cost a CI cycle): response-model names
+  are GLOBAL in the OpenAPI namespace — "EmployeeRow" collided
+  with Transfers'+Reports' and broke the generated types. Pick
+  unique names; verify frontend with `npx tsc -b --force`.
+- Removed the dead peak-hours heatmap endpoint + service + tests
+  (its SPA card died in D-1; its date-sensitive tests were
+  reddening Monday-morning CI; owner confirmed removal).
+- Deferred by design: SSN + W-4 fields need an encryption /
+  payroll-engine decision before storage. Employee department/
+  photo fields are open follow-ups.
+
 **R-track — per-user permissions perfection (owner-directed
 2026-08-29, "permissions and roles to be perfect… custom user with
 custom access… can't see any numbers"; PRs #894 R-1 + R-2):**
