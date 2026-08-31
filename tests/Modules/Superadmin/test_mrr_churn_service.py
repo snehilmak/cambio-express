@@ -20,13 +20,31 @@ def _add_store(db, *, slug, plan="basic", billing_cycle="monthly",
 
 
 def test_plan_mrr_table_has_expected_keys():
-    """PLAN_MRR maps (plan, cycle) → monthly equivalent."""
+    """PLAN_MRR maps (plan, cycle) → monthly equivalent, at the
+    prices the product actually sells.
+
+    These were $49/$99 (and $490/$990 yearly) — pricing we have
+    never charged — which inflated every superadmin MRR/ARR figure.
+    The table is now derived from PLAN_CATALOG.
+    """
     from api.Modules.Superadmin.Services import PLAN_MRR
-    assert PLAN_MRR[("basic", "monthly")] == 49.0
-    assert PLAN_MRR[("pro",   "monthly")] == 99.0
-    # Yearly prices normalised to monthly.
-    assert abs(PLAN_MRR[("basic", "yearly")] - 490.0 / 12.0) < 1e-9
-    assert abs(PLAN_MRR[("pro",   "yearly")] - 990.0 / 12.0) < 1e-9
+    assert PLAN_MRR[("basic", "monthly")] == 35.0
+    assert PLAN_MRR[("pro",   "monthly")] == 45.0
+    # Yearly prices normalised to monthly ($350/yr and $450/yr).
+    assert abs(PLAN_MRR[("basic", "yearly")] - 350.0 / 12.0) < 0.01
+    assert abs(PLAN_MRR[("pro",   "yearly")] - 450.0 / 12.0) < 0.01
+
+
+def test_plan_mrr_table_tracks_the_billing_catalog():
+    """The reports table is a view of PLAN_CATALOG, not a copy —
+    a price change in one place can't leave the other stale."""
+    from api.Modules.Billing.Services import plan_monthly_cents
+    from api.Modules.Superadmin.Services import PLAN_MRR
+    for plan in ("basic", "pro"):
+        for cycle in ("monthly", "yearly"):
+            assert PLAN_MRR[(plan, cycle)] == (
+                plan_monthly_cents(plan, cycle) / 100.0
+            )
 
 
 # ── mrr_arr ───────────────────────────────────────────────
@@ -54,9 +72,9 @@ def test_mrr_arr_groups_by_plan_and_cycle():
             db.session, date(2026, 5, 1), date(2026, 5, 31),
         )
         # 2 basic monthly + 1 basic yearly + 1 pro monthly = 4 stores
-        # MRR = 2*49 + 1*(490/12) + 1*99 = 98 + 40.833 + 99 = 237.833
+        # MRR = 2*35 + 1*(350/12) + 1*45 = 70 + 29.17 + 45 = 144.17
         assert totals["stores"] == 4
-        assert abs(totals["mrr"] - (2*49.0 + 490.0/12 + 99.0)) < 0.01
+        assert abs(totals["mrr"] - (2*35.0 + 350.0/12 + 45.0)) < 0.02
         # ARR = 12 * MRR
         assert abs(totals["arr"] - totals["mrr"] * 12.0) < 0.01
 
@@ -79,7 +97,7 @@ def test_mrr_arr_excludes_trial_and_inactive():
             db.session, date(2026, 5, 1), date(2026, 5, 31),
         )
         assert totals["stores"] == 1
-        assert totals["mrr"] == 49.0
+        assert totals["mrr"] == 35.0
 
 
 def test_mrr_arr_excludes_stores_created_after_d_to():

@@ -68,6 +68,7 @@ const OwnerConnect = lazy(() => import("./routes/OwnerConnect"));
 const OwnerDashboard = lazy(() => import("./routes/OwnerDashboard"));
 const OwnerLocations = lazy(() => import("./routes/OwnerLocations"));
 const OwnerPLRollup = lazy(() => import("./routes/OwnerPLRollup"));
+const OwnerBilling = lazy(() => import("./routes/OwnerBilling"));
 const OwnerReports = lazy(() => import("./routes/OwnerReports"));
 const OwnerStoreDetail = lazy(() => import("./routes/OwnerStoreDetail"));
 const Privacy = lazy(() => import("./routes/Privacy"));
@@ -309,6 +310,7 @@ export default function App() {
           <Route path="owner/dashboard"      element={<RequireRole roles={["owner"]}><OwnerDashboard /></RequireRole>} />
           <Route path="owner/locations"      element={<RequireRole roles={["owner"]}><OwnerLocations /></RequireRole>} />
           <Route path="owner/pl-rollup"      element={<RequireRole roles={["owner"]}><OwnerPLRollup /></RequireRole>} />
+          <Route path="owner/billing"        element={<RequireRole roles={["owner"]}><OwnerBilling /></RequireRole>} />
           <Route path="owner/reports"        element={<RequireRole roles={["owner"]}><OwnerReports /></RequireRole>} />
           <Route path="owner/bulk-add-user"          element={<RequireRole roles={["owner"]}><OwnerBulkAddUser /></RequireRole>} />
           <Route path="owner/cross-store-defaults"   element={<RequireRole roles={["owner"]}><OwnerCrossStoreDefaults /></RequireRole>} />

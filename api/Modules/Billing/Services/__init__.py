@@ -32,6 +32,15 @@ from api.Modules.Billing.Services.feature_flags import (
     store_has_addon,
 )
 from api.Modules.Billing.Services.health import check_stripe_integration
+from api.Modules.Billing.Services.plans import (
+    PAID_PLAN_KEYS,
+    PLAN_CATALOG,
+    plan_key,
+    plan_label,
+    plan_monthly_cents,
+    plan_price_cents,
+    plan_price_label,
+)
 from api.Modules.Billing.Services.portal import (
     NoBillingCustomerError,
     create_billing_portal_session,
@@ -100,6 +109,13 @@ __all__ = [
     "issue_store_credit",
     "lookup_referral_code",
     "new_referral_code",
+    "PAID_PLAN_KEYS",
+    "PLAN_CATALOG",
+    "plan_key",
+    "plan_label",
+    "plan_monthly_cents",
+    "plan_price_cents",
+    "plan_price_label",
     "purge_expired_stores",
     "resolve_price_ids",
     "retention_purge_dry_run",

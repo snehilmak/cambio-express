@@ -12,15 +12,31 @@ from typing import Any
 from api.Core.Clock import utc_now
 
 
-# Hard-coded plan price table. Used by MRR/ARR. When Stripe pricing
-# changes, update here. Yearly prices are normalised to monthly
-# equivalents for the MRR sum.
-PLAN_MRR: dict[tuple[str, str], float] = {
-    ("basic", "monthly"): 49.0,
-    ("basic", "yearly"):  490.0 / 12.0,
-    ("pro",   "monthly"): 99.0,
-    ("pro",   "yearly"):  990.0 / 12.0,
-}
+def _plan_mrr_table() -> dict[tuple[str, str], float]:
+    """Build the ``(plan, cycle) -> monthly dollars`` table used by
+    MRR/ARR from ``PLAN_CATALOG``.
+
+    This table used to be hard-coded at $49/$99 monthly and
+    $490/$990 yearly — pricing the product hasn't sold since the
+    numbers were written down.  Against the real $35/$45 it inflated
+    every MRR and ARR figure on the superadmin reports by roughly
+    40-120%.  Deriving it from the catalog means the pricing page,
+    the subscription page, the dashboard MRR tile and these reports
+    can no longer disagree.
+    """
+    from api.Modules.Billing.Services import plan_monthly_cents
+
+    return {
+        (plan, cycle): plan_monthly_cents(plan, cycle) / 100.0
+        for plan in ("basic", "pro")
+        for cycle in ("monthly", "yearly")
+    }
+
+
+# Plan price table used by MRR/ARR, keyed `(plan, billing_cycle)` and
+# normalised to monthly dollars. Prices live in PLAN_CATALOG
+# (api/Modules/Billing/Services/plans.py) — change them there.
+PLAN_MRR: dict[tuple[str, str], float] = _plan_mrr_table()
 
 
 def _plan_label(plan: str | None) -> str:

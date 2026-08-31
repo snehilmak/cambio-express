@@ -577,14 +577,10 @@ def subscription_summary_route(
         raise HTTPException(status_code=404, detail="Store not found")
     from api.Modules.Billing.Services import (
         ADDONS_CATALOG, DEFAULT_RETENTION_DAYS as DATA_RETENTION_DAYS,
-        data_retention_days_left, get_trial_status, store_addon_keys,
-        store_feature_enabled, store_has_paid_plan,
+        data_retention_days_left, get_trial_status, plan_label,
+        plan_price_label, store_addon_keys, store_feature_enabled,
+        store_has_paid_plan,
     )
-    plan_labels = {
-        "trial": "Free Trial", "basic": "Basic", "pro": "Pro",
-        "inactive": "Inactive",
-    }
-    plan_prices = {"basic": "$35 / month", "pro": "$45 / month"}
     active_keys = store_addon_keys(store)
     addon_rows = []
     for key, addon in ADDONS_CATALOG.items():
@@ -647,8 +643,8 @@ def subscription_summary_route(
                 if store.data_retention_until else None
             ),
         },
-        "plan_label": plan_labels.get(store.plan or "", "Unknown"),
-        "plan_price": plan_prices.get(store.plan or "", ""),
+        "plan_label": plan_label(store.plan, store.billing_cycle),
+        "plan_price": plan_price_label(store.plan, store.billing_cycle),
         "has_paid_plan": store_has_paid_plan(store),
         "trial_status": trial_status,
         "trial_days_left": trial_days_left,

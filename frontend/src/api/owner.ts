@@ -8,6 +8,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import { api } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
+import type { components } from "./openapi";
 
 export type OwnerPeriod = "today" | "month" | "year";
 
@@ -341,5 +342,28 @@ export async function redeemConnectCode(code: string): Promise<{ owner_name: str
   return api<{ owner_name: string }>("/api/v2/admin/redeem-connect-code", {
     method: "POST",
     json: { code },
+  });
+}
+
+
+// ── Billing rollup (B-1) ─────────────────────────────────────
+// Subscriptions are per-store, so this is the one place an owner
+// can see the whole umbrella's billing state at once. Shapes come
+// from the generated OpenAPI types.
+
+export type OwnerBillingRow = components["schemas"]["OwnerBillingRow"];
+export type OwnerBillingTotals =
+  components["schemas"]["OwnerBillingTotals"];
+export type OwnerBillingResponse =
+  components["schemas"]["OwnerBillingResponse"];
+
+export function useOwnerBilling() {
+  const identity = getCurrentIdentity();
+  const enabled =
+    identity?.role === "owner" || identity?.role === "superadmin";
+  return useQuery<OwnerBillingResponse>({
+    enabled,
+    queryKey: ["owner", "billing", identity?.user_id],
+    queryFn: () => api<OwnerBillingResponse>("/api/v2/owner/billing"),
   });
 }

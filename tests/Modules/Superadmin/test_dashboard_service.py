@@ -20,8 +20,9 @@ def test_compute_mrr_pure_math():
     assert by_ == round(350 / 12)
     # Pro monthly: 3 * $45 = $135
     assert pm == 135
-    # Pro yearly: 1 * $420 / 12 = $35
-    assert py_ == 35
+    # Pro yearly: 1 * $450 / 12 ≈ $38. This was priced at $420 while
+    # the pricing page sold Pro-yearly at $450, under-reporting MRR.
+    assert py_ == round(450 / 12)
     assert total == bm + by_ + pm + py_
 
 

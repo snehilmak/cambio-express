@@ -257,6 +257,7 @@ export const NAV: NavGroup[] = [
       { to: "/owner/cross-store-defaults",  label: "Cross-store defaults",  icon: iconRollup(),    desc: "Shared settings for every store." },
       { to: "/owner/activity",              label: "Activity stream",       icon: iconReports(),   desc: "Recent actions across stores." },
       { to: "/owner/bulk-permissions",      label: "Bulk permissions",      icon: iconSettings(),  desc: "Set roles across all stores." },
+      { to: "/owner/billing",               label: "Billing",               icon: iconBilling(),   desc: "Plans and costs for every store." },
       { to: "/owner/settings",              label: "Owner settings",        icon: iconSettings(),  desc: "Your owner account preferences." },
     ],
   },
@@ -567,6 +568,18 @@ function iconDevice() {
     </svg>
   );
 }
+function iconBilling() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false"
+      stroke="currentColor" strokeWidth="2" strokeLinecap="round"
+      strokeLinejoin="round">
+      <rect x="2" y="5" width="20" height="14" rx="2" />
+      <path d="M2 10h20" />
+      <path d="M6 15h4" />
+    </svg>
+  );
+}
+
 function iconSettings() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false"

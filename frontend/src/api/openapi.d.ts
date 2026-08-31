@@ -3132,6 +3132,35 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/owner/billing": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Owner Billing Route
+         * @description Subscription state for every store in the owner's umbrella.
+         *
+         *     Read-only by design: subscriptions are per-store, so acting on
+         *     one (subscribe, Stripe portal) happens inside that store where
+         *     its Stripe customer lives. This page answers "what am I paying
+         *     across all of them, and is anything about to lapse?" without
+         *     switching into each store in turn.
+         *
+         *     Gated on `settings.read` — the same permission that guards a
+         *     single store's subscription page.
+         */
+        get: operations["owner_billing_route_owner_billing_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/owner/bulk-add-user": {
         parameters: {
             query?: never;
@@ -9384,6 +9413,76 @@ export interface components {
              * @default
              */
             phone: string;
+        };
+        /**
+         * OwnerBillingResponse
+         * @description Subscription state for every store in the umbrella, stores
+         *     needing action first, then alphabetical.
+         */
+        OwnerBillingResponse: {
+            /** Rows */
+            rows: components["schemas"]["OwnerBillingRow"][];
+            totals: components["schemas"]["OwnerBillingTotals"];
+        };
+        /**
+         * OwnerBillingRow
+         * @description One store's subscription state on the owner billing page.
+         *
+         *     `monthly_cost` normalises yearly plans to a monthly figure so
+         *     stores on different cadences can be summed. `attention` is a slug
+         *     ("" | "trial_ending" | "trial_expired" | "inactive" |
+         *     "retention") the SPA maps to wording + a pill tone.
+         */
+        OwnerBillingRow: {
+            /** Addon Count */
+            addon_count: number;
+            /** Addon Monthly Cost */
+            addon_monthly_cost: number;
+            /** Attention */
+            attention: string;
+            /** Billing Cycle */
+            billing_cycle: string;
+            /** Has Paid Plan */
+            has_paid_plan: boolean;
+            /** Monthly Cost */
+            monthly_cost: number;
+            /** Plan */
+            plan: string;
+            /** Plan Label */
+            plan_label: string;
+            /** Plan Price Label */
+            plan_price_label: string;
+            /** Retention Days Left */
+            retention_days_left: number | null;
+            /** Store Id */
+            store_id: number;
+            /** Store Name */
+            store_name: string;
+            /** Store Slug */
+            store_slug: string;
+            /** Trial Days Left */
+            trial_days_left: number | null;
+            /** Trial Ends At */
+            trial_ends_at: string | null;
+            /** Trial Status */
+            trial_status: string;
+        };
+        /** OwnerBillingTotals */
+        OwnerBillingTotals: {
+            /** Addon Monthly Cost */
+            addon_monthly_cost: number;
+            /** Attention Count */
+            attention_count: number;
+            /** Inactive Stores */
+            inactive_stores: number;
+            /** Monthly Cost */
+            monthly_cost: number;
+            /** Paid Stores */
+            paid_stores: number;
+            /** Stores */
+            stores: number;
+            /** Trial Stores */
+            trial_stores: number;
         };
         /**
          * OwnerBulkAddUserRequest
@@ -18431,6 +18530,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    owner_billing_route_owner_billing_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OwnerBillingResponse"];
                 };
             };
             /** @description Validation Error */

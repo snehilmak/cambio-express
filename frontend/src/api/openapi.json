@@ -7659,6 +7659,183 @@
         "title": "OwnerAddStoreRequest",
         "type": "object"
       },
+      "OwnerBillingResponse": {
+        "additionalProperties": false,
+        "description": "Subscription state for every store in the umbrella, stores\nneeding action first, then alphabetical.",
+        "properties": {
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/OwnerBillingRow"
+            },
+            "title": "Rows",
+            "type": "array"
+          },
+          "totals": {
+            "$ref": "#/components/schemas/OwnerBillingTotals"
+          }
+        },
+        "required": [
+          "rows",
+          "totals"
+        ],
+        "title": "OwnerBillingResponse",
+        "type": "object"
+      },
+      "OwnerBillingRow": {
+        "additionalProperties": false,
+        "description": "One store's subscription state on the owner billing page.\n\n`monthly_cost` normalises yearly plans to a monthly figure so\nstores on different cadences can be summed. `attention` is a slug\n(\"\" | \"trial_ending\" | \"trial_expired\" | \"inactive\" |\n\"retention\") the SPA maps to wording + a pill tone.",
+        "properties": {
+          "addon_count": {
+            "title": "Addon Count",
+            "type": "integer"
+          },
+          "addon_monthly_cost": {
+            "title": "Addon Monthly Cost",
+            "type": "number"
+          },
+          "attention": {
+            "title": "Attention",
+            "type": "string"
+          },
+          "billing_cycle": {
+            "title": "Billing Cycle",
+            "type": "string"
+          },
+          "has_paid_plan": {
+            "title": "Has Paid Plan",
+            "type": "boolean"
+          },
+          "monthly_cost": {
+            "title": "Monthly Cost",
+            "type": "number"
+          },
+          "plan": {
+            "title": "Plan",
+            "type": "string"
+          },
+          "plan_label": {
+            "title": "Plan Label",
+            "type": "string"
+          },
+          "plan_price_label": {
+            "title": "Plan Price Label",
+            "type": "string"
+          },
+          "retention_days_left": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retention Days Left"
+          },
+          "store_id": {
+            "title": "Store Id",
+            "type": "integer"
+          },
+          "store_name": {
+            "title": "Store Name",
+            "type": "string"
+          },
+          "store_slug": {
+            "title": "Store Slug",
+            "type": "string"
+          },
+          "trial_days_left": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trial Days Left"
+          },
+          "trial_ends_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trial Ends At"
+          },
+          "trial_status": {
+            "title": "Trial Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "store_id",
+          "store_name",
+          "store_slug",
+          "plan",
+          "plan_label",
+          "plan_price_label",
+          "billing_cycle",
+          "monthly_cost",
+          "trial_status",
+          "trial_days_left",
+          "trial_ends_at",
+          "retention_days_left",
+          "addon_count",
+          "addon_monthly_cost",
+          "has_paid_plan",
+          "attention"
+        ],
+        "title": "OwnerBillingRow",
+        "type": "object"
+      },
+      "OwnerBillingTotals": {
+        "additionalProperties": false,
+        "properties": {
+          "addon_monthly_cost": {
+            "title": "Addon Monthly Cost",
+            "type": "number"
+          },
+          "attention_count": {
+            "title": "Attention Count",
+            "type": "integer"
+          },
+          "inactive_stores": {
+            "title": "Inactive Stores",
+            "type": "integer"
+          },
+          "monthly_cost": {
+            "title": "Monthly Cost",
+            "type": "number"
+          },
+          "paid_stores": {
+            "title": "Paid Stores",
+            "type": "integer"
+          },
+          "stores": {
+            "title": "Stores",
+            "type": "integer"
+          },
+          "trial_stores": {
+            "title": "Trial Stores",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "stores",
+          "paid_stores",
+          "trial_stores",
+          "inactive_stores",
+          "monthly_cost",
+          "addon_monthly_cost",
+          "attention_count"
+        ],
+        "title": "OwnerBillingTotals",
+        "type": "object"
+      },
       "OwnerBulkAddUserRequest": {
         "additionalProperties": false,
         "description": "POST body for ``/owner/bulk-add-user``. Creates the same\nlogin (username + password) at every store in ``store_ids``\nthat's actually in the owner's umbrella. Stores outside the\numbrella are reported as ``rejected`` rather than 403'd so\nthe operator sees the full result table.",
@@ -26692,6 +26869,72 @@
           }
         },
         "summary": "Owner Activity Route",
+        "tags": [
+          "owner"
+        ]
+      }
+    },
+    "/owner/billing": {
+      "get": {
+        "description": "Subscription state for every store in the owner's umbrella.\n\nRead-only by design: subscriptions are per-store, so acting on\none (subscribe, Stripe portal) happens inside that store where\nits Stripe customer lives. This page answers \"what am I paying\nacross all of them, and is anything about to lapse?\" without\nswitching into each store in turn.\n\nGated on `settings.read` \u2014 the same permission that guards a\nsingle store's subscription page.",
+        "operationId": "owner_billing_route_owner_billing_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OwnerBillingResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Owner Billing Route",
         "tags": [
           "owner"
         ]
