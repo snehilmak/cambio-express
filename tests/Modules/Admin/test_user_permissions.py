@@ -250,11 +250,11 @@ def test_jwt_perms_and_live_enforcement(client, test_store_id):
     from api.Core.Permissions import clear_user_permissions
 
     admin_token = login_admin(client, test_store_id)
-    uid = _mk_store_user(test_store_id, "r1_live_emp")
+    uid = _mk_store_user(test_store_id, "r1.live.emp@store.com")
 
     # Token minted BEFORE the overlay — carries full employee perms.
     pre_token = login_employee(
-        client, test_store_id, "r1_live_emp", password="emppass1234",
+        client, test_store_id, "r1.live.emp@store.com", password="emppass1234",
     )
     assert client.get(
         f"/api/v2/transfers?store_ids={test_store_id}",
@@ -277,7 +277,7 @@ def test_jwt_perms_and_live_enforcement(client, test_store_id):
         login = client.post(
             "/api/v2/auth/login",
             json={
-                "username": "r1_live_emp",
+                "username": "r1.live.emp@store.com",
                 "password": "emppass1234",
                 "store_id": test_store_id,
             },
@@ -365,7 +365,7 @@ def test_create_user_with_permissions_matrix(client, test_store_id):
     made = client.post(
         "/api/v2/admin/users", headers=_headers(token),
         json={
-            "username": "r2_amber_new",
+            "email":    "r2.amber.new@store.com",
             "password": "newpass1234",
             "full_name": "Amber",
             "role": "employee",
@@ -381,7 +381,7 @@ def test_create_user_with_permissions_matrix(client, test_store_id):
         login = client.post(
             "/api/v2/auth/login",
             json={
-                "username": "r2_amber_new",
+                "username": "r2.amber.new@store.com",
                 "password": "newpass1234",
                 "store_id": test_store_id,
             },
@@ -399,7 +399,7 @@ def test_create_user_without_permissions_has_no_overlay(
     made = client.post(
         "/api/v2/admin/users", headers=_headers(token),
         json={
-            "username": "r2_plain_new",
+            "email":    "r2.plain.new@store.com",
             "password": "newpass1234",
             "role": "employee",
         },

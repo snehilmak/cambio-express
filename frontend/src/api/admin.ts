@@ -109,7 +109,11 @@ export interface AdminUserDetailResponse {
 }
 
 export interface AdminUserCreateBody {
-  username:   string;
+  // Identity (L-2): the person signs in with their email or phone.
+  // At least one is required — the API 422s when both are blank.
+  // There is no username to type; the server derives and stores it.
+  email?:     string;
+  phone?:     string;
   password:   string;
   full_name?: string;
   role?:      string;

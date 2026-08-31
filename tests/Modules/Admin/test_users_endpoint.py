@@ -72,7 +72,7 @@ def test_users_endpoints_reject_employee_role(client, test_store_id):
         )
         creating = client.post(
             "/api/v2/admin/users",
-            json={"username": "x", "password": "y"},
+            json={"email": "x@store.com", "password": "y"},
             headers={"Authorization": f"Bearer {token}"},
         )
         patching = client.patch(
@@ -156,7 +156,7 @@ def test_users_create_then_list(client, test_store_id):
     create = client.post(
         "/api/v2/admin/users",
         json={
-            "username":  "new.cashier",
+            "email":     "new.cashier@store.com",
             "password":  "secret123",
             "full_name": "New Cashier",
             "role":      "employee",
@@ -165,7 +165,7 @@ def test_users_create_then_list(client, test_store_id):
     )
     assert create.status_code == 201, create.get_data(as_text=True)
     body = create.get_json()
-    assert body["username"]  == "new.cashier"
+    assert body["username"]  == "new.cashier@store.com"
     assert body["role"]      == "employee"
     assert body["is_active"] is True
     new_id = body["id"]
@@ -185,7 +185,7 @@ def test_users_create_hashes_password(client, test_store_id):
     create = client.post(
         "/api/v2/admin/users",
         json={
-            "username": "hash.check",
+            "email":    "hash.check@store.com",
             "password": "rawpass789",
             "role":     "employee",
         },
@@ -210,18 +210,18 @@ def test_users_create_rejects_duplicate_username(client, test_store_id):
     token = _login(client, test_store_id)
     client.post(
         "/api/v2/admin/users",
-        json={"username": "dup.user", "password": "x"},
+        json={"email": "dup.user@store.com", "password": "x"},
         headers={"Authorization": f"Bearer {token}"},
     )
     again = client.post(
         "/api/v2/admin/users",
-        json={"username": "dup.user", "password": "y"},
+        json={"email": "dup.user@store.com", "password": "y"},
         headers={"Authorization": f"Bearer {token}"},
     )
     assert again.status_code == 422
     detail = again.get_json()["detail"]
     assert "field_errors" in detail
-    assert "username" in detail["field_errors"]
+    assert "email" in detail["field_errors"]
 
 
 def test_users_create_rejects_bad_role(client, test_store_id):
@@ -229,7 +229,7 @@ def test_users_create_rejects_bad_role(client, test_store_id):
     resp = client.post(
         "/api/v2/admin/users",
         json={
-            "username": "bad.role",
+            "email":    "bad.role@store.com",
             "password": "x",
             "role":     "owner",
         },
@@ -244,7 +244,7 @@ def test_users_create_rejects_extra_fields(client, test_store_id):
     resp = client.post(
         "/api/v2/admin/users",
         json={
-            "username": "extra.user",
+            "email":    "extra.user@store.com",
             "password": "x",
             "store_id": 999,  # not in schema
         },
@@ -306,7 +306,7 @@ def test_users_patch_renames(client, test_store_id):
     token = _login(client, test_store_id)
     create = client.post(
         "/api/v2/admin/users",
-        json={"username": "rename.me", "password": "x"},
+        json={"email": "rename.me@store.com", "password": "x"},
         headers={"Authorization": f"Bearer {token}"},
     )
     new_id = create.get_json()["id"]
@@ -323,7 +323,7 @@ def test_users_patch_changes_role_and_is_active(client, test_store_id):
     token = _login(client, test_store_id)
     create = client.post(
         "/api/v2/admin/users",
-        json={"username": "promote.me", "password": "x"},
+        json={"email": "promote.me@store.com", "password": "x"},
         headers={"Authorization": f"Bearer {token}"},
     )
     new_id = create.get_json()["id"]
@@ -348,7 +348,7 @@ def test_users_patch_password_only_when_provided(
     token = _login(client, test_store_id)
     create = client.post(
         "/api/v2/admin/users",
-        json={"username": "pw.user", "password": "first123"},
+        json={"email": "pw.user@store.com", "password": "first123"},
         headers={"Authorization": f"Bearer {token}"},
     )
     new_id = create.get_json()["id"]
@@ -436,7 +436,7 @@ def test_users_patch_records_audit_row(client, test_store_id):
     token = _login(client, test_store_id)
     create = client.post(
         "/api/v2/admin/users",
-        json={"username": "audited", "password": "x"},
+        json={"email": "audited@store.com", "password": "x"},
         headers={"Authorization": f"Bearer {token}"},
     )
     assert create.status_code == 201

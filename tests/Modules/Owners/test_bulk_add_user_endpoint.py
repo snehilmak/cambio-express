@@ -56,7 +56,7 @@ def test_bulk_add_user_requires_jwt(client):
     resp = client.post(
         "/api/v2/owner/bulk-add-user",
         json={
-            "username": "x@x.com", "password": "pw12345678",
+            "email": "x@x.com", "password": "pw12345678",
             "store_ids": [1],
         },
     )
@@ -71,7 +71,7 @@ def test_bulk_add_user_rejects_admin_role(client, test_store_id):
     resp = client.post(
         "/api/v2/owner/bulk-add-user",
         json={
-            "username": "x@x.com", "password": "pw12345678",
+            "email": "x@x.com", "password": "pw12345678",
             "store_ids": [test_store_id],
         },
         headers={"Authorization": f"Bearer {token}"},
@@ -91,7 +91,7 @@ def test_bulk_add_user_creates_at_every_umbrella_store(client):
     resp = client.post(
         "/api/v2/owner/bulk-add-user",
         json={
-            "username": "regional@example.com",
+            "email":    "regional@example.com",
             "password": "regional1!pw",
             "full_name": "Regional Manager",
             "role": "employee",
@@ -141,7 +141,7 @@ def test_bulk_add_user_skips_existing_username_at_a_store(client):
     resp = client.post(
         "/api/v2/owner/bulk-add-user",
         json={
-            "username": "dup@example.com",
+            "email":    "dup@example.com",
             "password": "newpassword1!",
             "store_ids": [sid_a, sid_b],
         },
@@ -176,7 +176,7 @@ def test_bulk_add_user_rejects_cross_umbrella_store(client):
     resp = client.post(
         "/api/v2/owner/bulk-add-user",
         json={
-            "username": "mixedscope@example.com",
+            "email":    "mixedscope@example.com",
             "password": "mixedpass1!",
             "store_ids": [sid_a, sid_out],
         },
@@ -203,7 +203,7 @@ def test_bulk_add_user_creates_audit_rows(client):
     resp = client.post(
         "/api/v2/owner/bulk-add-user",
         json={
-            "username": "auditme@example.com",
+            "email":    "auditme@example.com",
             "password": "auditpass1!",
             "store_ids": [sid_a, sid_b],
         },

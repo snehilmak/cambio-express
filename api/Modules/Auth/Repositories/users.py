@@ -8,6 +8,7 @@ the request is for; we never search "username across all stores".
 """
 from typing import Iterable
 
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from api.Modules.Auth.Models import User
@@ -55,30 +56,54 @@ def find_user_by_username(
     return q.first()
 
 
-def find_active_users_by_username(
-    db: Session, username: str, *, limit: int = 25,
+def find_active_users_by_identifier(
+    db: Session, identifier: str, *, limit: int = 25,
 ) -> list[User]:
-    """Every ACTIVE user carrying `username`, across all stores,
-    ordered by id asc.
+    """Every ACTIVE user a sign-in `identifier` could refer to,
+    across all stores, ordered by id asc.
 
-    Usernames are unique per store, not globally
-    (`UniqueConstraint("store_id", "username")`), so "amber" can
-    legitimately exist at several stores. The sign-in page has no
-    store context, so it has to consider all of them and let the
-    password decide — `find_user_by_username`'s first-match-wins
-    would lock out everyone but the oldest row.
+    An identifier is an email address, a phone number, or — for
+    accounts that predate L-2 — a username. All three are matched in
+    one query rather than branching on what the input "looks like",
+    because the guess can be wrong: a legacy username can be an email
+    address, and a numeric username can look like a phone number.
+    Matching all three and letting the password decide has no such
+    failure mode.
 
-    `limit` bounds the scan: each candidate costs a bcrypt verify
-    at the call site, so an unbounded result would let a common
-    username ("admin") turn one login attempt into hundreds of
-    hashes. 25 is far above any realistic collision count and far
-    below a useful amplification factor.
+    Identifiers are unique per store, not globally
+    (`UniqueConstraint("store_id", "username")`), so "amber" — or one
+    shared family email — can legitimately exist at several stores.
+    The sign-in page has no store context, so it has to consider all
+    of them; a first-match-wins lookup would lock out everyone but
+    the oldest row.
+
+    `limit` bounds the scan: each candidate costs a bcrypt verify at
+    the call site, so an unbounded result would let a common
+    identifier turn one login attempt into hundreds of hashes. 25 is
+    far above any realistic collision count and far below a useful
+    amplification factor.
     """
-    if not username:
+    from api.Modules.Auth.Services.identity import (
+        normalize_email, normalize_phone,
+    )
+    raw = (identifier or "").strip()
+    if not raw:
         return []
+
+    # Username stays case-sensitive (legacy behaviour); email is
+    # matched case-insensitively, which is what people expect of an
+    # address they typed with a capital letter.
+    matches = [User.username == raw]
+    email = normalize_email(raw)
+    if email:
+        matches.append(func.lower(User.email) == email)
+    phone = normalize_phone(raw)
+    if phone:
+        matches.append(User.login_phone == phone)
+
     return (
         db.query(User)
-          .filter(User.username == username)
+          .filter(or_(*matches))
           .filter(User.is_active.is_(True))
           .order_by(User.id.asc())
           .limit(limit)

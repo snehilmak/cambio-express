@@ -31,8 +31,9 @@ def bulk_add_user_to_stores(
     *,
     owner_id: int,
     store_ids: list[int],
-    username: str,
     password: str,
+    email: str = "",
+    phone: str = "",
     full_name: str = "",
     role: str = "employee",
 ) -> list[dict[str, Any]]:
@@ -41,18 +42,29 @@ def bulk_add_user_to_stores(
     requested store with one of three statuses:
 
       ``created``  — new User row inserted
-      ``skipped``  — that store already had a user with this username
+      ``skipped``  — that store already had this person
       ``rejected`` — the store is not in the owner's umbrella
+
+    The person is identified by email and/or phone, like every
+    other new login (L-2). Creating the same identifier at several
+    stores is the intended use here, and it's exactly the case the
+    sign-in store-picker handles: one set of credentials, valid at
+    several stores, so they choose which one to open.
 
     Caller commits. Per-store failures don't roll the whole
     batch back — each is reported in the response and the
     transaction keeps going (best-effort semantics, matching
     the SPA's "what happened to each one" table view).
     """
+    from api.Modules.Auth.Services.identity import login_identifier
+
     if role not in VALID_ROLES:
         raise ValueError("Role must be 'admin' or 'employee'.")
-    if not (username or "").strip():
-        raise ValueError("Username is required.")
+    if not login_identifier(email, phone):
+        raise ValueError(
+            "An email address or phone number is required — it's how "
+            "this person signs in.",
+        )
     if not (password or ""):
         raise ValueError("Password is required.")
     if not store_ids:
@@ -80,7 +92,8 @@ def bulk_add_user_to_stores(
             create_store_user(
                 db,
                 store_id=sid,
-                username=username,
+                email=email,
+                phone=phone,
                 password=password,
                 full_name=full_name,
                 role=role,

@@ -223,11 +223,11 @@ def _authenticating_users(
     Every candidate is verified, with no early exit, so the work
     done doesn't depend on which row happens to match first.
     """
-    from api.Modules.Auth.Repositories import find_active_users_by_username
+    from api.Modules.Auth.Repositories import find_active_users_by_identifier
     if not username or not password:
         return []
     return [
-        u for u in find_active_users_by_username(db, username)
+        u for u in find_active_users_by_identifier(db, username)
         if u.check_password(password)
     ]
 

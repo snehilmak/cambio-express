@@ -255,7 +255,11 @@ export function useOwnerStoreDetail(
 // ── Bulk add user ───────────────────────────────────────────
 
 export interface OwnerBulkAddUserBody {
-  username:  string;
+  // Identity (L-2): email and/or phone, at least one. Creating the
+  // same identifier at several stores is the point here — the
+  // sign-in store-picker handles the resulting ambiguity.
+  email?:    string;
+  phone?:    string;
   password:  string;
   full_name: string;
   role:      "admin" | "employee";

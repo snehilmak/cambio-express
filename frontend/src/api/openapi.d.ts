@@ -698,10 +698,12 @@ export interface paths {
         put?: never;
         /**
          * Create User Route
-         * @description Create a new User in the principal's store. Username must
-         *     be unique within the store; password is hashed via
-         *     `User.set_password` (never stored raw). Role limited to
-         *     'admin' / 'employee'.
+         * @description Create a new User in the principal's store.
+         *
+         *     The person signs in with their email address or phone number —
+         *     at least one is required, and it must be unused at this store.
+         *     Password is hashed via `User.set_password` (never stored raw).
+         *     Role limited to 'admin' / 'employee'.
          */
         post: operations["create_user_route_admin_users_post"];
         delete?: never;
@@ -1015,11 +1017,18 @@ export interface paths {
         put?: never;
         /**
          * Login Cross Store Route
-         * @description Cross-store JWT login for the SPA's generic landing page.
-         *     Same response shape as `/auth/login`, but takes
-         *     username + password only — the user's home store is looked
-         *     up across every store. Employees are rejected here so they
-         *     use their store's slug-scoped sign-in page.
+         * @description Cross-store JWT login for the SPA's sign-in page. Same
+         *     response shape as `/auth/login`, but takes username +
+         *     password only — the store is resolved from the credentials.
+         *
+         *     **Every role signs in here, employees included.** The old
+         *     employee rejection ("use your store's sign-in page") predates
+         *     the unified sign-in page and left employee logins unusable.
+         *
+         *     Returns 409 with `{code: "store_ambiguous", stores: [...]}`
+         *     when the same credentials are valid at more than one store;
+         *     the client re-submits to `/auth/login` with the chosen
+         *     `store_id`.
          */
         post: operations["login_cross_store_route_auth_login_cross_store_post"];
         delete?: never;
@@ -6084,8 +6093,15 @@ export interface components {
             /** Status */
             status?: ("pending" | "approved" | "rejected") | null;
         };
-        /** AdminUserCreateRequest */
+        /**
+         * AdminUserCreateRequest
+         * @description New logins are identified by email and/or phone — there is no
+         *     username to type. At least one of `email` / `phone` must be
+         *     present; the Service raises 422 when both are blank.
+         */
         AdminUserCreateRequest: {
+            /** Email */
+            email?: string | null;
             /**
              * Full Name
              * @default
@@ -6101,13 +6117,13 @@ export interface components {
                     [key: string]: boolean;
                 };
             } | null;
+            /** Phone */
+            phone?: string | null;
             /**
              * Role
              * @default employee
              */
             role: string;
-            /** Username */
-            username: string;
         };
         /**
          * AdminUserDetailResponse
@@ -9487,12 +9503,17 @@ export interface components {
         /**
          * OwnerBulkAddUserRequest
          * @description POST body for ``/owner/bulk-add-user``. Creates the same
-         *     login (username + password) at every store in ``store_ids``
-         *     that's actually in the owner's umbrella. Stores outside the
-         *     umbrella are reported as ``rejected`` rather than 403'd so
-         *     the operator sees the full result table.
+         *     login at every store in ``store_ids`` that's actually in the
+         *     owner's umbrella. Stores outside the umbrella are reported as
+         *     ``rejected`` rather than 403'd so the operator sees the full
+         *     result table.
+         *
+         *     The person is identified by email and/or phone (L-2) — at
+         *     least one is required.
          */
         OwnerBulkAddUserRequest: {
+            /** Email */
+            email?: string | null;
             /**
              * Full Name
              * @default
@@ -9500,6 +9521,8 @@ export interface components {
             full_name: string;
             /** Password */
             password: string;
+            /** Phone */
+            phone?: string | null;
             /**
              * Role
              * @default employee
@@ -9508,8 +9531,6 @@ export interface components {
             role: "employee";
             /** Store Ids */
             store_ids: number[];
-            /** Username */
-            username: string;
         };
         /** OwnerBulkAddUserResponse */
         OwnerBulkAddUserResponse: {

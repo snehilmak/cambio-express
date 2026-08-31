@@ -63,7 +63,7 @@ def test_create_with_grants_restricts_session_features(
     created = client.post(
         "/api/v2/admin/users",
         json={
-            "username": "u3_restricted",
+            "email":    "u3.restricted@store.com",
             "password": "pass1234!",
             "role": "employee",
             "module_access": ["module_check_cashing"],
@@ -77,7 +77,7 @@ def test_create_with_grants_restricts_session_features(
         ]
 
         token = _login_as(
-            client, test_store_id, "u3_restricted", "pass1234!",
+            client, test_store_id, "u3.restricted@store.com", "pass1234!",
         )
         assert _features(client, token) == ["module_check_cashing"]
 
@@ -94,7 +94,7 @@ def test_create_rejects_unknown_module_key(client, test_store_id):
     resp = client.post(
         "/api/v2/admin/users",
         json={
-            "username": "u3_bad_key",
+            "email":    "u3.badkey@store.com",
             "password": "pass1234!",
             "module_access": ["module_time_travel"],
         },
@@ -114,7 +114,7 @@ def test_patch_semantics_omitted_null_and_empty(client, test_store_id):
     created = client.post(
         "/api/v2/admin/users",
         json={
-            "username": "u3_patch",
+            "email":    "u3.patch@store.com",
             "password": "pass1234!",
             "module_access": ["module_check_cashing"],
         },
@@ -143,7 +143,7 @@ def test_patch_semantics_omitted_null_and_empty(client, test_store_id):
         )
         assert patched.status_code == 200
         assert patched.get_json()["module_access"] == []
-        token = _login_as(client, test_store_id, "u3_patch", "pass1234!")
+        token = _login_as(client, test_store_id, "u3.patch@store.com", "pass1234!")
         assert _features(client, token) == []
 
         # Explicit null → back to every store module.
@@ -154,7 +154,7 @@ def test_patch_semantics_omitted_null_and_empty(client, test_store_id):
         )
         assert patched.status_code == 200
         assert patched.get_json()["module_access"] is None
-        token = _login_as(client, test_store_id, "u3_patch", "pass1234!")
+        token = _login_as(client, test_store_id, "u3.patch@store.com", "pass1234!")
         assert _features(client, token) == [
             "module_money_services", "module_check_cashing",
         ]

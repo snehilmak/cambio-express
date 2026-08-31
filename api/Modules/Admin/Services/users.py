@@ -80,18 +80,45 @@ class SelfDemotionError(ValueError):
 
 def create_store_user(
     db: Session, *, store_id: int,
-    username: str, password: str,
+    password: str,
+    email: str = "", phone: str = "",
     full_name: str = "", role: str = "employee",
     module_access: Optional[list[str]] = None,
 ) -> User:
     """Insert a new active User row for the store. Caller commits.
-    Raises UsernameTakenError on collision, ValueError on bad
-    role / missing required fields."""
-    username = (username or "").strip()
-    if not username:
-        raise ValueError("Username is required.")
-    if len(username) > 80:
-        raise ValueError("Username is too long (max 80 characters).")
+
+    People sign in with an **email address or a phone number**
+    (owner directive 2026-08-31) — there is no username to invent.
+    At least one of the two is required; email wins as the stored
+    identifier when both are given, because password reset already
+    runs on email. Phone-only is supported for staff who have no
+    email address, which is normal for cashiers.
+
+    Accounts created before this keep their usernames and keep
+    signing in with them; only new accounts go through here.
+
+    Raises `UsernameTakenError` when the identifier is already in
+    use in this store, `ValueError` on a bad role or missing
+    required fields.
+    """
+    from api.Modules.Auth.Services.identity import (
+        is_email, login_identifier, normalize_email, normalize_phone,
+    )
+
+    email = normalize_email(email)
+    phone_raw = (phone or "").strip()
+
+    if email and not is_email(email):
+        raise ValueError("Enter a valid email address.")
+    if phone_raw and not normalize_phone(phone_raw):
+        raise ValueError("Enter a valid phone number.")
+
+    identifier = login_identifier(email, phone_raw)
+    if not identifier:
+        raise ValueError(
+            "An email address or phone number is required — it's how "
+            "this person signs in.",
+        )
 
     if not (password or ""):
         raise ValueError("Password is required.")
@@ -102,17 +129,24 @@ def create_store_user(
 
     full_name = (full_name or "").strip()[:120]
 
-    if find_store_user_by_username(db, store_id, username):
-        raise UsernameTakenError("Username already exists in this store.")
+    if find_store_user_by_username(db, store_id, identifier):
+        raise UsernameTakenError(
+            "Someone at this store already signs in with that "
+            "email or phone number.",
+        )
 
     user = User(
         store_id=store_id,
-        username=username,
+        username=identifier,
+        email=email,
         full_name=full_name,
         role=role,
         is_active=True,
         module_access=normalize_module_access(module_access),
     )
+    # Keeps `phone` as typed and `login_phone` canonical — assigning
+    # `phone` directly would leave phone sign-in silently broken.
+    user.set_login_phone(phone_raw)
     user.set_password(password)
     db.add(user)
     db.flush()
