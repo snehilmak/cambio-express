@@ -86,7 +86,58 @@ class OwnerPLRollupResponse(BaseModel):
     year_choices: list[int]
 
 
+class OwnerBillingRow(BaseModel):
+    """One store's subscription state on the owner billing page.
+
+    `monthly_cost` normalises yearly plans to a monthly figure so
+    stores on different cadences can be summed. `attention` is a slug
+    ("" | "trial_ending" | "trial_expired" | "inactive" |
+    "retention") the SPA maps to wording + a pill tone."""
+    model_config = ConfigDict(extra="forbid")
+
+    store_id: int
+    store_name: str
+    store_slug: str
+    plan: str
+    plan_label: str
+    plan_price_label: str
+    billing_cycle: str
+    monthly_cost: float
+    trial_status: str
+    trial_days_left: int | None
+    trial_ends_at: str | None
+    retention_days_left: int | None
+    addon_count: int
+    addon_monthly_cost: float
+    has_paid_plan: bool
+    attention: str
+
+
+class OwnerBillingTotals(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    stores: int
+    paid_stores: int
+    trial_stores: int
+    inactive_stores: int
+    monthly_cost: float
+    addon_monthly_cost: float
+    attention_count: int
+
+
+class OwnerBillingResponse(BaseModel):
+    """Subscription state for every store in the umbrella, stores
+    needing action first, then alphabetical."""
+    model_config = ConfigDict(extra="forbid")
+
+    rows: list[OwnerBillingRow]
+    totals: OwnerBillingTotals
+
+
 __all__ = [
+    "OwnerBillingResponse",
+    "OwnerBillingRow",
+    "OwnerBillingTotals",
     "OwnerConnectCodeListResponse",
     "OwnerConnectCodeResponse",
     "OwnerConnectCodeRow",

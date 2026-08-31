@@ -26,30 +26,30 @@ from typing import Any
 from api.Core.Clock import utc_now
 
 
-# Plan pricing in dollars. Yearly buckets are amortised to /12
-# when summed into MRR.
-_BASIC_MONTHLY_PRICE = 35
-_BASIC_YEARLY_PRICE = 350
-_PRO_MONTHLY_PRICE = 45
-_PRO_YEARLY_PRICE = 420
-
-
 def compute_mrr(
     basic_monthly: int, basic_yearly: int,
     pro_monthly: int, pro_yearly: int,
 ) -> tuple[int, int, int, int, int]:
     """Return MRR components and total from subscriber counts.
 
-    Yearly subscribers are amortised to /12.
-    Prices: Basic $35/mo or $350/yr; Pro $45/mo or $420/yr.
+    Yearly subscribers are amortised to /12.  Prices come from
+    ``PLAN_CATALOG`` — this function used to carry its own copy,
+    which had drifted: Pro-yearly was priced at $420 here while the
+    pricing page sells it at $450, so every Pro-yearly store was
+    under-reported by $2.50/month.
 
     Returns `(basic_monthly_mrr, basic_yearly_mrr,
               pro_monthly_mrr, pro_yearly_mrr, total)`.
     """
-    bm = basic_monthly * _BASIC_MONTHLY_PRICE
-    by_ = round(basic_yearly * _BASIC_YEARLY_PRICE / 12)
-    pm = pro_monthly * _PRO_MONTHLY_PRICE
-    py_ = round(pro_yearly * _PRO_YEARLY_PRICE / 12)
+    from api.Modules.Billing.Services import plan_monthly_cents
+
+    def _dollars(count: int, plan: str, cycle: str) -> int:
+        return round(count * plan_monthly_cents(plan, cycle) / 100)
+
+    bm = _dollars(basic_monthly, "basic", "monthly")
+    by_ = _dollars(basic_yearly, "basic", "yearly")
+    pm = _dollars(pro_monthly, "pro", "monthly")
+    py_ = _dollars(pro_yearly, "pro", "yearly")
     return bm, by_, pm, py_, bm + by_ + pm + py_
 
 

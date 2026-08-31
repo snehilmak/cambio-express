@@ -23,6 +23,9 @@ from api.Modules.Auth.Controllers import get_principal
 from api.Modules.Auth.Models import User
 from api.Modules.Auth.Services.principal import require_permission
 from api.Modules.Owners.Requests import (
+    OwnerBillingResponse,
+    OwnerBillingRow,
+    OwnerBillingTotals,
     OwnerBulkAddUserRequest,
     OwnerBulkAddUserResponse,
     OwnerBulkAddUserResultRow,
@@ -43,6 +46,7 @@ from api.Modules.Owners.Requests import (
 from api.Modules.Owners.Services import (
     apply_cross_store_defaults,
     bulk_add_user_to_stores,
+    owner_billing_payload,
     owner_locations_payload,
     owner_store_ids,
 )
@@ -114,6 +118,31 @@ def owner_locations_route(
     ]
     return OwnerLocationsResponse(
         rows=out_rows, total=total, matched=len(out_rows),
+    )
+
+
+@router.get("/billing", response_model=OwnerBillingResponse)
+def owner_billing_route(
+    db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
+) -> OwnerBillingResponse:
+    """Subscription state for every store in the owner's umbrella.
+
+    Read-only by design: subscriptions are per-store, so acting on
+    one (subscribe, Stripe portal) happens inside that store where
+    its Stripe customer lives. This page answers "what am I paying
+    across all of them, and is anything about to lapse?" without
+    switching into each store in turn.
+
+    Gated on `settings.read` — the same permission that guards a
+    single store's subscription page.
+    """
+    require_permission(claims, "settings", "read")
+    user = _require_owner_principal(db, claims)
+    payload = owner_billing_payload(db, user)
+    return OwnerBillingResponse(
+        rows=[OwnerBillingRow(**r) for r in payload["rows"]],
+        totals=OwnerBillingTotals(**payload["totals"]),
     )
 
 

@@ -1,0 +1,24 @@
+/* Owner billing rollup (B-1). Kit primitives carry the KPIs,
+   table, pills and buttons — what's left is the secondary detail
+   line and the horizontal-scroll wrapper. */
+
+/* Six columns is wide for a phone; scroll the table rather than
+   let the page body scroll sideways. */
+.tableWrap {
+  overflow-x: auto;
+}
+
+/* Secondary line under a cell's primary value: "3 days left",
+   "$450 / year". */
+.detail {
+  margin-top: 0.15rem;
+  color: var(--db-text-muted);
+  font-size: 0.78rem;
+}
+
+.footnote {
+  margin: 0.75rem 0 0;
+  color: var(--db-text-muted);
+  font-size: 0.8rem;
+  line-height: 1.5;
+}

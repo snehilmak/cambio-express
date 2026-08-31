@@ -128,6 +128,7 @@ files = [
     "api/Modules/Billing/Services/config.py",
     "api/Modules/Billing/Services/feature_flags.py",
     "api/Modules/Billing/Services/health.py",
+    "api/Modules/Billing/Services/plans.py",
     "api/Modules/Billing/Services/portal.py",
     "api/Modules/Billing/Services/retention.py",
     "api/Modules/Billing/Services/store_state.py",
