@@ -96,7 +96,67 @@ component. Need a new overlay kind? Add the Radix-based primitive
 to the kit first, styled with `--db-*` tokens and the `.ds-popover`
 motion class, then use it.
 
-## 6. Layout & styling (recap — details in CLAUDE.md)
+## 6. Reuse before you build — MANDATORY
+
+**Before writing any component, hook, helper or CSS block, check
+whether one already exists.** This is a gate, not a suggestion:
+every duplicate is a second place to fix the same bug, and we have
+already paid for that twice (see below).
+
+The check, in order:
+
+1. **`frontend/src/components/ui/index.tsx`** — the kit's export
+   list is the inventory. Read it. It is short on purpose.
+2. **`grep` for the concept**, not the name you'd have chosen.
+   Looking for a calendar? `grep -rn "grid-template-columns:
+   repeat(7"`. A money field? `grep -rn "MoneyInput"`. The thing
+   you want often exists under a name you didn't guess.
+3. **Look at the nearest existing page that does the same job.**
+   Building a daily sheet? The MSB daily book already is one.
+   Building a list with filters? Transfers is the reference.
+
+**Two copies is the extraction threshold.** If you are about to
+write something a second time, extract it first and move the
+existing caller onto it in the SAME PR. Extracting for the new
+page only, and leaving the old copy alone, doubles the maintenance
+instead of halving it — the point is fewer implementations, not
+more abstractions.
+
+**When you extract, take the hard-won details with you.** A
+component earns its keep by carrying the fixes that are easy to
+forget: containment rules, accessibility labels, edge-case
+handling. Put a comment on them saying *why* they exist, so the
+next person doesn't "simplify" them away.
+
+Known shared components, and what they own:
+
+| Use this | Instead of |
+|---|---|
+| `MonthCalendar` + `MonthCalendarLegend` | a month grid, cell states, money/variance containment |
+| `MoneyInput` | `<input type="number">` + your own cents parsing |
+| `Table`, `TableStates` | a `<table>` plus hand-rolled loading/empty/error |
+| `PermissionMatrixTable` | a per-route permission grid |
+| `RowActions` | inline row buttons (it handles the mobile sheet) |
+| `TabsBar` / `TabsLink` / `TabsButton` | a hand-built tab strip |
+| `ConfirmDialog` | `window.confirm` |
+| `fmtMoney2` / `formatDate` / `formatTimestamp` | `toFixed(2)`, `.slice(0, 10)` |
+| `Modal`, `Tooltip`, `Switch`, `Checkbox`, `Pill`, `KpiCard` | hand-rolled equivalents |
+
+The same rule applies on the backend: a Service that two modules
+need lives in `api/Core/` or the owning module's `Services/`, not
+copy-pasted. `PLAN_CATALOG` exists because plan prices had been
+duplicated into three modules and two had silently drifted.
+
+**Cautionary tale, so this isn't abstract.** The Store Daily Book
+shipped with its own month calendar — the same grid maths, the
+same cell states, and a hand-copied version of the containment
+rules that fix a real overflow bug. It also used raw number inputs
+instead of `MoneyInput`. Consolidating took 933 lines across two
+implementations down to 843 across one, and cut one page's
+stylesheet from 137 lines to 12. None of that work would have been
+needed if the kit had been checked first.
+
+## 7. Layout & styling (recap — details in CLAUDE.md)
 
 - Kit primitives first; page-specific leftovers in a co-located
   `<Route>.module.css`. No bottom-of-file `CSSProperties` constants,
@@ -108,10 +168,11 @@ motion class, then use it.
 - Steppers (prev/next day/month) and other widgets used by 2+ routes
   get extracted to the kit — two copies is the threshold.
 
-## 7. Enforcement
+## 8. Enforcement
 
 - PR review checklist: any `<select>` with 2 boolean-shaped options,
   any `window.confirm`, any `toFixed(2)` on money, any `.slice(0,10)`
-  on a date is a change request.
+  on a date is a change request. **So is a component that duplicates
+  something in section 6's table.**
 - When you fix a drift, fix ALL instances of that drift in the same
   PR — one pattern, everywhere, or the standard erodes again.
