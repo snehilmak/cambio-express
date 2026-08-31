@@ -124,36 +124,60 @@
   margin-top: 1px;
 }
 
-.employeeBox {
-  margin-top: 8px;
-  padding: 16px 18px;
+/* The .employee* block that styled the "Employee? Enter your store
+   code" box was removed with the box itself — employees now sign in
+   on the same form as everyone else. */
+
+/* "Which store?" step, shown when one sign-in is valid at several
+   stores. */
+.storeChoices {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.storeChoice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 14px 16px;
   background: var(--db-bg-elevated);
   border: 1px solid var(--db-gray-3);
   border-radius: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 120ms ease, transform 120ms ease;
 }
 
-.employeeTitle {
-  font-size: 13px;
+.storeChoice:hover:not(:disabled) {
+  border-color: var(--db-neon);
+  transform: translateY(-1px);
+}
+
+.storeChoice:focus-visible {
+  outline: 2px solid var(--db-neon);
+  outline-offset: 2px;
+}
+
+.storeChoice:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.storeChoiceName {
+  font-size: 14px;
   font-weight: 600;
   color: var(--db-gray-9);
 }
 
-.employeeSub {
+.storeChoiceRole {
   font-size: 12px;
   color: var(--db-gray-7);
-  line-height: 1.45;
-}
-
-.employeeForm {
-  display: flex;
-  gap: 8px;
-}
-
-.employeeInput {
-  flex: 1;
+  text-transform: capitalize;
 }
 
 @media (max-width: 900px) {
