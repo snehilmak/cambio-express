@@ -52,14 +52,14 @@
 /* Column accents. Tone carries meaning here: the over/short card
    is the one an operator looks at first. */
 .sales   { border-color: color-mix(in srgb, var(--db-accent) 45%, transparent); }
-.tenders { border-color: color-mix(in srgb, var(--db-tone-negative, #ff3b30) 45%, transparent); }
-.deposit { border-color: color-mix(in srgb, var(--db-tone-info, #3b82f6) 45%, transparent); }
+.tenders { border-color: color-mix(in srgb, var(--db-negative) 45%, transparent); }
+.deposit { border-color: color-mix(in srgb, var(--db-info) 45%, transparent); }
 
 .balanced { border-color: var(--db-accent); }
 .balanced .totalValue { color: var(--db-accent); }
-.over     { border-color: var(--db-tone-info, #3b82f6); }
-.short    { border-color: var(--db-tone-negative, #ff3b30); }
-.short .totalValue { color: var(--db-tone-negative, #ff3b30); }
+.over     { border-color: var(--db-info); }
+.short    { border-color: var(--db-negative); }
+.short .totalValue { color: var(--db-negative); }
 
 /* ── Three columns ─────────────────────────────────────────── */
 
@@ -147,7 +147,7 @@
 }
 
 .origMatch   { color: var(--db-accent); }
-.origChanged { color: var(--db-tone-negative, #ff3b30); }
+.origChanged { color: var(--db-negative); }
 
 .footerRow {
   margin-top: 1rem;
