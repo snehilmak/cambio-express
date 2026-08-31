@@ -130,6 +130,10 @@ const SuperadminStoreForm = lazy(() => import("./routes/SuperadminStoreForm"));
 const SuperadminStores = lazy(() => import("./routes/SuperadminStores"));
 const SuperadminUsers = lazy(() => import("./routes/SuperadminUsers"));
 const TimeClock = lazy(() => import("./routes/TimeClock"));
+const Transactions = lazy(() => import("./routes/Transactions"));
+const TransactionDetail = lazy(
+  () => import("./routes/TransactionDetail"),
+);
 const TimeClockPaystub = lazy(() => import("./routes/TimeClockPaystub"));
 const TransferDetail = lazy(() => import("./routes/TransferDetail"));
 // Receipt printing surface is hidden until we decide we need it —
@@ -305,6 +309,10 @@ export default function App() {
               a redirect for bookmarks and old links. */}
           <Route path="day-close"              element={<Navigate to="/store-book" replace />} />
           <Route path="pos-import"             element={<RequirePermission resource="day_close" action="update"><PosImport /></RequirePermission>} />
+          {/* Reading a ticket is a reporting act — day_close.read,
+              not the update right that books a day. */}
+          <Route path="transactions"           element={<RequirePermission resource="day_close" action="read"><Transactions /></RequirePermission>} />
+          <Route path="transactions/:id"       element={<RequirePermission resource="day_close" action="read"><TransactionDetail /></RequirePermission>} />
           <Route path="price-book"             element={<RequirePermission resource="catalog" action="read"><PriceBook /></RequirePermission>} />
           <Route path="purchase-invoices"      element={<RequirePermission resource="catalog" action="read"><PurchaseInvoices /></RequirePermission>} />
           <Route path="purchase-invoices/new"  element={<RequirePermission resource="catalog" action="update"><PurchaseInvoiceForm /></RequirePermission>} />

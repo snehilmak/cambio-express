@@ -1,0 +1,27 @@
+/* Transactions list — page-specific layout only; everything else
+   is a kit primitive (CLAUDE.md inline-styles-vs-modules). */
+
+.filters {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+
+.searchField {
+  flex: 1;
+  min-width: 14rem;
+}
+
+.voidedToggle {
+  /* Sits on the control baseline next to the inputs, not against
+     their labels. */
+  padding-bottom: 0.4rem;
+}
+
+/* Status pills wrap instead of stretching the row. */
+.flags {
+  display: flex;
+  gap: 0.3rem;
+  flex-wrap: wrap;
+}

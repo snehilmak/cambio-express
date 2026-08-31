@@ -1,0 +1,69 @@
+/* One ticket — page-specific treatments only. */
+
+.flags {
+  display: flex;
+  gap: 0.3rem;
+  flex-wrap: wrap;
+}
+
+/* A voided line stays readable but is unmistakably not part of the
+   sale: struck through, dimmed, with a warning bar down the row. */
+.cancelledRow td {
+  color: var(--db-text-muted);
+  text-decoration: line-through;
+}
+
+.cancelledRow td:first-child {
+  box-shadow: inset 3px 0 0 0 var(--db-warning);
+}
+
+/* The "voided" pill itself must stay legible — no strikethrough. */
+.cancelledRow td:last-child {
+  text-decoration: none;
+}
+
+.sub {
+  color: var(--db-text-muted);
+  font-size: 0.85em;
+}
+
+/* Register provenance — a label/value list, two-up on wide
+   viewports and stacked on narrow ones. */
+.meta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem 1.5rem;
+  margin: 0;
+}
+
+@media (max-width: 40rem) {
+  .meta {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.metaRow {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  min-width: 0;
+  padding: 0.25rem 0;
+  border-bottom: 1px solid var(--db-border);
+}
+
+.metaLabel {
+  color: var(--db-text-muted);
+  margin: 0;
+}
+
+.metaValue {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  text-align: right;
+}
+
+.footerRow {
+  display: flex;
+  justify-content: flex-start;
+}
