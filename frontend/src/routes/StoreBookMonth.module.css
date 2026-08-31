@@ -1,0 +1,12 @@
+/* Store Daily Book — month page.
+
+   The calendar grid, cells and legend all live in
+   components/ui/MonthCalendar.module.css, shared with the MSB
+   daily book. Only the page's own month-picker row is local. */
+
+.nav {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}

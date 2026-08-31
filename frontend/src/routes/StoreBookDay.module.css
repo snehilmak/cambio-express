@@ -1,0 +1,154 @@
+/* Store Daily Book — one day (D-2). Kit primitives carry the
+   inputs, buttons and cards; what's here is the three-column
+   layout and the running-total strip. */
+
+.dayNav {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+/* ── Running totals ────────────────────────────────────────── */
+
+.totalsRow {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.totalCard {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.9rem 1rem;
+  border-radius: 0.75rem;
+  border: 1px solid var(--db-border);
+  background: var(--db-surface-2);
+  min-width: 0;
+}
+
+.totalLabel {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--db-text-muted);
+}
+
+.totalValue {
+  font-family: var(--db-font-mono, "JetBrains Mono", monospace);
+  font-size: 1.35rem;
+  font-weight: 600;
+  color: var(--db-text);
+  /* A six-figure day must not push the card wider than its grid
+     track — same lesson as the daily-book calendar cells. */
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Column accents. Tone carries meaning here: the over/short card
+   is the one an operator looks at first. */
+.sales   { border-color: color-mix(in srgb, var(--db-accent) 45%, transparent); }
+.tenders { border-color: color-mix(in srgb, var(--db-negative) 45%, transparent); }
+.deposit { border-color: color-mix(in srgb, var(--db-info) 45%, transparent); }
+
+.balanced { border-color: var(--db-accent); }
+.balanced .totalValue { color: var(--db-accent); }
+.over     { border-color: var(--db-info); }
+.short    { border-color: var(--db-negative); }
+.short .totalValue { color: var(--db-negative); }
+
+/* ── Three columns ─────────────────────────────────────────── */
+
+.columns {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+  align-items: start;
+}
+
+/* Stack on anything narrower than a laptop — three columns of
+   money inputs is unusable on a tablet in portrait. */
+@media (max-width: 60rem) {
+  .columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.column {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.columnHead {
+  padding: 0.6rem 0.9rem;
+  border-radius: 0.6rem;
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--db-text);
+  background: var(--db-surface-2);
+  border: 1px solid var(--db-border);
+}
+
+.section {
+  padding: 0.75rem 0.9rem;
+}
+
+.sectionTitle {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--db-text-muted);
+  margin-bottom: 0.5rem;
+}
+
+/* ── One field ─────────────────────────────────────────────── */
+
+.row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.4rem 0;
+}
+
+.rowLabel {
+  font-size: 0.85rem;
+  color: var(--db-text);
+}
+
+.rowInputs {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+  min-width: 0;
+}
+
+.rowInputs > :nth-last-child(1) {
+  min-width: 0;
+}
+
+/* The "#" / gallons companion beside the money box. */
+.countInput {
+  max-width: 5.5rem;
+  flex: 0 0 auto;
+}
+
+/* "Orig. Val" — what the register reported before any edit.
+   Green while the operator's value still matches, red once they
+   have overridden it. */
+.orig {
+  font-size: 0.72rem;
+  font-family: var(--db-font-mono, "JetBrains Mono", monospace);
+}
+
+.origMatch   { color: var(--db-accent); }
+.origChanged { color: var(--db-negative); }
+
+.footerRow {
+  margin-top: 1rem;
+}

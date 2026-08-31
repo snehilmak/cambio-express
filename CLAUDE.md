@@ -48,6 +48,20 @@ single neon-green `#3fff00` accent, Space Grotesk + Inter +
 JetBrains Mono, inline stroke SVG nav icons).
 
 Non-negotiables:
+- **Reuse before you build — MANDATORY. Check for an existing
+  shared component BEFORE writing a new one.** See
+  [UI-STANDARDS.md §6](docs/design-system/UI-STANDARDS.md). Read
+  `frontend/src/components/ui/index.tsx` (the kit's export list is
+  the inventory), grep for the CONCEPT rather than the name you'd
+  have picked, and look at the nearest page that already does the
+  same job. **Two copies is the extraction threshold**: if you are
+  about to write something a second time, extract it and move the
+  existing caller onto it in the SAME PR — extracting for the new
+  page alone doubles the maintenance instead of halving it. The
+  same rule holds on the backend (`PLAN_CATALOG` exists because
+  plan prices had been duplicated into three modules and two had
+  drifted). §6 carries the inventory table and a worked example of
+  what skipping this costs.
 - **One control per data type — see
   [`docs/design-system/UI-STANDARDS.md`](docs/design-system/UI-STANDARDS.md).**
   Binding for every UI change: booleans are `<Switch>` (settings) or
@@ -507,6 +521,27 @@ step** — rename it in one revision, copy data over, drop the old
 column in a follow-up revision once the dual-write window has
 elapsed.
 
+**A migration NEVER imports application code.** Spell the columns
+out literally, even when a model already has the list. Two reasons,
+and the first is the important one:
+
+1. **A migration is immutable history.** If it derives its columns
+   from a model, renaming a field later silently changes what that
+   historical revision creates — a database rebuilt from scratch
+   stops matching one migrated in place. Alembic is the sole source
+   of schema truth, and truth that follows application code isn't
+   truth.
+2. Alembic imports every file in `alembic/versions/` to build the
+   revision graph, and `init_db()` runs that during boot — so a
+   top-level `from api.…` drags the model layer into the boot path
+   from inside the migration loader.
+
+When a literal list could drift from a model, add a test that
+asserts the two agree (see
+`tests/Modules/StoreBook/test_migration_matches_model.py`, which
+also asserts the migration imports no application code at all).
+That's how you get both safety and immutability.
+
 ## Bank-charge automation (built-in rules)
 Standard bank charges from a known institution shouldn't require the
 operator to set up their own rule. Examples: Nizari Progressive's
@@ -783,6 +818,15 @@ Known traps:
 - Never bypass hooks (`--no-verify`, `--no-gpg-sign`) unless asked.
 
 ## What NOT to do
+- ❌ Write a component, hook, helper or CSS block without first
+  checking whether one exists — read
+  `frontend/src/components/ui/index.tsx` and grep for the concept
+  (UI-STANDARDS §6). A hand-rolled month grid, money input, tab
+  strip, confirm dialog or table-with-loading-states is a change
+  request.
+- ❌ Extract a shared component for a NEW page while leaving the
+  existing copy in place — move every caller onto it in the same PR
+  or you have added a maintenance burden, not removed one.
 - ❌ Inline-style hex colors that duplicate `app.css`.
 - ❌ Drop columns or tables from a running DB without a backfill
   step (rename in one revision, copy data, drop in a follow-up).

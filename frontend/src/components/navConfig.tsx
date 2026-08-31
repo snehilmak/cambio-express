@@ -67,11 +67,11 @@ export const NAV: NavGroup[] = [
         desc: "MSB cash ledger and daily close-out.",
       },
       {
-        to: "/day-close", label: "Day close",
+        to: "/store-book", label: "Store Daily book",
         roles: ["admin", "employee"],
         flag: "module_day_close", perm: "day_close.read",
         icon: iconRegister(),
-        desc: "Register totals and department sales.",
+        desc: "Sales, tenders, deposits, and the day's over/short.",
       },
       {
         to: "/lottery", label: "Lottery",

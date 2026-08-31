@@ -4324,6 +4324,93 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/storebook/month": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Storebook Month Route
+         * @description Calendar month: the days that have a sheet, with each day's
+         *     totals and lock state, plus month rollups for the header.
+         */
+        get: operations["storebook_month_route_storebook_month_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/storebook/{day}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Storebook Day Route
+         * @description One day's sheet. Creates the row on first open — the
+         *     operator shouldn't have to 'start' a day before entering it.
+         */
+        get: operations["storebook_day_route_storebook__day__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Storebook Update Route
+         * @description Partial edit. A locked day is refused with 409 so the SPA
+         *     can tell 'you need to unlock' apart from a validation error.
+         */
+        patch: operations["storebook_update_route_storebook__day__patch"];
+        trace?: never;
+    };
+    "/storebook/{day}/lock": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Storebook Lock Route
+         * @description Lock or unlock the day.
+         */
+        post: operations["storebook_lock_route_storebook__day__lock_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/storebook/{day}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Storebook Restore Route
+         * @description Take the register's number back for one overridden field.
+         */
+        post: operations["storebook_restore_route_storebook__day__restore_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/superadmin/anomalies": {
         parameters: {
             query?: never;
@@ -10885,6 +10972,157 @@ export interface components {
         StagedDaysResponse: {
             /** Days */
             days: components["schemas"]["StagedDayRow"][];
+        };
+        /** StoreBookColumnSpec */
+        StoreBookColumnSpec: {
+            /** Column */
+            column: string;
+            /** Label */
+            label: string;
+            /** Sections */
+            sections: components["schemas"]["StoreBookSectionSpec"][];
+        };
+        /**
+         * StoreBookDayResponse
+         * @description One day's sheet.
+         *
+         *     `values` and `counts` are keyed by field key; `originals` holds
+         *     only the fields an import supplied, so the SPA renders the
+         *     "Orig. Val" caption exactly where there is one.
+         */
+        StoreBookDayResponse: {
+            /** Counts */
+            counts: {
+                [key: string]: number;
+            };
+            /** Entry Date */
+            entry_date: string;
+            /** Is Locked */
+            is_locked: boolean;
+            /** Layout */
+            layout: components["schemas"]["StoreBookColumnSpec"][];
+            /** Locked At */
+            locked_at: string | null;
+            /** Notes */
+            notes: string;
+            /** Originals */
+            originals: {
+                [key: string]: number;
+            };
+            /** Store Id */
+            store_id: number;
+            totals: components["schemas"]["StoreBookTotals"];
+            /** Updated At */
+            updated_at: string | null;
+            /** Values */
+            values: {
+                [key: string]: number;
+            };
+        };
+        /**
+         * StoreBookFieldSpec
+         * @description One input on the sheet.
+         */
+        StoreBookFieldSpec: {
+            /** Count Field */
+            count_field?: string | null;
+            /** Gallons Field */
+            gallons_field?: string | null;
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+        };
+        /** StoreBookLockRequest */
+        StoreBookLockRequest: {
+            /** Locked */
+            locked: boolean;
+        };
+        /**
+         * StoreBookMonthResponse
+         * @description Calendar month: one row per day that has a sheet, plus the
+         *     month's rolled-up totals for the header cards.
+         */
+        StoreBookMonthResponse: {
+            /** Month */
+            month: number;
+            /** Rows */
+            rows: components["schemas"]["StoreBookMonthRow"][];
+            /** Total Fuel Cents */
+            total_fuel_cents: number;
+            /** Total Fuel Gallons */
+            total_fuel_gallons: number;
+            /** Total Sales Cents */
+            total_sales_cents: number;
+            /** Year */
+            year: number;
+        };
+        /** StoreBookMonthRow */
+        StoreBookMonthRow: {
+            /** Deposit Cents */
+            deposit_cents: number;
+            /** Entry Date */
+            entry_date: string;
+            /** Is Locked */
+            is_locked: boolean;
+            /** Over Short Cents */
+            over_short_cents: number;
+            /** Sales Cents */
+            sales_cents: number;
+            /** Tenders Cents */
+            tenders_cents: number;
+        };
+        /**
+         * StoreBookRestoreRequest
+         * @description Take the register's number back for one field.
+         */
+        StoreBookRestoreRequest: {
+            /** Field Key */
+            field_key: string;
+        };
+        /** StoreBookSectionSpec */
+        StoreBookSectionSpec: {
+            /** Fields */
+            fields: components["schemas"]["StoreBookFieldSpec"][];
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+        };
+        /**
+         * StoreBookTotals
+         * @description The three running column totals plus the variance between
+         *     two of them — the number the sheet exists to produce.
+         */
+        StoreBookTotals: {
+            /** Deposit Cents */
+            deposit_cents: number;
+            /** Over Short Cents */
+            over_short_cents: number;
+            /** Sales Cents */
+            sales_cents: number;
+            /** Tenders Cents */
+            tenders_cents: number;
+        };
+        /**
+         * StoreBookUpdateRequest
+         * @description Partial update — only the fields the operator touched.
+         *
+         *     Unknown keys are rejected by the Service rather than dropped
+         *     here, so a typo surfaces as an error instead of a save that
+         *     silently discarded a number.
+         */
+        StoreBookUpdateRequest: {
+            /** Counts */
+            counts?: {
+                [key: string]: number;
+            } | null;
+            /** Notes */
+            notes?: string | null;
+            /** Values */
+            values?: {
+                [key: string]: number;
+            } | null;
         };
         /**
          * StoreHourEntry
@@ -21035,6 +21273,194 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ReturnCheckResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    storebook_month_route_storebook_month_get: {
+        parameters: {
+            query: {
+                year: number;
+                month: number;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StoreBookMonthResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    storebook_day_route_storebook__day__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                day: string;
+            };
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StoreBookDayResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    storebook_update_route_storebook__day__patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                day: string;
+            };
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StoreBookUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StoreBookDayResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    storebook_lock_route_storebook__day__lock_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                day: string;
+            };
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StoreBookLockRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StoreBookDayResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    storebook_restore_route_storebook__day__restore_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                day: string;
+            };
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StoreBookRestoreRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StoreBookDayResponse"];
                 };
             };
             /** @description Validation Error */
