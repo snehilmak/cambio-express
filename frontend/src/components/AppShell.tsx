@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 
 import { useProfile, useSessionStatus, useStoreInfo } from "../api/account";
 import { useTicketsUnread } from "../api/support";
@@ -178,11 +178,48 @@ function Topbar({
       </button>
       {isOwnerSession() && <StoreSwitchChip identity={identity} />}
       <span style={topbarSpacer} />
+      <TrialChip />
       {referralCode && <ReferralBadge code={referralCode} />}
       <InstallAppButton />
       <ThemeToggle />
       <UserMenu identity={identity} onSignOut={onSignOut} />
     </header>
+  );
+}
+
+// Trial countdown (W-1). Present for the WHOLE trial rather than
+// appearing near the end: "5 days left" on day two sets an
+// expectation, while something that materialises on day four reads
+// as an alarm. It is a link, not a dismissible notice — a dismissal
+// is a one-time event, and the person who most needs the reminder is
+// the one who dismissed it on day two.
+//
+// Nothing renders for a paid store: the server sends `trial: null`.
+function TrialChip() {
+  const session = useSessionStatus();
+  const trial = session.data?.trial;
+  if (!trial) return null;
+  return (
+    <Link
+      to="/subscribe"
+      className={`app-trial-chip is-${trial.tone}`}
+      title={`${trial.message} Click to subscribe.`}
+    >
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+        stroke="currentColor" strokeWidth="2" strokeLinecap="round"
+        strokeLinejoin="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="9" />
+        <path d="M12 7v5l3 2" />
+      </svg>
+      <span className="app-trial-chip-text">
+        {trial.status === "active" || trial.status === "expiring_soon"
+          ? (trial.days_left === 0
+              ? "Trial ends today"
+              : `${trial.days_left} day${trial.days_left === 1 ? "" : "s"} left`)
+          : "Trial ended"}
+      </span>
+      <span className="app-trial-chip-cta">Subscribe</span>
+    </Link>
   );
 }
 
