@@ -13,7 +13,18 @@ Link invariants:
     violations and raise;
   * only store roles (admin / employee) are linkable — owners and
     platform roles have no HR record at a store;
-  * linking never mutates the User row (auth stays auth).
+  * LINKING never mutates the User row (auth stays auth).
+
+Editing a linked employee's email or phone is the one exception,
+and it is deliberate. Those two fields ARE the login identifier
+(L-2), and they were stored on both rows: an admin who corrected
+someone's email on the Profile tab updated the HR record while the
+person went on signing in with the old one, with nothing anywhere
+saying so. ``sync_login_identity`` pushes the change through to
+the login, validating and checking for collisions BEFORE writing
+either row so a rejected edit leaves both untouched. It changes
+the string someone types, not who they are or what they can do —
+so it audits but does not revoke sessions.
 """
 from datetime import date
 
@@ -27,6 +38,94 @@ _LINKABLE_ROLES = ("admin", "employee")
 
 class EmployeeLinkError(ValueError):
     """Raised when a login link would violate an invariant."""
+
+
+class LoginSyncError(ValueError):
+    """The HR edit would break how the linked person signs in."""
+
+
+def sync_login_identity(
+    db: Session, employee: StoreEmployee, *,
+    email: str | None, phone: str | None,
+) -> tuple[str, str] | None:
+    """Push an employee's email/phone onto their LINKED login.
+
+    Email and phone are the login identifier (L-2) and were being
+    stored in two places: editing them on the Employees → Profile
+    tab updated the HR row and left the login untouched, so the
+    person kept signing in with the old address and nothing said
+    so. This is the sync half of that fix.
+
+    Returns ``(old_identifier, new_identifier)`` when the login
+    actually moved, else ``None``. Raises before writing ANYTHING
+    if the result would be invalid or collide — a half-applied
+    identity change is worse than a refused one.
+
+    No session revocation: the person and their permissions are
+    unchanged, only the string they type. The caller audits it.
+    """
+    if employee.user_id is None:
+        return None
+    if email is None and phone is None:
+        return None
+
+    from api.Modules.Auth.Services.identity import (
+        is_email, login_identifier, normalize_email, normalize_phone,
+    )
+    from api.Modules.Admin.Repositories.users import (
+        find_store_user_by_username,
+    )
+
+    user = db.get(User, int(employee.user_id))
+    if user is None:
+        return None
+
+    # Unspecified fields keep whatever the login already has, so a
+    # phone-only edit cannot wipe someone's email.
+    new_email = (
+        normalize_email(email) if email is not None
+        else normalize_email(user.email or "")
+    )
+    new_phone = (
+        (phone or "").strip() if phone is not None
+        else (user.phone or "").strip()
+    )
+
+    if new_email and not is_email(new_email):
+        raise LoginSyncError("Enter a valid email address.")
+    if new_phone and not normalize_phone(new_phone):
+        raise LoginSyncError("Enter a valid phone number.")
+
+    identifier = login_identifier(new_email, new_phone)
+    if not identifier:
+        raise LoginSyncError(
+            "This person signs in with their email or phone — "
+            "clearing both would lock them out. Unlink their login "
+            "first if that is what you want.",
+        )
+
+    old = user.username or ""
+    if identifier == old:
+        # Still write the fields: the display values can differ from
+        # the identifier (a reformatted phone, a changed email when
+        # phone is the identifier).
+        user.email = new_email
+        user.set_login_phone(new_phone)
+        db.flush()
+        return None
+
+    clash = find_store_user_by_username(db, employee.store_id, identifier)
+    if clash is not None and clash.id != user.id:
+        raise LoginSyncError(
+            "Someone at this store already signs in with that "
+            "email or phone number.",
+        )
+
+    user.username = identifier
+    user.email = new_email
+    user.set_login_phone(new_phone)
+    db.flush()
+    return old, identifier
 
 
 def update_employee_hr(

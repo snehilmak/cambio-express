@@ -449,7 +449,20 @@ def update_employee_route(
     if emp is None:
         raise HTTPException(status_code=404, detail="Employee not found")
     fields = body.model_dump(exclude_unset=True)
+    login_moved: tuple[str, str] | None = None
     try:
+        # Sync the login FIRST. Email and phone are the login
+        # identifier (L-2); validating and collision-checking before
+        # any HR write means a rejected edit leaves both rows
+        # untouched, rather than updating the HR record and leaving
+        # the person signing in with the old address.
+        from api.Modules.Admin.Services.employees import (
+            sync_login_identity,
+        )
+        login_moved = sync_login_identity(
+            db, emp,
+            email=fields.get("email"), phone=fields.get("phone"),
+        )
         update_team_member(
             db, emp,
             name=fields.get("name"),
@@ -474,12 +487,20 @@ def update_employee_route(
         k for k in fields if not k.startswith("clear_")
     ] + [k for k in ("clear_hired_on", "clear_date_of_birth")
          if fields.get(k)]
+    summary = f"changed: {', '.join(sorted(changed)) or 'nothing'}"
+    if login_moved is not None:
+        # Worth its own sentence in the log: this changed how a
+        # person signs in, not just what a record says.
+        summary += (
+            f" — login identifier {login_moved[0]!r} → "
+            f"{login_moved[1]!r}"
+        )
     _audit_admin_action(
         db, claims=claims, action="update_employee",
         target_type="team_member",
         target_id=str(emp.id),
         target_label=(emp.name or "")[:160],
-        summary=f"changed: {', '.join(sorted(changed)) or 'nothing'}",
+        summary=summary,
     )
     db.commit()
     linked = db.get(User, emp.user_id) if emp.user_id else None
