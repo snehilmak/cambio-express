@@ -25,8 +25,23 @@ from sqlalchemy.orm import Session
 
 
 # Status values excluded from owner-facing transfer rollups so a
-# canceled transfer doesn't inflate volume.
-OWNER_TRANSFER_EXCLUDED: list[str] = ["Canceled", "Rejected"]
+# cancelled transfer doesn't inflate volume.
+#
+# BOTH spellings of cancel are listed on purpose. The app writes
+# "Cancelled" (two L) — see EditTransfer.tsx and
+# api/Modules/Transfers/INVARIANTS.md — but this list shipped with
+# only the one-L "Canceled", so for a long time none of the ~20
+# call sites that use it actually excluded a cancelled transfer:
+# owner dashboards, superadmin BI, the tax pack, daily-summary
+# emails, customer segments and employee activity all counted them
+# as volume, and the cancelled-transfers report — whose entire
+# subject is these rows — matched only the rejected ones.
+#
+# Keeping the one-L form covers any row written while it was the
+# only value tested for. Do not "tidy" either spelling away;
+# tests/Modules/Owners/test_transfer_exclusion_spelling.py pins
+# both.
+OWNER_TRANSFER_EXCLUDED: list[str] = ["Cancelled", "Canceled", "Rejected"]
 
 
 def owner_period_window(

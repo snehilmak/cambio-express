@@ -280,6 +280,51 @@ def _sales_block(
     }
 
 
+def _transfers_rollup(
+    db: Session, store_id: int, today: date,
+) -> dict[str, float]:
+    """Money-transfer volume over the same windows the sales and
+    purchase blocks use, so the period table can put all three
+    side by side.
+
+    Cancelled and rejected transfers are excluded through the
+    shared ``OWNER_TRANSFER_EXCLUDED`` list rather than a literal
+    here — money that never moved does not belong in a volume
+    figure, and the spelling of "cancelled" is exactly the thing
+    that has gone wrong before.
+    """
+    from datetime import timedelta
+
+    from sqlalchemy import func
+
+    from api.Modules.Owners.Services import OWNER_TRANSFER_EXCLUDED
+    from api.Modules.Transfers.Models import Transfer
+
+    def _sum_since(start: date) -> float:
+        # send_amount is a DollarView property, not a column —
+        # SQL has to sum the cents column (P0-3 convention).
+        cents = (
+            db.query(func.coalesce(
+                func.sum(Transfer.send_amount_cents), 0,
+            ))
+            .filter(
+                Transfer.store_id == store_id,
+                Transfer.send_date >= start,
+                Transfer.send_date <= today,
+                Transfer.status.notin_(OWNER_TRANSFER_EXCLUDED),
+            )
+            .scalar()
+        )
+        return float(cents or 0) / 100.0
+
+    return {
+        "today": _sum_since(today),
+        "d7": _sum_since(today - timedelta(days=6)),
+        "d15": _sum_since(today - timedelta(days=14)),
+        "d30": _sum_since(today - timedelta(days=29)),
+    }
+
+
 def _hourly_block(db: Session, store_id: int) -> dict[str, Any] | None:
     """Hourly-sales chart data (G-3): the two most recent business
     days with hour buckets — "current" is live for an in-progress
@@ -528,6 +573,11 @@ def _admin_summary(
         if "module_day_close" in modules and _can("day_close")
         else []
     )
+    transfers_rollup = (
+        _transfers_rollup(db, store_id, today)
+        if "module_money_services" in modules and _can("transfers")
+        else None
+    )
 
     today_report = (
         db.query(DailyReport)
@@ -557,6 +607,7 @@ def _admin_summary(
         "clocked_in": clocked_in,
         "register": register,
         "recent_receipts": recent_receipts,
+        "transfers_rollup": transfers_rollup,
         "kpis": {
             "total_transfers": total_transfers,
             "today_transfers": today_transfers,

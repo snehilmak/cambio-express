@@ -129,6 +129,16 @@ export interface ReceiptRow {
   has_voided_line: boolean;
 }
 
+// Money-transfer volume over the same windows as sales and
+// purchases, so the period table can line all three up. null when
+// the money-services module is off.
+export interface TransfersRollup {
+  today: number;
+  d7: number;
+  d15: number;
+  d30: number;
+}
+
 export interface ClockedInRow {
   name: string;
   clock_in_at: string | null;
@@ -145,6 +155,7 @@ export interface AdminDashboard {
   clocked_in: ClockedInRow[];
   register: RegisterActivityBlock | null;
   recent_receipts: ReceiptRow[];
+  transfers_rollup: TransfersRollup | null;
   kpis: AdminDashboardKpis;
   company_stats: CompanyStat[];
   recent_transfers: DashboardTransferRow[];
