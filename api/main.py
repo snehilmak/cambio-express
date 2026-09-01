@@ -221,6 +221,14 @@ def create_app() -> FastAPI:
     from api.Core.Observability.security_headers import SecurityHeadersMiddleware
     app.add_middleware(SecurityHeadersMiddleware)
 
+    # Subscription enforcement (W-1). Middleware, not a per-route
+    # dependency: this way a write endpoint added later is covered
+    # without anyone remembering to decorate it. Refuses WRITES from
+    # stores whose trial has elapsed; reads always pass so a lapsed
+    # operator can still see and export their own books.
+    from api.Core.Subscription import SubscriptionGateMiddleware
+    app.add_middleware(SubscriptionGateMiddleware)
+
     # Rate limiting (BACKLOG D6). slowapi reads its storage backend
     # from RATELIMIT_STORAGE_URI (Redis in prod, in-memory in dev/CI).
     # The module-level singleton lives in api/Core/RateLimit.py so
