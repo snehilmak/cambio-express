@@ -17,6 +17,11 @@ class AdminUserRow(BaseModel):
     # True when the user carries a per-user permission overlay
     # (R-1) — custom access instead of their role's defaults.
     has_custom_permissions: bool = False
+    # R-3: the saved access role this user follows, if any. The
+    # roster and the user form show the role's NAME rather than a
+    # generic "Custom access" pill.
+    store_role_id: int | None = None
+    store_role_name: str = ""
 
 
 class AdminUserListResponse(BaseModel):
@@ -49,6 +54,11 @@ class AdminUserCreateRequest(BaseModel):
     # R-2: optional custom-access overlay written at creation time
     # (resource → action → bool). None = pure role permissions.
     permissions: dict[str, dict[str, bool]] | None = None
+    # R-3: put the new hire straight into a saved role. Takes
+    # precedence over `permissions` — a named role IS a matrix, and
+    # honouring both would leave the label describing access the
+    # user does not have.
+    store_role_id: int | None = None
 
 
 class AdminUserUpdateRequest(BaseModel):

@@ -346,6 +346,7 @@ def _employee_row(e, u) -> "EmployeeRecord":
             has_custom_permissions=(
                 user_has_custom_permissions(u.id, e.store_id)
             ),
+            store_role_name=_role_name_for(u),
         )
     return EmployeeRecord(
         id=e.id,
@@ -448,7 +449,20 @@ def update_employee_route(
     if emp is None:
         raise HTTPException(status_code=404, detail="Employee not found")
     fields = body.model_dump(exclude_unset=True)
+    login_moved: tuple[str, str] | None = None
     try:
+        # Sync the login FIRST. Email and phone are the login
+        # identifier (L-2); validating and collision-checking before
+        # any HR write means a rejected edit leaves both rows
+        # untouched, rather than updating the HR record and leaving
+        # the person signing in with the old address.
+        from api.Modules.Admin.Services.employees import (
+            sync_login_identity,
+        )
+        login_moved = sync_login_identity(
+            db, emp,
+            email=fields.get("email"), phone=fields.get("phone"),
+        )
         update_team_member(
             db, emp,
             name=fields.get("name"),
@@ -473,12 +487,20 @@ def update_employee_route(
         k for k in fields if not k.startswith("clear_")
     ] + [k for k in ("clear_hired_on", "clear_date_of_birth")
          if fields.get(k)]
+    summary = f"changed: {', '.join(sorted(changed)) or 'nothing'}"
+    if login_moved is not None:
+        # Worth its own sentence in the log: this changed how a
+        # person signs in, not just what a record says.
+        summary += (
+            f" — login identifier {login_moved[0]!r} → "
+            f"{login_moved[1]!r}"
+        )
     _audit_admin_action(
         db, claims=claims, action="update_employee",
         target_type="team_member",
         target_id=str(emp.id),
         target_label=(emp.name or "")[:160],
-        summary=f"changed: {', '.join(sorted(changed)) or 'nothing'}",
+        summary=summary,
     )
     db.commit()
     linked = db.get(User, emp.user_id) if emp.user_id else None
@@ -950,7 +972,30 @@ def _user_row(u) -> AdminUserRow:
             user_has_custom_permissions(u.id, u.store_id)
             if u.store_id is not None else False
         ),
+        store_role_id=getattr(u, "store_role_id", None),
+        store_role_name=_role_name_for(u),
     )
+
+
+def _role_name_for(u) -> str:
+    """The saved role's name, so the roster and the user form can
+    say "Shift lead" rather than the generic "Custom access" (R-3).
+    Reads through the loaded row; no query when there is no role."""
+    role_id = getattr(u, "store_role_id", None)
+    if role_id is None:
+        return ""
+    from sqlalchemy import inspect as _sa_inspect
+
+    from api.Modules.Tenancy.Models import StoreRole
+
+    # Read through the row's OWN session. Opening a fresh one here
+    # would leak it — this is a display helper, and a detached row
+    # simply reports no name rather than costing a connection.
+    session = _sa_inspect(u).session
+    if session is None:
+        return ""
+    role = session.get(StoreRole, int(role_id))
+    return (role.name or "") if role is not None else ""
 
 
 def _audit_user_action(
@@ -1052,7 +1097,19 @@ def create_user_route(
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
     custom = ""
-    if body.permissions is not None:
+    if body.store_role_id is not None:
+        # R-3: a saved role wins over a hand-ticked matrix. Both
+        # would leave the role label describing access the user does
+        # not actually have.
+        from api.Modules.Admin.Services.roles import (
+            RoleNotFoundError, assign_role,
+        )
+        try:
+            assigned = assign_role(db, store_id, user, body.store_role_id)
+        except RoleNotFoundError:
+            raise HTTPException(status_code=404, detail="Role not found")
+        custom = f" in the {assigned.name!r} access role" if assigned else ""
+    elif body.permissions is not None:
         # R-2: write the custom-access overlay in the same request
         # the operator submitted it from — a brand-new user has no
         # sessions to revoke yet.
@@ -1219,12 +1276,20 @@ def set_user_permissions_route(
         get_user_permission_matrix, set_user_permissions,
     )
     set_user_permissions(store_id, user.id, matrix)
+    # Editing one member by hand DETACHES them from their saved
+    # role (R-3). They keep the matrix just given to them; leaving
+    # them attached would let the next role edit silently revert an
+    # edit someone watched succeed.
+    from api.Modules.Admin.Services.roles import detach_member
+    had_role = user.store_role_id is not None
+    detach_member(db, user)
     _audit_user_action(
         db, claims=claims, action="set_user_permissions",
         target_user=user,
         summary=(
             f"set custom access for {user.username!r} "
             "(per-user permission overlay)"
+            + (" — detached from their saved role" if had_role else "")
         ),
     )
     from api.Modules.Auth.Services.principal import (
@@ -1252,6 +1317,10 @@ def clear_user_permissions_route(
         clear_user_permissions, get_user_permission_matrix,
     )
     clear_user_permissions(store_id, user.id)
+    # No overlay means no saved role either — the label would claim
+    # an access set that is no longer being applied.
+    from api.Modules.Admin.Services.roles import detach_member
+    detach_member(db, user)
     _audit_user_action(
         db, claims=claims, action="clear_user_permissions",
         target_user=user,
@@ -1493,3 +1562,264 @@ def redeem_connect_code_route(
     )
     db.commit()
     return {"owner_name": owner_name}
+
+
+# ── Named access roles (R-3) ────────────────────────────────
+#
+# "Save this matrix as a role." A role OWNS its members' overlays:
+# editing one rewrites every member's access and kills their live
+# sessions. That is the same security write as editing one user,
+# multiplied — so every mutation here audits and revokes, exactly
+# like the per-user routes above.
+
+
+def _role_row(role, member_count: int) -> dict:
+    from api.Modules.Admin.Services.roles import role_matrix
+    return {
+        "id": role.id,
+        "name": role.name or "",
+        "member_count": member_count,
+        "matrix": role_matrix(role),
+        "updated_at": (
+            role.updated_at.isoformat() if role.updated_at else None
+        ),
+    }
+
+
+def _revoke_all(db: Session, users: list) -> None:
+    from api.Modules.Auth.Services.principal import (
+        invalidate_sessions_for_user,
+    )
+    for user in users:
+        invalidate_sessions_for_user(db, user.id)
+
+
+def _member_label(user) -> str:
+    return (user.full_name or user.username or f"#{user.id}")[:80]
+
+
+@router.get("/roles")
+def list_roles_route(
+    db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
+) -> dict:
+    """The store's saved access roles, with how many people wear
+    each — the count is what makes an edit's blast radius visible
+    before you open it."""
+    require_permission(claims, "users", "read")
+    store_id = resolve_store_scope(claims)
+    from api.Core.Permissions import RBAC_ACTIONS, RBAC_RESOURCES
+    from api.Modules.Admin.Services.roles import list_roles, member_counts
+    counts = member_counts(db, store_id)
+    return {
+        "resources": RBAC_RESOURCES,
+        "actions": RBAC_ACTIONS,
+        "roles": [
+            _role_row(r, counts.get(r.id, 0))
+            for r in list_roles(db, store_id)
+        ],
+    }
+
+
+@router.get("/roles/{role_id}/members")
+def role_members_route(
+    role_id: int = Path(..., ge=1),
+    db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
+) -> dict:
+    """Who this edit would affect. The SPA names these people in
+    the confirmation before a propagating save — "changes access
+    for 6 people" with no names is not a confirmation."""
+    require_permission(claims, "users", "read")
+    store_id = resolve_store_scope(claims)
+    from api.Modules.Admin.Services.roles import (
+        RoleNotFoundError, get_role, members,
+    )
+    try:
+        role = get_role(db, store_id, role_id)
+    except RoleNotFoundError:
+        raise HTTPException(status_code=404, detail="Role not found")
+    return {
+        "role_id": role.id,
+        "name": role.name or "",
+        "members": [
+            {"id": u.id, "name": _member_label(u), "role": u.role or ""}
+            for u in members(db, store_id, role.id)
+        ],
+    }
+
+
+@router.post("/roles", status_code=201)
+def create_role_route(
+    body: dict,
+    db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
+) -> dict:
+    require_permission(claims, "users", "update")
+    store_id = resolve_store_scope(claims)
+    matrix = body.get("matrix")
+    if not isinstance(matrix, dict):
+        raise HTTPException(
+            status_code=422, detail="Body must carry a matrix object.",
+        )
+    from api.Modules.Admin.Services.roles import RoleError, create_role
+    try:
+        role = create_role(
+            db, store_id, name=str(body.get("name") or ""),
+            matrix=matrix,
+            created_by=int(claims["sub"]) if claims.get("sub") else None,
+        )
+    except RoleError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    _audit_admin_action(
+        db, claims=claims, action="create_access_role",
+        target_type="store_role", target_id=str(role.id),
+        target_label=role.name[:160],
+        summary=f"created access role {role.name!r}",
+    )
+    db.commit()
+    return _role_row(role, 0)
+
+
+@router.put("/roles/{role_id}")
+def update_role_route(
+    body: dict,
+    role_id: int = Path(..., ge=1),
+    db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
+) -> dict:
+    """Rename and/or re-matrix a role.
+
+    When the matrix changes this rewrites every member's overlay
+    and revokes their sessions — the live propagation the feature
+    exists for. The response reports who was affected so the SPA
+    can say so rather than claiming a quiet success.
+    """
+    require_permission(claims, "users", "update")
+    store_id = resolve_store_scope(claims)
+    matrix = body.get("matrix")
+    if matrix is not None and not isinstance(matrix, dict):
+        raise HTTPException(
+            status_code=422, detail="matrix must be an object.",
+        )
+    name = body.get("name")
+    from api.Modules.Admin.Services.roles import (
+        RoleError, RoleNotFoundError, member_counts, update_role,
+    )
+    try:
+        role, affected = update_role(
+            db, store_id, role_id,
+            name=str(name) if name is not None else None,
+            matrix=matrix,
+        )
+    except RoleNotFoundError:
+        raise HTTPException(status_code=404, detail="Role not found")
+    except RoleError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+    names = ", ".join(_member_label(u) for u in affected)
+    _audit_admin_action(
+        db, claims=claims, action="update_access_role",
+        target_type="store_role", target_id=str(role.id),
+        target_label=role.name[:160],
+        summary=(
+            f"updated access role {role.name!r}"
+            + (
+                f" — reapplied to {len(affected)} member(s): {names}"
+                if affected else " (name only)"
+            )
+        ),
+    )
+    _revoke_all(db, affected)
+    db.commit()
+    out = _role_row(role, member_counts(db, store_id).get(role.id, 0))
+    out["affected_members"] = [
+        {"id": u.id, "name": _member_label(u)} for u in affected
+    ]
+    return out
+
+
+@router.delete("/roles/{role_id}")
+def delete_role_route(
+    role_id: int = Path(..., ge=1),
+    db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
+) -> dict:
+    """Delete a role. Members KEEP their current access and simply
+    stop being tracked — deleting a label must never change what
+    anyone can do, in either direction."""
+    require_permission(claims, "users", "update")
+    store_id = resolve_store_scope(claims)
+    from api.Modules.Admin.Services.roles import (
+        RoleNotFoundError, delete_role,
+    )
+    try:
+        name, detached = delete_role(db, store_id, role_id)
+    except RoleNotFoundError:
+        raise HTTPException(status_code=404, detail="Role not found")
+    _audit_admin_action(
+        db, claims=claims, action="delete_access_role",
+        target_type="store_role", target_id=str(role_id),
+        target_label=name[:160],
+        summary=(
+            f"deleted access role {name!r} — {len(detached)} member(s) "
+            "kept their access"
+        ),
+    )
+    db.commit()
+    return {
+        "deleted": name,
+        "detached": [
+            {"id": u.id, "name": _member_label(u)} for u in detached
+        ],
+    }
+
+
+@router.put("/users/{user_id}/role")
+def assign_user_role_route(
+    body: dict,
+    user_id: int = Path(..., ge=1),
+    db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
+) -> dict:
+    """Put a user in a saved role, or take them out of one
+    (``role_id: null``).
+
+    Assigning writes the overlay immediately so the user is already
+    restricted at first login. Removing leaves the overlay alone —
+    they keep exactly the access they had.
+    """
+    require_permission(claims, "users", "update")
+    store_id = resolve_store_scope(claims)
+    user = _find_permission_target(db, claims, store_id, user_id)
+    raw = body.get("role_id")
+    role_id = None if raw in (None, "", 0) else int(raw)
+    from api.Modules.Admin.Services.roles import (
+        RoleNotFoundError, assign_role,
+    )
+    try:
+        role = assign_role(db, store_id, user, role_id)
+    except RoleNotFoundError:
+        raise HTTPException(status_code=404, detail="Role not found")
+    _audit_user_action(
+        db, claims=claims, action="assign_access_role",
+        target_user=user,
+        summary=(
+            f"assigned access role {role.name!r} to {user.username!r}"
+            if role is not None else
+            f"removed the access role from {user.username!r} "
+            "(access unchanged)"
+        ),
+    )
+    from api.Modules.Auth.Services.principal import (
+        invalidate_sessions_for_user,
+    )
+    invalidate_sessions_for_user(db, user.id)
+    db.commit()
+    from api.Core.Permissions import get_user_permission_matrix
+    out = get_user_permission_matrix(
+        user.id, user.role or "employee", store_id,
+    )
+    out["store_role_id"] = user.store_role_id
+    out["store_role_name"] = role.name if role is not None else None
+    return out

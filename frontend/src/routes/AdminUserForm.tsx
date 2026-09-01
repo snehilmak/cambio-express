@@ -17,12 +17,21 @@ import {
   useToast,
 } from "../components/ui";
 import { PermissionMatrixTable } from "../components/PermissionMatrixTable";
+import { assignAccessRole, useAccessRoles } from "../api/roles";
 import { useUnsavedGuard } from "../lib/useUnsavedGuard";
 import styles from "./AdminUserForm.module.css";
 
 // R-2 access presets. "role" = no overlay (pure role permissions);
 // the others seed a custom-access matrix the operator can tweak.
-type AccessMode = "role" | "hr" | "bookkeeper" | "custom";
+// R-3 adds the store's SAVED roles to the same picker, as
+// `saved:<id>` — one control for "what can this person do",
+// rather than a second dropdown competing with this one.
+type AccessMode = "role" | "hr" | "bookkeeper" | "custom" | `saved:${number}`;
+
+function savedRoleId(mode: AccessMode): number | null {
+  return mode.startsWith("saved:")
+    ? Number(mode.slice("saved:".length)) : null;
+}
 
 interface UserDraft {
   // Identity. New logins are created with email and/or phone (L-2);
@@ -135,6 +144,7 @@ export default function AdminUserForm() {
   const detail  = useAdminUser(isEdit ? uid : null);
   const session = useSessionStatus();
   const userPerms = useAdminUserPermissions(isEdit ? uid : null);
+  const accessRoles = useAccessRoles();
   // Role matrices seed the "Custom" editor on create; shares the
   // Store Permissions page's cache key + payload shape.
   const storePerms = useQuery<StorePermissionsPayload>({
@@ -174,7 +184,16 @@ export default function AdminUserForm() {
 
   useEffect(() => {
     if (!isEdit || !userPerms.data) return;
-    const p = userPerms.data.has_custom
+    // A user already in a saved role must show as that role, not
+    // as "Custom" — otherwise a plain Save would push their matrix
+    // through the overlay route and silently DETACH them.
+    const savedId = detail.data?.user?.store_role_id ?? null;
+    const p = savedId != null
+      ? {
+          access: `saved:${savedId}` as AccessMode,
+          perm: structuredClone(userPerms.data.matrix),
+        }
+      : userPerms.data.has_custom
       ? {
           access: "custom" as const,
           perm: structuredClone(userPerms.data.matrix),
@@ -183,7 +202,7 @@ export default function AdminUserForm() {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- hydrate the custom-access half of the draft from the R-1 overlay endpoint
     setDraft((d) => ({ ...d, ...p }));
     setBaseline((b) => ({ ...b, ...p }));
-  }, [isEdit, userPerms.data]);
+  }, [isEdit, userPerms.data, detail.data]);
 
   const isDirty = JSON.stringify(draft) !== JSON.stringify(baseline);
   const guard = useUnsavedGuard(isDirty && !busy, {
@@ -229,7 +248,14 @@ export default function AdminUserForm() {
   function setAccess(mode: AccessMode) {
     setDraft((d) => {
       let perm = d.perm;
-      if (mode === "hr") perm = hrMatrix(resources, actions);
+      const saved = savedRoleId(mode);
+      if (saved != null) {
+        // Show the saved role's matrix read-only: it is the role
+        // that decides, and pretending otherwise would let someone
+        // tick a box that the next role edit silently reverts.
+        const role = accessRoles.data?.roles.find((r) => r.id === saved);
+        perm = role ? structuredClone(role.matrix) : perm;
+      } else if (mode === "hr") perm = hrMatrix(resources, actions);
       else if (mode === "bookkeeper") perm = bookkeeperMatrix(resources, actions);
       else if (mode === "custom") perm = perm ?? seedCustomMatrix();
       else perm = null;
@@ -287,7 +313,13 @@ export default function AdminUserForm() {
     setFieldErrors({});
     try {
       const moduleAccess = draft.restrict ? draft.modules : null;
-      const wantsCustom = draft.access !== "role" && draft.perm != null;
+      const savedRole = savedRoleId(draft.access);
+      // A saved role is applied through the role endpoint. Sending
+      // its matrix to the per-user overlay route instead would
+      // immediately DETACH the user from the role they were just
+      // put in (R-3's hand-edit rule).
+      const wantsCustom =
+        savedRole == null && draft.access !== "role" && draft.perm != null;
       if (isEdit) {
         const body: AdminUserUpdateBody = {
           full_name: draft.full_name,
@@ -300,8 +332,13 @@ export default function AdminUserForm() {
         // Custom access saves through the R-1 overlay endpoints —
         // only when it actually changed (each write revokes the
         // user's sessions, so no-op saves shouldn't log them out).
-        if (!isSelf) {
-          const hadCustom = baseline.access !== "role";
+        if (!isSelf && savedRole !== savedRoleId(baseline.access)) {
+          await assignAccessRole(uid, savedRole);
+        }
+        if (!isSelf && savedRole == null) {
+          const hadCustom =
+            baseline.access !== "role"
+            && savedRoleId(baseline.access) == null;
           const permChanged =
             wantsCustom !== hadCustom
             || (wantsCustom
@@ -322,7 +359,8 @@ export default function AdminUserForm() {
           role:      draft.role,
           module_access: moduleAccess,
         };
-        if (wantsCustom && draft.perm) body.permissions = draft.perm;
+        if (savedRole != null) body.store_role_id = savedRole;
+        else if (wantsCustom && draft.perm) body.permissions = draft.perm;
         const created = await createAdminUser(body);
         if (linkEmployeeId) {
           const { linkEmployeeLogin } = await import("../api/employees");
@@ -475,14 +513,36 @@ export default function AdminUserForm() {
                   <option value="hr">HR &amp; payroll — time clock only, no financials</option>
                   <option value="bookkeeper">Bookkeeper — view books, move no money</option>
                   <option value="custom">Custom — pick exactly what they can do</option>
+                  {(accessRoles.data?.roles ?? []).length > 0 && (
+                    <optgroup label="Your saved roles">
+                      {(accessRoles.data?.roles ?? []).map((r) => (
+                        <option key={r.id} value={`saved:${r.id}`}>
+                          {r.name}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
                 </Select>
+                {savedRoleId(draft.access) != null && (
+                  <Alert tone="info">
+                    This person follows the{" "}
+                    <strong>
+                      {accessRoles.data?.roles.find(
+                        (r) => r.id === savedRoleId(draft.access),
+                      )?.name}
+                    </strong>{" "}
+                    role. Editing the role changes them too — pick
+                    “Custom” instead to give this one person their own
+                    access.
+                  </Alert>
+                )}
                 {draft.access !== "role" && draft.perm && (
                   <PermissionMatrixTable
                     resources={resources}
                     actions={actions}
                     checked={(resource, action) => draft.perm?.[resource]?.[action] ?? false}
                     onToggle={togglePerm}
-                    disabled={busy}
+                    disabled={busy || savedRoleId(draft.access) != null}
                     resourceHeader="Area"
                   />
                 )}

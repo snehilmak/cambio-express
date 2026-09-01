@@ -14,6 +14,9 @@ class EmployeeLoginInfo(BaseModel):
     role:      str
     is_active: bool
     has_custom_permissions: bool
+    # R-3: name the saved role instead of the generic "Custom
+    # access" pill — "Shift lead" tells the reader something.
+    store_role_name: str = ""
 
 
 class EmployeeRecord(BaseModel):

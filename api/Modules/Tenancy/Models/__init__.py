@@ -28,6 +28,8 @@ from sqlalchemy import (
 )
 from api.Core.PasswordHash import check_password_hash, generate_password_hash
 
+from sqlalchemy.orm import relationship
+
 from api.Core.Database import Base
 
 
@@ -244,6 +246,13 @@ class User(Base):
     # shows. UX gating like the store flags — routes stay
     # permission-gated. Owners/superadmin are never restricted.
     module_access = Column(String(300), nullable=True)
+    # Named access role (R-3). NULL = no role: the user runs on
+    # their own overlay (or pure role defaults). Set means the
+    # StoreRole owns this user's overlay and rewrites it whenever
+    # the role is edited.
+    store_role_id = Column(
+        Integer, ForeignKey("store_role.id"), nullable=True, index=True,
+    )
     # Notification preferences. Opt-out (default True) for the one we
     # ship in v1 — a trial-ending reminder. Adding more toggles is one
     # column per channel here + the matching sender.
@@ -410,6 +419,92 @@ class OwnerConnectCode(Base):
     revoked_at       = Column(DateTime, nullable=True)
 
 
+class StoreRole(Base):
+    """A named, reusable access matrix — R-3, "save this matrix as
+    a role".
+
+    R-1 gave every user a permission overlay; R-2 gave the user
+    form a matrix editor seeded from hardcoded presets. Both stop
+    at ONE user: two people meant to have identical access were
+    ticked out by hand and then drifted, with nothing to say they
+    had.
+
+    A role fixes that by OWNING its members' overlays. It is not a
+    new layer in the permission resolution path — assigning or
+    editing a role writes through ``set_user_permissions`` into
+    the same per-user Casbin overlay that already existed, so
+    ``check_permission`` and JWT baking are untouched. That was
+    deliberate: the resolution order is a documented security
+    contract (Auth INVARIANTS.md) and this feature has no business
+    changing it.
+
+    **Propagation is LIVE** (owner's call): editing a role rewrites
+    every member's overlay and revokes their sessions. A role whose
+    edits didn't propagate would just be a preset with extra steps,
+    and presets already exist.
+
+    **Editing one member's access individually DETACHES them** from
+    the role, keeping their custom matrix. The alternative — leave
+    them attached — plants a time bomb: someone tweaks Amber's
+    access, sees it save, and the next role edit silently reverts
+    it. Detaching makes the divergence visible; the roster shows
+    "Custom access" instead of the role's name.
+    """
+
+    __tablename__ = "store_role"
+    id         = Column(Integer, primary_key=True)
+    store_id   = Column(
+        Integer, ForeignKey("store.id"), nullable=False, index=True,
+    )
+    name       = Column(String(60), nullable=False)
+    # Provenance only, and deliberately NOT a foreign key: user
+    # already points at store_role, so an FK back to user would
+    # close a cycle that SQLite cannot order for DDL (it has no
+    # ALTER to defer with). The value is who created the role, not
+    # a relationship anything traverses.
+    created_by = Column(Integer, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow)
+    __table_args__ = (UniqueConstraint("store_id", "name"),)
+
+    permissions = relationship(
+        "StoreRolePermission", back_populates="role",
+        cascade="all, delete-orphan",
+    )
+
+
+class StoreRolePermission(Base):
+    """One granted (resource, action) pair on a role.
+
+    Only GRANTS are stored. A resource with no rows is denied, not
+    "inherit" — the role is the complete answer for a member, the
+    same explicit-write contract ``set_user_permissions`` applies
+    to a hand-ticked matrix. Storing denials too would let the two
+    representations disagree.
+    """
+
+    __tablename__ = "store_role_permission"
+    id       = Column(Integer, primary_key=True)
+    # Denormalized so the retention purge can sweep by store like
+    # every other per-store table (same reason DepartmentSale
+    # carries one).
+    store_id = Column(
+        Integer, ForeignKey("store.id"), nullable=False, index=True,
+    )
+    role_id  = Column(
+        Integer, ForeignKey("store_role.id", ondelete="CASCADE"),
+        nullable=False, index=True,
+    )
+    resource = Column(String(40), nullable=False)
+    action   = Column(String(20), nullable=False)
+    __table_args__ = (
+        UniqueConstraint("role_id", "resource", "action"),
+    )
+
+    role = relationship("StoreRole", back_populates="permissions")
+
+
 __all__ = [
-    "OwnerConnectCode", "Store", "StoreEmployee", "StoreOwnerLink", "User",
+    "OwnerConnectCode", "Store", "StoreEmployee", "StoreOwnerLink",
+    "StoreRole", "StoreRolePermission", "User",
 ]

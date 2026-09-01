@@ -10,6 +10,7 @@ import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
 import { formatDate } from "../lib/datetime";
 import { fmtMoney2 } from "../lib/formatters";
+import AccessRolesManager from "../components/AccessRolesManager";
 import {
   Breadcrumbs, ButtonLink, Card, ConfirmDialog, Empty, PageHeader,
   PageShell, Pill, RowActions, Section, Table, TableStates, tdStyle,
@@ -138,12 +139,22 @@ export default function Employees() {
                           {r.login.role === "admin" ? "Super Admin" : "Employee"}
                         </Pill>{" "}
                         <span>{r.login.username}</span>
-                        {r.login.has_custom_permissions && (
+                        {/* Name the saved role when there is one —
+                            "Shift lead" says more than "Custom
+                            access" (R-3). */}
+                        {r.login.store_role_name ? (
+                          <>
+                            {" "}
+                            <Pill tone="accent">
+                              {r.login.store_role_name}
+                            </Pill>
+                          </>
+                        ) : r.login.has_custom_permissions ? (
                           <>
                             {" "}
                             <Pill tone="neutral">Custom access</Pill>
                           </>
-                        )}
+                        ) : null}
                         {!r.login.is_active && (
                           <>
                             {" "}
@@ -203,6 +214,10 @@ export default function Employees() {
           </Table>
         )}
       </Card>
+
+      {/* Saved access roles (R-3) — reference data about people,
+          so it lives with the people rather than in settings. */}
+      <AccessRolesManager />
 
       {loginOnly.length > 0 && (
         <Section title="Logins without an employee record">
