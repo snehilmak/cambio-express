@@ -257,3 +257,18 @@ def _stripe_user_message(exc: Exception) -> str:
     if "customer portal" in cause_text.lower() and "configur" in cause_text.lower():
         return _STRIPE_FRIENDLY["billing_portal_configuration_invalid"]
     return "Payment service error. Please try again."
+
+
+@router.get("/pricing")
+def public_pricing_route() -> dict[str, Any]:
+    """Plan prices for the marketing page. **Unauthenticated** —
+    it renders before anyone has an account.
+
+    Served from PLAN_CATALOG rather than let the landing page keep
+    its own copy. It had one, and it drifted: the page advertised
+    Pro yearly at $420 while checkout charged $450. PLAN_CATALOG
+    exists because prices had already been duplicated into three
+    modules and two went stale; the marketing page was the fourth.
+    """
+    from api.Modules.Billing.Services.plans import public_pricing
+    return {"plans": public_pricing()}

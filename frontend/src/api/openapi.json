@@ -23378,6 +23378,30 @@
         ]
       }
     },
+    "/billing/pricing": {
+      "get": {
+        "description": "Plan prices for the marketing page. **Unauthenticated** \u2014\nit renders before anyone has an account.\n\nServed from PLAN_CATALOG rather than let the landing page keep\nits own copy. It had one, and it drifted: the page advertised\nPro yearly at $420 while checkout charged $450. PLAN_CATALOG\nexists because prices had already been duplicated into three\nmodules and two went stale; the marketing page was the fourth.",
+        "operationId": "public_pricing_route_billing_pricing_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Public Pricing Route Billing Pricing Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Public Pricing Route",
+        "tags": [
+          "billing"
+        ]
+      }
+    },
     "/catalog/invoices": {
       "get": {
         "operationId": "list_invoices_route_catalog_invoices_get",

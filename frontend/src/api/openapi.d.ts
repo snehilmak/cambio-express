@@ -2281,6 +2281,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/billing/pricing": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Public Pricing Route
+         * @description Plan prices for the marketing page. **Unauthenticated** —
+         *     it renders before anyone has an account.
+         *
+         *     Served from PLAN_CATALOG rather than let the landing page keep
+         *     its own copy. It had one, and it drifted: the page advertised
+         *     Pro yearly at $420 while checkout charged $450. PLAN_CATALOG
+         *     exists because prices had already been duplicated into three
+         *     modules and two went stale; the marketing page was the fourth.
+         */
+        get: operations["public_pricing_route_billing_pricing_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/catalog/invoices": {
         parameters: {
             query?: never;
@@ -17184,6 +17211,28 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    public_pricing_route_billing_pricing_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
         };

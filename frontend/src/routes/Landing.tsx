@@ -1,4 +1,7 @@
 import { useEffect, useState } from "react";
+
+import { usePublicPricing } from "../api/billing";
+import { fmtMoney } from "../lib/formatters";
 import { Link } from "react-router-dom";
 
 import styles from "./Landing.module.css";
@@ -12,6 +15,12 @@ import styles from "./Landing.module.css";
 // motion, simple structure.
 export default function Landing() {
   const [navOpen, setNavOpen] = useState(false);
+  // Prices come from the server (PLAN_CATALOG), never a copy here —
+  // the copy that used to live in this file drifted from checkout.
+  const pricing = usePublicPricing();
+  const plans = pricing.data?.plans ?? [];
+  const basic = plans.find((p) => p.key === "basic");
+  const pro = plans.find((p) => p.key === "pro");
 
   useEffect(() => {
     if ("serviceWorker" in navigator) {
@@ -179,8 +188,14 @@ export default function Landing() {
         <div className={styles.pricing}>
           <div className={styles.plan}>
             <div className={styles.planName}>BASIC</div>
-            <div className={styles.planPrice}>$35<span className={styles.priceSuffix}>/mo</span></div>
-            <div className={styles.planPeriod}>per store · monthly · or $350 / yr</div>
+            <div className={styles.planPrice}>
+              {basic ? fmtMoney(basic.monthly_cents / 100) : "—"}
+              <span className={styles.priceSuffix}>/mo</span>
+            </div>
+            <div className={styles.planPeriod}>
+              per store · monthly · or{" "}
+              {basic ? fmtMoney(basic.yearly_cents / 100) : "—"} / yr
+            </div>
             <ul className={styles.planFeats}>
               <li><span className={styles.ck}>✓</span>Daily books</li>
               <li><span className={styles.ck}>✓</span>Money transfer logging</li>
@@ -195,8 +210,16 @@ export default function Landing() {
           </div>
           <div className={styles.plan}>
             <div className={styles.planName}>PRO</div>
-            <div className={styles.planPrice}>$45<span className={styles.priceSuffix}>/mo</span></div>
-            <div className={styles.planPeriod}>or $420 / yr · 2 months free</div>
+            <div className={styles.planPrice}>
+              {pro ? fmtMoney(pro.monthly_cents / 100) : "—"}
+              <span className={styles.priceSuffix}>/mo</span>
+            </div>
+            <div className={styles.planPeriod}>
+              or {pro ? fmtMoney(pro.yearly_cents / 100) : "—"} / yr
+              {pro && pro.months_free > 0
+                ? ` · ${pro.months_free} months free`
+                : ""}
+            </div>
             <ul className={styles.planFeats}>
               <li><span className={styles.ck}>✓</span>Everything in Basic</li>
               <li><span className={styles.ck}>✓</span>Live bank sync</li>
