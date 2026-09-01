@@ -49,6 +49,11 @@ class AdminUserCreateRequest(BaseModel):
     # R-2: optional custom-access overlay written at creation time
     # (resource → action → bool). None = pure role permissions.
     permissions: dict[str, dict[str, bool]] | None = None
+    # R-3: put the new hire straight into a saved role. Takes
+    # precedence over `permissions` — a named role IS a matrix, and
+    # honouring both would leave the label describing access the
+    # user does not have.
+    store_role_id: int | None = None
 
 
 class AdminUserUpdateRequest(BaseModel):

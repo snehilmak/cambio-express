@@ -81,6 +81,10 @@ STORE_OWNED_MODELS: list[str] = [
     "SupportTicket",
     "AnnouncementStore",
     "User",
+    # Named access roles (R-3). AFTER User: user.store_role_id FKs
+    # store_role, so the referencing rows must be gone first.
+    # Permissions FK the role — children before parent.
+    "StoreRolePermission", "StoreRole",
 ]
 
 # Model name → FK column when not literally "store_id".
