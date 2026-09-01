@@ -17,6 +17,11 @@ class AdminUserRow(BaseModel):
     # True when the user carries a per-user permission overlay
     # (R-1) — custom access instead of their role's defaults.
     has_custom_permissions: bool = False
+    # R-3: the saved access role this user follows, if any. The
+    # roster and the user form show the role's NAME rather than a
+    # generic "Custom access" pill.
+    store_role_id: int | None = None
+    store_role_name: str = ""
 
 
 class AdminUserListResponse(BaseModel):

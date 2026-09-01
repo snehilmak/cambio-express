@@ -346,6 +346,7 @@ def _employee_row(e, u) -> "EmployeeRecord":
             has_custom_permissions=(
                 user_has_custom_permissions(u.id, e.store_id)
             ),
+            store_role_name=_role_name_for(u),
         )
     return EmployeeRecord(
         id=e.id,
@@ -950,7 +951,30 @@ def _user_row(u) -> AdminUserRow:
             user_has_custom_permissions(u.id, u.store_id)
             if u.store_id is not None else False
         ),
+        store_role_id=getattr(u, "store_role_id", None),
+        store_role_name=_role_name_for(u),
     )
+
+
+def _role_name_for(u) -> str:
+    """The saved role's name, so the roster and the user form can
+    say "Shift lead" rather than the generic "Custom access" (R-3).
+    Reads through the loaded row; no query when there is no role."""
+    role_id = getattr(u, "store_role_id", None)
+    if role_id is None:
+        return ""
+    from sqlalchemy import inspect as _sa_inspect
+
+    from api.Modules.Tenancy.Models import StoreRole
+
+    # Read through the row's OWN session. Opening a fresh one here
+    # would leak it — this is a display helper, and a detached row
+    # simply reports no name rather than costing a connection.
+    session = _sa_inspect(u).session
+    if session is None:
+        return ""
+    role = session.get(StoreRole, int(role_id))
+    return (role.name or "") if role is not None else ""
 
 
 def _audit_user_action(

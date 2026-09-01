@@ -209,6 +209,82 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/roles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Roles Route
+         * @description The store's saved access roles, with how many people wear
+         *     each — the count is what makes an edit's blast radius visible
+         *     before you open it.
+         */
+        get: operations["list_roles_route_admin_roles_get"];
+        put?: never;
+        /** Create Role Route */
+        post: operations["create_role_route_admin_roles_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/roles/{role_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Update Role Route
+         * @description Rename and/or re-matrix a role.
+         *
+         *     When the matrix changes this rewrites every member's overlay
+         *     and revokes their sessions — the live propagation the feature
+         *     exists for. The response reports who was affected so the SPA
+         *     can say so rather than claiming a quiet success.
+         */
+        put: operations["update_role_route_admin_roles__role_id__put"];
+        post?: never;
+        /**
+         * Delete Role Route
+         * @description Delete a role. Members KEEP their current access and simply
+         *     stop being tracked — deleting a label must never change what
+         *     anyone can do, in either direction.
+         */
+        delete: operations["delete_role_route_admin_roles__role_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/roles/{role_id}/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Role Members Route
+         * @description Who this edit would affect. The SPA names these people in
+         *     the confirmation before a propagating save — "changes access
+         *     for 6 people" with no names is not a confirmation.
+         */
+        get: operations["role_members_route_admin_roles__role_id__members_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/store-info": {
         parameters: {
             query?: never;
@@ -767,6 +843,31 @@ export interface paths {
          *     role's permissions.
          */
         delete: operations["clear_user_permissions_route_admin_users__user_id__permissions_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/users/{user_id}/role": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Assign User Role Route
+         * @description Put a user in a saved role, or take them out of one
+         *     (``role_id: null``).
+         *
+         *     Assigning writes the overlay immediately so the user is already
+         *     restricted at first login. Removing leaves the overlay alone —
+         *     they keep exactly the access they had.
+         */
+        put: operations["assign_user_role_route_admin_users__user_id__role_put"];
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -6260,6 +6361,8 @@ export interface components {
              * @default employee
              */
             role: string;
+            /** Store Role Id */
+            store_role_id?: number | null;
         };
         /**
          * AdminUserDetailResponse
@@ -6292,6 +6395,13 @@ export interface components {
             module_access: string[] | null;
             /** Role */
             role: string;
+            /** Store Role Id */
+            store_role_id?: number | null;
+            /**
+             * Store Role Name
+             * @default
+             */
+            store_role_name: string;
             /** Username */
             username: string;
         };
@@ -7927,6 +8037,11 @@ export interface components {
             is_active: boolean;
             /** Role */
             role: string;
+            /**
+             * Store Role Name
+             * @default
+             */
+            store_role_name: string;
             /** User Id */
             user_id: number;
             /** Username */
@@ -13354,6 +13469,199 @@ export interface operations {
             };
         };
     };
+    list_roles_route_admin_roles_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_role_route_admin_roles_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_role_route_admin_roles__role_id__put: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                role_id: number;
+            };
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_role_route_admin_roles__role_id__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                role_id: number;
+            };
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    role_members_route_admin_roles__role_id__members_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                role_id: number;
+            };
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_store_info_admin_store_info_get: {
         parameters: {
             query?: never;
@@ -14569,6 +14877,49 @@ export interface operations {
             };
         };
         requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    assign_user_role_route_admin_users__user_id__role_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                user_id: number;
+            };
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {

@@ -98,6 +98,11 @@ export interface AdminUserRow {
   // R-1: true when the user carries a custom-access permission
   // overlay instead of pure role permissions.
   has_custom_permissions: boolean;
+  // R-3: the saved access role this user follows, if any. The
+  // roster shows the role's NAME rather than a generic
+  // "Custom access" pill.
+  store_role_id?: number | null;
+  store_role_name?: string;
 }
 
 export interface AdminUserListResponse {
@@ -121,6 +126,11 @@ export interface AdminUserCreateBody {
   // R-2: custom-access overlay written at creation time.
   // Omitted/null = pure role permissions.
   permissions?: PermMatrix | null;
+  // R-3: put the new hire straight into a saved role. Takes
+  // precedence over `permissions` server-side — a named role IS a
+  // matrix, and honouring both would leave the label describing
+  // access the user does not have.
+  store_role_id?: number | null;
 }
 
 export interface AdminUserUpdateBody {
