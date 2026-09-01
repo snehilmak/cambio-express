@@ -569,3 +569,56 @@
   overflow-x: auto;
 }
 
+
+/* ── Forward balance override (M-1) ───────────────────────── */
+
+.forwardBalanceField {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+/* A text button, not a Button: this sits under a field as an
+   affordance, not as one of the form's actions. */
+.forwardBalanceLink {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  font-size: 0.78rem;
+  color: var(--db-accent);
+  cursor: pointer;
+  text-align: left;
+  align-self: flex-start;
+}
+
+.forwardBalanceLink:hover {
+  text-decoration: underline;
+}
+
+.forwardBalanceNote {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  font-size: 0.78rem;
+}
+
+.forwardCarry {
+  color: var(--db-text-muted);
+  font-family: var(--db-font-mono);
+}
+
+/* The carry has moved away from the pinned figure — the operator
+   edited a prior day and this one is deliberately not following. */
+.forwardCarryDiverged {
+  color: var(--db-warning);
+  font-family: var(--db-font-mono);
+}
+
+.forwardBalanceWarning {
+  font-size: 0.75rem;
+  color: var(--db-warning);
+}

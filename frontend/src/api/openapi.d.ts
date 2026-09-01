@@ -7635,6 +7635,13 @@ export interface components {
              * @default false
              */
             forward_balance_auto: boolean;
+            /** Forward Balance Carry */
+            forward_balance_carry?: number | null;
+            /**
+             * Forward Balance Overridden
+             * @default false
+             */
+            forward_balance_overridden: boolean;
             /**
              * From Bank
              * @default 0
@@ -7772,6 +7779,8 @@ export interface components {
             check_cashing_fees?: number | null;
             /** Forward Balance */
             forward_balance?: number | null;
+            /** Forward Balance Override */
+            forward_balance_override?: number | null;
             /** Money Order Fees */
             money_order_fees?: number | null;
             /** Non Taxable */

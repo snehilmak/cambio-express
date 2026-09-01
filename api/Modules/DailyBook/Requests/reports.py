@@ -30,9 +30,16 @@ class DailyReportRow(BaseModel):
     check_cashing_fees: float = 0.0
     return_check_hold_fees: float = 0.0
     forward_balance: float = 0.0
-    # True when forward_balance is auto-carried from the previous
-    # logged day (drops + safe) and the editor renders it read-only;
-    # False only on the first logged day (operator-seeded).
+    # What the carry WOULD produce, recomputed on every read (M-1).
+    # Shown beside an override so a diverged chain is visible: fix
+    # yesterday and this moves while the pinned value does not. None
+    # on the genuine first day — nothing to carry from.
+    forward_balance_carry: float | None = None
+    # True when the operator has pinned this day's opening balance.
+    forward_balance_overridden: bool = False
+    # True when the CARRY is deciding the number and the editor
+    # renders it read-only. False on the first logged day
+    # (operator-seeded) and whenever an override is in force.
     forward_balance_auto: bool = False
     from_bank: float = 0.0
     rebates_commissions: float = 0.0
@@ -256,6 +263,13 @@ class DailyReportUpdateRequest(BaseModel):
     check_cashing_fees:      float | None = None
     return_check_hold_fees:  float | None = None
     forward_balance:         float | None = None
+    # Pin this day's opening cash (M-1). Explicit and separate from
+    # `forward_balance`, which is still ignored whenever a carry
+    # exists — that is the stale-form guard and it stays. Send a
+    # number to pin, or null to release the day back to the carry.
+    # Because "null" is meaningful here, the controller reads it
+    # from the raw payload rather than the None-dropping float map.
+    forward_balance_override: float | None = None
     rebates_commissions:     float | None = None
     cash_deposit:            float | None = None
     safe_balance:            float | None = None

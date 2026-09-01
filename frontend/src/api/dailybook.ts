@@ -36,6 +36,12 @@ export interface DailyReportRow {
   check_cashing_fees: number;
   return_check_hold_fees: number;
   forward_balance: number;
+  /** What the chain WOULD carry, recomputed server-side on every
+   *  read (M-1). Shown beside an override so a diverged chain is
+   *  visible. null on the first logged day — nothing to carry. */
+  forward_balance_carry: number | null;
+  /** True when the operator has pinned this day's opening cash. */
+  forward_balance_overridden: boolean;
   /** True when forward_balance is auto-carried from the prior logged
    *  day (drops + safe) and the editor renders it read-only. False
    *  only on the store's first logged day (operator-seeded). */
@@ -85,6 +91,11 @@ export interface DailyReportUpdateBody {
   check_cashing_fees?: number;
   return_check_hold_fees?: number;
   forward_balance?: number;
+  /** Pin this day's opening cash, or null to release it back to the
+   *  carry (M-1). Separate from `forward_balance`, which the server
+   *  still ignores whenever a carry exists — that stale-form guard
+   *  stays. */
+  forward_balance_override?: number | null;
   rebates_commissions?: number;
   cash_deposit?: number;
   safe_balance?: number;

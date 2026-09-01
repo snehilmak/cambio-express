@@ -2679,6 +2679,22 @@
             "title": "Forward Balance Auto",
             "type": "boolean"
           },
+          "forward_balance_carry": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Forward Balance Carry"
+          },
+          "forward_balance_overridden": {
+            "default": false,
+            "title": "Forward Balance Overridden",
+            "type": "boolean"
+          },
           "from_bank": {
             "default": 0.0,
             "title": "From Bank",
@@ -2878,6 +2894,17 @@
               }
             ],
             "title": "Forward Balance"
+          },
+          "forward_balance_override": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Forward Balance Override"
           },
           "money_order_fees": {
             "anyOf": [

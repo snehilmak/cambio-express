@@ -17,6 +17,11 @@ export interface FormState {
   check_cashing_fees: number;
   return_check_hold_fees: number;
   forward_balance: number;
+  // null = follow the auto-carry; a number PINS this day's opening
+  // cash (M-1). It rides the form so Save can send it, but it never
+  // enters the totals — `forward_balance` already holds the number
+  // in force, pinned or carried.
+  forward_balance_override: number | null;
   rebates_commissions: number;
   cash_deposit: number;
   safe_balance: number;

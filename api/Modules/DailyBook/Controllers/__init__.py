@@ -70,6 +70,8 @@ def _to_row(s: DailyReportSummary) -> DailyReportRow:
         check_cashing_fees=s.check_cashing_fees,
         return_check_hold_fees=s.return_check_hold_fees,
         forward_balance=s.forward_balance,
+        forward_balance_carry=s.forward_balance_carry,
+        forward_balance_overridden=s.forward_balance_overridden,
         forward_balance_auto=s.forward_balance_auto,
         from_bank=s.from_bank,
         rebates_commissions=s.rebates_commissions,
@@ -193,7 +195,16 @@ def update_daily_route(
     # the caller actually included land on the row.
     payload = body.model_dump(exclude_unset=True)
     notes = payload.pop("notes", "")
+    # `forward_balance_override` is pulled out BEFORE the None-drop
+    # below: null is meaningful here (release the pin, go back to the
+    # carry) and would otherwise be silently discarded (M-1).
+    has_override = "forward_balance_override" in payload
+    override_value = payload.pop("forward_balance_override", None)
     fields = {k: float(v) for k, v in payload.items() if v is not None}
+    if has_override:
+        fields["forward_balance_override"] = (
+            None if override_value is None else float(override_value)
+        )
 
     try:
         update_daily_report(
