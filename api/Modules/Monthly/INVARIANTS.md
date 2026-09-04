@@ -19,7 +19,7 @@
 
 ## What the monthly P&L is
 
-One row in `monthly_financial` per `(store_id, year, month)`
+One row in `msb_monthly_financial` per `(store_id, year, month)`
 capturing the per-month roll-up: income lines, purchases,
 expenses, the return-check write-offs, bank charges, and the
 end-of-month adjustments (over/short, borrowed-money returns,
@@ -30,7 +30,7 @@ book is the raw cash flow, the monthly P&L is the accountant-
 readable view of the same money rolled up to a month + augmented
 with cross-month adjustments.
 
-Unlike `daily_report`, the monthly row has **no lock state**. The
+Unlike `msb_daily_report`, the monthly row has **no lock state**. The
 data inputs are locked (see "Field categories" below), but the
 row itself stays editable forever.
 
@@ -41,9 +41,9 @@ One table:
 
 | Table | What it holds |
 |---|---|
-| `monthly_financial` | The per-month P&L row. ~30 numeric columns + `notes`. UNIQUE on `(store_id, year, month)`. |
+| `msb_monthly_financial` | The per-month P&L row. ~30 numeric columns + `notes`. UNIQUE on `(store_id, year, month)`. |
 
-That's it. Every other table the P&L cares about (`daily_report`,
+That's it. Every other table the P&L cares about (`msb_daily_report`,
 `bank_transaction`, the return-check workflow) is read on save and
 the resulting sums are written into the matching columns here.
 
@@ -87,7 +87,7 @@ before `setattr`).
 
 ### Category 2: Daily-ledger-derived (always locked)
 
-These columns are the **sum of `daily_report` rows for the month**.
+These columns are the **sum of `msb_daily_report` rows for the month**.
 The mapping is canonical in
 `api/Modules/Monthly/Services/write.py` :: `_DAILY_DERIVED_FIELDS`:
 

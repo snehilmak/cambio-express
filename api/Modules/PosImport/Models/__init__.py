@@ -23,12 +23,12 @@ from api.Core.Database import Base
 
 
 class PosMerchandiseMap(Base):
-    __tablename__ = "pos_merchandise_map"
+    __tablename__ = "retail_pos_merchandise_map"
     id                = Column(Integer, primary_key=True)
-    store_id          = Column(Integer, ForeignKey("store.id"), nullable=False, index=True)
+    store_id          = Column(Integer, ForeignKey("tenancy_store.id"), nullable=False, index=True)
     merchandise_code  = Column(String(20), nullable=False)
     department_id     = Column(
-        Integer, ForeignKey("department.id"), nullable=False,
+        Integer, ForeignKey("retail_department.id"), nullable=False,
     )
     created_at        = Column(DateTime, default=datetime.utcnow)
     __table_args__ = (
@@ -46,9 +46,9 @@ class PosAgentCredential(Base):
     re-issue instead of editing; ``last_used_at`` powers an
     "agent is alive" indicator."""
 
-    __tablename__ = "pos_agent_credential"
+    __tablename__ = "retail_pos_agent_credential"
     id           = Column(Integer, primary_key=True)
-    store_id     = Column(Integer, ForeignKey("store.id"), nullable=False, index=True)
+    store_id     = Column(Integer, ForeignKey("tenancy_store.id"), nullable=False, index=True)
     key_hash     = Column(String(64), unique=True, nullable=False)
     label        = Column(String(80), nullable=False, default="")
     created_at   = Column(DateTime, default=datetime.utcnow)
@@ -63,9 +63,9 @@ class PosJournalFile(Base):
     commits re-parse the original (and future parser fixes can
     re-book history); ~2KB per transaction at c-store volume."""
 
-    __tablename__ = "pos_journal_file"
+    __tablename__ = "retail_pos_journal_file"
     id            = Column(Integer, primary_key=True)
-    store_id      = Column(Integer, ForeignKey("store.id"), nullable=False, index=True)
+    store_id      = Column(Integer, ForeignKey("tenancy_store.id"), nullable=False, index=True)
     filename      = Column(String(120), nullable=False)
     business_date = Column(Date, nullable=True, index=True)
     event_kind    = Column(String(16), nullable=False, default="")
@@ -86,9 +86,9 @@ class PosItemDaySale(Base):
     joins opportunistically). Fuel lines are excluded — fuel is
     grade-level volume, not shelf movement."""
 
-    __tablename__ = "pos_item_day_sale"
+    __tablename__ = "retail_pos_item_day_sale"
     id               = Column(Integer, primary_key=True)
-    store_id         = Column(Integer, ForeignKey("store.id"), nullable=False, index=True)
+    store_id         = Column(Integer, ForeignKey("tenancy_store.id"), nullable=False, index=True)
     business_date    = Column(Date, nullable=False, index=True)
     pos_code         = Column(String(30), nullable=False)
     description      = Column(String(160), nullable=False, default="")
@@ -124,9 +124,9 @@ class PosTransaction(Base):
     row forever; the store is already known from ``store_id``.
     """
 
-    __tablename__ = "pos_transaction"
+    __tablename__ = "retail_pos_transaction"
     id            = Column(Integer, primary_key=True)
-    store_id      = Column(Integer, ForeignKey("store.id"), nullable=False, index=True)
+    store_id      = Column(Integer, ForeignKey("tenancy_store.id"), nullable=False, index=True)
     business_date = Column(Date, nullable=False, index=True)
     source_file   = Column(String(120), nullable=False)
     # sale | refund | void | other | financial
@@ -175,10 +175,10 @@ class PosTransactionLine(Base):
     filtering on status would inflate it.
     """
 
-    __tablename__ = "pos_transaction_line"
+    __tablename__ = "retail_pos_transaction_line"
     id             = Column(Integer, primary_key=True)
     transaction_id = Column(
-        Integer, ForeignKey("pos_transaction.id", ondelete="CASCADE"),
+        Integer, ForeignKey("retail_pos_transaction.id", ondelete="CASCADE"),
         nullable=False, index=True,
     )
     store_id       = Column(Integer, nullable=False, index=True)
@@ -209,10 +209,10 @@ class PosTransactionTender(Base):
     negative row with ``is_change`` set, so summing yields net money
     taken in — the same convention the day aggregates use."""
 
-    __tablename__ = "pos_transaction_tender"
+    __tablename__ = "retail_pos_transaction_tender"
     id             = Column(Integer, primary_key=True)
     transaction_id = Column(
-        Integer, ForeignKey("pos_transaction.id", ondelete="CASCADE"),
+        Integer, ForeignKey("retail_pos_transaction.id", ondelete="CASCADE"),
         nullable=False, index=True,
     )
     store_id      = Column(Integer, nullable=False, index=True)

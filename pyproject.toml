@@ -47,6 +47,7 @@ files = [
     "api/Core/Observability/sentry.py",
     "api/Core/PasswordHash.py",
     "api/Core/RateLimit.py",
+    "api/Core/Schema.py",
     # ── api/Modules/Admin ────────────────────────────────────
     "api/Modules/Admin/Repositories/store_info.py",
     "api/Modules/Admin/Repositories/team.py",
@@ -229,4 +230,5 @@ files = [
     "api/Modules/Transfers/Services/tax.py",
     "api/Modules/ReportImport/Services/intermex.py",
     "api/Modules/ReportImport/Services/commit.py",
+    "scripts/dump_schema_doc.py",
 ]

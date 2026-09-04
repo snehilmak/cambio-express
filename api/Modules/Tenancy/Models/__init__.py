@@ -49,7 +49,7 @@ BUSINESS_TYPE_LABELS = {
 
 
 class Store(Base):
-    __tablename__ = "store"
+    __tablename__ = "tenancy_store"
     id            = Column(Integer, primary_key=True)
     name          = Column(String(120), nullable=False)
     slug          = Column(String(60), unique=True, nullable=False)
@@ -200,16 +200,16 @@ class Store(Base):
     # the table is created without the FK first, then the FK is added
     # via ALTER TABLE.
     referred_by_code_id = Column(Integer,
-        ForeignKey("referral_code.id", use_alter=True,
+        ForeignKey("billing_referral_code.id", use_alter=True,
                     name="fk_store_referred_by_code"),
         nullable=True)
     referee_credit_applied_at = Column(DateTime, nullable=True)
 
 
 class User(Base):
-    __tablename__ = "user"
+    __tablename__ = "tenancy_user"
     id            = Column(Integer, primary_key=True)
-    store_id      = Column(Integer, ForeignKey("store.id"), nullable=True)
+    store_id      = Column(Integer, ForeignKey("tenancy_store.id"), nullable=True)
     username      = Column(String(80), nullable=False)
     password_hash = Column(String(200), nullable=False)
     role          = Column(String(20), default="employee")
@@ -251,7 +251,7 @@ class User(Base):
     # StoreRole owns this user's overlay and rewrites it whenever
     # the role is edited.
     store_role_id = Column(
-        Integer, ForeignKey("store_role.id"), nullable=True, index=True,
+        Integer, ForeignKey("tenancy_store_role.id"), nullable=True, index=True,
     )
     # Notification preferences. Opt-out (default True) for the one we
     # ship in v1 — a trial-ending reminder. Adding more toggles is one
@@ -303,7 +303,7 @@ class User(Base):
         # (CLI password reset / superadmin recovery), and the
         # signup duplicate-check (`User.username == email`) all
         # scan the table without this index.
-        Index("ix_user_username", "username"),
+        Index("ix_tenancy_user_username", "username"),
     )
 
     def set_login_phone(self, raw: str | None) -> None:
@@ -348,9 +348,9 @@ class StoreEmployee(Base):
     attribution survives.
     """
 
-    __tablename__ = "store_employee"
+    __tablename__ = "tenancy_store_employee"
     id         = Column(Integer, primary_key=True)
-    store_id   = Column(Integer, ForeignKey("store.id"), nullable=False, index=True)
+    store_id   = Column(Integer, ForeignKey("tenancy_store.id"), nullable=False, index=True)
     name       = Column(String(120), nullable=False)
     is_active  = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -367,7 +367,7 @@ class StoreEmployee(Base):
     # employees never sign in. ondelete SET NULL isn't declared —
     # Users are soft-deactivated, never hard-deleted.
     user_id = Column(
-        Integer, ForeignKey("user.id"), nullable=True, unique=True,
+        Integer, ForeignKey("tenancy_user.id"), nullable=True, unique=True,
         index=True,
     )
     hired_on      = Column(Date, nullable=True)
@@ -383,10 +383,10 @@ class StoreEmployee(Base):
 
 
 class StoreOwnerLink(Base):
-    __tablename__ = "store_owner_link"
+    __tablename__ = "tenancy_store_owner_link"
     id        = Column(Integer, primary_key=True)
-    owner_id  = Column(Integer, ForeignKey("user.id"), nullable=False)
-    store_id  = Column(Integer, ForeignKey("store.id"), nullable=False, index=True)
+    owner_id  = Column(Integer, ForeignKey("tenancy_user.id"), nullable=False)
+    store_id  = Column(Integer, ForeignKey("tenancy_store.id"), nullable=False, index=True)
     linked_at = Column(DateTime, default=datetime.utcnow)
     __table_args__ = (UniqueConstraint("owner_id", "store_id"),)
 
@@ -407,15 +407,15 @@ class OwnerConnectCode(Base):
     note to contact the owner if they need to disconnect.
     """
 
-    __tablename__ = "owner_connect_code"
+    __tablename__ = "tenancy_owner_connect_code"
     id               = Column(Integer, primary_key=True)
-    owner_id         = Column(Integer, ForeignKey("user.id"), nullable=False)
+    owner_id         = Column(Integer, ForeignKey("tenancy_user.id"), nullable=False)
     code             = Column(String(8), unique=True, nullable=False)
     created_at       = Column(DateTime, default=datetime.utcnow)
     expires_at       = Column(DateTime, nullable=False)
     used_at          = Column(DateTime, nullable=True)
-    used_by_user_id  = Column(Integer, ForeignKey("user.id"), nullable=True)
-    used_by_store_id = Column(Integer, ForeignKey("store.id"), nullable=True)
+    used_by_user_id  = Column(Integer, ForeignKey("tenancy_user.id"), nullable=True)
+    used_by_store_id = Column(Integer, ForeignKey("tenancy_store.id"), nullable=True)
     revoked_at       = Column(DateTime, nullable=True)
 
 
@@ -451,10 +451,10 @@ class StoreRole(Base):
     "Custom access" instead of the role's name.
     """
 
-    __tablename__ = "store_role"
+    __tablename__ = "tenancy_store_role"
     id         = Column(Integer, primary_key=True)
     store_id   = Column(
-        Integer, ForeignKey("store.id"), nullable=False, index=True,
+        Integer, ForeignKey("tenancy_store.id"), nullable=False, index=True,
     )
     name       = Column(String(60), nullable=False)
     # Provenance only, and deliberately NOT a foreign key: user
@@ -483,16 +483,16 @@ class StoreRolePermission(Base):
     representations disagree.
     """
 
-    __tablename__ = "store_role_permission"
+    __tablename__ = "tenancy_store_role_permission"
     id       = Column(Integer, primary_key=True)
     # Denormalized so the retention purge can sweep by store like
     # every other per-store table (same reason DepartmentSale
     # carries one).
     store_id = Column(
-        Integer, ForeignKey("store.id"), nullable=False, index=True,
+        Integer, ForeignKey("tenancy_store.id"), nullable=False, index=True,
     )
     role_id  = Column(
-        Integer, ForeignKey("store_role.id", ondelete="CASCADE"),
+        Integer, ForeignKey("tenancy_store_role.id", ondelete="CASCADE"),
         nullable=False, index=True,
     )
     resource = Column(String(40), nullable=False)

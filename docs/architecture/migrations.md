@@ -61,6 +61,12 @@ Alembic revisions drift from `db.metadata`.
 Alembic revision in the same PR (same command as above) so a future
 `alembic upgrade head` against a stamped DB will create it too.
 
+Name the table `<area>_<thing>` with its module's prefix from
+`MODULE_PREFIX` in `api/Core/Schema.py` (CLAUDE.md "Table naming"),
+then run `python -m scripts.dump_schema_doc` and commit the
+regenerated `docs/SCHEMA.md`. `tests/Core/test_table_prefixes.py`
+fails otherwise.
+
 ## Cutover PR (future)
 
 The cutover PR (per ADR-004 §6) does three things in one deploy:

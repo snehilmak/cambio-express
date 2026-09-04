@@ -18,15 +18,15 @@ from tests._app import db_session
 
 # (model attr, table_name, expected_index_name)
 EXPECTED_FK_INDEXES = [
-    ("StoreEmployee",     "store_employee",      "ix_store_employee_store_id"),
-    ("OperatorAuditLog",  "operator_audit_log",  "ix_operator_audit_log_store_id"),
-    ("TransferAudit",     "transfer_audit",      "ix_transfer_audit_store_id"),
-    ("DailyDrop",         "daily_drop",          "ix_daily_drop_store_id"),
-    ("CheckDeposit",      "check_deposit",       "ix_check_deposit_store_id"),
-    ("ReturnCheck",       "return_check",        "ix_return_check_store_id"),
-    ("DailyLineItem",     "daily_line_item",     "ix_daily_line_item_store_id"),
-    ("StripeBankAccount", "stripe_bank_account", "ix_stripe_bank_account_store_id"),
-    ("StoreOwnerLink",    "store_owner_link",    "ix_store_owner_link_store_id"),
+    ("StoreEmployee",     "tenancy_store_employee",      "ix_tenancy_store_employee_store_id"),
+    ("OperatorAuditLog",  "audit_operator_log",  "ix_audit_operator_log_store_id"),
+    ("TransferAudit",     "audit_transfer",      "ix_audit_transfer_store_id"),
+    ("DailyDrop",         "msb_daily_drop",          "ix_msb_daily_drop_store_id"),
+    ("CheckDeposit",      "msb_check_deposit",       "ix_msb_check_deposit_store_id"),
+    ("ReturnCheck",       "msb_return_check",        "ix_msb_return_check_store_id"),
+    ("DailyLineItem",     "msb_daily_line_item",     "ix_msb_daily_line_item_store_id"),
+    ("StripeBankAccount", "bank_stripe_account", "ix_bank_stripe_account_store_id"),
+    ("StoreOwnerLink",    "tenancy_store_owner_link",    "ix_tenancy_store_owner_link_store_id"),
 ]
 
 

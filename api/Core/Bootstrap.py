@@ -48,32 +48,32 @@ _log = logging.getLogger(__name__)
 # DBs.
 ADDED_INDEXES: list[tuple[str, str, str]] = [
     # Transfer hot path.
-    ("ix_transfer_store_send_date", "transfer", "store_id, send_date"),
-    ("ix_transfer_customer_id",     "transfer", "customer_id"),
-    ("ix_transfer_created_by",      "transfer", "created_by"),
-    ("ix_transfer_status",          "transfer", "status"),
-    ("ix_transfer_confirm_number",  "transfer", "confirm_number"),
+    ("ix_msb_transfer_store_send_date", "msb_transfer", "store_id, send_date"),
+    ("ix_msb_transfer_customer_id",     "msb_transfer", "customer_id"),
+    ("ix_msb_transfer_created_by",      "msb_transfer", "created_by"),
+    ("ix_msb_transfer_status",          "msb_transfer", "status"),
+    ("ix_msb_transfer_confirm_number",  "msb_transfer", "confirm_number"),
     # Customer umbrella-upsert lookup. Non-unique on
     # (phone_country, phone_number); the existing unique constraint
     # on (store_id, phone_country, phone_number) stays put.
-    ("ix_customer_phone",           "customer", "phone_country, phone_number"),
+    ("ix_msb_customer_phone",           "msb_customer", "phone_country, phone_number"),
     # User cross-store username lookup. ``user`` is a Postgres
     # reserved word, but the DDL below double-quotes the table name.
-    ("ix_user_username",            "user",     "username"),
+    ("ix_tenancy_user_username",            "tenancy_user",     "username"),
     # LoginEvent DAU/MAU covering composite.
-    ("ix_login_event_at_user",      "login_event", "at, user_id"),
+    ("ix_auth_login_event_at_user",      "auth_login_event", "at, user_id"),
     # Missing FK indexes on ``store_id`` for cascade-delete + JOIN
     # performance. Postgres does not auto-index FKs; without these,
     # each cascade in the data-retention purge is a full table scan.
-    ("ix_store_employee_store_id",      "store_employee",      "store_id"),
-    ("ix_operator_audit_log_store_id",  "operator_audit_log",  "store_id"),
-    ("ix_transfer_audit_store_id",      "transfer_audit",      "store_id"),
-    ("ix_daily_drop_store_id",          "daily_drop",          "store_id"),
-    ("ix_check_deposit_store_id",       "check_deposit",       "store_id"),
-    ("ix_return_check_store_id",        "return_check",        "store_id"),
-    ("ix_daily_line_item_store_id",     "daily_line_item",     "store_id"),
-    ("ix_stripe_bank_account_store_id", "stripe_bank_account", "store_id"),
-    ("ix_store_owner_link_store_id",    "store_owner_link",    "store_id"),
+    ("ix_tenancy_store_employee_store_id",      "tenancy_store_employee",      "store_id"),
+    ("ix_audit_operator_log_store_id",  "audit_operator_log",  "store_id"),
+    ("ix_audit_transfer_store_id",      "audit_transfer",      "store_id"),
+    ("ix_msb_daily_drop_store_id",          "msb_daily_drop",          "store_id"),
+    ("ix_msb_check_deposit_store_id",       "msb_check_deposit",       "store_id"),
+    ("ix_msb_return_check_store_id",        "msb_return_check",        "store_id"),
+    ("ix_msb_daily_line_item_store_id",     "msb_daily_line_item",     "store_id"),
+    ("ix_bank_stripe_account_store_id", "bank_stripe_account", "store_id"),
+    ("ix_tenancy_store_owner_link_store_id",    "tenancy_store_owner_link",    "store_id"),
 ]
 
 

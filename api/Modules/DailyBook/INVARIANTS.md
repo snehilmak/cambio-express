@@ -18,7 +18,7 @@
 
 ## What the daily book is
 
-One row in `daily_report` per `(store_id, report_date)` capturing
+One row in `msb_daily_report` per `(store_id, report_date)` capturing
 every dollar that moved through the store that day. The
 `DailyReport.over_short` field is what the operator literally cares
 about — "did the cash drawer reconcile?" Everything else in this
@@ -35,11 +35,11 @@ Five tables, three of them line-item-shaped:
 
 | Table | What it holds |
 |---|---|
-| `daily_report` | The per-day P&L stub. One row per `(store, date)`. |
-| `daily_line_item` | Generic time + amount + note rows keyed by `kind`. Backs every list-shaped section of the book (drops, deposits, cash purchases, etc.). |
-| `daily_drop` | Legacy bespoke table for outside-cash drops. **Preserved for historical data; new writes go through `daily_line_item` with `kind='drop'`.** Don't add new code that reads from this table — see `Services/kinds.py` line 40-44. |
-| `check_deposit` | Same story as `daily_drop` — legacy, preserved for history, new writes go through `daily_line_item` with `kind='check_deposit'`. |
-| `mt_summary` | Per-(store, date, company) money-transfer roll-up: amount, fees, commission, federal_tax. Source of truth for `DailyReport.money_transfer`. |
+| `msb_daily_report` | The per-day P&L stub. One row per `(store, date)`. |
+| `msb_daily_line_item` | Generic time + amount + note rows keyed by `kind`. Backs every list-shaped section of the book (drops, deposits, cash purchases, etc.). |
+| `msb_daily_drop` | Legacy bespoke table for outside-cash drops. **Preserved for historical data; new writes go through `msb_daily_line_item` with `kind='drop'`.** Don't add new code that reads from this table — see `Services/kinds.py` line 40-44. |
+| `msb_check_deposit` | Same story as `msb_daily_drop` — legacy, preserved for history, new writes go through `msb_daily_line_item` with `kind='check_deposit'`. |
+| `msb_mt_summary` | Per-(store, date, company) money-transfer roll-up: amount, fees, commission, federal_tax. Source of truth for `DailyReport.money_transfer`. |
 
 The `DailyReport` row has ~25 dollar columns. They fall into THREE
 categories, and **the category determines whether you can write to
@@ -76,11 +76,11 @@ From the second logged day on it is **auto-carried** — see
 
 ### Category 2: Line-item-derived
 
-These columns are the **sum of `daily_line_item` rows** with the
+These columns are the **sum of `msb_daily_line_item` rows** with the
 matching `kind`. The mapping is canonical in
 `api/Modules/DailyBook/Services/kinds.py` :: `LINE_ITEM_KINDS`:
 
-| `DailyReport` field | `daily_line_item.kind` | Operator action |
+| `DailyReport` field | `msb_daily_line_item.kind` | Operator action |
 |---|---|---|
 | `return_check_paid_back` | `return_payback` | Record a customer paying back a bounced check |
 | `cash_purchases` | `cash_purchase` | Petty-cash purchase out of the drawer |
@@ -90,7 +90,7 @@ matching `kind`. The mapping is canonical in
 | `other_cash_in` | `other_cash_in` | Catch-all ad-hoc receipt |
 | `other_cash_out` | `other_cash_out` | Catch-all ad-hoc payout |
 | `outside_cash_drops` | `drop` | Cashier dropped excess cash to the safe / ATM |
-| `checks_deposit` | `check_deposit` | Trip to the bank with checks |
+| `checks_deposit` | `msb_check_deposit` | Trip to the bank with checks |
 | `from_bank` | `from_bank` | Cash pulled from the bank into the drawer (multiple bank runs per day) |
 | `money_order` | `money_order` | Money orders sold — one aggregate entry per day or one entry per money order, operator's choice |
 | `payroll_expense` | `payroll_cash` | Payroll paid in CASH — a real daily disbursement |
@@ -107,7 +107,7 @@ Only one field today:
 
 | Field | Source | Endpoint |
 |---|---|---|
-| `money_transfer` | Sum of `mt_summary` rows for `(store, date)` | `PUT /api/v2/daily/{store}/{date}/mt-breakdown` |
+| `money_transfer` | Sum of `msb_mt_summary` rows for `(store, date)` | `PUT /api/v2/daily/{store}/{date}/mt-breakdown` |
 
 `money_transfer` is treated like Category 2 by the daily PUT — it's
 NOT in the writable schema. Try to PUT it and you'll 422. This
@@ -380,9 +380,9 @@ The daily book feeds:
   monthly lines via `_BANK_CATEGORY_PL_FIELD`. Changing the field
   set here can break monthly without warning.
 - **Transfers** (`api/Modules/Transfers/`): the per-(store,
-  date, company) `mt_summary` table is the source of truth for
+  date, company) `msb_mt_summary` table is the source of truth for
   `DailyReport.money_transfer`.  Cashier-entered transfers in
-  `Transfer` do NOT auto-update `mt_summary` — the operator
+  `Transfer` do NOT auto-update `msb_mt_summary` — the operator
   applies them via the MT-breakdown editor (`PUT
   /api/v2/daily/{store}/{date}/mt-breakdown`), which is the only
   write path.  The editor's auto-fill defaults come from
@@ -394,7 +394,7 @@ The daily book feeds:
   feed line-item kinds (see `BUILTIN_BANK_RULES`). Those line items
   show up under the existing line-item-derived fields.
 - **Return checks** (`api/Modules/ReturnChecks/`): recording a
-  return-check payback creates a `daily_line_item` with
+  return-check payback creates a `msb_daily_line_item` with
   `kind='return_payback'` whose amount rolls into
   `return_check_paid_back`.
 
@@ -449,8 +449,8 @@ Things that need a design discussion FIRST:
 - `test_kinds_service.py` — `LINE_ITEM_KINDS` registry helpers.
 - `test_lock_service.py` / `test_locks_service.py` — lock state.
 - `test_mt_breakdown.py` — `money_transfer` derivation from
-  `mt_summary` rows.
-- `test_transfers_summary.py` — Transfer → `mt_summary` recompute.
+  `msb_mt_summary` rows.
+- `test_transfers_summary.py` — Transfer → `msb_mt_summary` recompute.
 - `test_audit_coverage.py` — every mutation route writes an
   audit row.
 

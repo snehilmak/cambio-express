@@ -19,24 +19,24 @@ from api.Core.Database import Base
 
 
 class TimeClockEntry(Base):
-    __tablename__ = "time_clock_entry"
+    __tablename__ = "hr_time_clock_entry"
 
     id                  = Column(Integer, primary_key=True)
     store_id            = Column(
-        Integer, ForeignKey("store.id"), nullable=False, index=True,
+        Integer, ForeignKey("tenancy_store.id"), nullable=False, index=True,
     )
     store_employee_id   = Column(
-        Integer, ForeignKey("store_employee.id"),
+        Integer, ForeignKey("tenancy_store_employee.id"),
         nullable=False, index=True,
     )
     # The User session that initiated the clock-in. Often the
     # shared per-store ``employee`` login; sometimes a personal
     # admin login if the cashier-roster row maps to an admin too.
-    clock_in_user_id    = Column(Integer, ForeignKey("user.id"), nullable=True)
+    clock_in_user_id    = Column(Integer, ForeignKey("tenancy_user.id"), nullable=True)
     # The User session that closed the shift. May differ from
     # ``clock_in_user_id`` if the shift starts on a counter
     # terminal and ends on a back-office laptop.
-    clock_out_user_id   = Column(Integer, ForeignKey("user.id"), nullable=True)
+    clock_out_user_id   = Column(Integer, ForeignKey("tenancy_user.id"), nullable=True)
     # UTC timestamps; SPA formats per ``Store.timezone``.
     clock_in_at         = Column(DateTime, nullable=False, default=datetime.utcnow)
     clock_out_at        = Column(DateTime, nullable=True)
@@ -95,15 +95,15 @@ class StoreEmployeePasskey(Base):
     re-registers.
     """
 
-    __tablename__ = "store_employee_passkey"
+    __tablename__ = "hr_store_employee_passkey"
 
     id                    = Column(Integer, primary_key=True)
     store_id              = Column(
-        Integer, ForeignKey("store.id"),
+        Integer, ForeignKey("tenancy_store.id"),
         nullable=False, index=True,
     )
     store_employee_id     = Column(
-        Integer, ForeignKey("store_employee.id"),
+        Integer, ForeignKey("tenancy_store_employee.id"),
         nullable=False, unique=True,
     )
     # WebAuthn credential metadata — same shape as the user-side
@@ -123,7 +123,7 @@ class StoreEmployeePasskey(Base):
     # User session that walked the cashier through registration —
     # for the admin audit-trail view.
     registered_by_user_id = Column(
-        Integer, ForeignKey("user.id"), nullable=True,
+        Integer, ForeignKey("tenancy_user.id"), nullable=True,
     )
 
 
@@ -147,15 +147,15 @@ class TimeClockShift(Base):
     as a warning, not a hard reject.
     """
 
-    __tablename__ = "time_clock_shift"
+    __tablename__ = "hr_time_clock_shift"
 
     id                = Column(Integer, primary_key=True)
     store_id          = Column(
-        Integer, ForeignKey("store.id"),
+        Integer, ForeignKey("tenancy_store.id"),
         nullable=False, index=True,
     )
     store_employee_id = Column(
-        Integer, ForeignKey("store_employee.id"),
+        Integer, ForeignKey("tenancy_store_employee.id"),
         nullable=False, index=True,
     )
     shift_date        = Column(Date, nullable=False)
@@ -164,7 +164,7 @@ class TimeClockShift(Base):
     notes             = Column(String(500), default="")
     created_at        = Column(DateTime, default=datetime.utcnow, nullable=False)
     created_by_user_id = Column(
-        Integer, ForeignKey("user.id"), nullable=True,
+        Integer, ForeignKey("tenancy_user.id"), nullable=True,
     )
 
     __table_args__ = (
@@ -172,7 +172,7 @@ class TimeClockShift(Base):
         # path — every admin schedule page lists "shifts in this
         # period" and joins them against the roster.
         Index(
-            "ix_time_clock_shift_store_date",
+            "ix_hr_time_clock_shift_store_date",
             "store_id", "shift_date",
         ),
     )

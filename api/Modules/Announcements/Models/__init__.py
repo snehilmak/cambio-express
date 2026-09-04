@@ -26,7 +26,7 @@ class Announcement(Base):
     banner-* utility classes in ``app.css``.
     """
 
-    __tablename__ = "announcement"
+    __tablename__ = "platform_announcement"
     id         = Column(Integer, primary_key=True)
     message    = Column(Text, nullable=False)
     level      = Column(String(16), default="info")  # info | warning | error | success
@@ -34,7 +34,7 @@ class Announcement(Base):
     starts_at  = Column(DateTime, nullable=True)
     expires_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
-    created_by = Column(Integer, ForeignKey("user.id"), nullable=True)
+    created_by = Column(Integer, ForeignKey("tenancy_user.id"), nullable=True)
     # Broadcast-email flags. ``broadcast_requested`` is set when the
     # superadmin ticks the "Also email all users" checkbox at create
     # time. ``broadcast_sent_at`` is stamped the first time
@@ -61,12 +61,12 @@ class AnnouncementStore(Base):
     invariant #4).
     """
 
-    __tablename__ = "announcement_store"
+    __tablename__ = "platform_announcement_store"
     id              = Column(Integer, primary_key=True)
     announcement_id = Column(
-        Integer, ForeignKey("announcement.id"), nullable=False,
+        Integer, ForeignKey("platform_announcement.id"), nullable=False,
     )
-    store_id        = Column(Integer, ForeignKey("store.id"), nullable=False)
+    store_id        = Column(Integer, ForeignKey("tenancy_store.id"), nullable=False)
     __table_args__ = (
         UniqueConstraint("announcement_id", "store_id"),
     )
@@ -77,9 +77,9 @@ class PushSubscription(Base):
     opted in on. Deleted on unsubscribe or when the endpoint starts
     returning 404/410 from the push provider."""
 
-    __tablename__ = "push_subscription"
+    __tablename__ = "platform_push_subscription"
     id         = Column(Integer, primary_key=True)
-    user_id    = Column(Integer, ForeignKey("user.id"), nullable=False)
+    user_id    = Column(Integer, ForeignKey("tenancy_user.id"), nullable=False)
     endpoint   = Column(Text, nullable=False)
     p256dh     = Column(String(200), nullable=False)
     auth       = Column(String(80), nullable=False)

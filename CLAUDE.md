@@ -542,6 +542,43 @@ asserts the two agree (see
 also asserts the migration imports no application code at all).
 That's how you get both safety and immutability.
 
+## Table naming — every table carries its area prefix
+**Every application table is named `<area>_<thing>`.** The prefix
+says which part of the product owns the table, which module folder
+it lives in, and which `INVARIANTS.md` to read before touching it.
+It is an *area*, not a tenancy marker — whether a row is pinned to
+one store is already on the row as `store_id`.
+
+| Prefix | Modules |
+|---|---|
+| `tenancy_` | Tenancy |
+| `auth_` | Auth |
+| `billing_` | Billing, FeatureFlags |
+| `platform_` | Superadmin, Webhooks, Announcements |
+| `support_` | Support |
+| `audit_` | Audit |
+| `bank_` | BankSync |
+| `hr_` | TimeClock |
+| `msb_` | Transfers, Customers, Batches, DailyBook, Monthly, ReturnChecks, TVDisplay |
+| `retail_` | DayClose, StoreBook, Lottery, PosImport, Catalog |
+
+The map is `MODULE_PREFIX` in `api/Core/Schema.py`; the generated
+developer map of every table (module, scope, foreign keys, which
+INVARIANTS to read) is [`docs/SCHEMA.md`](docs/SCHEMA.md).
+
+**When you add a table:** name it with its module's prefix, then run
+`python -m scripts.dump_schema_doc` and commit the regenerated
+`docs/SCHEMA.md`. **When you add a module:** add it to
+`MODULE_PREFIX`. `tests/Core/test_table_prefixes.py` fails on a
+wrong prefix, an unmapped module, or a stale doc. Library-owned
+tables (`alembic_version`, `casbin_rule`) keep their upstream names.
+
+Historical migrations before `c4a9e7d21f08` create the OLD names
+and are immutable — the rename revision at that point moves every
+table, its `ix_<table>_*` indexes, and (Postgres) its auto-named
+constraints and id sequence. Never edit an old revision to use a
+new name.
+
 ## Bank-charge automation (built-in rules)
 Standard bank charges from a known institution shouldn't require the
 operator to set up their own rule. Examples: Nizari Progressive's

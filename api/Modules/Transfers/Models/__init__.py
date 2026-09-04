@@ -21,13 +21,13 @@ from api.Core.Money import to_cents, to_dollars
 
 
 class Transfer(Base):
-    __tablename__ = "transfer"
+    __tablename__ = "msb_transfer"
     id             = Column(Integer, primary_key=True)
-    store_id       = Column(Integer, ForeignKey("store.id"), nullable=False)
-    created_by     = Column(Integer, ForeignKey("user.id"))
+    store_id       = Column(Integer, ForeignKey("tenancy_store.id"), nullable=False)
+    created_by     = Column(Integer, ForeignKey("tenancy_user.id"))
     # Linked to Customer for returning-customer autofill. Nullable so
     # legacy transfers stay valid.
-    customer_id    = Column(Integer, ForeignKey("customer.id"), nullable=True)
+    customer_id    = Column(Integer, ForeignKey("msb_customer.id"), nullable=True)
     send_date      = Column(Date, nullable=False)
     company        = Column(String(30), nullable=False)
     # Service performed for the customer. Money Transfer is the
@@ -73,7 +73,7 @@ class Transfer(Base):
     # string snapshot captured at save-time so historical transfers
     # display the correct name forever — even if the roster row is
     # later deactivated, renamed, or deleted.
-    employee_id    = Column(Integer, ForeignKey("store_employee.id"), nullable=True)
+    employee_id    = Column(Integer, ForeignKey("tenancy_store_employee.id"), nullable=True)
     employee_name  = Column(String(120), default="")
     created_at     = Column(DateTime, default=datetime.utcnow)
     updated_at     = Column(DateTime, default=datetime.utcnow)
@@ -86,11 +86,11 @@ class Transfer(Base):
     # • status                  the active-vs-cancelled filter on every list view
     # • confirm_number          the transfers-list "look up by confirmation #" search
     __table_args__ = (
-        Index("ix_transfer_store_send_date", "store_id", "send_date"),
-        Index("ix_transfer_customer_id",    "customer_id"),
-        Index("ix_transfer_created_by",     "created_by"),
-        Index("ix_transfer_status",         "status"),
-        Index("ix_transfer_confirm_number", "confirm_number"),
+        Index("ix_msb_transfer_store_send_date", "store_id", "send_date"),
+        Index("ix_msb_transfer_customer_id",    "customer_id"),
+        Index("ix_msb_transfer_created_by",     "created_by"),
+        Index("ix_msb_transfer_status",         "status"),
+        Index("ix_msb_transfer_confirm_number", "confirm_number"),
     )
 
     # ── Dollar views over the cents columns ────────────────

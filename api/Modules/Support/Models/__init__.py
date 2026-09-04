@@ -27,8 +27,8 @@ from api.Core.Database import Base
 class SupportTicket(Base):
     __tablename__ = "support_ticket"
     id          = Column(Integer, primary_key=True)
-    store_id    = Column(Integer, ForeignKey("store.id"), nullable=False, index=True)
-    user_id     = Column(Integer, ForeignKey("user.id"), nullable=False, index=True)
+    store_id    = Column(Integer, ForeignKey("tenancy_store.id"), nullable=False, index=True)
+    user_id     = Column(Integer, ForeignKey("tenancy_user.id"), nullable=False, index=True)
     submitted_by = Column(String(120), nullable=False)
     category    = Column(String(30), nullable=False, default="question")
     priority    = Column(String(10), nullable=True)
@@ -41,7 +41,7 @@ class SupportTicket(Base):
     # Claim/assignment — which platform-staff person is working the
     # ticket. ``assigned_to_name`` is a display snapshot (same
     # pattern as ``submitted_by``); the FK is the authority.
-    assigned_to_user_id = Column(Integer, ForeignKey("user.id"), nullable=True)
+    assigned_to_user_id = Column(Integer, ForeignKey("tenancy_user.id"), nullable=True)
     assigned_to_name    = Column(String(120), nullable=True)
     # Per-SIDE read receipts for the in-app unread badge. Each side
     # (store users vs platform staff) shares one marker — the read
@@ -73,9 +73,9 @@ class SupportMessage(Base):
     id             = Column(Integer, primary_key=True)
     ticket_id      = Column(Integer, ForeignKey("support_ticket.id"),
                             nullable=False, index=True)
-    store_id       = Column(Integer, ForeignKey("store.id"),
+    store_id       = Column(Integer, ForeignKey("tenancy_store.id"),
                             nullable=False, index=True)
-    author_user_id = Column(Integer, ForeignKey("user.id"), nullable=True)
+    author_user_id = Column(Integer, ForeignKey("tenancy_user.id"), nullable=True)
     author_name    = Column(String(120), nullable=False, default="")
     author_kind    = Column(String(10), nullable=False, default="user")
     body           = Column(Text, nullable=False)

@@ -22,11 +22,11 @@ def test_user_username_index_declared(client):
         ix.name: tuple(c.name for c in ix.columns)
         for ix in User.__table__.indexes
     }
-    assert "ix_user_username" in declared, (
+    assert "ix_tenancy_user_username" in declared, (
         "User.__table_args__ must declare an Index() on `username` "
         "so fresh installs pick it up via db.create_all()."
     )
-    assert declared["ix_user_username"] == ("username",)
+    assert declared["ix_tenancy_user_username"] == ("username",)
 
 
 def test_user_username_index_present_in_db(client):
@@ -38,9 +38,9 @@ def test_user_username_index_present_in_db(client):
     from tests._app import db
     with db_session():
         insp = inspect(db.engine)
-        present = {ix["name"] for ix in insp.get_indexes("user")}
-    assert "ix_user_username" in present, (
-        f"ix_user_username should exist on the user table after "
+        present = {ix["name"] for ix in insp.get_indexes("tenancy_user")}
+    assert "ix_tenancy_user_username" in present, (
+        f"ix_tenancy_user_username should exist on the user table after "
         f"_ensure_added_indexes(); got {present!r}"
     )
 
@@ -51,7 +51,7 @@ def test_user_unique_constraint_still_present(client):
     from tests._app import db
     with db_session():
         insp = inspect(db.engine)
-        uniques = insp.get_unique_constraints("user")
+        uniques = insp.get_unique_constraints("tenancy_user")
     cols = [tuple(u["column_names"]) for u in uniques]
     assert ("store_id", "username") in cols, (
         f"unique constraint (store_id, username) must survive; "
@@ -64,7 +64,7 @@ def test_added_indexes_registry_lists_user(client):
     from api.Core.Bootstrap import ADDED_INDEXES as _ADDED_INDEXES
     declared = {ix.name for ix in User.__table__.indexes}
     user_entries = [
-        name for name, table, _ in _ADDED_INDEXES if table == "user"
+        name for name, table, _ in _ADDED_INDEXES if table == "tenancy_user"
     ]
     for name in user_entries:
         assert name in declared, (

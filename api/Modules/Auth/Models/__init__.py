@@ -42,9 +42,9 @@ class PasswordResetToken(Base):
     account — they'd need to have intercepted the email too.
     """
 
-    __tablename__ = "password_reset_token"
+    __tablename__ = "auth_password_reset_token"
     id         = Column(Integer, primary_key=True)
-    user_id    = Column(Integer, ForeignKey("user.id"), nullable=False)
+    user_id    = Column(Integer, ForeignKey("tenancy_user.id"), nullable=False)
     token_hash = Column(String(128), unique=True, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     expires_at = Column(DateTime, nullable=False)
@@ -61,9 +61,9 @@ class RecoveryCode(Base):
     rows for that user and mints a fresh batch.
     """
 
-    __tablename__ = "recovery_code"
+    __tablename__ = "auth_recovery_code"
     id         = Column(Integer, primary_key=True)
-    user_id    = Column(Integer, ForeignKey("user.id"), nullable=False)
+    user_id    = Column(Integer, ForeignKey("tenancy_user.id"), nullable=False)
     code_hash  = Column(String(128), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     used_at    = Column(DateTime, nullable=True)
@@ -91,9 +91,9 @@ class Passkey(Base):
     redundant friction without adding security.
     """
 
-    __tablename__ = "passkey"
+    __tablename__ = "auth_passkey"
     id             = Column(Integer, primary_key=True)
-    user_id        = Column(Integer, ForeignKey("user.id"), nullable=False)
+    user_id        = Column(Integer, ForeignKey("tenancy_user.id"), nullable=False)
     # credential_id is up to 1023 bytes per spec; we store the raw
     # bytes so the server-side verifier doesn't have to re-decode on
     # every use.
@@ -112,9 +112,9 @@ class LoginEvent(Base):
     Historic periods before this model ships show no activity —
     data collects forward from now."""
 
-    __tablename__ = "login_event"
+    __tablename__ = "auth_login_event"
     id      = Column(Integer, primary_key=True)
-    user_id = Column(Integer, ForeignKey("user.id"),
+    user_id = Column(Integer, ForeignKey("tenancy_user.id"),
                       nullable=False, index=True)
     role    = Column(String(20), default="", index=True)
     at      = Column(DateTime, default=datetime.utcnow,
@@ -126,7 +126,7 @@ class LoginEvent(Base):
     # do a range scan and have `user_id` already in-index for the
     # distinct-count, no heap fetch per row.
     __table_args__ = (
-        Index("ix_login_event_at_user", "at", "user_id"),
+        Index("ix_auth_login_event_at_user", "at", "user_id"),
     )
 
 
@@ -152,11 +152,11 @@ class RefreshToken(Base):
     lives in the DB is revoked by flipping a column.
     """
 
-    __tablename__ = "refresh_token"
+    __tablename__ = "auth_refresh_token"
     id              = Column(Integer, primary_key=True)
     # 32-byte URL-safe random — 256 bits of entropy.
     jti             = Column(String(64), unique=True, nullable=False, index=True)
-    user_id         = Column(Integer, ForeignKey("user.id"),
+    user_id         = Column(Integer, ForeignKey("tenancy_user.id"),
                               nullable=False, index=True)
     # Stable UUID across rotation. Issued fresh on each login path
     # call; copied forward by ``rotate()``. Treat ``NULL`` (legacy
@@ -180,7 +180,7 @@ class RefreshToken(Base):
     # the new row's id goes here. Lets ops trace the chain for
     # forensics if the replay detector flips.
     rotated_to_id   = Column(
-        Integer, ForeignKey("refresh_token.id"), nullable=True,
+        Integer, ForeignKey("auth_refresh_token.id"), nullable=True,
     )
 
 

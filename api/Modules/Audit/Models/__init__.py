@@ -38,10 +38,10 @@ class OperatorAuditLog(Base):
     only reaper, via ``_STORE_OWNED_MODELS``).
     """
 
-    __tablename__ = "operator_audit_log"
+    __tablename__ = "audit_operator_log"
     id           = Column(Integer, primary_key=True)
-    store_id     = Column(Integer, ForeignKey("store.id"), nullable=False, index=True)
-    user_id      = Column(Integer, ForeignKey("user.id"), nullable=True)
+    store_id     = Column(Integer, ForeignKey("tenancy_store.id"), nullable=False, index=True)
+    user_id      = Column(Integer, ForeignKey("tenancy_user.id"), nullable=True)
     user_name    = Column(String(120), default="")
     user_role    = Column(String(20),  default="")
     target_type  = Column(String(30),  nullable=False)
@@ -65,12 +65,12 @@ class TransferAudit(Base):
     valid after the roster row is deactivated).
     """
 
-    __tablename__ = "transfer_audit"
+    __tablename__ = "audit_transfer"
     id             = Column(Integer, primary_key=True)
-    store_id       = Column(Integer, ForeignKey("store.id"), nullable=False, index=True)
-    transfer_id    = Column(Integer, ForeignKey("transfer.id"), nullable=False)
-    user_id        = Column(Integer, ForeignKey("user.id"), nullable=True)
-    employee_id    = Column(Integer, ForeignKey("store_employee.id"), nullable=True)
+    store_id       = Column(Integer, ForeignKey("tenancy_store.id"), nullable=False, index=True)
+    transfer_id    = Column(Integer, ForeignKey("msb_transfer.id"), nullable=False)
+    user_id        = Column(Integer, ForeignKey("tenancy_user.id"), nullable=True)
+    employee_id    = Column(Integer, ForeignKey("tenancy_store_employee.id"), nullable=True)
     employee_name  = Column(String(120), default="")
     action         = Column(String(30), nullable=False)   # created | updated | status_changed
     summary        = Column(String(500), default="")
@@ -81,9 +81,9 @@ class TransferAudit(Base):
 class SuperadminAuditLog(Base):
     """Append-only record of platform-admin actions for traceability."""
 
-    __tablename__ = "superadmin_audit_log"
+    __tablename__ = "audit_superadmin_log"
     id          = Column(Integer, primary_key=True)
-    admin_id    = Column(Integer, ForeignKey("user.id"), nullable=True)
+    admin_id    = Column(Integer, ForeignKey("tenancy_user.id"), nullable=True)
     admin_name  = Column(String(120), default="")  # snapshot in case the user row is deleted
     action      = Column(String(60), nullable=False)   # e.g. "extend_trial", "comp_plan"
     target_type = Column(String(30), default="")       # "store" | "discount" | "feature"
@@ -109,9 +109,9 @@ class OwnerAuditLog(Base):
     purge's ``_STORE_OWNED_MODELS`` list.
     """
 
-    __tablename__ = "owner_audit_log"
+    __tablename__ = "audit_owner_log"
     id           = Column(Integer, primary_key=True)
-    owner_id     = Column(Integer, ForeignKey("user.id"), nullable=False, index=True)
+    owner_id     = Column(Integer, ForeignKey("tenancy_user.id"), nullable=False, index=True)
     owner_name   = Column(String(120), default="")
     action       = Column(String(40), nullable=False)
     target_type  = Column(String(30), default="")

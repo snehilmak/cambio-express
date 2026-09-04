@@ -47,9 +47,9 @@ PACK_STATUSES = ("received", "active", "settled", "returned")
 
 
 class LotteryGame(Base):
-    __tablename__ = "lottery_game"
+    __tablename__ = "retail_lottery_game"
     id                 = Column(Integer, primary_key=True)
-    store_id           = Column(Integer, ForeignKey("store.id"), nullable=False, index=True)
+    store_id           = Column(Integer, ForeignKey("tenancy_store.id"), nullable=False, index=True)
     # The state's game number as printed on the pack — the key the
     # operator actually knows ("game 2417").
     game_number        = Column(String(20), nullable=False)
@@ -67,10 +67,10 @@ class LotteryGame(Base):
 
 
 class LotteryPack(Base):
-    __tablename__ = "lottery_pack"
+    __tablename__ = "retail_lottery_pack"
     id           = Column(Integer, primary_key=True)
-    store_id     = Column(Integer, ForeignKey("store.id"), nullable=False, index=True)
-    game_id      = Column(Integer, ForeignKey("lottery_game.id"), nullable=False, index=True)
+    store_id     = Column(Integer, ForeignKey("tenancy_store.id"), nullable=False, index=True)
+    game_id      = Column(Integer, ForeignKey("retail_lottery_game.id"), nullable=False, index=True)
     # The pack number printed on the pack — unique per game per store.
     pack_number  = Column(String(40), nullable=False)
     status       = Column(String(16), nullable=False, default="received")
@@ -84,7 +84,7 @@ class LotteryPack(Base):
     # baseline for the first day's sold-count delta. 0 for a fresh
     # pack; non-zero when a partially-sold pack moves stores/bins.
     opening_ticket = Column(Integer, nullable=False, default=0)
-    created_by   = Column(Integer, ForeignKey("user.id"), nullable=True)
+    created_by   = Column(Integer, ForeignKey("tenancy_user.id"), nullable=True)
     created_at   = Column(DateTime, default=datetime.utcnow)
     __table_args__ = (UniqueConstraint("store_id", "game_id", "pack_number"),)
 
@@ -101,13 +101,13 @@ class LotteryDayCount(Base):
     (store, date, pack) — re-submitting the same day's count
     updates in place rather than stacking rows."""
 
-    __tablename__ = "lottery_day_count"
+    __tablename__ = "retail_lottery_day_count"
     id             = Column(Integer, primary_key=True)
-    store_id       = Column(Integer, ForeignKey("store.id"), nullable=False, index=True)
+    store_id       = Column(Integer, ForeignKey("tenancy_store.id"), nullable=False, index=True)
     report_date    = Column(Date, nullable=False)
-    pack_id        = Column(Integer, ForeignKey("lottery_pack.id"), nullable=False, index=True)
+    pack_id        = Column(Integer, ForeignKey("retail_lottery_pack.id"), nullable=False, index=True)
     closing_ticket = Column(Integer, nullable=False)
-    created_by     = Column(Integer, ForeignKey("user.id"), nullable=True)
+    created_by     = Column(Integer, ForeignKey("tenancy_user.id"), nullable=True)
     created_at     = Column(DateTime, default=datetime.utcnow)
     __table_args__ = (
         UniqueConstraint("store_id", "report_date", "pack_id"),
