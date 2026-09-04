@@ -4,6 +4,8 @@
 // redirects to. The Stripe webhook (`/webhooks/stripe`) is what
 // actually flips the store onto the new plan.
 
+import { useQuery } from "@tanstack/react-query";
+
 import { api } from "../lib/api";
 
 export interface CheckoutResponse {
@@ -79,4 +81,31 @@ export async function toggleAddon(
     `/api/v2/admin/addons/${encodeURIComponent(addonKey)}/toggle`,
     { method: "POST", json: {} },
   );
+}
+
+
+// ── Public pricing (W-1) ────────────────────────────────────
+//
+// The landing page renders before anyone has an account, so this is
+// unauthenticated. It reads PLAN_CATALOG server-side rather than
+// letting the marketing page keep its own copy of the prices — it
+// had one and it drifted, advertising Pro yearly at $420 while
+// checkout charged $450.
+
+export interface PublicPlan {
+  key: string;
+  label: string;
+  monthly_cents: number;
+  yearly_cents: number;
+  /** Whole months of the monthly price the yearly price saves. */
+  months_free: number;
+}
+
+export function usePublicPricing() {
+  return useQuery<{ plans: PublicPlan[] }>({
+    queryKey: ["billing", "public-pricing"],
+    queryFn: () => api<{ plans: PublicPlan[] }>("/api/v2/billing/pricing"),
+    // Prices change about never; don't refetch on every mount.
+    staleTime: 60 * 60 * 1000,
+  });
 }

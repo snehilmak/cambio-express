@@ -270,6 +270,17 @@ export interface SessionStatus {
   business_type: string;
   /** Module flags ON for this store — gates nav + routes. */
   features: string[];
+  /** Trial countdown for the topbar (W-1). null for paid stores. */
+  trial: TrialBanner | null;
+}
+
+export interface TrialBanner {
+  status: "active" | "expiring_soon" | "grace" | "expired";
+  /** Whole days remaining, rounded UP — 30 hours reads as 2, not 1.
+   *  0 once the trial has ended. */
+  days_left: number;
+  tone: "neutral" | "warning" | "negative";
+  message: string;
 }
 
 export function useSessionStatus() {

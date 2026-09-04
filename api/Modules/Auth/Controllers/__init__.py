@@ -818,6 +818,7 @@ def session_status_route(
     from api.Modules.Billing.Services.feature_flags import (
         enabled_module_flags_for_user,
     )
+    from api.Modules.Billing.Services.trial import trial_banner
     from api.Modules.Tenancy.Models import Store, User
     store_id = claims.get("store_id")
     store = db.get(Store, int(store_id)) if store_id is not None else None
@@ -834,6 +835,11 @@ def session_status_route(
             if store is not None else ""
         ),
         "features": enabled_module_flags_for_user(db, store, user),
+        # Trial countdown for the topbar (W-1). Present for the WHOLE
+        # trial, not just the last few days: "5 days left" on day two
+        # sets an expectation, while something that appears near the
+        # end reads as an alarm. None for paid stores.
+        "trial": trial_banner(store),
     }
 
 

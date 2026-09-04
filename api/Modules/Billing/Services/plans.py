@@ -133,3 +133,40 @@ def plan_price_label(
     )
     period = "year" if spec["cycle"] == "yearly" else "month"
     return f"{amount} / {period}"
+
+
+def public_pricing() -> list[dict[str, object]]:
+    """The plan table the marketing page renders, straight from
+    PLAN_CATALOG.
+
+    This exists because the landing page had its own copy of the
+    prices and it DRIFTED: it advertised Pro yearly at $420 while
+    checkout charged $450. PLAN_CATALOG was itself created after
+    prices were duplicated into three modules and two went stale
+    (CLAUDE.md, "Reuse before you build"); the marketing page was
+    quietly the fourth copy.
+
+    Monthly and yearly are paired per tier so the page can say
+    "$45/mo or $450/yr" without doing arithmetic of its own — the
+    saving is derived here too, for the same reason.
+    """
+    out: list[dict[str, object]] = []
+    for base in ("basic", "pro"):
+        monthly = PLAN_CATALOG[base]
+        yearly = PLAN_CATALOG[f"{base}_yearly"]
+        monthly_cents = int(monthly["price_cents"])
+        yearly_cents = int(yearly["price_cents"])
+        # Months of the monthly price the yearly price saves. Whole
+        # months only — "2 months free" is a claim, and a claim that
+        # rounds in our favour is the kind that ends up in a
+        # complaint.
+        saved = (monthly_cents * 12) - yearly_cents
+        months_free = saved // monthly_cents if monthly_cents else 0
+        out.append({
+            "key": base,
+            "label": str(monthly["label"]),
+            "monthly_cents": monthly_cents,
+            "yearly_cents": yearly_cents,
+            "months_free": int(months_free),
+        })
+    return out

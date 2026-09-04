@@ -17,6 +17,7 @@ from typing import Iterable
 
 from sqlalchemy.orm import Session
 
+from api.Core.Money import to_cents, to_dollars
 from api.Modules.DailyBook.Models import DailyReport
 from api.Modules.DailyBook.Repositories import (
     find_prior_report,
@@ -52,6 +53,14 @@ class DailyReportSummary:
     check_cashing_fees: float
     return_check_hold_fees: float
     forward_balance: float
+    # The carry the chain WOULD produce, recomputed on every read
+    # (M-1). Shown beside an override so a diverged chain is visible:
+    # fix yesterday and this moves while the pinned value does not.
+    # None on the genuine first day, where there is nothing to carry.
+    forward_balance_carry: float | None
+    # True when the operator has PINNED this day's opening balance.
+    # The carry above keeps updating; this value does not.
+    forward_balance_overridden: bool
     # True when ``forward_balance`` is auto-carried from the previous
     # logged day (prior.outside_cash_drops + prior.safe_balance) and
     # the editor should render it read-only. False only on the very
@@ -121,7 +130,16 @@ def _summarize(
     means "first logged day" — the operator-seeded stored value
     stands and the field stays editable."""
     stored_forward = float(r.forward_balance or 0)
-    forward = stored_forward if forward_auto is None else float(forward_auto)
+    # An operator override PINS the opening balance: the carry is
+    # still computed (and returned, so the editor can show the two
+    # side by side) but no longer decides the number.
+    override_cents = r.forward_balance_override_cents
+    overridden = override_cents is not None
+    carry = None if forward_auto is None else float(forward_auto)
+    if overridden:
+        forward = to_dollars(int(override_cents))
+    else:
+        forward = stored_forward if carry is None else carry
     forward_delta = forward - stored_forward
     base_receipts = float(r.total_receipts or 0)
     total_receipts = base_receipts + forward_delta
@@ -142,7 +160,12 @@ def _summarize(
         check_cashing_fees=float(r.check_cashing_fees or 0),
         return_check_hold_fees=float(r.return_check_hold_fees or 0),
         forward_balance=forward,
-        forward_balance_auto=forward_auto is not None,
+        forward_balance_carry=carry,
+        forward_balance_overridden=overridden,
+        # "auto" now means "the carry is deciding this number" — an
+        # override takes the field back into the operator's hands, so
+        # the editor must render it editable again.
+        forward_balance_auto=(forward_auto is not None and not overridden),
         from_bank=float(r.from_bank or 0),
         rebates_commissions=float(r.rebates_commissions or 0),
         return_check_paid_back=float(r.return_check_paid_back or 0),
@@ -195,7 +218,8 @@ def _carry_only_summary(
         bill_payment_charge=0.0, phone_recargas=0.0, boost_mobile=0.0,
         money_transfer=0.0, money_order=0.0, money_order_fees=0.0,
         check_cashing_fees=0.0, return_check_hold_fees=0.0,
-        forward_balance=forward, forward_balance_auto=True,
+        forward_balance=forward, forward_balance_carry=forward,
+        forward_balance_overridden=False, forward_balance_auto=True,
         from_bank=0.0, rebates_commissions=0.0,
         return_check_paid_back=0.0, other_cash_in=0.0,
         cash_deposit=0.0, safe_balance=0.0, payroll_expense=0.0,
@@ -324,18 +348,37 @@ def update_daily_report(
             "Daily report is locked — unlock it before editing."
         )
     # Forward balance auto-carries from the previous logged day when
-    # one exists — the operator can't override it (mirrors the auto
-    # sales-tax field). We skip any client-sent forward_balance here
-    # and force the carried value below, so a stale form can't clobber
-    # it. Only the very first logged day (no prior report) honours the
-    # operator-entered seed.
+    # one exists. A bare `forward_balance` in the payload is still
+    # IGNORED — that is the stale-form guard, and it stays: a form
+    # rendered an hour ago must not silently clobber the carry.
+    #
+    # An override is a different thing and is explicit (M-1). The
+    # caller sends `forward_balance_override` to pin the day's
+    # opening cash, or `None` to release it back to the carry. Only
+    # the very first logged day (no prior report) still honours a
+    # plain operator-entered seed.
     prior = find_prior_report(db, store_id, report_date)
     for field in EDITABLE_REPORT_FIELDS:
         if field == "forward_balance" and prior is not None:
             continue
         if field in fields:
             setattr(report, field, float(fields[field] or 0))
-    if prior is not None:
+
+    if "forward_balance_override" in fields:
+        raw = fields["forward_balance_override"]
+        report.forward_balance_override_cents = (
+            None if raw is None else to_cents(raw)
+        )
+
+    if report.forward_balance_override_cents is not None:
+        # Pinned. The stored column carries the operator's number so
+        # every downstream reader (owner dashboards, tax export, the
+        # daily-summary email) sees the same opening balance the
+        # editor shows, without needing to know about overrides.
+        report.forward_balance_cents = int(
+            report.forward_balance_override_cents,
+        )
+    elif prior is not None:
         report.forward_balance = carry_forward_from(prior)
     report.notes = notes or ""
     # Over/Short is derived, not typed — recompute it from the freshly

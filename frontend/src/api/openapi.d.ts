@@ -2281,6 +2281,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/billing/pricing": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Public Pricing Route
+         * @description Plan prices for the marketing page. **Unauthenticated** —
+         *     it renders before anyone has an account.
+         *
+         *     Served from PLAN_CATALOG rather than let the landing page keep
+         *     its own copy. It had one, and it drifted: the page advertised
+         *     Pro yearly at $420 while checkout charged $450. PLAN_CATALOG
+         *     exists because prices had already been duplicated into three
+         *     modules and two went stale; the marketing page was the fourth.
+         */
+        get: operations["public_pricing_route_billing_pricing_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/catalog/invoices": {
         parameters: {
             query?: never;
@@ -7635,6 +7662,13 @@ export interface components {
              * @default false
              */
             forward_balance_auto: boolean;
+            /** Forward Balance Carry */
+            forward_balance_carry?: number | null;
+            /**
+             * Forward Balance Overridden
+             * @default false
+             */
+            forward_balance_overridden: boolean;
             /**
              * From Bank
              * @default 0
@@ -7772,6 +7806,8 @@ export interface components {
             check_cashing_fees?: number | null;
             /** Forward Balance */
             forward_balance?: number | null;
+            /** Forward Balance Override */
+            forward_balance_override?: number | null;
             /** Money Order Fees */
             money_order_fees?: number | null;
             /** Non Taxable */
@@ -17175,6 +17211,28 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    public_pricing_route_billing_pricing_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
         };

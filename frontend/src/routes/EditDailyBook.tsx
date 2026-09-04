@@ -308,6 +308,16 @@ export default function EditDailyBook() {
     for (const k of EDITABLE_KEYS) {
       (body as Record<string, number>)[k] = Number(form[k]) || 0;
     }
+    // The override rides separately and MUST be able to send null —
+    // that is how a day is released back to the carry (M-1). It is
+    // sent only when the day is pinned or was just released, so an
+    // ordinary save on an ordinary day carries no override key at
+    // all and the server's carry logic is untouched.
+    if (form.forward_balance_override != null) {
+      body.forward_balance_override = Number(form.forward_balance_override);
+    } else if (report?.forward_balance_overridden) {
+      body.forward_balance_override = null;
+    }
     await updateDailyReport(storeId, date, body);
     await queryClient.invalidateQueries({
       queryKey: ["dailybook", "report", storeId, date],
@@ -778,8 +788,23 @@ function ReceiptsPanel(
         <ForwardBalanceInput
           value={props.form.forward_balance}
           auto={props.report?.forward_balance_auto === true}
+          overridden={props.form.forward_balance_override != null}
+          carry={props.report?.forward_balance_carry ?? null}
           disabled={props.locked}
-          onChange={(v) => props.set("forward_balance", v)}
+          onChange={(v) => {
+            props.set("forward_balance", v);
+            // Typing in the box IS the override once it is unlocked;
+            // keeping the two in step means Save cannot ship a
+            // number the operator can see but the server discards.
+            props.set("forward_balance_override", v);
+          }}
+          onOverride={() =>
+            props.set("forward_balance_override", props.form.forward_balance)}
+          onRestore={() => {
+            props.set("forward_balance_override", null);
+            const carry = props.report?.forward_balance_carry;
+            if (carry != null) props.set("forward_balance", carry);
+          }}
         />
         {RECEIPT_INPUTS.map((f) => (
           <NumberInput
@@ -2019,30 +2044,87 @@ function NumberInput({
  *  seeds the opening balance once and it carries forward from then
  *  on. Same auto-lock pattern as the sales-tax field. */
 function ForwardBalanceInput({
-  value, auto, disabled, onChange,
+  value, auto, overridden, carry, disabled, onChange, onOverride, onRestore,
 }: {
   value: number;
   auto: boolean;
+  /** The operator has PINNED this day's opening cash (M-1). */
+  overridden: boolean;
+  /** What the chain WOULD carry, recomputed server-side on every
+   *  read. null on the first logged day — nothing to carry from. */
+  carry: number | null;
   disabled?: boolean;
   onChange: (next: number) => void;
+  onOverride: () => void;
+  onRestore: () => void;
 }) {
+  // The number the chain says, versus the number the operator
+  // pinned. Showing both is the whole safety story: correct
+  // yesterday and the carry moves while the pin does not, so a
+  // diverged chain announces itself instead of looking like a bug.
+  const diverged =
+    overridden && carry != null && Math.abs(carry - value) > 0.004;
+
   return (
-    <MoneyInput
-      label={(
-        <>
-          Forward balance
-          <InfoTip
-            label="About forward balance"
-            text={auto
-              ? "Auto-carried: yesterday's cash drops + safe balance. Edit yesterday to change it."
-              : "Opening balance — set once on your first day; it carries forward automatically after that."}
-          />
-        </>
+    <div className={styles.forwardBalanceField}>
+      <MoneyInput
+        label={(
+          <>
+            Forward balance
+            <InfoTip
+              label="About forward balance"
+              text={
+                overridden
+                  ? "You've set this day's opening cash by hand. It stays put even if you edit yesterday — use Use carried value to go back to following the day before."
+                  : auto
+                  ? "Auto-carried: yesterday's cash drops + safe balance. Edit yesterday to change it, or override it if this day really started with something else."
+                  : "Opening balance — set once on your first day; it carries forward automatically after that."
+              }
+            />
+          </>
+        )}
+        value={Number.isFinite(value) ? value : 0}
+        onChange={onChange}
+        disabled={disabled || (auto && !overridden)}
+      />
+      {!disabled && auto && !overridden && (
+        <button
+          type="button"
+          className={styles.forwardBalanceLink}
+          onClick={onOverride}
+        >
+          Override this day
+        </button>
       )}
-      value={Number.isFinite(value) ? value : 0}
-      onChange={onChange}
-      disabled={disabled || auto}
-    />
+      {overridden && (
+        <div className={styles.forwardBalanceNote}>
+          <span
+            className={
+              diverged ? styles.forwardCarryDiverged : styles.forwardCarry
+            }
+          >
+            {carry == null
+              ? "Set by hand"
+              : `Carried value: ${fmtMoney2(carry)}`}
+          </span>
+          {!disabled && (
+            <button
+              type="button"
+              className={styles.forwardBalanceLink}
+              onClick={onRestore}
+            >
+              Use carried value
+            </button>
+          )}
+        </div>
+      )}
+      {diverged && (
+        <div className={styles.forwardBalanceWarning}>
+          Yesterday has changed since you set this. Today is still
+          pinned to your figure.
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -2060,6 +2142,10 @@ function buildInitialForm(r: DailyReportRow | null | undefined): FormState {
     check_cashing_fees:      r?.check_cashing_fees      ?? 0,
     return_check_hold_fees:  r?.return_check_hold_fees  ?? 0,
     forward_balance:         r?.forward_balance         ?? 0,
+    // null = follow the carry (M-1). Hydrated from the server's
+    // overridden flag so reopening a pinned day shows it pinned.
+    forward_balance_override: r?.forward_balance_overridden
+      ? (r?.forward_balance ?? 0) : null,
     rebates_commissions:     r?.rebates_commissions     ?? 0,
     cash_deposit:            r?.cash_deposit            ?? 0,
     safe_balance:            r?.safe_balance            ?? 0,

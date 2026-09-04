@@ -67,7 +67,8 @@ cash_deposit, safe_balance
 
 Plus `notes` (text, separate parameter).
 
-**`forward_balance` is conditionally operator-editable.** It is in
+**`forward_balance` is conditionally operator-editable** (and can
+be explicitly overridden — see "Operator override" below). It is in
 `EDITABLE_REPORT_FIELDS` (so the schema accepts it), but it only
 honours the operator's value on the store's **first logged day**.
 From the second logged day on it is **auto-carried** — see
@@ -295,9 +296,44 @@ Rules:
   `safe_balance`, or `outside_cash_drops`. So the carry only affects
   the daily book's own receipts / net / over-short display.
 
+### Operator override (M-1)
+
+The carry has no answer for a store migrating mid-month, cash moved
+outside the book, or a locked prior day that is known wrong. So one
+day at a time can be **pinned**:
+
+- `forward_balance_override_cents` is NULL for every normal day —
+  "follow the carry". A value pins that day's opening cash.
+- **A bare `forward_balance` in the payload is STILL ignored** when
+  a carry exists. That is the stale-form guard and it stays. Only
+  the explicit `forward_balance_override` key pins anything; send
+  `null` on that key to release the day back to the carry.
+- **The carry keeps being computed** and is returned as
+  `forward_balance_carry` on every read. This is what makes the
+  override safe: correct yesterday and the carry moves while the
+  pin does not, so a diverged chain is visible on screen instead of
+  looking like a bug. The editor colours the gap.
+- `forward_balance_auto` now means "the carry is deciding this
+  number" — it is False on the first logged day AND whenever an
+  override is in force, because both put the field back in the
+  operator's hands.
+- **An override never cascades.** `carry_forward_from(prior)` reads
+  `prior.outside_cash_drops + prior.safe_balance` and never
+  `prior.forward_balance`, so pinning Monday changes Monday's
+  receipts / over-short and nothing downstream. Tomorrow opens with
+  what today actually CLOSED with.
+- **The pin lands in the stored column** too, so every downstream
+  reader (owner dashboards, tax export, daily-summary email) sees
+  the same opening balance the editor shows without knowing that
+  overrides exist.
+- It **persists until explicitly released** — saving any other
+  field leaves it alone, or it would not be an override.
+- A locked day still refuses it: the lock is the kill-switch and an
+  override is an edit.
+
 If you change the carry formula, update `carry_forward_from`,
 `test_dailybook_services.py` (the `test_forward_balance_*` cases),
-and this section together.
+`test_forward_balance_override.py`, and this section together.
 
 
 ## Lock rules

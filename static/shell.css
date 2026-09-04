@@ -1,0 +1,57 @@
+
+/* ── Trial countdown chip (W-1) ────────────────────────────
+   Present for the whole trial, escalating in tone rather than
+   appearing late. A link to /subscribe, never a dismissible
+   notice: a dismissal is a one-time event, and the person who
+   most needs the reminder is the one who dismissed it on day
+   two. */
+
+.app-trial-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.28rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid var(--db-border);
+  background: var(--db-surface-2);
+  color: var(--db-text);
+  font-size: 0.78rem;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: border-color 140ms ease, background 140ms ease;
+}
+
+.app-trial-chip:hover {
+  border-color: var(--db-accent);
+}
+
+.app-trial-chip.is-warning {
+  border-color: var(--db-warning);
+  color: var(--db-warning);
+}
+
+.app-trial-chip.is-negative {
+  border-color: var(--db-negative);
+  color: var(--db-negative);
+}
+
+/* The CTA half reads as the action; the count reads as the fact. */
+.app-trial-chip-cta {
+  font-weight: 600;
+  border-left: 1px solid currentColor;
+  padding-left: 0.45rem;
+  opacity: 0.9;
+}
+
+/* On a narrow topbar the day count is the part worth keeping. */
+@media (max-width: 40rem) {
+  .app-trial-chip-cta {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-trial-chip {
+    transition: none;
+  }
+}

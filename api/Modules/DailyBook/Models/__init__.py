@@ -47,6 +47,14 @@ class DailyReport(Base):
     return_check_hold_fees_cents = Column(BigInteger, default=0)
     return_check_paid_back_cents = Column(BigInteger, default=0)
     forward_balance_cents = Column(BigInteger, default=0)
+    # Operator override of the auto-carried opening balance (M-1).
+    # NULL = follow the carry, which is the normal case. A value
+    # PINS the day's opening cash: the carry is still computed and
+    # shown beside it, so a chain that has diverged is visible
+    # rather than silently ignored. Overriding one day never
+    # cascades — tomorrow's carry reads that day's drops + safe, not
+    # its forward balance.
+    forward_balance_override_cents = Column(BigInteger, nullable=True)
     from_bank_cents       = Column(BigInteger, default=0)
     other_cash_in_cents   = Column(BigInteger, default=0)
     rebates_commissions_cents = Column(BigInteger, default=0)
