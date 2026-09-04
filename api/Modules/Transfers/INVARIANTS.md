@@ -21,7 +21,7 @@
 
 ## What a transfer is
 
-One row in `transfer` per money-movement event a cashier logs:
+One row in `msb_transfer` per money-movement event a cashier logs:
 remittance (send money to family abroad), bill payment, top up,
 or recharge. The Transfer carries:
 
@@ -283,15 +283,15 @@ non-None employee — anonymous transfers aren't allowed.
   silently corrupts batch totals.
 - **Monthly P&L** (`api/Modules/Monthly/`): sums transfer
   `(send_amount + fee + federal_tax)` into the monthly receipt
-  line. Reads from `transfer` directly + the per-(store, date,
-  company) `mt_summary` table (see below).
+  line. Reads from `msb_transfer` directly + the per-(store, date,
+  company) `msb_mt_summary` table (see below).
 - **DailyBook** (`api/Modules/DailyBook/`): the per-store /
-  per-date `mt_summary` table is the per-company roll-up the
-  daily book reads. **Not auto-recomputed from `transfer` rows**
+  per-date `msb_mt_summary` table is the per-company roll-up the
+  daily book reads. **Not auto-recomputed from `msb_transfer` rows**
   — the cashier updates it manually via the MT-breakdown editor
   on the daily-book page (`PUT /daily/{store}/{date}/mt-
   breakdown`). The auto-fill defaults shown in that editor DO
-  come from `summarize_transfers_for_day` reading `transfer`
+  come from `summarize_transfers_for_day` reading `msb_transfer`
   rows, but applying them is an explicit action.
 - **Customers** (`api/Modules/Customers/`): every transfer save
   upserts a customer (see above). Customer merge / delete
@@ -300,7 +300,7 @@ non-None employee — anonymous transfers aren't allowed.
   of transfers, but receipts can reference both.
 
 **Net rule**: a Transfer write should not directly mutate
-`mt_summary`, `ach_batch`, `monthly_financial`, or any other
+`msb_mt_summary`, `msb_ach_batch`, `msb_monthly_financial`, or any other
 roll-up table. Those tables either re-derive on demand
 (monthly P&L) or have their own write paths (batches, MT
 breakdown). Adding a fan-out from Transfer-write to a roll-up
@@ -349,8 +349,8 @@ What needs a design discussion FIRST:
   transfers (e.g. "no more than N transfers per customer per
   day") — these tend to have edge cases nobody catches in code
   review.
-- Auto-computing or auto-touching any roll-up table (mt_summary,
-  ach_batch, monthly_financial) from the Transfer write path.
+- Auto-computing or auto-touching any roll-up table (msb_mt_summary,
+  msb_ach_batch, msb_monthly_financial) from the Transfer write path.
 - Changing `sibling_store_ids` or the upsert lookup order.
 - Renaming `service_type` values or dropping one (historical
   rows still reference them).

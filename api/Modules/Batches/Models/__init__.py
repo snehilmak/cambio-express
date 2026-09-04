@@ -23,9 +23,9 @@ from api.Core.Money import to_cents, to_dollars
 
 
 class ACHBatch(Base):
-    __tablename__ = "ach_batch"
+    __tablename__ = "msb_ach_batch"
     id             = Column(Integer, primary_key=True)
-    store_id       = Column(Integer, ForeignKey("store.id"), nullable=False)
+    store_id       = Column(Integer, ForeignKey("tenancy_store.id"), nullable=False)
     ach_date       = Column(Date, nullable=False)
     company        = Column(String(30), nullable=False)
     batch_ref      = Column(String(60), nullable=False)

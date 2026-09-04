@@ -31,9 +31,9 @@ class StripeBankAccount(Base):
     are never held here — Stripe is the custodian.
     """
 
-    __tablename__ = "stripe_bank_account"
+    __tablename__ = "bank_stripe_account"
     id                   = Column(Integer, primary_key=True)
-    store_id             = Column(Integer, ForeignKey("store.id"), nullable=False, index=True)
+    store_id             = Column(Integer, ForeignKey("tenancy_store.id"), nullable=False, index=True)
     stripe_account_id    = Column(String(60), unique=True, nullable=False)
     institution_name     = Column(String(120), default="")
     display_name         = Column(String(120), default="")
@@ -87,8 +87,8 @@ class BankTransaction(Base):
 
     __tablename__ = "bank_transaction"
     id                       = Column(Integer, primary_key=True)
-    store_id                 = Column(Integer, ForeignKey("store.id"), nullable=False)
-    stripe_bank_account_id   = Column(Integer, ForeignKey("stripe_bank_account.id"), nullable=False)
+    store_id                 = Column(Integer, ForeignKey("tenancy_store.id"), nullable=False)
+    stripe_bank_account_id   = Column(Integer, ForeignKey("bank_stripe_account.id"), nullable=False)
     stripe_transaction_id    = Column(String(80), unique=True, nullable=False)
     amount_cents             = Column(BigInteger, nullable=False)  # signed: + credit, - debit
     currency                 = Column(String(8), default="usd")
@@ -98,7 +98,7 @@ class BankTransaction(Base):
     category_slug            = Column(String(60), default="")
     matched_rule_id          = Column(Integer, nullable=True)
     daily_line_item_id       = Column(Integer,
-                                       ForeignKey("daily_line_item.id"),
+                                       ForeignKey("msb_daily_line_item.id"),
                                        nullable=True)
     created_at               = Column(DateTime, default=datetime.utcnow)
     __table_args__ = (
@@ -129,7 +129,7 @@ class BankRule(Base):
 
     __tablename__ = "bank_rule"
     id                  = Column(Integer, primary_key=True)
-    store_id            = Column(Integer, ForeignKey("store.id"),
+    store_id            = Column(Integer, ForeignKey("tenancy_store.id"),
                                   nullable=False, index=True)
     enabled             = Column(Boolean, default=True)
     priority            = Column(Integer, default=100)
@@ -142,7 +142,7 @@ class BankRule(Base):
     amount_min_cents    = Column(Integer, nullable=True)  # absolute cents; None = unbounded
     amount_max_cents    = Column(Integer, nullable=True)
     account_filter_id   = Column(Integer,
-                                  ForeignKey("stripe_bank_account.id"),
+                                  ForeignKey("bank_stripe_account.id"),
                                   nullable=True)
 
     # Output: a daily-book line-item kind from ``_LINE_ITEM_KINDS``,

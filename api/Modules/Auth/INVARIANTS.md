@@ -42,11 +42,11 @@ columns; we treat the rest of the stack as untrusted input.
 
 | Table | What it holds |
 |---|---|
-| `user` | `username`, `password_hash` (scrypt), `role`, `store_id`, `is_active`, `totp_secret` (base32 plaintext), `totp_enrolled_at`, `full_name`, `theme_preference`, notification preferences |
-| `recovery_code` | One row per unused / used recovery code. `code_hash` = sha256 of normalised raw code; `used_at` = NULL until consumed. |
-| `passkey` | `(user_id, credential_id, public_key, sign_count, aaguid, name)`. `credential_id` is unique across the table. |
-| `password_reset_token` | `token_hash` = sha256(raw token), 1-hour expiry, single-use (`used_at` set after consumption). |
-| `login_event` | Audit row per login attempt: timestamp, user_id (when known), username (raw input), succeeded, ip, user_agent. |
+| `tenancy_user` | `username`, `password_hash` (scrypt), `role`, `store_id`, `is_active`, `totp_secret` (base32 plaintext), `totp_enrolled_at`, `full_name`, `theme_preference`, notification preferences |
+| `auth_recovery_code` | One row per unused / used recovery code. `code_hash` = sha256 of normalised raw code; `used_at` = NULL until consumed. |
+| `auth_passkey` | `(user_id, credential_id, public_key, sign_count, aaguid, name)`. `credential_id` is unique across the table. |
+| `auth_password_reset_token` | `token_hash` = sha256(raw token), 1-hour expiry, single-use (`used_at` set after consumption). |
+| `auth_login_event` | Audit row per login attempt: timestamp, user_id (when known), username (raw input), succeeded, ip, user_agent. |
 
 
 ## The role / permissions matrix
@@ -305,12 +305,12 @@ For roles where `needs_totp(user)` is True:
 
 1. **First login** → `LoginPendingResult(enroll_required=True)`.
    SPA renders the QR/secret page.
-2. `/auth/login/totp/enroll/start` mints `user.totp_secret`
+2. `/auth/login/totp/enroll/start` mints `tenancy_user.totp_secret`
    (base32, 32 chars from `pyotp.random_base32()`). Idempotent
    — refreshes return the same secret until the user finishes
    enrollment.
 3. `/auth/login/totp/enroll/finish` verifies the user's first
-   6-digit code, sets `user.totp_enrolled_at`, mints **10
+   6-digit code, sets `tenancy_user.totp_enrolled_at`, mints **10
    one-shot recovery codes** (`generate_recovery_codes`).
    The plaintext codes are returned to the SPA exactly once
    — they're never retrievable later.

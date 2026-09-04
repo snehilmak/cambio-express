@@ -30,9 +30,9 @@ class Customer(Base):
     win.
     """
 
-    __tablename__ = "customer"
+    __tablename__ = "msb_customer"
     id            = Column(Integer, primary_key=True)
-    store_id      = Column(Integer, ForeignKey("store.id"), nullable=False)
+    store_id      = Column(Integer, ForeignKey("tenancy_store.id"), nullable=False)
     full_name     = Column(String(120), nullable=False)
     dob           = Column(Date, nullable=True)
     address       = Column(String(255), default="")
@@ -51,7 +51,7 @@ class Customer(Base):
         # planner do a single seek and filter on store_id — cheaper
         # for owner umbrellas with several stores, no worse for
         # single-store admins.
-        Index("ix_customer_phone", "phone_country", "phone_number"),
+        Index("ix_msb_customer_phone", "phone_country", "phone_number"),
     )
 
     def to_dict(

@@ -25,7 +25,7 @@ class WebhookEvent(Base):
     deliveries + failure rate without round-tripping the Stripe API.
     """
 
-    __tablename__ = "webhook_event"
+    __tablename__ = "platform_webhook_event"
     id           = Column(Integer, primary_key=True)
     received_at  = Column(DateTime, default=datetime.utcnow,
                            nullable=False, index=True)
@@ -59,7 +59,7 @@ class EmailEvent(Base):
     from ballooning the table.
     """
 
-    __tablename__ = "email_event"
+    __tablename__ = "platform_email_event"
     id           = Column(Integer, primary_key=True)
     # Resend's provider-side message id. Same message_id will have
     # multiple events over its lifecycle (sent → delivered → opened
@@ -68,7 +68,7 @@ class EmailEvent(Base):
     # The normalized to-address (lowercased, trimmed) the event is
     # about.
     to_addr      = Column(String(255), default="", index=True)
-    user_id      = Column(Integer, ForeignKey("user.id"), nullable=True)
+    user_id      = Column(Integer, ForeignKey("tenancy_user.id"), nullable=True)
     # "email.sent" | "email.delivered" | "email.bounced" |
     # "email.complained" | "email.opened" | "email.clicked" |
     # "email.delivery_delayed"

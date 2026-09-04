@@ -41,10 +41,10 @@ class ReferralCode(Base):
     trial — keeps us from paying for signups that churn.
     """
 
-    __tablename__ = "referral_code"
+    __tablename__ = "billing_referral_code"
     id                    = Column(Integer, primary_key=True)
     code                  = Column(String(12), unique=True, nullable=False)
-    owner_store_id        = Column(Integer, ForeignKey("store.id"),
+    owner_store_id        = Column(Integer, ForeignKey("tenancy_store.id"),
                                     unique=True, nullable=False)
     reward_self_cents     = Column(Integer, default=10000)  # $100
     reward_referee_cents  = Column(Integer, default=5000)   # $50
@@ -59,10 +59,10 @@ class ReferralRedemption(Base):
     side has been applied — so a webhook retry can't double-credit.
     """
 
-    __tablename__ = "referral_redemption"
+    __tablename__ = "billing_referral_redemption"
     id                      = Column(Integer, primary_key=True)
-    referral_code_id        = Column(Integer, ForeignKey("referral_code.id"), nullable=False)
-    referee_store_id        = Column(Integer, ForeignKey("store.id"),
+    referral_code_id        = Column(Integer, ForeignKey("billing_referral_code.id"), nullable=False)
+    referee_store_id        = Column(Integer, ForeignKey("tenancy_store.id"),
                                       unique=True, nullable=False)
     redeemed_at             = Column(DateTime, default=datetime.utcnow)
     self_credit_applied_at  = Column(DateTime, nullable=True)
@@ -81,7 +81,7 @@ class DiscountCode(Base):
     ``allow_promotion_codes=True``.
     """
 
-    __tablename__ = "discount_code"
+    __tablename__ = "billing_discount_code"
     id                        = Column(Integer, primary_key=True)
     code                      = Column(String(40), unique=True, nullable=False)
     label                     = Column(String(120), default="")
@@ -96,7 +96,7 @@ class DiscountCode(Base):
     stripe_promotion_code_id  = Column(String(60), default="")
     is_active                 = Column(Boolean, default=True)
     created_at                = Column(DateTime, default=datetime.utcnow)
-    created_by                = Column(Integer, ForeignKey("user.id"), nullable=True)
+    created_by                = Column(Integer, ForeignKey("tenancy_user.id"), nullable=True)
 
     @property
     def value_label(self) -> str:
@@ -115,7 +115,7 @@ class FeatureFlag(Base):
     one customer).
     """
 
-    __tablename__ = "feature_flag"
+    __tablename__ = "billing_feature_flag"
     id                 = Column(Integer, primary_key=True)
     key                = Column(String(60), unique=True, nullable=False)
     label              = Column(String(120), default="")
@@ -127,13 +127,13 @@ class FeatureFlag(Base):
 class StoreFeatureOverride(Base):
     """Per-store override of a FeatureFlag's global default."""
 
-    __tablename__ = "store_feature_override"
+    __tablename__ = "billing_store_feature_override"
     id         = Column(Integer, primary_key=True)
-    store_id   = Column(Integer, ForeignKey("store.id"), nullable=False)
+    store_id   = Column(Integer, ForeignKey("tenancy_store.id"), nullable=False)
     flag_key   = Column(String(60), nullable=False)
     enabled    = Column(Boolean, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow)
-    updated_by = Column(Integer, ForeignKey("user.id"), nullable=True)
+    updated_by = Column(Integer, ForeignKey("tenancy_user.id"), nullable=True)
     __table_args__ = (UniqueConstraint("store_id", "flag_key"),)
 
 

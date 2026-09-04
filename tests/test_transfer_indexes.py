@@ -20,11 +20,11 @@ from tests._app import db_session
 # Single source of truth for what the test enforces. Keep this in
 # sync with `_ADDED_INDEXES` in app.py.
 EXPECTED_TRANSFER_INDEXES = {
-    "ix_transfer_store_send_date":  ("store_id", "send_date"),
-    "ix_transfer_customer_id":      ("customer_id",),
-    "ix_transfer_created_by":       ("created_by",),
-    "ix_transfer_status":           ("status",),
-    "ix_transfer_confirm_number":   ("confirm_number",),
+    "ix_msb_transfer_store_send_date":  ("store_id", "send_date"),
+    "ix_msb_transfer_customer_id":      ("customer_id",),
+    "ix_msb_transfer_created_by":       ("created_by",),
+    "ix_msb_transfer_status":           ("status",),
+    "ix_msb_transfer_confirm_number":   ("confirm_number",),
 }
 
 
@@ -55,7 +55,7 @@ def test_transfer_indexes_present_in_db(client):
     from tests._app import db
     with db_session():
         insp = inspect(db.engine)
-        present = {ix["name"] for ix in insp.get_indexes("transfer")}
+        present = {ix["name"] for ix in insp.get_indexes("msb_transfer")}
     for name in EXPECTED_TRANSFER_INDEXES:
         assert name in present, (
             f"index {name!r} should exist on the transfer table; "
@@ -72,7 +72,7 @@ def test_added_indexes_registry_matches_model(client):
     from api.Core.Bootstrap import ADDED_INDEXES as _ADDED_INDEXES
     declared_names = {ix.name for ix in Transfer.__table__.indexes}
     for name, table, _cols in _ADDED_INDEXES:
-        if table != "transfer":
+        if table != "msb_transfer":
             continue
         assert name in declared_names, (
             f"_ADDED_INDEXES has {name!r} for the transfer table, "
@@ -105,7 +105,7 @@ def test_period_filter_uses_index_on_postgres(client):
     from tests._app import db
     with db_session():
         insp = inspect(db.engine)
-        idxs = {ix["name"]: ix for ix in insp.get_indexes("transfer")}
-    composite = idxs.get("ix_transfer_store_send_date")
+        idxs = {ix["name"]: ix for ix in insp.get_indexes("msb_transfer")}
+    composite = idxs.get("ix_msb_transfer_store_send_date")
     assert composite is not None
     assert composite["column_names"] == ["store_id", "send_date"]

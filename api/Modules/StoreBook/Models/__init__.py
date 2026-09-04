@@ -217,10 +217,10 @@ class StoreDailyEntry(Base):
     three column totals always computable.
     """
 
-    __tablename__ = "store_daily_entry"
+    __tablename__ = "retail_store_daily_entry"
     id         = Column(Integer, primary_key=True)
     store_id   = Column(
-        Integer, ForeignKey("store.id"), nullable=False, index=True,
+        Integer, ForeignKey("tenancy_store.id"), nullable=False, index=True,
     )
     entry_date = Column(Date, nullable=False, index=True)
 
@@ -300,7 +300,7 @@ class StoreDailyEntry(Base):
     # deliberately NOT blocked by the lock — see the Services
     # module for why.
     locked_at  = Column(DateTime, nullable=True)
-    locked_by  = Column(Integer, ForeignKey("user.id"), nullable=True)
+    locked_by  = Column(Integer, ForeignKey("tenancy_user.id"), nullable=True)
 
     __table_args__ = (
         UniqueConstraint("store_id", "entry_date"),
@@ -335,11 +335,11 @@ class StoreDailyEntryOriginal(Base):
     without the caption.
     """
 
-    __tablename__ = "store_daily_entry_original"
+    __tablename__ = "retail_store_daily_entry_original"
     id       = Column(Integer, primary_key=True)
     entry_id = Column(
         Integer,
-        ForeignKey("store_daily_entry.id", ondelete="CASCADE"),
+        ForeignKey("retail_store_daily_entry.id", ondelete="CASCADE"),
         nullable=False, index=True,
     )
     store_id     = Column(Integer, nullable=False, index=True)

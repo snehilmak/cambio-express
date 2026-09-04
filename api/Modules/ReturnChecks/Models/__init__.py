@@ -82,9 +82,9 @@ class ReturnCheck(Base):
     KPI on the list page and owner dashboard.
     """
 
-    __tablename__ = "return_check"
+    __tablename__ = "msb_return_check"
     id              = Column(Integer, primary_key=True)
-    store_id        = Column(Integer, ForeignKey("store.id"), nullable=False, index=True)
+    store_id        = Column(Integer, ForeignKey("tenancy_store.id"), nullable=False, index=True)
     bounced_on      = Column(Date, nullable=False)
     customer_name   = Column(String(120), nullable=False)
     # Company on the check / associated business. Required at the API
@@ -104,7 +104,7 @@ class ReturnCheck(Base):
     status          = Column(String(16),  default="pending", nullable=False)
     status_changed_on = Column(Date,      nullable=True)
     notes           = Column(Text,        default="")
-    created_by      = Column(Integer, ForeignKey("user.id"), nullable=True)
+    created_by      = Column(Integer, ForeignKey("tenancy_user.id"), nullable=True)
     created_at      = Column(DateTime, default=datetime.utcnow)
     updated_at      = Column(DateTime, default=datetime.utcnow,
                               onupdate=datetime.utcnow)
@@ -196,10 +196,10 @@ class ReturnCheckPayment(Base):
     without double-entry.
     """
 
-    __tablename__ = "return_check_payment"
+    __tablename__ = "msb_return_check_payment"
     id                 = Column(Integer, primary_key=True)
     return_check_id    = Column(Integer,
-                                 ForeignKey("return_check.id"),
+                                 ForeignKey("msb_return_check.id"),
                                  nullable=False, index=True)
     amount_cents       = Column(BigInteger, nullable=False, default=0)
     paid_on            = Column(Date,  nullable=False)
@@ -217,7 +217,7 @@ class ReturnCheckPayment(Base):
     @amount.setter
     def amount(self, dollars: object) -> None:
         self.amount_cents = to_cents(dollars)  # type: ignore[assignment]
-    created_by         = Column(Integer, ForeignKey("user.id"),
+    created_by         = Column(Integer, ForeignKey("tenancy_user.id"),
                                  nullable=True)
     created_at         = Column(DateTime, default=datetime.utcnow)
 

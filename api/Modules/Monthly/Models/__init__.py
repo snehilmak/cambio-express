@@ -19,9 +19,9 @@ from api.Core.Money import DollarView, to_dollars
 
 
 class MonthlyFinancial(Base):
-    __tablename__ = "monthly_financial"
+    __tablename__ = "msb_monthly_financial"
     id                    = Column(Integer, primary_key=True)
-    store_id              = Column(Integer, ForeignKey("store.id"), nullable=False)
+    store_id              = Column(Integer, ForeignKey("tenancy_store.id"), nullable=False)
     year                  = Column(Integer, nullable=False)
     month                 = Column(Integer, nullable=False)
     taxable_sales_cents   = Column(BigInteger, default=0)

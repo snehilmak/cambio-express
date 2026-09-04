@@ -31,11 +31,11 @@ def test_login_event_composite_declared(client):
         ix.name: tuple(c.name for c in ix.columns)
         for ix in LoginEvent.__table__.indexes
     }
-    assert "ix_login_event_at_user" in declared, (
+    assert "ix_auth_login_event_at_user" in declared, (
         "LoginEvent.__table_args__ must declare the (at, user_id) "
         "composite — fresh installs need it via db.create_all()."
     )
-    assert declared["ix_login_event_at_user"] == ("at", "user_id"), (
+    assert declared["ix_auth_login_event_at_user"] == ("at", "user_id"), (
         f"column order matters — got "
         f"{declared['ix_login_event_at_user']!r}"
     )
@@ -45,9 +45,9 @@ def test_login_event_composite_present_in_db(client):
     from tests._app import db
     with db_session():
         insp = inspect(db.engine)
-        present = {ix["name"] for ix in insp.get_indexes("login_event")}
-    assert "ix_login_event_at_user" in present, (
-        f"ix_login_event_at_user should exist after boot; got "
+        present = {ix["name"] for ix in insp.get_indexes("auth_login_event")}
+    assert "ix_auth_login_event_at_user" in present, (
+        f"ix_auth_login_event_at_user should exist after boot; got "
         f"{present!r}"
     )
 
@@ -60,7 +60,7 @@ def test_existing_single_column_indexes_survive(client):
     from tests._app import db
     with db_session():
         insp = inspect(db.engine)
-        idxs = insp.get_indexes("login_event")
+        idxs = insp.get_indexes("auth_login_event")
     by_cols = {tuple(ix["column_names"]) for ix in idxs}
     assert ("at",)      in by_cols, f"standalone `at` index missing; have {by_cols!r}"
     assert ("user_id",) in by_cols, f"standalone `user_id` index missing; have {by_cols!r}"
@@ -71,7 +71,7 @@ def test_added_indexes_registry_lists_login_event(client):
     from api.Core.Bootstrap import ADDED_INDEXES as _ADDED_INDEXES
     declared = {ix.name for ix in LoginEvent.__table__.indexes}
     entries = [
-        name for name, table, _ in _ADDED_INDEXES if table == "login_event"
+        name for name, table, _ in _ADDED_INDEXES if table == "auth_login_event"
     ]
     for name in entries:
         assert name in declared, (

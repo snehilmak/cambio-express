@@ -39,9 +39,9 @@ POS_CODE_FORMATS = ("upc", "plu")
 
 
 class Vendor(Base):
-    __tablename__ = "vendor"
+    __tablename__ = "retail_vendor"
     id             = Column(Integer, primary_key=True)
-    store_id       = Column(Integer, ForeignKey("store.id"), nullable=False, index=True)
+    store_id       = Column(Integer, ForeignKey("tenancy_store.id"), nullable=False, index=True)
     name           = Column(String(120), nullable=False)
     contact_name   = Column(String(120), nullable=False, default="")
     phone          = Column(String(30), nullable=False, default="")
@@ -58,9 +58,9 @@ class Vendor(Base):
 
 
 class PriceBookItem(Base):
-    __tablename__ = "price_book_item"
+    __tablename__ = "retail_price_book_item"
     id              = Column(Integer, primary_key=True)
-    store_id        = Column(Integer, ForeignKey("store.id"), nullable=False, index=True)
+    store_id        = Column(Integer, ForeignKey("tenancy_store.id"), nullable=False, index=True)
     # The scan code as the register knows it — UPC digits, or a
     # short keyed PLU ("2" = ice bag). Stored as a string so
     # leading zeros survive.
@@ -68,10 +68,10 @@ class PriceBookItem(Base):
     pos_code_format = Column(String(10), nullable=False, default="upc")
     name            = Column(String(160), nullable=False)
     department_id   = Column(
-        Integer, ForeignKey("department.id"), nullable=True, index=True,
+        Integer, ForeignKey("retail_department.id"), nullable=True, index=True,
     )
     vendor_id       = Column(
-        Integer, ForeignKey("vendor.id"), nullable=True, index=True,
+        Integer, ForeignKey("retail_vendor.id"), nullable=True, index=True,
     )
     price_cents     = Column(BigInteger, nullable=False, default=0)
     cost_cents      = Column(BigInteger, nullable=False, default=0)
@@ -111,11 +111,11 @@ INVOICE_STATUSES = ("open", "paid")
 
 
 class PurchaseInvoice(Base):
-    __tablename__ = "purchase_invoice"
+    __tablename__ = "retail_purchase_invoice"
     id             = Column(Integer, primary_key=True)
-    store_id       = Column(Integer, ForeignKey("store.id"), nullable=False, index=True)
+    store_id       = Column(Integer, ForeignKey("tenancy_store.id"), nullable=False, index=True)
     vendor_id      = Column(
-        Integer, ForeignKey("vendor.id"), nullable=False, index=True,
+        Integer, ForeignKey("retail_vendor.id"), nullable=False, index=True,
     )
     # The vendor's invoice number as printed — the key the operator
     # reconciles statements against. Unique per (store, vendor):
@@ -134,7 +134,7 @@ class PurchaseInvoice(Base):
     status   = Column(String(16), nullable=False, default="open")
     paid_on  = Column(Date, nullable=True)
     notes      = Column(String(500), nullable=False, default="")
-    created_by = Column(Integer, ForeignKey("user.id"), nullable=True)
+    created_by = Column(Integer, ForeignKey("tenancy_user.id"), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow,
@@ -163,16 +163,16 @@ class PurchaseInvoice(Base):
 
 
 class PurchaseInvoiceLine(Base):
-    __tablename__ = "purchase_invoice_line"
+    __tablename__ = "retail_purchase_invoice_line"
     id         = Column(Integer, primary_key=True)
-    store_id   = Column(Integer, ForeignKey("store.id"), nullable=False, index=True)
+    store_id   = Column(Integer, ForeignKey("tenancy_store.id"), nullable=False, index=True)
     invoice_id = Column(
-        Integer, ForeignKey("purchase_invoice.id"), nullable=False, index=True,
+        Integer, ForeignKey("retail_purchase_invoice.id"), nullable=False, index=True,
     )
     # Optional price-book link — misc lines (ice bags of CO2, a
     # one-off charge) have no catalog item.
     item_id     = Column(
-        Integer, ForeignKey("price_book_item.id"), nullable=True, index=True,
+        Integer, ForeignKey("retail_price_book_item.id"), nullable=True, index=True,
     )
     description = Column(String(160), nullable=False, default="")
     # Quantity can be fractional (weighted goods, split cases) —

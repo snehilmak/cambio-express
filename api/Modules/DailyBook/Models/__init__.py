@@ -30,9 +30,9 @@ from api.Core.Money import DollarView, to_dollars
 
 
 class DailyReport(Base):
-    __tablename__ = "daily_report"
+    __tablename__ = "msb_daily_report"
     id                    = Column(Integer, primary_key=True)
-    store_id              = Column(Integer, ForeignKey("store.id"), nullable=False)
+    store_id              = Column(Integer, ForeignKey("tenancy_store.id"), nullable=False)
     report_date           = Column(Date, nullable=False)
     taxable_sales_cents   = Column(BigInteger, default=0)
     non_taxable_cents     = Column(BigInteger, default=0)
@@ -82,7 +82,7 @@ class DailyReport(Base):
     # explicitly unlock before editing again. ``locked_by`` is the
     # admin who set the lock.
     locked_at             = Column(DateTime, nullable=True)
-    locked_by             = Column(Integer, ForeignKey("user.id"), nullable=True)
+    locked_by             = Column(Integer, ForeignKey("tenancy_user.id"), nullable=True)
     __table_args__ = (UniqueConstraint("store_id", "report_date"),)
 
     # Money is stored as INTEGER CENTS (P0-3; see api/Core/Money.py).
@@ -196,15 +196,15 @@ class DailyDrop(Base):
     agree.
     """
 
-    __tablename__ = "daily_drop"
+    __tablename__ = "msb_daily_drop"
     id          = Column(Integer, primary_key=True)
-    store_id    = Column(Integer, ForeignKey("store.id"), nullable=False, index=True)
+    store_id    = Column(Integer, ForeignKey("tenancy_store.id"), nullable=False, index=True)
     report_date = Column(Date, nullable=False)
     drop_time   = Column(Time, nullable=False)
     amount_cents = Column(BigInteger, nullable=False, default=0)
     amount      = DollarView("amount_cents")
     note        = Column(String(120), default="")
-    created_by  = Column(Integer, ForeignKey("user.id"), nullable=True)
+    created_by  = Column(Integer, ForeignKey("tenancy_user.id"), nullable=True)
     created_at  = Column(DateTime, default=datetime.utcnow)
 
     def to_dict(self) -> dict[str, Any]:
@@ -227,15 +227,15 @@ class CheckDeposit(Base):
     every add / delete / daily-report save so the two can never drift.
     """
 
-    __tablename__ = "check_deposit"
+    __tablename__ = "msb_check_deposit"
     id           = Column(Integer, primary_key=True)
-    store_id     = Column(Integer, ForeignKey("store.id"), nullable=False, index=True)
+    store_id     = Column(Integer, ForeignKey("tenancy_store.id"), nullable=False, index=True)
     report_date  = Column(Date, nullable=False)
     deposit_time = Column(Time, nullable=False)
     amount_cents = Column(BigInteger, nullable=False, default=0)
     amount       = DollarView("amount_cents")
     note         = Column(String(120), default="")
-    created_by   = Column(Integer, ForeignKey("user.id"), nullable=True)
+    created_by   = Column(Integer, ForeignKey("tenancy_user.id"), nullable=True)
     created_at   = Column(DateTime, default=datetime.utcnow)
 
     def to_dict(self) -> dict[str, Any]:
@@ -264,9 +264,9 @@ class DailyLineItem(Base):
     the generic model.
     """
 
-    __tablename__ = "daily_line_item"
+    __tablename__ = "msb_daily_line_item"
     id          = Column(Integer, primary_key=True)
-    store_id    = Column(Integer, ForeignKey("store.id"), nullable=False, index=True)
+    store_id    = Column(Integer, ForeignKey("tenancy_store.id"), nullable=False, index=True)
     report_date = Column(Date, nullable=False)
     # One of the keys in ``_LINE_ITEM_KINDS``. Not a DB enum so new
     # kinds can be introduced with zero migration.
@@ -280,9 +280,9 @@ class DailyLineItem(Base):
     # find + update + delete the shadow line item when the return
     # check is edited or reopened, instead of leaving stale rows
     # behind. NULL for line items the cashier added manually.
-    return_check_id = Column(Integer, ForeignKey("return_check.id"),
+    return_check_id = Column(Integer, ForeignKey("msb_return_check.id"),
                               nullable=True)
-    created_by  = Column(Integer, ForeignKey("user.id"), nullable=True)
+    created_by  = Column(Integer, ForeignKey("tenancy_user.id"), nullable=True)
     created_at  = Column(DateTime, default=datetime.utcnow)
 
     def to_dict(self) -> dict[str, Any]:
@@ -295,9 +295,9 @@ class DailyLineItem(Base):
 
 
 class MoneyTransferSummary(Base):
-    __tablename__ = "mt_summary"
+    __tablename__ = "msb_mt_summary"
     id           = Column(Integer, primary_key=True)
-    store_id     = Column(Integer, ForeignKey("store.id"), nullable=False)
+    store_id     = Column(Integer, ForeignKey("tenancy_store.id"), nullable=False)
     report_date  = Column(Date, nullable=False)
     company      = Column(String(40), nullable=False)
     amount_cents      = Column(BigInteger, default=0)

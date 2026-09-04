@@ -39,9 +39,9 @@ class TVDisplay(Base):
     """One row per store that owns the tv_display add-on. Created
     lazily on first visit to /admin/tv-display."""
 
-    __tablename__ = "tv_display"
+    __tablename__ = "msb_tv_display"
     id              = Column(Integer, primary_key=True)
-    store_id        = Column(Integer, ForeignKey("store.id"),
+    store_id        = Column(Integer, ForeignKey("tenancy_store.id"),
                               unique=True, nullable=False)
     # 32-char URL-safe random token. Anyone with the URL can view —
     # rotation is a one-click action on the admin page.
@@ -71,9 +71,9 @@ class TVDisplay(Base):
 class TVDisplayCountry(Base):
     """One section on the board (Mexico, Guatemala, …)."""
 
-    __tablename__ = "tv_display_country"
+    __tablename__ = "msb_tv_display_country"
     id            = Column(Integer, primary_key=True)
-    display_id    = Column(Integer, ForeignKey("tv_display.id"),
+    display_id    = Column(Integer, ForeignKey("msb_tv_display.id"),
                             nullable=False, index=True)
     country_code  = Column(String(4), default="")  # ISO-2 — drives the flag emoji
     country_name  = Column(String(80), nullable=False)
@@ -86,9 +86,9 @@ class TVDisplayCountry(Base):
 class TVDisplayPayoutBank(Base):
     """One row in a country's matrix — "Bancomer", "Banorte", etc."""
 
-    __tablename__ = "tv_display_payout_bank"
+    __tablename__ = "msb_tv_display_payout_bank"
     id          = Column(Integer, primary_key=True)
-    country_id  = Column(Integer, ForeignKey("tv_display_country.id"),
+    country_id  = Column(Integer, ForeignKey("msb_tv_display_country.id"),
                           nullable=False, index=True)
     bank_name   = Column(String(120), nullable=False)
     sort_order  = Column(Integer, default=0)
@@ -98,9 +98,9 @@ class TVDisplayRate(Base):
     """The cell value at (bank, mt_company). Sparse — a cell with no
     rate set is rendered as "—" on the board."""
 
-    __tablename__ = "tv_display_rate"
+    __tablename__ = "msb_tv_display_rate"
     id          = Column(Integer, primary_key=True)
-    bank_id     = Column(Integer, ForeignKey("tv_display_payout_bank.id"),
+    bank_id     = Column(Integer, ForeignKey("msb_tv_display_payout_bank.id"),
                           nullable=False, index=True)
     # The MT company column header — must match one of the strings
     # in the parent country's mt_companies CSV. Not FK'd because the
@@ -128,9 +128,9 @@ class TVPairing(Base):
     legacy /tv/<public_token> tablet/Chromecast users.
     """
 
-    __tablename__ = "tv_pairing"
+    __tablename__ = "msb_tv_pairing"
     id            = Column(Integer, primary_key=True)
-    display_id    = Column(Integer, ForeignKey("tv_display.id"),
+    display_id    = Column(Integer, ForeignKey("msb_tv_display.id"),
                             nullable=False, index=True)
     # 32-byte URL-safe random; same generator as public_token.
     device_token  = Column(String(48), unique=True, nullable=False)
@@ -171,7 +171,7 @@ class TVPendingPair(Base):
     redeem to a TVPairing.
     """
 
-    __tablename__ = "tv_pending_pair"
+    __tablename__ = "msb_tv_pending_pair"
     id            = Column(Integer, primary_key=True)
     # 6-char alphanumeric (same alphabet as PAIR_CODE_ALPHABET).
     # Indexed because /api/tv-pair/status does the lookup by code
@@ -189,7 +189,7 @@ class TVPendingPair(Base):
     # and the Fire TV polls find the resulting TVPairing instead.
     claimed_at         = Column(DateTime, nullable=True)
     claimed_pairing_id = Column(Integer,
-                                 ForeignKey("tv_pairing.id"),
+                                 ForeignKey("msb_tv_pairing.id"),
                                  nullable=True)
 
 
@@ -211,7 +211,7 @@ class TVCompanyCatalog(Base):
     display_name for rendering.
     """
 
-    __tablename__ = "tv_company_catalog"
+    __tablename__ = "msb_tv_company_catalog"
     id           = Column(Integer, primary_key=True)
     # URL-safe lowercase identifier (e.g. "maxi", "intermex"). The
     # column header CSV on TVDisplayCountry.mt_companies stores
@@ -236,7 +236,7 @@ class TVBankCatalog(Base):
     for Mexico" vs "banks for Guatemala."
     """
 
-    __tablename__ = "tv_bank_catalog"
+    __tablename__ = "msb_tv_bank_catalog"
     id           = Column(Integer, primary_key=True)
     slug         = Column(String(60), unique=True, nullable=False, index=True)
     display_name = Column(String(80), nullable=False)
@@ -271,7 +271,7 @@ class TVCatalogLogo(Base):
       Postgres; the BLOB column on SQLite handles it just as well.
     """
 
-    __tablename__ = "tv_catalog_logo"
+    __tablename__ = "msb_tv_catalog_logo"
     id           = Column(Integer, primary_key=True)
     # "company" | "bank" — keep the values short, the URL embeds them.
     catalog_type = Column(String(8), nullable=False, index=True)
